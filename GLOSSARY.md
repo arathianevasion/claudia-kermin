@@ -16,6 +16,10 @@ _Avoid_: the bot, the chatbot, the AI, Claude
 The home planet in KSP. The mod name's "Kermin" never refers to the planet.
 _Avoid_: Kermin (for the planet)
 
+**Super Intelligence**:
+Claudia's crew role, combining the abilities of a Pilot, an Engineer and a Scientist.
+_Avoid_: trait (alone), class, profession
+
 **Mission Goal**:
 The player's plain-language statement of what a mission must achieve, e.g. "Land on the Mun, run 3 experiments, return to Kerbin."
 _Avoid_: objective, prompt, task
@@ -39,6 +43,10 @@ _Avoid_: confirmation, sign-off
 **Mission**:
 One Mission Goal pursued by Claudia with one craft, from its Craft Check until it succeeds or is abandoned.
 _Avoid_: flight, run, job
+
+**Lost**:
+The outcome of a Mission that ends because Claudia was killed aboard the craft.
+_Avoid_: failed, crashed, KIA (for the Mission)
 
 ### Scripts
 
