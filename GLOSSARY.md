@@ -35,3 +35,7 @@ _Avoid_: report, evaluation, review
 **Approval**:
 The player's go-ahead, given in chat, for Claudia to execute the proposed Maneuver Sequence.
 _Avoid_: confirmation, sign-off
+
+**Mission**:
+One Mission Goal pursued by Claudia with one craft, from its Craft Check until it succeeds or is abandoned.
+_Avoid_: flight, run, job
