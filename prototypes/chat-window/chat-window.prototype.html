@@ -1,0 +1,380 @@
+<title>Claudia Chat Window</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* PROTOTYPE, throwaway. Question: where does Claudia's chat window sit and how does it show plans, Approval, Debriefs, scripts and cost?
+   Three structurally different variants (#a, #b, #c) over a mock KSP scene, styled after KSP's stock IMGUI skin so nothing here is beyond what IMGUI can draw.
+   Layout concept: a fake game viewport fills the screen; the variant window floats over it; a prototype control bar sits at the bottom. */
+:root {
+  color-scheme: dark;
+  --space: #05070b;
+  --win: rgba(28, 33, 38, 0.94);
+  --win-edge: #4b555e;
+  --win-title: #1a1f24;
+  --panel: rgba(255, 255, 255, 0.045);
+  --fg: #e3e7ea;
+  --muted: #98a3ac;
+  --dim: #66717a;
+  --btn: #3a434b;
+  --btn-hi: #4c5761;
+  --btn-edge: #5d6872;
+  --kerbal: #a6e04a;   /* KSP's kerbal-green, used as the accent */
+  --ok: #7fd36b;
+  --warn: #f2b84b;
+  --bad: #ef6a5a;
+  --info: #6fb6f2;
+  --ui: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+}
+html, body { height: 100%; }
+body { background: var(--space); color: var(--fg); font: 14px/1.4 var(--ui); overflow: hidden; }
+* { box-sizing: border-box; }
+button { font: inherit; color: inherit; }
+
+/* ---------- mock game viewport ---------- */
+.scene { position: fixed; inset: 0; overflow: hidden; }
+.scene.flight { background: radial-gradient(ellipse 140% 60% at 50% 125%, #2f6fb0 0 38%, #8fc3ea 39%, #12233a 41%, transparent 55%), radial-gradient(circle at 20% 20%, #0d1420, var(--space) 70%); }
+.scene.vab { background: linear-gradient(#2a2e33, #3b4045 55%, #4b5056 56%, #33373b); }
+.stars { position: absolute; inset: 0; background-image: radial-gradient(1px 1px at 12% 18%, #fff8, transparent), radial-gradient(1px 1px at 33% 9%, #fff6, transparent), radial-gradient(1px 1px at 61% 27%, #fff9, transparent), radial-gradient(1px 1px at 82% 14%, #fff5, transparent), radial-gradient(1px 1px at 72% 41%, #fff7, transparent), radial-gradient(1px 1px at 8% 46%, #fff5, transparent), radial-gradient(1.5px 1.5px at 47% 35%, #fffa, transparent); }
+.vab .stars { display: none; }
+.hud-alt { position: absolute; top: max(10px, env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); background: #111a; border: 1px solid #fff2; border-radius: 0 0 8px 8px; padding: 4px 16px; font: 500 15px var(--mono); color: #ffd36a; letter-spacing: .04em; }
+.navball { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); width: 150px; height: 150px; border-radius: 50%; background: linear-gradient(#3d8fd6 50%, #9a6a3a 50%); border: 6px solid #222b; box-shadow: 0 0 0 2px #0008; }
+.navball::after { content: ""; position: absolute; left: 50%; top: 50%; width: 46px; height: 4px; margin: -2px 0 0 -23px; background: #ffb400; border-radius: 2px; }
+.staging { position: absolute; left: 10px; bottom: 64px; display: grid; gap: 4px; }
+.staging span { width: 44px; height: 22px; border-radius: 4px; background: #2b333b; border: 1px solid #556; font: 10px var(--mono); color: var(--muted); display: grid; place-items: center; }
+.craft { position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%); width: 34px; height: 180px; background: linear-gradient(90deg, #8d9399, #e7eaec 45%, #9aa0a6); clip-path: polygon(50% 0, 100% 16%, 100% 82%, 130% 100%, -30% 100%, 0 82%, 0 16%); }
+.vab-label { position: absolute; top: max(12px, env(safe-area-inset-top, 0px)); left: 12px; font: 600 12px var(--ui); letter-spacing: .12em; text-transform: uppercase; color: #fff7; }
+.flight .craft, .flight .vab-label { display: none; }
+.vab .hud-alt, .vab .navball, .vab .staging { display: none; }
+
+/* ---------- KSP-ish window primitives ---------- */
+.win { position: absolute; background: var(--win); border: 1px solid var(--win-edge); border-radius: 7px; box-shadow: 0 8px 30px #000a; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.win-title { background: var(--win-title); padding: 5px 10px; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; border-bottom: 1px solid #0006; }
+.win-title .grow { flex: 1; min-width: 0; text-align: center; color: #cfd6db; }
+.x { width: 18px; height: 18px; border-radius: 3px; background: var(--btn); border: 1px solid var(--btn-edge); font-size: 11px; line-height: 16px; text-align: center; color: var(--muted); }
+.btn { background: linear-gradient(var(--btn-hi), var(--btn)); border: 1px solid var(--btn-edge); border-radius: 4px; padding: 5px 11px; cursor: pointer; font-weight: 500; white-space: nowrap; }
+.btn:hover { filter: brightness(1.15); }
+.btn:focus-visible, .linkish:focus-visible, .ctl button:focus-visible { outline: 2px solid var(--kerbal); outline-offset: 1px; }
+.btn.go { background: linear-gradient(#5e8a2a, #46691e); border-color: #86b843; color: #f3ffe0; }
+.btn.stop { background: linear-gradient(#8a3a2f, #6a2a22); border-color: #c0594b; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.input { display: flex; gap: 6px; padding: 8px; border-top: 1px solid #0005; }
+.input input { flex: 1; min-width: 0; background: #12161a; border: 1px solid var(--btn-edge); border-radius: 4px; color: var(--fg); padding: 5px 8px; font: inherit; }
+.scroll { overflow-y: auto; min-height: 0; }
+.cost { font: 500 12px var(--mono); color: var(--muted); white-space: nowrap; }
+.cost b { color: var(--fg); font-weight: 500; }
+.cost.hot b { color: var(--warn); }
+.cost.capped b { color: var(--bad); }
+.pill { display: inline-block; font: 600 11px var(--ui); letter-spacing: .06em; text-transform: uppercase; padding: 1px 7px; border-radius: 9px; border: 1px solid currentColor; }
+.pill.ok { color: var(--ok); } .pill.warn { color: var(--warn); } .pill.bad { color: var(--bad); } .pill.info { color: var(--info); } .pill.dim { color: var(--muted); }
+.face { width: 30px; height: 30px; flex: none; border-radius: 50%; background: radial-gradient(circle at 36% 42%, #111 0 2.5px, transparent 3px), radial-gradient(circle at 64% 42%, #111 0 2.5px, transparent 3px), radial-gradient(ellipse 30% 10% at 50% 68%, #2c3a17 0 70%, transparent 75%), radial-gradient(circle at 50% 45%, #b5e85b, #7fae2e 70%); border: 2px solid #2a3320; }
+.face.sm { width: 22px; height: 22px; }
+.linkish { background: none; border: 0; padding: 0; color: var(--info); cursor: pointer; font-size: 12px; text-decoration: underline; text-underline-offset: 2px; }
+details > summary { cursor: pointer; color: var(--info); font-size: 12px; list-style: none; }
+details > summary::before { content: "▸ "; }
+details[open] > summary::before { content: "▾ "; }
+details .more { margin-top: 6px; color: var(--muted); font-size: 13px; }
+pre.ks { margin: 6px 0 0; padding: 8px; background: #0c0f12; border: 1px solid #333c44; border-radius: 4px; font: 12px/1.5 var(--mono); color: #c9e3a8; overflow-x: auto; white-space: pre; }
+table.facts { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+table.facts td { padding: 2px 4px; border-bottom: 1px solid #ffffff10; }
+table.facts td.n { text-align: right; font-family: var(--mono); font-size: 12px; }
+.lbl { font: 600 11px var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.check { display: flex; gap: 8px; align-items: baseline; }
+.check i { font-style: normal; width: 14px; text-align: center; }
+.done i { color: var(--ok); } .todo i { color: var(--dim); }
+.bar { height: 6px; border-radius: 3px; background: #0006; overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--kerbal); }
+.bar.warn span { background: var(--warn); } .bar.bad span { background: var(--bad); }
+
+/* chat messages, used by A and C's drawer */
+.msgs { display: grid; gap: 10px; padding: 10px; align-content: start; }
+.msg { display: flex; gap: 8px; align-items: flex-start; min-width: 0; }
+.msg .body { min-width: 0; flex: 1; display: grid; gap: 6px; }
+.msg .who { font-size: 12px; color: var(--kerbal); font-weight: 600; }
+.msg.player { flex-direction: row-reverse; }
+.msg.player .body { justify-items: end; }
+.msg.player .who { color: var(--muted); }
+.msg.player .text { background: #2c4a63; border: 1px solid #3f6a8c; border-radius: 6px; padding: 5px 9px; max-width: 85%; }
+.msg.system { justify-content: center; color: var(--muted); font-size: 12px; text-align: center; }
+.card { background: var(--panel); border: 1px solid #ffffff1c; border-radius: 5px; padding: 8px 10px; display: grid; gap: 6px; min-width: 0; }
+.card h4 { margin: 0; font-size: 13px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.card h4 .lbl { color: var(--kerbal); }
+.seqlist { display: grid; gap: 2px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.seqlist div { display: grid; grid-template-columns: 18px 1fr auto; gap: 6px; }
+.seqlist .n, .seqlist .dv { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.seqlist .cur { color: var(--kerbal); }
+.seqlist .past { color: var(--dim); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 13px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; min-width: 0; }
+.cap-box { border-color: #ef6a5a88; background: #ef6a5a14; }
+
+/* ---------- Variant A: Comms log (tall docked window, everything inline) ---------- */
+.A { top: max(48px, calc(env(safe-area-inset-top, 0px) + 40px)); right: max(12px, env(safe-area-inset-right, 0px)); bottom: 60px; width: min(400px, calc(100% - 24px)); }
+.A .quick { padding: 8px 8px 0; border-top: 1px solid #0005; }
+
+/* ---------- Variant B: Mission board (wide split: plan state left, conversation right, pinned Approval) ---------- */
+.B { left: 50%; transform: translateX(-50%); top: max(48px, calc(env(safe-area-inset-top, 0px) + 40px)); width: min(860px, calc(100% - 24px)); height: min(560px, calc(100% - 120px)); }
+.B .split { flex: 1; display: grid; grid-template-columns: 270px 1fr; min-height: 0; }
+.B .side { border-right: 1px solid #0006; padding: 10px; display: grid; gap: 14px; align-content: start; background: #0002; }
+.B .board-seq { display: grid; gap: 4px; }
+.B .bs { display: grid; grid-template-columns: 16px 1fr auto; gap: 6px; padding: 4px 6px; border-radius: 4px; font-size: 13px; align-items: center; font-variant-numeric: tabular-nums; }
+.B .bs .dv { font: 11px var(--mono); color: var(--muted); }
+.B .bs.past { color: var(--dim); }
+.B .bs.cur { background: #a6e04a1a; outline: 1px solid #a6e04a66; }
+.B .bs i { font-style: normal; text-align: center; }
+.B .talk { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.B .lines { padding: 10px; display: grid; gap: 8px; align-content: start; }
+.B .line { font-size: 13px; display: grid; grid-template-columns: 64px 1fr; gap: 8px; }
+.B .line .who { color: var(--kerbal); font-weight: 600; text-align: right; }
+.B .line.player .who { color: #8ec3ea; }
+.B .line.system { color: var(--muted); font-size: 12px; }
+.B .ref { color: var(--info); font-size: 12px; }
+.B .pinned { border-top: 2px solid var(--kerbal); background: #a6e04a0d; padding: 10px; display: grid; gap: 8px; }
+.B .pinned.cap { border-top-color: var(--bad); background: #ef6a5a12; }
+.B .pinned.run { border-top-color: var(--info); background: #6fb6f20f; }
+@media (max-width: 700px) { .B .split { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } .B .side { border-right: 0; border-bottom: 1px solid #0006; max-height: 170px; overflow-y: auto; } }
+
+/* ---------- Variant C: Capcom strip (slim strip under the altimeter, log in a drawer) ---------- */
+.C { top: max(44px, calc(env(safe-area-inset-top, 0px) + 36px)); left: 50%; transform: translateX(-50%); width: min(720px, calc(100% - 24px)); }
+.C .strip { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; padding: 8px 10px; align-items: center; }
+.C .say { font-size: 13px; min-width: 0; }
+.C .say b { color: var(--kerbal); }
+.C .stepper { display: flex; gap: 3px; padding: 0 10px 8px; }
+.C .stepper span { flex: 1; height: 16px; border-radius: 3px; background: #ffffff12; font: 10px/16px var(--mono); text-align: center; color: var(--dim); overflow: hidden; white-space: nowrap; }
+.C .stepper span.past { background: #7fd36b33; color: var(--ok); }
+.C .stepper span.cur { background: var(--kerbal); color: #1d2a09; font-weight: 600; }
+.C .actions { padding: 0 10px 10px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.C .drawer { border-top: 1px solid #0006; max-height: min(52vh, 420px); }
+@media (max-width: 560px) { .C .strip { grid-template-columns: auto 1fr; } .C .strip .cost { grid-column: 1 / -1; } }
+
+/* ---------- prototype controls (not part of the design) ---------- */
+.ctl { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 50; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 24px); background: #fff; color: #111; border-radius: 22px; padding: 5px 8px; box-shadow: 0 4px 18px #0009; font: 600 12px system-ui, sans-serif; }
+.ctl button { background: #eee; border: 0; border-radius: 14px; padding: 4px 10px; cursor: pointer; color: #111; font: inherit; }
+.ctl button.on { background: #111; color: #fff; }
+.ctl .sep { width: 1px; height: 18px; background: #ccc; margin: 0 4px; }
+.ctl .vname { min-width: 150px; text-align: center; }
+.note { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); top: max(10px, env(safe-area-inset-top, 0px)); z-index: 40; max-width: 250px; font: 12px/1.35 system-ui, sans-serif; background: #fffd; color: #222; border-radius: 6px; padding: 6px 9px; }
+@media (max-width: 900px) { .note { display: none; } }
+@media (prefers-reduced-motion: no-preference) { .bar span { transition: width .4s; } }
+</style>
+
+<div class="scene flight" id="scene">
+  <div class="stars"></div>
+  <div class="hud-alt">ALT 81,204 m · ORBIT</div>
+  <div class="navball"></div>
+  <div class="staging"><span>S3</span><span>S2</span><span>S1</span><span>S0</span></div>
+  <div class="craft"></div>
+  <div class="vab-label">Vehicle Assembly Building · Mun Lander II</div>
+</div>
+<div id="app"></div>
+<div class="note" id="note"></div>
+<nav class="ctl" aria-label="Prototype controls">
+  <button id="prev" aria-label="Previous variant">◀</button><span class="vname" id="vname"></span><button id="next" aria-label="Next variant">▶</button>
+  <span class="sep"></span>
+  <button data-scene="flight">Flight</button><button data-scene="vab">VAB</button>
+  <span class="sep"></span>
+  <span id="states"></span>
+</nav>
+
+<script>
+// ---------- example Mission (shared data; each variant decides how to show it) ----------
+const GOAL = "Land on the Mun, run 3 experiments, return to Kerbin.";
+const SEQS = [
+  ["Launch to 80 km orbit", 3400], ["Mun transfer", 860], ["Mun capture, 20 km orbit", 310], ["Land near the equator", 580],
+  ["Run experiments", 0], ["Ascend to Mun orbit", 580], ["Return transfer", 310], ["Reentry and splashdown", 0]
+];
+const CRAFT_DV = 7350, PLAN_DV = SEQS.reduce((a, s) => a + s[1], 0);
+const SCRIPT = `// Mission Script: seq-02-mun-transfer.ks  (illustrative; Building Block contracts are still open)
+RUNONCEPATH("0:/claudia/core/transfer").
+RUNONCEPATH("0:/claudia/core/exec_node").
+LOCAL plan IS transfer(LEXICON("target", MUN, "periapsis", 20000)).
+LOCAL burn IS exec_node(LEXICON("max_residual", 10)).
+ADDONS:CLAUDIA:REPORT(LEXICON(
+  "sequence", 2, "ok", burn["ok"],
+  "mun_pe", SHIP:ORBIT:NEXTPATCH:PERIAPSIS, "dv_used", burn["dv_used"])).`;
+
+const STATES = {
+  flight: {
+    approval: { label: "Awaiting Approval", cur: 1, cost: 2.14, goals: [0, 0, 0] },
+    running:  { label: "Running", cur: 1, cost: 2.14, goals: [0, 0, 0], progress: 0.62 },
+    debrief:  { label: "Debrief", cur: 2, cost: 2.61, goals: [0, 0, 0] },
+    paused:   { label: "Paused at cap", cur: 2, cost: 9.71, goals: [0, 0, 0] },
+  },
+  vab: {
+    check: { label: "Craft Check", cur: -1, cost: 0.38, goals: [0, 0, 0] },
+  }
+};
+const CAP = 10;
+
+let variant = "a", scene = "flight", state = "approval", acked = {};
+const VARIANTS = { a: "A · Comms log", b: "B · Mission board", c: "C · Capcom strip" };
+const NOTES = {
+  a: "A: one tall window docked right. Everything is a chat message; plans, Debriefs and the Craft Check are cards inside the conversation. Quick replies sit under the latest message.",
+  b: "B: a wide two-pane window. Left: the Mission Goal checklist and Mission Plan, always visible. Right: the conversation as plain text. Whatever needs your decision is pinned at the bottom.",
+  c: "C: a slim strip under the altimeter that keeps the view clear: Claudia's latest line, the sequence stepper and the action buttons. The full log opens in a drawer."
+};
+
+// ---------- conversation content per state ----------
+function convo(st) {
+  const h = [
+    { who: "player", text: GOAL },
+    { who: "claudia", text: "Mun Lander II passed its Craft Check with 2 Warnings, which you acknowledged. Here's the Mission Plan.", card: "missionPlan" },
+    { who: "player", text: "Approve" },
+    { who: "system", text: "Mission Plan approved · Sequence 1 flown · Debrief: Nominal" },
+    { who: "claudia", text: "Sequence 1 Debrief: Nominal. We're in an 81.2 × 79.6 km orbit (target 80 ± 2 km) and used 3,452 m/s against a budget of 3,400. Margin is now 18.9%, still under the 25% Warning line. Next up is the Mun transfer.", card: "seqPlan" },
+  ];
+  if (st === "approval") return h;
+  h.push({ who: "player", text: "Approve" });
+  if (st === "running") { h.push({ who: "claudia", text: "Running the Mun transfer now. I'll check back when the burn is done.", card: "running" }); return h; }
+  h.push({ who: "system", text: "Sequence 2 flown" });
+  h.push({ who: "claudia", text: "Sequence 2 Debrief: Nominal. Mun periapsis is 21.4 km (target 20 ± 5 km) and the burn used 852 of 860 m/s. Next: capture into a 20 km Mun orbit at periapsis, in 2 d 4 h.", card: "debrief" });
+  if (st === "paused") {
+    h.push({ who: "player", text: "Why not aerobrake at Kerbin instead of a burn on the way home?" });
+    h.push({ who: "claudia", text: "We can, and it's already planned: the return leg budgets 0 m/s for reentry because Kerbin's atmosphere does the braking." });
+    h.push({ who: "system", text: "Spending Cap reached · Mission Paused", card: "cap" });
+  }
+  return h;
+}
+const vabHistory = () => [
+  { who: "player", text: "Check this craft for: " + GOAL },
+  { who: "claudia", text: "Mun Lander II can fly this Mission, with 2 Warnings to acknowledge before we start.", card: "craftCheck" },
+];
+
+// ---------- shared card renderers ----------
+const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const money = v => "$" + v.toFixed(2);
+function costHTML(st) {
+  const c = st.cost, cls = c >= CAP * 0.97 ? "capped" : c >= CAP * 0.8 ? "hot" : "";
+  return `<span class="cost ${cls}" title="Spent this Mission / Spending Cap"><b>${money(c)}</b> / ${money(CAP)}</span>`;
+}
+function seqListHTML(cur) {
+  return `<div class="seqlist">${SEQS.map((s, i) => `<div class="${i < cur ? "past" : i === cur ? "cur" : ""}"><span class="n">${i + 1}</span><span>${s[0]}</span><span class="dv">${s[1].toLocaleString()} m/s</span></div>`).join("")}</div>`;
+}
+function goalsHTML(st) {
+  const g = [["Land on the Mun"], ["Run 3 experiments (0/3)"], ["Return to Kerbin"]];
+  return g.map((x, i) => `<div class="check ${st.goals[i] ? "done" : "todo"}"><i>${st.goals[i] ? "✓" : "○"}</i><span>${x[0]}</span></div>`).join("");
+}
+function marginHTML(m) {
+  const cls = m < 15 ? "bad" : m < 25 ? "warn" : "";
+  return `<div><div class="row" style="justify-content:space-between"><span class="lbl">Delta-v margin</span><span class="cost"><b>${m.toFixed(1)}%</b></span></div><div class="bar ${cls}"><span style="width:${Math.min(100, m * 2)}%"></span></div></div>`;
+}
+const reasoning = t => `<details><summary>Show reasoning</summary><div class="more">${t}</div></details>`;
+const scriptBox = () => `<details><summary>Show script</summary><pre class="ks">${esc(SCRIPT)}</pre></details>`;
+
+function cardHTML(kind, st) {
+  if (kind === "missionPlan") return `<div class="card"><h4><span class="lbl">Mission Plan</span> 8 sequences · ${PLAN_DV.toLocaleString()} of ${CRAFT_DV.toLocaleString()} m/s</h4>${seqListHTML(st.cur)}${reasoning("Launch east from the KSC for the rotation bonus. Transfer when the Mun leads Kerbin by about 110°; at an 80 km parking orbit that's roughly one window per orbit, so timing is flexible. Landing near the equator keeps the descent and the ascent to orbit cheap.")}</div>`;
+  if (kind === "seqPlan") return `<div class="card"><h4><span class="lbl">Sequence Plan 2</span> Mun transfer <span class="pill info">Awaiting Approval</span></h4>
+    <dl class="kv"><dt>Intent</dt><dd>Burn prograde at the transfer window to reach a 20 km Mun periapsis.</dd>
+    <dt>Blocks</dt><dd>transfer (target Mun, periapsis 20 km) → exec_node</dd>
+    <dt>Target</dt><dd>Mun periapsis 20 km ± 5 km</dd>
+    <dt>Delta-v</dt><dd>860 m/s (budget 860)</dd><dt>Duration</dt><dd>14 min wait + 2 min 10 s burn</dd>
+    <dt>Aborts</dt><dd>Burn residual over 10 m/s · EC under 10%</dd><dt>Risks</dt><dd>An overburn could put periapsis below the surface; the script trims it before ending.</dd></dl>
+    ${reasoning("A 20 km periapsis is low enough to make capture cheap and high enough to clear the Mun's tallest peaks near the equator, at about 7 km.")}${scriptBox()}</div>`;
+  if (kind === "running") return `<div class="card"><h4><span class="lbl">Running</span> Mun transfer · exec_node</h4><div class="bar"><span style="width:${st.progress * 100}%"></span></div><div class="row" style="justify-content:space-between"><span class="cost"><b>534</b> / 860 m/s</span><span class="cost">T+1 min 21 s</span></div>${scriptBox()}</div>`;
+  if (kind === "debrief") return `<div class="card"><h4><span class="lbl">Debrief</span> Sequence 2 <span class="pill ok">Nominal</span></h4>
+    <table class="facts"><tr><td>Mun periapsis</td><td class="n">21.4 km</td><td class="n">target 20 ± 5</td></tr><tr><td>Delta-v used</td><td class="n">852 m/s</td><td class="n">budget 860</td></tr></table>
+    <div class="lbl">Mission Goal</div>${goalsHTML(st)}${marginHTML(19.0)}
+    <div class="lbl">Next: Sequence Plan 3</div><div>Mun capture into a 20 km orbit, 310 m/s, at periapsis in 2 d 4 h.</div>
+    ${reasoning("The 1.4 km periapsis error is well inside tolerance, so no correction burn is needed. That saves about 15 m/s we can keep as margin for the landing.")}</div>`;
+  if (kind === "cap") return `<div class="card cap-box"><h4><span class="pill bad">Paused</span> Spending Cap reached</h4><div>${money(st.cost)} of ${money(CAP)} spent. The next request could cost up to $0.42, which would go over the cap. The Mission is Paused and nothing is lost; your craft is coasting safely to the Mun.</div><div class="row"><button class="btn go">Raise cap to $15.00</button><button class="btn stop">End Mission</button></div></div>`;
+  if (kind === "craftCheck") {
+    const w = [["m", "Delta-v margin 21.7% is below 25%.", "Add a small fuel tank to the lander stage, or accept less room for corrections."], ["t", "Landing TWR on the Mun is 1.42, below 1.5.", "Expect a slower, longer suicide burn; I'll start it higher."]];
+    const all = w.every(x => acked[x[0]]);
+    return `<div class="card"><h4><span class="lbl">Craft Check</span> <span class="pill warn">Pass with Warnings</span></h4>
+      <table class="facts"><tr><td>Stage 3 · launch</td><td class="n">3,620 m/s</td><td class="n">TWR 1.38</td></tr><tr><td>Stage 2 · transfer</td><td class="n">1,410 m/s</td><td class="n">TWR 0.71</td></tr><tr><td>Stage 1 · lander</td><td class="n">2,320 m/s</td><td class="n">Mun TWR 1.42</td></tr><tr><td><b>Total</b></td><td class="n"><b>7,350 m/s</b></td><td class="n">need ${PLAN_DV.toLocaleString()} + 15%</td></tr></table>
+      <div class="lbl">Blockers</div><div class="check done"><i>✓</i><span>None</span></div>
+      <div class="lbl">Warnings</div>${w.map(x => `<label class="check" style="cursor:pointer"><input type="checkbox" data-ack="${x[0]}" ${acked[x[0]] ? "checked" : ""}><span>${x[1]} <span style="color:var(--muted)">${x[2]}</span></span></label>`).join("")}
+      ${reasoning("Margin is measured against the Delta-v Map for this Mission Goal plus the default 15% margin. Stage 2's low TWR is fine because it only burns in orbit.")}
+      <div class="row"><button class="btn go" ${all ? "" : "disabled"}>Start Mission</button><span style="color:var(--muted);font-size:12px">${all ? "Ready." : "Acknowledge both Warnings to start."}</span></div></div>`;
+  }
+  return "";
+}
+function quickHTML() {
+  if (scene === "vab") return `<button class="btn">Recheck craft</button><button class="btn">Ask a question</button>`;
+  if (state === "approval") return `<button class="btn go">Approve</button><button class="btn">Change something</button><button class="btn">Ask a question</button>`;
+  if (state === "running") return `<button class="btn stop">Abort sequence</button><button class="btn">Ask a question</button>`;
+  if (state === "debrief") return `<button class="btn go">Approve</button><button class="btn">Change something</button><button class="btn">Ask a question</button>`;
+  return `<button class="btn go">Raise cap to $15.00</button><button class="btn stop">End Mission</button>`;
+}
+function msgsHTML(hist, st, withCards = true) {
+  return `<div class="msgs">${hist.map(m => m.who === "system" && !(withCards && m.card) ? `<div class="msg system">— ${m.text} —</div>` :
+    m.who === "system" ? cardHTML(m.card, st) :
+    `<div class="msg ${m.who}">${m.who === "claudia" ? '<div class="face sm"></div>' : ""}<div class="body"><span class="who">${m.who === "claudia" ? "Claudia" : "You"}</span><div class="text">${m.text}</div>${withCards && m.card ? cardHTML(m.card, st) : ""}</div></div>`).join("")}</div>`;
+}
+const inputHTML = () => `<div class="input"><input id="say" placeholder="Message Claudia…" aria-label="Message Claudia"><button class="btn">Send</button></div>`;
+
+// ---------- Variant A ----------
+function renderA(st, hist) {
+  return `<section class="win A" aria-label="Claudia"><div class="win-title"><div class="face sm"></div><span class="grow">Claudia · ${scene === "vab" ? "Craft Check" : "Mun Mission"}</span>${costHTML(st)}<span class="x">✕</span></div>
+    <div class="scroll" id="scroller" style="flex:1">${msgsHTML(hist, st)}</div>
+    <div class="quick row">${quickHTML()}</div>${inputHTML()}</section>`;
+}
+
+// ---------- Variant B ----------
+function renderB(st, hist) {
+  const side = scene === "vab"
+    ? `<div><div class="lbl">Mission Goal</div><div style="margin-top:4px">${GOAL}</div></div><div><div class="lbl">Craft</div><div>Mun Lander II · 3 stages</div></div>${marginHTML(21.7)}<div class="lbl">Cost so far</div>${costHTML(st)}`
+    : `<div><div class="lbl">Mission Goal</div><div style="margin:4px 0 6px">${GOAL}</div>${goalsHTML(st)}</div>
+       <div><div class="lbl" style="margin-bottom:4px">Mission Plan</div><div class="board-seq">${SEQS.map((s, i) => `<div class="bs ${i < st.cur ? "past" : i === st.cur ? "cur" : ""}"><i>${i < st.cur ? "✓" : i === st.cur ? "▶" : i + 1}</i><span>${s[0]}</span><span class="dv">${s[1]}</span></div>`).join("")}</div></div>
+       ${marginHTML(state === "approval" || state === "running" ? 18.9 : 19.0)}<div><div class="lbl">Spending Cap</div>${costHTML(st)}<div class="bar ${st.cost >= CAP * .8 ? "warn" : ""}" style="margin-top:4px"><span style="width:${st.cost / CAP * 100}%"></span></div></div>`;
+  const lines = hist.map(m => {
+    if (m.who === "system") return `<div class="line system"><span></span><span>${m.text}</span></div>`;
+    const ref = m.card && m.card !== "cap" ? ` <span class="ref">[${({ missionPlan: "Mission Plan, left", seqPlan: "Sequence Plan 2, pinned below", running: "progress, pinned below", debrief: "Debrief, pinned below", craftCheck: "Craft Check, pinned below" })[m.card]}]</span>` : "";
+    return `<div class="line ${m.who}"><span class="who">${m.who === "claudia" ? "Claudia" : "You"}</span><span>${m.text}${ref}</span></div>`;
+  }).join("");
+  const pinKind = scene === "vab" ? "craftCheck" : ({ approval: "seqPlan", running: "running", debrief: "debrief", paused: "cap" })[state];
+  const pinCls = state === "paused" && scene !== "vab" ? "cap" : state === "running" && scene !== "vab" ? "run" : "";
+  let pinned = cardHTML(pinKind, st).replace('<div class="card', '<div class="card" style="background:none;border:0;padding:0" data-x="');
+  const pinBtns = pinKind === "cap" || pinKind === "craftCheck" ? "" : `<div class="row">${quickHTML()}</div>`;
+  return `<section class="win B" aria-label="Claudia"><div class="win-title"><div class="face sm"></div><span class="grow">Claudia · Mission Board</span><span class="x">_</span><span class="x">✕</span></div>
+    <div class="split"><aside class="side scroll">${side}</aside>
+    <div class="talk"><div class="scroll" id="scroller" style="flex:1"><div class="lines">${lines}</div></div>
+    <div class="pinned ${pinCls} scroll" style="max-height:55%">${pinned}${pinBtns}</div>${inputHTML()}</div></div></section>`;
+}
+
+// ---------- Variant C ----------
+let drawer = false;
+function renderC(st, hist) {
+  const last = [...hist].reverse().find(m => m.who === "claudia");
+  const say = scene === "vab" ? "Craft Check: <b>Pass with Warnings</b>. 2 Warnings to acknowledge."
+    : ({ approval: "Debrief 1 Nominal. Ready for <b>Mun transfer</b>, 860 m/s, burn in 14 min.", running: "Running <b>Mun transfer</b>: 534 / 860 m/s.", debrief: "Debrief 2 <b>Nominal</b>, Mun Pe 21.4 km. Next: capture, 310 m/s.", paused: "<b>Paused</b>: Spending Cap reached ($9.71 / $10.00)." })[state];
+  const stepper = scene === "vab" ? "" : `<div class="stepper" aria-label="Mission Plan">${SEQS.map((s, i) => `<span class="${i < st.cur ? "past" : i === st.cur ? "cur" : ""}" title="${i + 1}. ${s[0]} · ${s[1]} m/s">${i === st.cur ? s[0] : i + 1}</span>`).join("")}</div>`;
+  const inline = state === "running" && scene !== "vab" ? `<div style="padding:0 10px 8px">${cardHTML("running", st).replace(/<details>[\s\S]*<\/details>/, "")}</div>` : "";
+  const vabActions = scene === "vab" ? `<button class="btn" id="opendrawer">Review Warnings</button>` : "";
+  return `<section class="win C" aria-label="Claudia"><div class="strip"><div class="face"></div><div class="say">${say}</div>${costHTML(st)}</div>${stepper}${inline}
+    <div class="actions">${scene === "vab" ? vabActions : quickHTML()}<span style="flex:1"></span><button class="linkish" id="toggledrawer">${drawer ? "Hide log ▴" : "Show log ▾"}</button></div>
+    ${drawer ? `<div class="drawer scroll" id="scroller">${msgsHTML(hist, st)}</div>${inputHTML()}` : ""}</section>`;
+}
+
+// ---------- wiring ----------
+function render() {
+  if (scene === "vab") state = "check"; else if (state === "check") state = "approval";
+  const st = STATES[scene][state];
+  const hist = scene === "vab" ? vabHistory() : convo(state);
+  document.getElementById("scene").className = "scene " + scene;
+  document.getElementById("app").innerHTML = ({ a: renderA, b: renderB, c: renderC })[variant](st, hist);
+  document.getElementById("vname").textContent = VARIANTS[variant];
+  document.getElementById("note").textContent = NOTES[variant];
+  document.querySelectorAll("[data-scene]").forEach(b => b.classList.toggle("on", b.dataset.scene === scene));
+  document.getElementById("states").innerHTML = Object.entries(STATES[scene]).map(([k, v]) => `<button data-state="${k}" class="${k === state ? "on" : ""}">${v.label}</button>`).join("");
+  const sc = document.getElementById("scroller"); if (sc) sc.scrollTop = sc.scrollHeight;
+}
+const keys = Object.keys(VARIANTS);
+function step(d) { variant = keys[(keys.indexOf(variant) + d + keys.length) % keys.length]; location.hash = variant; render(); }
+document.getElementById("prev").onclick = () => step(-1);
+document.getElementById("next").onclick = () => step(1);
+document.addEventListener("click", e => {
+  const t = e.target;
+  if (t.dataset.scene) { scene = t.dataset.scene; render(); }
+  else if (t.dataset.state) { state = t.dataset.state; render(); }
+  else if (t.id === "toggledrawer" || t.id === "opendrawer") { drawer = !drawer || t.id === "opendrawer"; render(); }
+});
+document.addEventListener("change", e => { if (e.target.dataset.ack) { acked[e.target.dataset.ack] = e.target.checked; render(); } });
+document.addEventListener("keydown", e => {
+  if (e.target.closest("input, textarea, [contenteditable]")) return;
+  if (e.key === "ArrowLeft") step(-1); if (e.key === "ArrowRight") step(1);
+});
+const h = (location.hash || "").slice(1); if (VARIANTS[h]) variant = h;
+render();
+</script>
