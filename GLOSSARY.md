@@ -74,6 +74,14 @@ _Avoid_: confirmation, sign-off
 One Mission Goal pursued by Claudia with one craft, from its Craft Check until it succeeds or is abandoned.
 _Avoid_: flight, run, job
 
+**Spending Cap**:
+The most a Mission may spend on Claudia's API calls, set by the player when the Mission starts and raisable later.
+_Avoid_: budget (which means delta-v), limit, quota
+
+**Paused**:
+The state of a Mission that has stopped making progress, e.g. at its Spending Cap or on an API error, and can be resumed by the player.
+_Avoid_: suspended, on hold, abandoned
+
 **Lost**:
 The outcome of a Mission that ends because Claudia was killed aboard the craft.
 _Avoid_: failed, crashed, KIA (for the Mission)
