@@ -32,9 +32,27 @@ _Avoid_: validation, craft verification
 One self-contained stretch of flight that Claudia plans and kOS executes in a single go, e.g. launch to orbit, Mun transfer burn, landing.
 _Avoid_: step, phase, maneuver (alone), burn
 
+**Mission Plan**:
+The ordered list of Maneuver Sequences Claudia intends to fly to reach a Mission Goal, each with its delta-v budget and rough timing; approved once to start the Mission and revised as Debriefs require.
+_Avoid_: flight plan, roadmap
+
+**Sequence Plan**:
+Claudia's proposal for the next Maneuver Sequence: its intent, Building Blocks and settings, target outcome with tolerances, expected delta-v and duration, abort conditions and risks.
+_Avoid_: maneuver plan, proposal, step plan
+
 **Debrief**:
 Claudia's chat-based evaluation after a Maneuver Sequence: what happened versus the plan, progress toward the Mission Goal, and the proposed next Maneuver Sequence with its reasoning.
 _Avoid_: report, evaluation, review
+
+**Nominal**:
+A Debrief outcome: the Maneuver Sequence ended within its Sequence Plan's tolerances.
+
+**Off-Nominal**:
+A Debrief outcome: the Maneuver Sequence ended outside tolerance, but the Mission Goal is still reachable.
+
+**Failed**:
+A Debrief outcome: the Mission Goal can no longer be reached as stated.
+_Avoid_: Lost (which is a Mission outcome, not a Debrief outcome)
 
 **Approval**:
 The player's go-ahead, given in chat, for Claudia to execute the proposed Maneuver Sequence.
