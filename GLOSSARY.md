@@ -28,6 +28,18 @@ _Avoid_: objective, prompt, task
 Claudia's assessment of whether a player-supplied craft can achieve a Mission Goal.
 _Avoid_: validation, craft verification
 
+**Blocker**:
+A Craft Check finding that prevents the Mission from starting; it cannot be overridden.
+_Avoid_: error, hard fail
+
+**Warning**:
+A Craft Check finding the player must acknowledge before the Mission starts.
+_Avoid_: soft fail, notice
+
+**Delta-v Map**:
+The reference table of delta-v needed for each leg of travel in the Kerbin system, against which a Mission Plan is budgeted.
+_Avoid_: dv chart, cheat sheet
+
 **Maneuver Sequence**:
 One self-contained stretch of flight that Claudia plans and kOS executes in a single go, e.g. launch to orbit, Mun transfer burn, landing.
 _Avoid_: step, phase, maneuver (alone), burn
