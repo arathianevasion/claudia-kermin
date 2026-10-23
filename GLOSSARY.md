@@ -39,3 +39,21 @@ _Avoid_: confirmation, sign-off
 **Mission**:
 One Mission Goal pursued by Claudia with one craft, from its Craft Check until it succeeds or is abandoned.
 _Avoid_: flight, run, job
+
+### Scripts
+
+**Core Library**:
+The fixed set of Building Blocks that ships with Claudia Kermin and is the same for every Mission.
+_Avoid_: primitives, stdlib, script bundle
+
+**Building Block**:
+One reusable flight routine in the Core Library (e.g. launch, transfer, land) that Claudia sets up for a Maneuver Sequence.
+_Avoid_: primitive, routine, module
+
+**Mission Script**:
+A script Claudia writes for one Mission to carry out a Maneuver Sequence, kept with that Mission.
+_Avoid_: generated script, glue script
+
+**Custom Script**:
+A Mission Script written from scratch instead of from Building Blocks, used when no Building Block fits.
+_Avoid_: raw script, freeform script
