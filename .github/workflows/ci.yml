@@ -3,6 +3,7 @@
 # CI has no KSP, so it builds and tests the Unity-free core only, and compiles the shipped
 # kerboscript with kOS.Safe taken from the public kOS release. The adapter and kOS addon
 # need a local KSP install and are built on a developer machine (see README, Building).
+# The compile check only proves the kerboscript compiles; the Script Check (ADR 0003) is separate.
 name: CI
 
 on:
@@ -37,7 +38,9 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/kos"
           gh release download "$KOS_RELEASE_TAG" --repo KSP-KOS/KOS --pattern '*.zip' --dir "$RUNNER_TEMP/kos"
-          unzip -q "$RUNNER_TEMP"/kos/*.zip -d "$RUNNER_TEMP/kos/unpacked"
+          for zip in "$RUNNER_TEMP"/kos/*.zip; do
+            unzip -q -o "$zip" -d "$RUNNER_TEMP/kos/unpacked"
+          done
           safe=$(find "$RUNNER_TEMP/kos/unpacked" -name kOS.Safe.dll | head -n 1)
           if [ -z "$safe" ]; then echo "kOS.Safe.dll not found in the $KOS_RELEASE_TAG release"; exit 1; fi
           echo "KOS_PLUGINS_DIR=$(dirname "$safe")" >> "$GITHUB_ENV"

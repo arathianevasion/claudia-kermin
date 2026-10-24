@@ -49,7 +49,7 @@ namespace ClaudiaKermin.KsCompile
                 return 2;
             }
 
-            SafeHouse.Logger = new ConsoleLogger();
+            SafeHouse.Logger = new StderrLogger();
             var failures = 0;
             foreach (var file in files)
             {
@@ -124,7 +124,8 @@ namespace ClaudiaKermin.KsCompile
             public void SelectAutopilotMode(string autopilotMode) { }
         }
 
-        private sealed class ConsoleLogger : ILogger
+        /// <summary>Sends kOS warnings and errors to stderr and drops its routine log chatter.</summary>
+        private sealed class StderrLogger : ILogger
         {
             public void Log(string text) { }
             public void Log(Exception e) { }
