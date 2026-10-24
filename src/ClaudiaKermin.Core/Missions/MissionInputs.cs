@@ -30,6 +30,33 @@ namespace ClaudiaKermin.Core.Missions
         }
     }
 
+    /// <summary>Check the craft now, in the editor or in Flight, against the Mission Goal as typed so far.</summary>
+    public sealed class RunCraftCheck : MissionInput
+    {
+        public readonly string Goal;
+        public readonly string Model;
+
+        public RunCraftCheck(string goal, string model)
+        {
+            Goal = goal;
+            Model = model;
+        }
+    }
+
+    /// <summary>The player accepts a Craft Check Warning knowingly; Start Mission opens once every Warning is accepted.</summary>
+    public sealed class AcknowledgeWarning : MissionInput
+    {
+        public readonly string Code;
+        public AcknowledgeWarning(string code) { Code = code; }
+    }
+
+    /// <summary>The player's choice of Claudia's kOS processor, by part; null goes back to the one nearest the root.</summary>
+    public sealed class ChooseProcessor : MissionInput
+    {
+        public readonly uint? PartId;
+        public ChooseProcessor(uint? partId) { PartId = partId; }
+    }
+
     /// <summary>The Approve button: an unambiguous Approval of the pending Mission Plan or Sequence Plan.</summary>
     public sealed class Approve : MissionInput
     {

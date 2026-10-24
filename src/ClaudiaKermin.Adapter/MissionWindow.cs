@@ -146,7 +146,10 @@ namespace ClaudiaKermin.Adapter
                 _goalStyle = new GUIStyle(GUI.skin.textArea) { wordWrap = true, richText = false };
             }
             if (View.StartForm.CanStart) DrawStartForm();
+            // The start form's goal is spent once a Mission is under way.
+            if (View.CanEndMission) _goal = "";
             if (View.Stage != MissionStage.None) DrawMission();
+            if (View.StartForm.CanStart || View.CraftCheck.State != CraftCheckState.None) DrawCraftCheck();
             if (_debugTools)
             {
                 GUI.enabled = View.CanCaptureSnapshot;
@@ -190,14 +193,88 @@ namespace ClaudiaKermin.Adapter
 
             decimal cap;
             var capOk = decimal.TryParse(_cap, NumberStyles.Number, CultureInfo.InvariantCulture, out cap) && cap > 0;
-            GUI.enabled = capOk && _goal.Trim().Length > 0 && names.Length > 0;
+            // Start Mission runs the Craft Check first; it is disabled on a Blocker and until every Warning is acknowledged.
+            GUI.enabled = capOk && _goal.Trim().Length > 0 && names.Length > 0 && View.CraftCheck.StartAllowed;
             if (GUILayout.Button("Start Mission"))
             {
+                // The goal stays until the Mission has actually started: the Craft Check may still hold it back.
                 _send(new StartMission(_goal, cap, form.Models[_modelIndex]));
-                _goal = "";
             }
             GUI.enabled = true;
             if (!capOk) GUILayout.Label("The Spending Cap must be a positive number of dollars.", _wrap);
+        }
+
+        /// <summary>The Craft Check, pinned at the bottom of the Mission board.</summary>
+        private void DrawCraftCheck()
+        {
+            var check = View.CraftCheck;
+            var form = View.StartForm;
+            GUILayout.Box("", GUILayout.Height(2), GUILayout.ExpandWidth(true));
+            GUILayout.Label("Craft Check", _bold);
+
+            if (form.CanStart)
+            {
+                GUI.enabled = _goal.Trim().Length > 0 && form.Models.Count > 0 && check.State != CraftCheckState.Running;
+                if (GUILayout.Button("Check craft", GUILayout.ExpandWidth(false)))
+                    _send(new RunCraftCheck(_goal, form.Models[Mathf.Clamp(_modelIndex, 0, form.Models.Count - 1)]));
+                GUI.enabled = true;
+            }
+            DrawProcessorChoice(check);
+
+            switch (check.State)
+            {
+                case CraftCheckState.None:
+                    GUILayout.Label("Not checked yet. Start Mission checks the craft first, or press Check craft.", _wrap);
+                    break;
+                case CraftCheckState.Running:
+                    GUILayout.Label("Claudia is checking the craft...", _wrap);
+                    break;
+                case CraftCheckState.NeedsSimulator:
+                case CraftCheckState.Error:
+                    GUILayout.Label(check.Message, _wrap);
+                    break;
+                case CraftCheckState.Done:
+                    DrawCraftCheckResult(check);
+                    break;
+            }
+            if (form.CanStart && !check.StartAllowed && check.State == CraftCheckState.Done && !check.Stale)
+                GUILayout.Label(check.Verdict == CraftVerdict.Fail
+                    ? "Start Mission is closed: fix every Blocker in the craft and check again."
+                    : "Start Mission opens once you have acknowledged every Warning.", _wrap);
+        }
+
+        private void DrawProcessorChoice(CraftCheckView check)
+        {
+            if (check.Processors.Count == 0) return;
+            GUILayout.Label("Claudia's kOS processor (default: the one nearest the root):", _wrap);
+            foreach (var processor in check.Processors)
+            {
+                var label = (processor.Chosen ? "(x) " : "( ) ") + processor.Title
+                    + (processor.BootFile.Length > 0 ? " [boot file: " + processor.BootFile + "]" : "");
+                if (GUILayout.Button(label, GUILayout.ExpandWidth(false)) && !processor.Chosen) _send(new ChooseProcessor(processor.PartId));
+            }
+            if (GUILayout.Button("Use the one nearest the root", GUILayout.ExpandWidth(false))) _send(new ChooseProcessor(null));
+        }
+
+        private void DrawCraftCheckResult(CraftCheckView check)
+        {
+            var verdict = check.Verdict == CraftVerdict.Pass ? "Pass"
+                : check.Verdict == CraftVerdict.PassWithWarnings ? "Pass with Warnings" : "Fail";
+            GUILayout.Label(verdict + (check.Stale ? " (the craft changed since; Start Mission checks again)" : ""), _bold);
+            if (check.Summary.Length > 0) GUILayout.Label("Claudia: " + check.Summary, _wrap);
+            foreach (var finding in check.Findings)
+            {
+                GUILayout.BeginVertical(GUI.skin.box);
+                GUILayout.Label((finding.Severity == CraftFindingSeverity.Blocker ? "Blocker: " : "Warning: ") + finding.Title, _bold);
+                GUILayout.Label(finding.Explanation, _wrap);
+                if (finding.Fix.Length > 0) GUILayout.Label("Fix: " + finding.Fix, _wrap);
+                if (finding.Severity == CraftFindingSeverity.Warning)
+                {
+                    var acknowledged = GUILayout.Toggle(finding.Acknowledged, "I accept this risk");
+                    if (acknowledged && !finding.Acknowledged) _send(new AcknowledgeWarning(finding.Code));
+                }
+                GUILayout.EndVertical();
+            }
         }
 
         private void DrawMission()

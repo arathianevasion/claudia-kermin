@@ -32,13 +32,18 @@ namespace ClaudiaKermin.Core.Tests
 
         private MissionControl Control(StreamingFakeTransport transport, PlayerConfig config = null)
         {
-            var client = new ClaudeClient(transport, () => "sk-ant-test", l => { });
+            var client = new ClaudeClient(new CraftCheckRouter(transport), () => "sk-ant-test", l => { });
             client.Timing.Wait = (d, c) => { };
             var mission = new MissionControl(client, _background, config ?? new PlayerConfig(), () => true);
             mission.Send(new SaveLoaded(_save.Path));
             mission.Send(new SceneChanged(GameScene.Flight));
-            mission.Send(GameSnapshot.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "snapshots", "on-pad.json"))));
+            mission.Send(OnPad());
             return mission;
+        }
+
+        private static GameSnapshot OnPad()
+        {
+            return GameSnapshot.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "snapshots", "on-pad.json")));
         }
 
         private void DrainUntil(MissionControl mission, Func<MissionView, bool> condition)
@@ -131,7 +136,7 @@ namespace ClaudiaKermin.Core.Tests
             plan.PauseAt = 200;
             var transport = new StreamingFakeTransport(plan);
             var mission = Control(transport);
-            mission.Send(new StartMission(Goal, 10m, Sonnet));
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
 
             // In flight: the worst case is recorded before sending.
             Assert.True(mission.View.Busy);
@@ -157,7 +162,7 @@ namespace ClaudiaKermin.Core.Tests
             var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-priced.sse"));
             var mission = Control(transport);
             // 32000 output tokens alone could cost $0.32 on Sonnet; the input estimate is on top.
-            mission.Send(new StartMission(Goal, 0.30m, Sonnet));
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 0.30m, Sonnet));
 
             Assert.Empty(transport.Requests);
             Assert.Equal(MissionStage.Paused, mission.View.Stage);
@@ -182,7 +187,7 @@ namespace ClaudiaKermin.Core.Tests
             var plan = ScriptedResponse.Fixture("mission-plan-priced.sse");
             plan.PauseAt = 200;
             var mission = Control(new StreamingFakeTransport(plan));
-            mission.Send(new StartMission(Goal, 10m, Sonnet));
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
             var id = mission.View.MissionId;
             var pending = mission.View.PendingCharge;
             Assert.True(pending > 0m);
@@ -210,7 +215,7 @@ namespace ClaudiaKermin.Core.Tests
             var cut2 = ScriptedResponse.Fixture("partial-text.sse", 4096, StreamEnd.Break);
             var transport = new StreamingFakeTransport(cut1, cut2, ScriptedResponse.Fixture("mission-plan-priced.sse"));
             var mission = Control(transport);
-            mission.Send(new StartMission(Goal, 10m, Sonnet));
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
             DrainUntil(mission, v => v.Stage == MissionStage.Paused);
 
             var held = mission.View.HeldCharges;
@@ -231,7 +236,7 @@ namespace ClaudiaKermin.Core.Tests
         {
             var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("refusal.sse"));
             var mission = Control(transport);
-            mission.Send(new StartMission(Goal, 10m, Sonnet));
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
             DrainUntil(mission, v => v.Stage == MissionStage.Paused);
 
             // refusal.sse reports 30 input tokens and no output: $0.00006.
@@ -247,7 +252,7 @@ namespace ClaudiaKermin.Core.Tests
         {
             var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("max-tokens-tool.sse"), ScriptedResponse.Fixture("text.sse"));
             var mission = Control(transport);
-            mission.Send(new StartMission(Goal, 10m, Sonnet));
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
             DrainUntil(mission, v => v.Stage == MissionStage.Paused);
             var firstSpent = mission.View.Spent;
             Assert.True(firstSpent > 0m);
@@ -267,7 +272,7 @@ namespace ClaudiaKermin.Core.Tests
             var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-priced.sse"));
             var mission = Control(transport);
             // $0.54 of $0.65 is 83%; the worst case ($0.3x) still fits before sending.
-            mission.Send(new StartMission(Goal, 0.65m, Sonnet));
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 0.65m, Sonnet));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
 
             Assert.True(mission.View.CapWarning);
@@ -288,7 +293,7 @@ namespace ClaudiaKermin.Core.Tests
                 ScriptedResponse.Fixture("mission-sequence-plan-priced.sse"),
                 ScriptedResponse.Fixture("mission-debrief-priced.sse"));
             var mission = Control(transport);
-            mission.Send(new StartMission(Goal, 1.20m, Sonnet));
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 1.20m, Sonnet));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             mission.Send(new Approve());
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
@@ -317,7 +322,7 @@ namespace ClaudiaKermin.Core.Tests
             var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-big.sse"));
             var mission = Control(transport);
             // The plan costs $0.80, past the $0.50 cap, though its worst-case estimate fitted.
-            mission.Send(new StartMission(Goal, 0.50m, Sonnet));
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 0.50m, Sonnet));
             DrainUntil(mission, v => v.Stage == MissionStage.Paused);
 
             Assert.Equal(0.80m, mission.View.Spent);
