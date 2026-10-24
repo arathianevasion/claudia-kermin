@@ -42,7 +42,8 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(snapshot);
             mission.Send(new UtAdvanced(5000));
             CraftCheckRouter.StartChecked(mission, _background, snapshot, new StartMission("Reach orbit.", 10m, "claude-sonnet-5-5"));
-            Assert.Null(watch.Observe(mission.View));
+            // The check's drain may already have carried the Mission on to the plan, so the baseline is the Mission as it began.
+            Assert.Null(watch.Observe(new MissionView { MissionId = mission.View.MissionId, Stage = MissionStage.Planning }));
 
             var deadline = DateTime.UtcNow.AddSeconds(10);
             while ((mission.View.Stage != MissionStage.AwaitingPlanApproval || mission.View.Busy) && DateTime.UtcNow < deadline)
