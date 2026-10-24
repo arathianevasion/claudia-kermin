@@ -1,0 +1,31 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  The kOS addon: the bridge into each kOS processor and the runtime gates (ADR 0003).
+  Targets net48 like kOS 1.6.0.1. kOS and Harmony are dependencies the player installs;
+  neither is copied into the build output.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>ClaudiaKermin.KOS</AssemblyName>
+    <RootNamespace>ClaudiaKermin.KOS</RootNamespace>
+    <NeedsKSP>true</NeedsKSP>
+    <NeedsKOS>true</NeedsKOS>
+    <ShipsInGameData>true</ShipsInGameData>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ClaudiaKermin.Core/ClaudiaKermin.Core.csproj" />
+    <ProjectReference Include="../ClaudiaKermin.Adapter/ClaudiaKermin.Adapter.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="kOS" HintPath="$(KOSPluginsDir)/kOS.dll" Private="false" />
+    <Reference Include="kOS.Safe" HintPath="$(KOSPluginsDir)/kOS.Safe.dll" Private="false" />
+  </ItemGroup>
+
+  <!-- Compile-only: players get 0Harmony.dll from the community Harmony mod (HarmonyKSP). -->
+  <ItemGroup>
+    <PackageReference Include="Lib.Harmony" Version="2.2.2" ExcludeAssets="runtime" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

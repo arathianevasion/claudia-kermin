@@ -1,0 +1,18 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  The thin KSP adapter (ADR 0001): game-state reads, crew roster and UI, feeding the core plain
+  snapshots. Builds against a local KSP 1.12.5 install; see KSPRoot in Directory.Build.props.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>ClaudiaKermin</AssemblyName>
+    <RootNamespace>ClaudiaKermin.Adapter</RootNamespace>
+    <NeedsKSP>true</NeedsKSP>
+    <ShipsInGameData>true</ShipsInGameData>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ClaudiaKermin.Core/ClaudiaKermin.Core.csproj" />
+  </ItemGroup>
+</Project>
