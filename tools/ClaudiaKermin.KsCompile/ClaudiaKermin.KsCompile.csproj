@@ -1,8 +1,9 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <!--
-  Compiles kerboscript with kOS.Safe outside KSP, so CI catches syntax errors in the scripts we ship.
-  Not part of the mod. kOS.Safe comes from a local kOS install (KOSPluginsDir) or, in CI, from the
-  public kOS release.
+  The Script Check from the command line: CI runs it over every shipped script (the Core Library, RSVP
+  and the debug scripts) with the same code the mod runs (ClaudiaKermin.ScriptCheck). Not part of the mod.
+  kOS.Safe comes from a local kOS install (KOSPluginsDir) or, in CI, from the public kOS release, and is
+  copied next to the tool so it can run.
 -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -10,7 +11,13 @@
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <NeedsKOS>true</NeedsKOS>
+    <!-- NU1702: referencing the net48 Script Check from net10.0 is deliberate, as in the core tests. -->
+    <NoWarn>$(NoWarn);NU1702</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/ClaudiaKermin.ScriptCheck/ClaudiaKermin.ScriptCheck.csproj" />
+  </ItemGroup>
 
   <ItemGroup>
     <Reference Include="kOS.Safe" HintPath="$(KOSPluginsDir)/kOS.Safe.dll" />
