@@ -40,6 +40,10 @@ _Avoid_: error, hard fail
 A Craft Check finding the player must acknowledge before the Mission starts.
 _Avoid_: soft fail, notice
 
+**Game Snapshot**:
+A plain copy of the game at one moment (the craft, its stages and parts, orbit, situation, resources, crew, science and link state) that the mod takes and gives to Claudia and the Craft Check, so neither reads the live game; Game Snapshots recorded from real play are also what the mod's tests run against.
+_Avoid_: game state, telemetry (which Telemetry Checks measure while Running), dump
+
 **Delta-v Map**:
 The reference table of delta-v needed for each leg of travel in the Kerbin system, against which a Mission Plan is budgeted.
 _Avoid_: dv chart, cheat sheet
@@ -117,6 +121,10 @@ _Avoid_: takeover, override, manual mode
 **Lost**:
 The outcome of a Mission that ends because Claudia was killed aboard the craft.
 _Avoid_: failed, crashed, KIA (for the Mission)
+
+**Capcom strip**:
+The slim bar under the altimeter in Flight through which the player follows a Mission without leaving the flight view: Claudia's portrait and latest line, where the Mission is in its Mission Plan, the Spending Cap, live progress while Running, and the quick replies for the current state.
+_Avoid_: HUD, status bar, ticker
 
 ### Scripts
 
