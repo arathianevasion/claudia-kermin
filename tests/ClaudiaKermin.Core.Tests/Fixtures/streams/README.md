@@ -14,6 +14,9 @@ transport. None came from a live API call, and none holds a key.
 - `mission-*.sse`: one Mission's replies in the Mission reply schema (structured output as text deltas):
   the Mission Plan, the Sequence Plan with its script, the Debrief, an ambiguous reply and an answer.
 
+- `craft-check-*.sse`: Craft Check replies (a summary and findings by code): pass, two Warnings, a Blocker with a Warning,
+  and a finding outside the fixed lists.
+
 `../snapshots/on-pad.json` is a hand-written Game Snapshot in the format the debug capture button
 writes; replace or add captures from real play as they are taken.
 

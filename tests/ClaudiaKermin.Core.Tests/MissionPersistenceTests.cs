@@ -37,7 +37,7 @@ namespace ClaudiaKermin.Core.Tests
 
         private MissionControl Control(StreamingFakeTransport transport, Background background = null)
         {
-            var client = new ClaudeClient(transport, () => "sk-ant-test", l => { });
+            var client = new ClaudeClient(new CraftCheckRouter(transport), () => "sk-ant-test", l => { });
             client.Timing.Wait = (d, c) => { };
             var mission = new MissionControl(client, background ?? _background, new PlayerConfig(), () => true);
             mission.Send(new SaveLoaded(_save.Path));
@@ -47,7 +47,19 @@ namespace ClaudiaKermin.Core.Tests
         /// <summary>A "crashed" game: its own queue, never drained, so nothing it still has in flight can reach the files.</summary>
         private MissionControl Crashable(StreamingFakeTransport transport)
         {
-            return Control(transport, new Background());
+            var background = new Background();
+            var mission = Control(transport, background);
+            _crashable[mission] = background;
+            return mission;
+        }
+
+        private readonly Dictionary<MissionControl, Background> _crashable = new Dictionary<MissionControl, Background>();
+
+        /// <summary>Start Mission with its Craft Check (which passes) drained first, on the queue the Mission was built with.</summary>
+        private void StartChecked(MissionControl mission, StartMission start)
+        {
+            Background background;
+            CraftCheckRouter.StartChecked(mission, _crashable.TryGetValue(mission, out background) ? background : _background, OnPad(), start);
         }
 
         private static GameSnapshot OnPad()
@@ -112,7 +124,7 @@ namespace ClaudiaKermin.Core.Tests
         {
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(OnPad());
-            mission.Send(new StartMission(Goal, cap, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission(Goal, cap, "claude-sonnet-5-5"));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
         }
 
@@ -366,7 +378,7 @@ namespace ClaudiaKermin.Core.Tests
             var crashed = Crashable(new StreamingFakeTransport(held));
             crashed.Send(new SceneChanged(GameScene.Flight));
             crashed.Send(OnPad());
-            crashed.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            StartChecked(crashed, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             Assert.True(crashed.View.Busy);
             var worstCase = crashed.View.PendingCharge;
             Assert.True(worstCase > 0m);
@@ -431,7 +443,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(OnPad());
-            mission.Send(new StartMission(Goal, 0.50m, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission(Goal, 0.50m, "claude-sonnet-5-5"));
             DrainUntil(mission, v => v.Stage == MissionStage.Paused);
             Assert.Equal(0.80m, mission.View.Spent);
             var saved = Saved(mission);
@@ -464,7 +476,7 @@ namespace ClaudiaKermin.Core.Tests
             var crashed = Crashable(before);
             crashed.Send(new SceneChanged(GameScene.Flight));
             crashed.Send(OnPad());
-            crashed.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            StartChecked(crashed, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             Assert.True(crashed.View.Busy);
             var saved = Saved(crashed);
             var folder = MissionFolder(crashed);
@@ -492,7 +504,7 @@ namespace ClaudiaKermin.Core.Tests
             var before = new StreamingFakeTransport(held);
             var crashed = Crashable(before);
             crashed.Send(new SceneChanged(GameScene.Editor));
-            crashed.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            StartChecked(crashed, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             var saved = Saved(crashed);
             Assert.Equal(MissionStage.WaitingForFlight, saved[0].Stage);
             // The craft reaches Flight and Claudia is asked for the Mission Plan, after the save was made.
@@ -516,7 +528,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(OnPad());
-            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             DrainUntil(mission, v => v.Stage == MissionStage.Paused);
             var saved = Saved(mission);
             Assert.Equal(MissionStage.Paused, saved[0].Stage);
