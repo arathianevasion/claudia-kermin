@@ -394,7 +394,13 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(MissionStage.AwaitingSequenceApproval, resumed.View.Stage);
             Assert.Contains(CoreLibrary.Bundle(script, 1, 10800), _check.Checked);
             resumed.Send(new Approve());
-            Assert.Equal(CoreLibrary.Bundle(script, 1, 10800), Assert.Single(resumed.TakeCommands().OfType<StartScript>()).Source);
+            var start = Assert.Single(resumed.TakeCommands().OfType<StartScript>());
+            Assert.Equal(CoreLibrary.Bundle(script, 1, 10800), start.Source);
+            // The checked script keeps the run id (#89) and the chosen processor (#55).
+            Assert.Equal(3102u, start.ProcessorPartId);
+            Assert.True(start.RunId > 0);
+            resumed.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Finished, null, "", "", false), start.RunId + 1));
+            Assert.Equal(MissionStage.Running, resumed.View.Stage);
         }
 
         [Fact]
