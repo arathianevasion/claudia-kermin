@@ -37,6 +37,7 @@ namespace ClaudiaKermin.Core.Missions
         private double _ut;
         private GameSnapshot _snapshot;
         private Mission _mission;
+        private int _lastRunId;
         private MissionView _view = new MissionView();
 
         public MissionControl(ClaudeClient client, Background background, PlayerConfig config, Func<bool> hasKey)
@@ -77,7 +78,7 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is AskQuestion) Asked(((AskQuestion)input).Text);
             else if (input is Retry) Retried();
             else if (input is CaptureSnapshot) Capture();
-            else if (input is KosRunRefused) RunRefused(((KosRunRefused)input).Reason);
+            else if (input is KosRunRefused) RunRefused((KosRunRefused)input);
             else if (input is KosRunEnded) RunEnded((KosRunEnded)input);
             TryPlan();
             Rebuild();
@@ -125,6 +126,8 @@ namespace ClaudiaKermin.Core.Missions
             public MissionStage StageBeforePause;
             /// <summary>The processor the running script was started on.</summary>
             public uint? RunningProcessor;
+            /// <summary>The id of the current run; run events carrying any other id are late and ignored.</summary>
+            public int? RunId;
             public MissionPlan Plan;
             public SequencePlan PendingSequence;
             public int SequencesProposed;
@@ -264,7 +267,8 @@ namespace ClaudiaKermin.Core.Missions
             Note(LogKind.Notice, "Sequence Plan approved: the mod is starting the script.");
             mission.Stage = MissionStage.Running;
             mission.RunningProcessor = processor.Value;
-            _commands.Add(new StartScript(processor.Value, "claudia:" + mission.Id + ":" + plan.Name, plan.Script));
+            mission.RunId = ++_lastRunId;
+            _commands.Add(new StartScript(processor.Value, "claudia:" + mission.Id + ":" + plan.Name, plan.Script, mission.RunId.Value));
         }
 
         private void Replied(string text)
@@ -315,10 +319,12 @@ namespace ClaudiaKermin.Core.Missions
 
         // ---- kOS ----
 
-        private void RunRefused(string reason)
+        private void RunRefused(KosRunRefused refused)
         {
+            var reason = refused.Reason;
             var mission = _mission;
-            if (mission == null || mission.Stage != MissionStage.Running) return;
+            if (mission == null || mission.Stage != MissionStage.Running || mission.RunId != refused.RunId) return;
+            mission.RunId = null;
             mission.Stage = MissionStage.AwaitingSequenceApproval;
             Note(LogKind.Notice, "The script didn't start: " + reason);
         }
@@ -329,7 +335,8 @@ namespace ClaudiaKermin.Core.Missions
             if (mission == null) return;
             var running = mission.Stage == MissionStage.Running
                 || (mission.Stage == MissionStage.Paused && mission.StageBeforePause == MissionStage.Running);
-            if (!running) return;
+            if (!running || mission.RunId != ended.RunId) return;
+            mission.RunId = null;
             Note(LogKind.Notice, "The script ended: " + ended.Outcome.Summary + ".");
             var turn = new Turn
             {

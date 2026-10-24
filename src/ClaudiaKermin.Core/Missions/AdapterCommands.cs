@@ -18,9 +18,12 @@ namespace ClaudiaKermin.Core.Missions
         public readonly uint ProcessorPartId;
         public readonly string Label;
         public readonly string Source;
+        /// <summary>Issued by the core, unique across all Missions in the session; the adapter returns it on the run's events.</summary>
+        public readonly int RunId;
 
-        public StartScript(uint processorPartId, string label, string source)
+        public StartScript(uint processorPartId, string label, string source, int runId)
         {
+            RunId = runId;
             ProcessorPartId = processorPartId;
             Label = label;
             Source = source;

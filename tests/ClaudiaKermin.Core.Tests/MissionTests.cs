@@ -158,7 +158,7 @@ namespace ClaudiaKermin.Core.Tests
 
             // The run's outcome feeds the Debrief.
             var report = new Dictionary<string, object> { { "success", true }, { "reason", "link check" }, { "situation", "PRELAUNCH" } };
-            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Finished, report, "", "", false)));
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Finished, report, "", "", false), start.RunId));
             DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
             AssertNextRequestExtends(afterSequence, transport.Requests[2]);
             var debrief = mission.View.Log.Last(e => e.Kind == LogKind.Debrief);
@@ -390,9 +390,9 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(new Approve());
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
             mission.Send(new Approve());
-            Assert.Single(Started(mission));
+            var lostStart = Assert.Single(Started(mission));
 
-            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Interrupted, null, "", "the kOS processor was lost", false)));
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Interrupted, null, "", "the kOS processor was lost", false), lostStart.RunId));
             DrainUntil(mission, v => v.Stage == MissionStage.Ended);
             Assert.Contains("Interrupted (the kOS processor was lost)", Text(Messages(transport.Requests[2]).Where(m => m.GetProperty("role").GetString() == "user").Last()));
             Assert.Equal("Failed", mission.View.Log.Last(e => e.Kind == LogKind.Debrief).Outcome);
@@ -485,9 +485,92 @@ namespace ClaudiaKermin.Core.Tests
             Assert.True(File.Exists(Path.Combine(folder, "transcript.json")));
 
             // The aborted script's late end report is not a Debrief of anything.
-            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Interrupted, null, "", "aborted", true)));
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Interrupted, null, "", "aborted", true), start.RunId));
             Assert.Equal(MissionStage.None, mission.View.Stage);
             Assert.Equal(2, transport.Requests.Count);
+        }
+
+        private static RunOutcome Finished()
+        {
+            return new RunOutcome(RunOutcomeKind.Finished, new Dictionary<string, object> { { "success", true } }, "", "", false);
+        }
+
+        /// <summary>Starts a Mission and takes it through both Approvals to Running; returns the script the mod was told to start.</summary>
+        private StartScript RunToRunning(MissionControl mission)
+        {
+            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+            mission.Send(new Approve());
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+            return Started(mission).Single();
+        }
+
+        private MissionControl InFlight(StreamingFakeTransport transport)
+        {
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            return mission;
+        }
+
+        [Fact]
+        public void AnEndedMissionsLateRunOutcomeIsNotAppliedToTheNewMission()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"), ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                ScriptedResponse.Fixture("mission-plan.sse"), ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = InFlight(transport);
+            var oldRun = RunToRunning(mission);
+            mission.Send(new EndMission());
+            var newRun = RunToRunning(mission);
+            Assert.Equal(4, transport.Requests.Count);
+
+            mission.Send(new KosRunEnded(Finished(), oldRun.RunId));
+
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+            Assert.Equal(4, transport.Requests.Count);
+            Assert.NotEqual(oldRun.RunId, newRun.RunId);
+        }
+
+        [Fact]
+        public void AnEndedMissionsLateRunRefusalIsNotAppliedToTheNewMission()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"), ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                ScriptedResponse.Fixture("mission-plan.sse"), ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = InFlight(transport);
+            var oldRun = RunToRunning(mission);
+            mission.Send(new EndMission());
+            RunToRunning(mission);
+
+            mission.Send(new KosRunRefused("the processor is busy", oldRun.RunId));
+
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+        }
+
+        [Fact]
+        public void AnEarlierRunsLateOutcomeWithinOneMissionIsIgnoredAndTheNewRunsOutcomeStillDebriefs()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"), ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                ScriptedResponse.Fixture("mission-debrief.sse"));
+            var mission = InFlight(transport);
+            var first = RunToRunning(mission);
+            mission.Send(new KosRunRefused("the processor is busy", first.RunId));
+            Assert.Equal(MissionStage.AwaitingSequenceApproval, mission.View.Stage);
+            mission.Send(new Approve());
+            var second = Started(mission).Single();
+            Assert.NotEqual(first.RunId, second.RunId);
+
+            mission.Send(new KosRunEnded(Finished(), first.RunId));
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+            Assert.Equal(2, transport.Requests.Count);
+
+            mission.Send(new KosRunEnded(Finished(), second.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+            Assert.Equal(3, transport.Requests.Count);
         }
 
         [Fact]
@@ -505,7 +588,7 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(new Approve());
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
             mission.Send(new Approve());
-            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Interrupted, null, "", "lost", false)));
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Interrupted, null, "", "lost", false), Started(mission).Single().RunId));
             DrainUntil(mission, v => v.Stage == MissionStage.Ended);
             Assert.False(mission.View.CanEndMission);
             mission.TakeCommands();
