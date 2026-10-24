@@ -135,3 +135,7 @@ _Avoid_: generated script, glue script
 **Custom Script**:
 A Mission Script written from scratch instead of from Building Blocks, used when no Building Block fits.
 _Avoid_: raw script, freeform script
+
+**Script Check**:
+The mod's check of a compiled script against a forbidden list (e.g. save and load, file operations, changing other vessels) before Approval; a script that fails is rewritten or never offered.
+_Avoid_: sandbox, validation
