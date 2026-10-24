@@ -118,7 +118,8 @@ namespace ClaudiaSpike
         public string ScreenTail(int n)
         {
             if (IsStale) return "";
-            var lines = shared.Screen.GetBuffer().Select(l => l.ToString().TrimEnd()).Where(l => l.Length > 0).ToList();
+            // Lines are NUL-padded char arrays; Unity's log truncates at the first NUL.
+            var lines = shared.Screen.GetBuffer().Select(l => l.ToString().Replace('\0', ' ').TrimEnd()).Where(l => l.Length > 0).ToList();
             return string.Join("\n", lines.Skip(System.Math.Max(0, lines.Count - n)).Select(l => "  | " + l).ToArray());
         }
 
