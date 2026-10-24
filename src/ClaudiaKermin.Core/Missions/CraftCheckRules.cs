@@ -75,7 +75,8 @@ namespace ClaudiaKermin.Core.Missions
             new CraftCheckRule("boot_file_set", Warning, "Boot file set on Claudia's processor",
                 "the processor Claudia will use (chosen_processor) has a boot file set."),
             new CraftCheckRule("manual_stretches_without_crew", Warning, "Manual stretches planned with no other crew aboard",
-                "the Mission Goal plans stretches the player flies by hand and no crew other than Claudia is aboard."),
+                "the Mission Goal plans stretches the player flies by hand (docking, EVA science, or flying a sequence themselves) and the crew list has no Kerbal "
+                + "other than Claudia (trait SuperIntelligence) and Tourists (trait Tourist)."),
         };
 
         public static CraftCheckRule Find(string code)

@@ -87,9 +87,17 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>Per-stage figures from the stock simulator.</summary>
         public List<SnapshotStage> Stages = new List<SnapshotStage>();
         public List<SnapshotCrewMember> Crew = new List<SnapshotCrewMember>();
+        /// <summary>The craft has a link to Kerbin; true too when CommNet is off in the save. A snapshot with no "link" field reads as linked.</summary>
+        public bool HasLink = true;
         public List<SnapshotExperiment> Experiments = new List<SnapshotExperiment>();
         /// <summary>The game's bodies, for the Delta-v Map and thrust over weight.</summary>
         public List<SnapshotBody> Bodies = new List<SnapshotBody>();
+
+        /// <summary>Crew aboard other than Claudia herself and Tourists: the Kerbals who could really fly the craft.</summary>
+        public bool HasOtherCrew
+        {
+            get { return Crew.Any(c => c.Trait != Roster.ClaudiaIdentity.TraitName && c.Trait != "Tourist"); }
+        }
 
         /// <summary>The kOS processor Claudia would use: the one nearest the root. Null if the craft has none.</summary>
         public uint? ProcessorPartId
@@ -117,7 +125,8 @@ namespace ClaudiaKermin.Core.Missions
                 .Field("situation", Situation)
                 .Field("body", Body)
                 .Field("mode", GameMode)
-                .Field("dv_sim", DeltaVSimulator);
+                .Field("dv_sim", DeltaVSimulator)
+                .Field("link", HasLink);
             json.Name("craft").BeginObject()
                 .Field("name", Craft.Name)
                 .Field("mass_t", Craft.MassTonnes)
@@ -202,6 +211,7 @@ namespace ClaudiaKermin.Core.Missions
                 Body = JsonNode.Str(root["body"]) ?? "",
                 GameMode = JsonNode.Str(root["mode"]) ?? "",
                 DeltaVSimulator = JsonNode.Bool(root["dv_sim"]) ?? false,
+                HasLink = JsonNode.Bool(root["link"]) ?? true,
             };
             var craft = root["craft"];
             if (craft != null)

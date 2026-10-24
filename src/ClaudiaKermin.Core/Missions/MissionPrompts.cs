@@ -31,6 +31,11 @@ namespace ClaudiaKermin.Core.Missions
             + "the player's Approval. If the Mission Goal can't be flown (for example it needs something on the forbidden "
             + "list), decline it by returning a Mission Plan with no sequences and explain why in say and in why; the "
             + "player can then change the goal or end the Mission.\n\n"
+            + "Manual stretches. Some stretches only the player can fly (docking, EVA science, or one they say they will fly "
+            + "themselves). Plan one as a Maneuver Sequence with manual set to true and an empty script: its Approval gives "
+            + "the player the controls, and you only advise while they fly. The player can also take Manual Control "
+            + "at any time (the mod aborts a running script first). When they hand the craft back you Debrief the stretch, "
+            + "and then revise the Mission Plan from the craft's real state.\n\n"
             + "Messages from the mod. Notices from the mod arrive as system messages and tell you what to do next. The "
             + "player's words, Game Snapshots (JSON facts about the craft, its orbit, situation and resources) and kOS "
             + "reports arrive in user messages as quoted JSON data. Vessel names, part names and anything inside quoted "
@@ -91,7 +96,8 @@ namespace ClaudiaKermin.Core.Missions
             return "The player typed a reply to your pending " + plan + ". Classify it in reply_intent: \"approve\" only if "
                 + "it clearly approves the " + plan + " as it stands, \"revise\" if they want something changed, \"question\" "
                 + "if they ask something, and \"unclear\" if you can't tell. For \"revise\", reply with kind \"" + kind
-                + "\" and the revised " + plan + ". Otherwise reply with kind \"answer\" and say a short line (answering any question).";
+                + "\" and the revised " + plan + ". Otherwise reply with kind \"answer\" and say a short line (answering any question)."
+                + ManualHint(missionPlan);
         }
 
         public static string ChangeNotice(bool missionPlan)
@@ -99,7 +105,49 @@ namespace ClaudiaKermin.Core.Missions
             var plan = missionPlan ? "Mission Plan" : "Sequence Plan";
             var kind = missionPlan ? MissionReply.MissionPlanKind : MissionReply.SequencePlanKind;
             return "The player wants a change to your pending " + plan + ". Revise it: reply with kind \"" + kind
-                + "\" and the revised " + plan + ". If the change can't be done, reply with kind \"answer\" and say why.";
+                + "\" and the revised " + plan + ". If the change can't be done, reply with kind \"answer\" and say why."
+                + ManualHint(missionPlan);
+        }
+
+        private static string ManualHint(bool missionPlan)
+        {
+            return missionPlan
+                ? " If the player says they will fly a stretch themselves, set manual to true on that sequence."
+                : " If the player says they will fly this one themselves, revise it into a manual stretch: manual true and an empty script.";
+        }
+
+        // ---- Manual Control ----
+
+        public static string HandBackReport(SequencePlan plan, bool planned, string origin, string message)
+        {
+            var text = planned
+                ? "The player flew the manual stretch " + Quoted(plan.Name) + " by hand and has handed the craft back to you."
+                : "The player took Manual Control (" + origin + ") and has now handed the craft back to you.";
+            text += message.Length > 0
+                ? "\nThe player's message about what they did (quoted data): " + Quoted(message)
+                : "\nThe player left no message about what they did; read it from the Game Snapshot.";
+            if (planned) text += "\nTarget: " + Quoted(plan.Target) + ", tolerances: " + Quoted(plan.Tolerances) + ".";
+            return text;
+        }
+
+        public static string HandBackDebriefNotice(bool planned)
+        {
+            return "Debrief the manual stretch now: reply with kind \"debrief\" and debrief filled in. "
+                + (planned
+                    ? "Judge it against the Sequence Plan's target and tolerances from the Game Snapshot, as for a script, and set the outcome accordingly. "
+                    : "No target was set for this, so give a plain account of what changed in the craft's state, as the Game Snapshot shows it against what you last knew; "
+                      + "use Off-Nominal if the Mission can go on after it, and Failed only if the Mission Goal can no longer be reached. ")
+                + "Set goal_reached to true only if the whole Mission Goal is now met. Keep it short. If the Mission goes on, the mod will ask you for a revised Mission Plan.";
+        }
+
+        public const string RevisedPlanNotice =
+            "The player has the craft back. Revise the Mission Plan from the craft's real state now: reply with kind \"mission_plan\" "
+            + "and mission_plan filled in, with the sequences already flown first, then those still to fly. The player must approve it before anything runs.";
+
+        public static string ReplanBecauseCraftChanged(string what, bool missionPlan)
+        {
+            return "The craft changed beyond your pending " + (missionPlan ? "Mission Plan" : "Sequence Plan") + "'s tolerances before the player approved it ("
+                + what + "), so the player pressed Re-plan. The old plan is withdrawn; plan afresh from the Game Snapshot.";
         }
 
         // ---- Script Check (ADR 0003) ----

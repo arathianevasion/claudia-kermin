@@ -39,6 +39,14 @@ namespace ClaudiaKermin.Core.Missions
         public readonly List<string> UnsafeProblems = new List<string>();
         public string LatestLine = "";
         public string PauseReason = "";
+        /// <summary>In Manual Control (or its Hand back Debrief): the stretch was planned, so its Debrief is judged against the target.</summary>
+        public bool ManualPlanned;
+        /// <summary>How Manual Control began, in words for Claudia's Debrief; "" outside Manual Control.</summary>
+        public string ManualOrigin = "";
+        /// <summary>The player handed back and the Debrief of the manual stretch is not finished: a revised Mission Plan follows it.</summary>
+        public bool HandBack;
+        /// <summary>The player's optional message with Hand back.</summary>
+        public string HandBackMessage = "";
         public MissionPlan MissionPlan;
         /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
         public SequencePlan SequencePlan;
@@ -68,6 +76,10 @@ namespace ClaudiaKermin.Core.Missions
                 { "sequenceCounted", SequenceCounted ? "true" : "false" },
                 { "latestLine", LatestLine },
                 { "pauseReason", PauseReason },
+                { "manualPlanned", ManualPlanned ? "true" : "false" },
+                { "manualOrigin", ManualOrigin },
+                { "handBack", HandBack ? "true" : "false" },
+                { "handBackMessage", HandBackMessage },
             };
             foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
             for (var i = 0; i < UnsafeProblems.Count; i++) values[UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture)] = UnsafeProblems[i];
@@ -96,6 +108,10 @@ namespace ClaudiaKermin.Core.Missions
                 StageBeforePause = ParseStage(Get(values, "stageBeforePause")),
                 LatestLine = Get(values, "latestLine"),
                 PauseReason = Get(values, "pauseReason"),
+                ManualPlanned = Get(values, "manualPlanned") == "true",
+                ManualOrigin = Get(values, "manualOrigin"),
+                HandBack = Get(values, "handBack") == "true",
+                HandBackMessage = Get(values, "handBackMessage"),
             };
             decimal cap;
             if (decimal.TryParse(Get(values, "spendingCap"), NumberStyles.Number, CultureInfo.InvariantCulture, out cap)) state.SpendingCap = cap;
@@ -187,7 +203,7 @@ namespace ClaudiaKermin.Core.Missions
             {
                 json.BeginObject().Field("why", mission.Why).Name("sequences").BeginArray();
                 foreach (var s in mission.Sequences)
-                    json.BeginObject().Field("name", s.Name).Field("intent", s.Intent).Field("delta_v", s.DeltaV).Field("timing", s.Timing).EndObject();
+                    json.BeginObject().Field("name", s.Name).Field("intent", s.Intent).Field("delta_v", s.DeltaV).Field("timing", s.Timing).Field("manual", s.Manual).EndObject();
                 json.EndArray().Field("total_delta_v", mission.TotalDeltaV).Field("expected_duration", mission.ExpectedDuration).EndObject();
             }
             json.Name("sequence_plan");
@@ -200,7 +216,7 @@ namespace ClaudiaKermin.Core.Missions
                 Strings(json, "abort_conditions", sequence.AbortConditions);
                 Strings(json, "risks", sequence.Risks);
                 json.Field("custom_script", sequence.CustomScript).Field("custom_script_reason", sequence.CustomScriptReason)
-                    .Field("script", sequence.Script).EndObject();
+                    .Field("script", sequence.Script).Field("manual", sequence.Manual).EndObject();
             }
             return json.EndObject().ToString();
         }

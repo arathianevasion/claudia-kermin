@@ -30,6 +30,28 @@ namespace ClaudiaKermin.Core.Missions
         Paused,
         /// <summary>"Couldn't produce a safe script": the Sequence Plan's script failed the Script Check twice. Retry, Retry with a note or Re-plan.</summary>
         UnsafeScript,
+        /// <summary>The player flies the craft and Claudia only advises; ends at Hand back, which Debriefs the stretch. Not Paused.</summary>
+        ManualControl,
+    }
+
+    /// <summary>
+    /// The KSP controls the adapter keeps locked while Claudia has the craft (spec: control locks). Level-triggered:
+    /// <see cref="MissionView.Locks"/> says what is locked now, and the adapter applies it every frame.
+    /// </summary>
+    [System.Flags]
+    public enum ControlLocks
+    {
+        None = 0,
+        Staging = 1,
+        ActionGroups = 2,
+        Sas = 4,
+        Rcs = 8,
+        Gear = 16,
+        Brakes = 32,
+        /// <summary>The time-warp keys: locked while Running only.</summary>
+        Warp = 64,
+        /// <summary>Everything Claudia's hold on the craft locks outside Running.</summary>
+        Craft = Staging | ActionGroups | Sas | Rcs | Gear | Brakes,
     }
 
     public enum QuickReply
@@ -52,6 +74,10 @@ namespace ClaudiaKermin.Core.Missions
         RetryWithNote,
         /// <summary>After "Couldn't produce a safe script": ask for a different Sequence Plan.</summary>
         Replan,
+        /// <summary>Running, or a plan awaiting Approval: take the controls (aborts a running script and makes the craft safe first).</summary>
+        ManualControl,
+        /// <summary>In Manual Control: give the craft back to Claudia (the reply box sends an optional message with it).</summary>
+        HandBack,
     }
 
     public enum LogKind
@@ -221,6 +247,15 @@ namespace ClaudiaKermin.Core.Missions
         public bool CanEndMission;
         /// <summary>Leaving Flight now would cut off a running sequence, so the adapter asks the player first.</summary>
         public bool LeavingFlightNeedsConfirmation;
+        /// <summary>The controls locked now because Claudia has the craft; <see cref="ControlLocks.None"/> in Manual Control and when no Mission is active.</summary>
+        public ControlLocks Locks;
+        /// <summary>
+        /// The player may take Manual Control now: there is a link (CommNet off counts) or another non-Tourist crew member aboard.
+        /// Without either, flight controls stay locked and the Manual Control button isn't offered.
+        /// </summary>
+        public bool ManualControlAllowed;
+        /// <summary>The craft has changed beyond the pending plan's tolerances, so Approve is replaced by Re-plan; "" otherwise.</summary>
+        public string PlanStale = "";
 
         public IList<LogEntry> Log = new List<LogEntry>();
     }

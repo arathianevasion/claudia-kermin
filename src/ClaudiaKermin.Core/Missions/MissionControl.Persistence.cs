@@ -60,6 +60,10 @@ namespace ClaudiaKermin.Core.Missions
                 SequenceCounted = mission.SequenceCounted,
                 LatestLine = mission.LatestLine,
                 PauseReason = mission.PauseReason,
+                ManualPlanned = mission.ManualPlanned,
+                ManualOrigin = mission.ManualOrigin,
+                HandBack = mission.HandBack,
+                HandBackMessage = mission.HandBackMessage,
                 MissionPlan = mission.Plan,
                 SequencePlan = mission.PendingSequence,
             };
@@ -198,7 +202,7 @@ namespace ClaudiaKermin.Core.Missions
             if (mission.Owed == Owed.Debrief && mission.Stage == MissionStage.Debriefing)
             {
                 var plan = mission.PendingSequence ?? new SequencePlan { Name = "(unknown)" };
-                turn = new Turn
+                turn = mission.HandBack ? HandBackTurn(mission) : new Turn
                 {
                     Purpose = Purpose.Debrief,
                     Effort = "high",
@@ -315,6 +319,10 @@ namespace ClaudiaKermin.Core.Missions
                 SequenceCounted = state.SequenceCounted,
                 UnsafeProblems = state.UnsafeProblems.ToList(),
                 LatestLine = state.LatestLine,
+                ManualPlanned = state.ManualPlanned,
+                ManualOrigin = state.ManualOrigin,
+                HandBack = state.HandBack,
+                HandBackMessage = state.HandBackMessage,
             };
             foreach (var setting in state.Settings) mission.Settings[setting.Key] = setting.Value;
 
@@ -444,6 +452,8 @@ namespace ClaudiaKermin.Core.Missions
                     mission.Owed = Owed.SequencePlan;
                     return MissionStage.Sequencing;
                 case MissionStage.AwaitingSequenceApproval:
+                    // A manual stretch has no script to check.
+                    if (mission.PendingSequence != null && mission.PendingSequence.Manual) return stage;
                     if (mission.PendingSequence != null)
                     {
                         var check = CheckScript(mission.PendingSequence);
@@ -521,6 +531,7 @@ namespace ClaudiaKermin.Core.Missions
                 case MissionStage.Running:
                 case MissionStage.Debriefing: return "a Maneuver Sequence that was Running (now interrupted)";
                 case MissionStage.UnsafeScript: return "Claudia couldn't produce a safe script";
+                case MissionStage.ManualControl: return "Manual Control: the player flying the craft";
                 case MissionStage.Succeeded: return "the Mission Goal met";
                 case MissionStage.Ended: return "ended";
                 default: return "planning";

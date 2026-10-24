@@ -15,6 +15,8 @@ namespace ClaudiaKermin.Core.Missions
         public double DeltaV;
         /// <summary>Due Time or rough timing, in Claudia's words.</summary>
         public string Timing = "";
+        /// <summary>A stretch the player flies by hand (docking, EVA science): no script, and its Approval gives the player the controls.</summary>
+        public bool Manual;
     }
 
     /// <summary>The ordered Maneuver Sequences Claudia intends to fly to reach the Mission Goal.</summary>
@@ -44,6 +46,8 @@ namespace ClaudiaKermin.Core.Missions
         public bool CustomScript;
         /// <summary>Why no Building Block fits, for the Custom Script badge; "" otherwise.</summary>
         public string CustomScriptReason = "";
+        /// <summary>A manual stretch: the player flies it by hand, so there is no script. Approval starts Manual Control.</summary>
+        public bool Manual;
     }
 
     public sealed class Debrief
@@ -102,14 +106,15 @@ namespace ClaudiaKermin.Core.Missions
             + "\"required\":[\"why\",\"sequences\",\"total_delta_v\",\"expected_duration\"],\"properties\":{"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
             + "\"sequences\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"name\",\"intent\",\"delta_v\",\"timing\"],\"properties\":{"
+            + "\"required\":[\"name\",\"intent\",\"delta_v\",\"timing\",\"manual\"],\"properties\":{"
             + "\"name\":{\"type\":\"string\"},\"intent\":{\"type\":\"string\"},"
             + "\"delta_v\":{\"type\":\"number\",\"description\":\"m/s\"},"
-            + "\"timing\":{\"type\":\"string\",\"description\":\"Due Time or rough timing\"}}}},"
+            + "\"timing\":{\"type\":\"string\",\"description\":\"Due Time or rough timing\"},"
+            + "\"manual\":{\"type\":\"boolean\",\"description\":\"True for a stretch the player flies by hand.\"}}}},"
             + "\"total_delta_v\":{\"type\":\"number\",\"description\":\"m/s\"},"
             + "\"expected_duration\":{\"type\":\"string\"}}},{\"type\":\"null\"}]},"
             + "\"sequence_plan\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"name\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"risks\",\"custom_script\",\"custom_script_reason\",\"script\"],"
+            + "\"required\":[\"name\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"risks\",\"custom_script\",\"custom_script_reason\",\"script\",\"manual\"],"
             + "\"properties\":{"
             + "\"name\":{\"type\":\"string\"},\"intent\":{\"type\":\"string\"},"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
@@ -120,7 +125,8 @@ namespace ClaudiaKermin.Core.Missions
             + "\"risks\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},"
             + "\"custom_script\":{\"type\":\"boolean\",\"description\":\"True when the script is written from scratch instead of from Building Blocks.\"},"
             + "\"custom_script_reason\":{\"type\":\"string\",\"description\":\"For a Custom Script, one short sentence on why no Building Block fits; otherwise empty.\"},"
-            + "\"script\":{\"type\":\"string\",\"description\":\"The complete Mission Script in kerboscript.\"}}},{\"type\":\"null\"}]},"
+            + "\"script\":{\"type\":\"string\",\"description\":\"The complete Mission Script in kerboscript; empty for a manual stretch.\"},"
+            + "\"manual\":{\"type\":\"boolean\",\"description\":\"True when the player flies this stretch by hand (docking, EVA science, or when they say they will fly it): the script is then empty.\"}}},{\"type\":\"null\"}]},"
             + "\"debrief\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
             + "\"required\":[\"outcome\",\"why\",\"what_happened\",\"goal_reached\",\"next\"],\"properties\":{"
             + "\"outcome\":{\"type\":\"string\",\"enum\":[\"Nominal\",\"Off-Nominal\",\"Failed\"]},"
@@ -170,6 +176,7 @@ namespace ClaudiaKermin.Core.Missions
                             Intent = JsonNode.Str(s["intent"]) ?? "",
                             DeltaV = JsonNode.Double(s["delta_v"]) ?? 0,
                             Timing = JsonNode.Str(s["timing"]) ?? "",
+                            Manual = JsonNode.Bool(s["manual"]) ?? false,
                         });
                     }
                 }
@@ -192,6 +199,7 @@ namespace ClaudiaKermin.Core.Missions
                     Script = JsonNode.Str(sequence["script"]) ?? "",
                     CustomScript = JsonNode.Bool(sequence["custom_script"]) ?? false,
                     CustomScriptReason = JsonNode.Str(sequence["custom_script_reason"]) ?? "",
+                    Manual = JsonNode.Bool(sequence["manual"]) ?? false,
                 };
             }
 

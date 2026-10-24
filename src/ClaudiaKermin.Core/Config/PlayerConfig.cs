@@ -42,6 +42,12 @@ namespace ClaudiaKermin.Core.Config
         /// <summary>The longest wait a Building Block sits through on the ground (or with no closed orbit), in seconds.</summary>
         public double WaitCapGroundSeconds = 10800;
 
+        /// <summary>How long attitude, translation or throttle input must be held, in seconds, before it starts Manual Control.</summary>
+        public double ManualHoldSeconds = 1;
+
+        /// <summary>How far the craft may drift from the pending plan's baseline, in percent, before Approve turns into Re-plan.</summary>
+        public int ReplanTolerancePercent = 15;
+
         public string DefaultModel
         {
             get { return Models[0]; }
@@ -68,7 +74,11 @@ namespace ClaudiaKermin.Core.Config
             + "price.claude-fable-5-1 = 10, 50\n"
             + "# Longest wait inside a Maneuver Sequence: orbits in orbit, seconds on the ground. Longer waits become a Due Time.\n"
             + "wait_cap_orbits = 1\n"
-            + "wait_cap_ground_s = 10800\n";
+            + "wait_cap_ground_s = 10800\n"
+            + "# Seconds attitude, translation or throttle input must be held to start Manual Control.\n"
+            + "manual_hold_s = 1\n"
+            + "# How far, in percent, the craft may change from a pending plan before Approve becomes Re-plan.\n"
+            + "replan_tolerance = 15\n";
 
         /// <summary>Loads the file, writing it with defaults first if it does not exist.</summary>
         public static PlayerConfig LoadOrCreate(string directory)
@@ -128,6 +138,16 @@ namespace ClaudiaKermin.Core.Config
                         double orbits;
                         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out orbits) && orbits > 0)
                             config.WaitCapOrbits = orbits;
+                        break;
+                    case "manual_hold_s":
+                        double hold;
+                        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out hold) && hold > 0)
+                            config.ManualHoldSeconds = hold;
+                        break;
+                    case "replan_tolerance":
+                        int tolerance;
+                        if (int.TryParse(value.TrimEnd('%'), NumberStyles.Integer, CultureInfo.InvariantCulture, out tolerance) && tolerance >= 0 && tolerance <= 200)
+                            config.ReplanTolerancePercent = tolerance;
                         break;
                     case "wait_cap_ground_s":
                         double ground;
