@@ -68,8 +68,8 @@ namespace ClaudiaKermin.Core.Config
         public static string Mask(string key)
         {
             if (string.IsNullOrEmpty(key)) return "";
-            var tail = key.Length <= 4 ? key : key.Substring(key.Length - 4);
-            return "****" + tail;
+            // A key too short to hide four characters of is masked entirely.
+            return key.Length <= 8 ? "****" : "****" + key.Substring(key.Length - 4);
         }
     }
 }

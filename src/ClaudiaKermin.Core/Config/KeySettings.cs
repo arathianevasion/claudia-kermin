@@ -44,7 +44,15 @@ namespace ClaudiaKermin.Core.Config
                 Status = "Enter a key first.";
                 return;
             }
-            _store.Save(typed);
+            try
+            {
+                _store.Save(typed);
+            }
+            catch (System.Exception e) when (e is System.IO.IOException || e is System.UnauthorizedAccessException)
+            {
+                Status = "Could not save the key: " + e.Message;
+                return;
+            }
             Check();
         }
 
@@ -61,6 +69,8 @@ namespace ClaudiaKermin.Core.Config
             {
                 Checking = false;
                 Status = KeyCheck.Describe(result);
+                if (_store.UsingEnvironmentKey)
+                    Status += " (This checked ANTHROPIC_API_KEY, which takes priority over the saved key.)";
             });
         }
     }

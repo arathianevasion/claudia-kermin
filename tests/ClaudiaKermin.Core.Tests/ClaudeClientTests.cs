@@ -159,7 +159,7 @@ namespace ClaudiaKermin.Core.Tests
         {
             var path = System.IO.Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..",
                 "src", "ClaudiaKermin.Core", "Claude", "HttpWebRequestTransport.cs");
-            if (!System.IO.File.Exists(path)) return;
+            Assert.True(System.IO.File.Exists(path), "transport source not found at " + path);
             var code = string.Join("\n", System.IO.File.ReadAllLines(path).Where(l => !l.TrimStart().StartsWith("//") && !l.TrimStart().StartsWith("///")));
             Assert.DoesNotContain("SecurityProtocol", code);
         }
