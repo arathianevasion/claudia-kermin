@@ -35,7 +35,7 @@ namespace ClaudiaKermin.Adapter.Roster
             return null;
         }
 
-        /// <summary>Applies one action. Returns true if it needs the player (a dialog) rather than the roster.</summary>
+        /// <summary>Applies one action; PromptRename goes to <paramref name="onPromptRename"/> since it needs the player.</summary>
         public static void Apply(KerbalRoster roster, RosterAction action, Action<ProtoCrewMember> onPromptRename)
         {
             var kerbal = action.KerbalId == 0 ? null : Find(roster, action.KerbalId);

@@ -129,6 +129,24 @@ namespace ClaudiaKermin.Core.Tests.Roster
         }
 
         [Fact]
+        public void AClashDoesNotStopHerBeingLookedAfterOnceSheIsOnTheRoster()
+        {
+            var state = new RosterState { ClaudiaId = 7, RenameDeclined = true, RespawnAtUT = Now };
+            var actions = Plan(state, Crew(4, "Claudia Smith"), Claudia(7, KerbalStanding.Missing, "Clod Kerman"));
+            Assert.Contains(actions, a => a.Type == RosterActionType.RevertName);
+            Assert.Contains(actions, a => a.Type == RosterActionType.Respawn);
+            Assert.DoesNotContain(actions, a => a.Type == RosterActionType.AddClaudia);
+        }
+
+        [Fact]
+        public void OnlyHiredCrewTriggerTheRenameDialog()
+        {
+            var tourist = new KerbalSnapshot(4, "Claudia Smith", "Tourist", KerbalKind.Tourist, KerbalStanding.Available);
+            var actions = Plan(new RosterState(), tourist);
+            Assert.Equal(RosterActionType.AddClaudia, Assert.Single(actions).Type);
+        }
+
+        [Fact]
         public void ADeclinedSaveRecoversWhenTheClashGoesAway()
         {
             var state = new RosterState { RenameDeclined = true };
