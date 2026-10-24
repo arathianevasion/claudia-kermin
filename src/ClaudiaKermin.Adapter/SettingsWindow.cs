@@ -20,14 +20,18 @@ namespace ClaudiaKermin.Adapter
 
         public bool Visible;
 
+        /// <summary>Set while the stock UI is hidden (F2).</summary>
+        public bool UiHidden;
+
         public SettingsWindow(KeySettings settings)
         {
             _settings = settings;
+            _frame.Remember("settings");
         }
 
         public void OnGUI()
         {
-            if (!Visible)
+            if (!Visible || UiHidden)
             {
                 Unlock();
                 return;
