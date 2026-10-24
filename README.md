@@ -58,7 +58,8 @@ The key is stored as **plain text** in `~/Library/Application Support/ClaudiaKer
 
 ## Known gaps
 
-- Mods that check crew roles by name may not count Claudia as a Pilot, Engineer or Scientist: KER, USI, Near Future Electrical, SystemHeat, SSPX, StationScience, WildBlue and Contract Configurator contract packs. Kerbalism and Community Trait Icons are patched.
+- Stock contracts, EVA welding and the construction combine bonus count Claudia as a Pilot, Engineer and Scientist (Harmony patches on `FinePrint.Utilities.VesselUtilities`). ModuleManager patches in `GameData/ClaudiaKermin/Compatibility` cover Kerbalism and Community Trait Icons.
+- These mods check crew roles by name and **do not** count Claudia as a Pilot, Engineer or Scientist: KER, USI, Near Future Electrical, SystemHeat, SSPX, StationScience, WildBlue and Contract Configurator contract packs.
 - Claudia doesn't go on EVA in v1. When a goal needs EVA science, she asks you to do it by hand.
 - **Before uninstalling**, press **Prepare to uninstall** in Claudia's settings in every save that has her. Removing the mod without it is likely to break those saves.
 
