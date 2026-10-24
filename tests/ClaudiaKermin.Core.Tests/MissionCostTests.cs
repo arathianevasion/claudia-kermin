@@ -295,10 +295,11 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(1.08m, mission.View.Spent);
             mission.Send(new Approve());
             Assert.Equal(MissionStage.Running, mission.View.Stage);
+            var start = mission.TakeCommands().OfType<StartScript>().Single();
 
             // The script ends; the Debrief's worst case would pass the cap, so it is not sent.
             var report = new System.Collections.Generic.Dictionary<string, object> { { "success", true }, { "situation", "PRELAUNCH" } };
-            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Finished, report, "", "", false)));
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Finished, report, "", "", false), start.RunId));
             Assert.Equal(MissionStage.Paused, mission.View.Stage);
             Assert.Equal(2, transport.Requests.Count);
             Assert.Equal(new[] { QuickReply.RaiseCap, QuickReply.EndMission }, mission.View.QuickReplies);
