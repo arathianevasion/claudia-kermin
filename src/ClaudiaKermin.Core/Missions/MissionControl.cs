@@ -171,7 +171,7 @@ namespace ClaudiaKermin.Core.Missions
             /// <summary>A turn that must follow the one in flight (a Debrief after a mid-run question).</summary>
             public Turn Next;
             public IRawStreamDump Dump;
-            /// <summary>The Mission Settings, by name; persisted with the Mission, edited by a later ticket.</summary>
+            /// <summary>The Mission Settings, by name; persisted with the Mission; EditSettings changes them (MissionSettingsValues reads and writes them).</summary>
             public readonly Dictionary<string, string> Settings = new Dictionary<string, string>();
             /// <summary>The Mission's vessel (its id and name), noted when the craft is first in Flight; the Go to button switches to it.</summary>
             public string VesselId = "";
