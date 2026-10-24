@@ -83,8 +83,12 @@ The state of a Mission that has stopped making progress, e.g. at its Spending Ca
 _Avoid_: suspended, on hold, abandoned
 
 **Blackout**:
-A period when Claudia has no link to Kerbin and flies the approved Mission Plan without asking for each Maneuver Sequence's Approval; her messages wait until the link returns. A Mission in Blackout is not Paused.
+A period when Claudia has no link to Kerbin and carries on without the player's Approval: she flies the approved Mission Plan, and may revise it within the Mission Goal and Spending Cap; her messages and revisions wait for the player until the link returns. A Mission in Blackout is not Paused.
 _Avoid_: autonomous mode, offline, comms loss
+
+**Manual Control**:
+The state of a Mission while the player flies the craft and Claudia only advises; it ends when the player hands the craft back. A Mission in Manual Control is not Paused.
+_Avoid_: takeover, override, manual mode
 
 **Lost**:
 The outcome of a Mission that ends because Claudia was killed aboard the craft.
