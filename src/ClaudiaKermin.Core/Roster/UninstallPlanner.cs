@@ -18,8 +18,22 @@ namespace ClaudiaKermin.Core.Roster
             var actions = new List<RosterAction>();
             foreach (var kerbal in kerbals)
                 if (kerbal.Trait == ClaudiaIdentity.TraitName)
-                    actions.Add(new RosterAction(RosterActionType.RerollTrait, kerbal.Id, kerbal.Name, ReplacementTrait));
+                    actions.Add(new RosterAction(RosterActionType.RerollTrait, kerbal.Name, trait: ReplacementTrait));
             return actions;
+        }
+
+        /// <summary>How many planned rerolls took effect, judged from a snapshot of the roster taken after applying them.</summary>
+        public static int CountChanged(IList<RosterAction> actions, IList<KerbalSnapshot> after)
+        {
+            var changed = 0;
+            foreach (var action in actions)
+                foreach (var kerbal in after)
+                    if (kerbal.Name == action.Target)
+                    {
+                        if (kerbal.Trait == action.Trait) changed++;
+                        break;
+                    }
+            return changed;
         }
     }
 }
