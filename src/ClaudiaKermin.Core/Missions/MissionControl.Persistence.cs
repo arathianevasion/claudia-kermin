@@ -57,11 +57,13 @@ namespace ClaudiaKermin.Core.Missions
                 SpendingCap = mission.SpendingCap,
                 TranscriptMarker = mission.Conversation.Count,
                 SequencesProposed = mission.SequencesProposed,
+                SequenceCounted = mission.SequenceCounted,
                 LatestLine = mission.LatestLine,
                 PauseReason = mission.PauseReason,
                 MissionPlan = mission.Plan,
                 SequencePlan = mission.PendingSequence,
             };
+            if (mission.UnsafeProblems != null) state.UnsafeProblems.AddRange(mission.UnsafeProblems);
             foreach (var setting in mission.Settings) state.Settings[setting.Key] = setting.Value;
             states.Add(state);
             return states;
@@ -107,6 +109,7 @@ namespace ClaudiaKermin.Core.Missions
                     Effort = turn.Effort,
                     UserText = turn.UserText,
                     Notice = turn.Notice,
+                    ScriptRewrite = turn.ScriptRewrite,
                     BaseMessages = mission.Conversation.Count,
                 });
             }
@@ -309,6 +312,8 @@ namespace ClaudiaKermin.Core.Missions
                 Plan = state.MissionPlan,
                 PendingSequence = state.SequencePlan,
                 SequencesProposed = state.SequencesProposed,
+                SequenceCounted = state.SequenceCounted,
+                UnsafeProblems = state.UnsafeProblems.ToList(),
                 LatestLine = state.LatestLine,
             };
             foreach (var setting in state.Settings) mission.Settings[setting.Key] = setting.Value;
@@ -379,7 +384,14 @@ namespace ClaudiaKermin.Core.Missions
             if (unanswered != null)
             {
                 var purpose = (Purpose)Enum.Parse(typeof(Purpose), unanswered.Purpose);
-                mission.Pending = new Turn { Purpose = purpose, Effort = unanswered.Effort, UserText = unanswered.UserText, Notice = unanswered.Notice };
+                mission.Pending = new Turn
+                {
+                    Purpose = purpose,
+                    Effort = unanswered.Effort,
+                    UserText = unanswered.UserText,
+                    Notice = unanswered.Notice,
+                    ScriptRewrite = unanswered.ScriptRewrite,
+                };
                 var requestStage = StageOf(purpose);
                 var settled = requestStage != MissionStage.None ? requestStage : Settle(mission, state.Stage == MissionStage.Paused ? state.StageBeforePause : state.Stage);
                 // A plan or Debrief request in hand is what the loop was waiting for; a question changes nothing.
@@ -415,9 +427,11 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>
         /// The stage a saved stage becomes with nothing in flight. A sequence that was Running (or being
         /// Debriefed) has no program now: it is interrupted, never restarted, and owed a Debrief. A plan that
-        /// was being written is asked for again.
+        /// was being written is asked for again. A Sequence Plan from the save is Script-Checked again before it
+        /// can be approved (ADR 0003): the save file is not trusted, and the check or the Core Library may have
+        /// changed since; one that fails is "Couldn't produce a safe script".
         /// </summary>
-        private static MissionStage Settle(Mission mission, MissionStage stage)
+        private MissionStage Settle(Mission mission, MissionStage stage)
         {
             switch (stage)
             {
@@ -430,7 +444,14 @@ namespace ClaudiaKermin.Core.Missions
                     mission.Owed = Owed.SequencePlan;
                     return MissionStage.Sequencing;
                 case MissionStage.AwaitingSequenceApproval:
-                    if (mission.PendingSequence != null) return stage;
+                    if (mission.PendingSequence != null)
+                    {
+                        var check = CheckScript(mission.PendingSequence);
+                        if (check.Passed) return stage;
+                        mission.UnsafeProblems = check.Problems;
+                        mission.PendingSequence = null;
+                        return MissionStage.UnsafeScript;
+                    }
                     mission.Owed = Owed.SequencePlan;
                     return MissionStage.Sequencing;
                 case MissionStage.AwaitingPlanApproval:
@@ -464,6 +485,7 @@ namespace ClaudiaKermin.Core.Missions
                 mission.Stage = MissionStage.AwaitingSequenceApproval;
                 OfferSequencePlan(mission, mission.PendingSequence);
             }
+            else if (stage == MissionStage.UnsafeScript) UnsafeScriptCard(mission, null);
             mission.SequencesProposed = state.SequencesProposed;
             mission.LatestLine = state.LatestLine;
         }
@@ -493,6 +515,7 @@ namespace ClaudiaKermin.Core.Missions
                 case MissionStage.AwaitingSequenceApproval: return "waiting for your Approval of a Sequence Plan";
                 case MissionStage.Running:
                 case MissionStage.Debriefing: return "a Maneuver Sequence that was Running (now interrupted)";
+                case MissionStage.UnsafeScript: return "Claudia couldn't produce a safe script";
                 case MissionStage.Succeeded: return "the Mission Goal met";
                 case MissionStage.Ended: return "ended";
                 default: return "planning";

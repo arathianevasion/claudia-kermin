@@ -27,6 +27,8 @@ namespace ClaudiaKermin.Core.Missions
         public string Effort;
         public string UserText = "";
         public string Notice = "";
+        /// <summary>A rewrite after a failed Script Check, so a re-sent one gets no further automatic rewrite.</summary>
+        public bool ScriptRewrite;
         /// <summary>How many messages the committed conversation held when the turn was sent; the turn is stale once the transcript has grown past it.</summary>
         public int BaseMessages;
     }
@@ -93,6 +95,7 @@ namespace ClaudiaKermin.Core.Missions
                 .Field("effort", turn.Effort)
                 .Field("user_text", turn.UserText)
                 .Field("notice", turn.Notice)
+                .Field("script_rewrite", turn.ScriptRewrite)
                 .Field("base_messages", turn.BaseMessages)
                 .EndObject();
             MissionFolder.ReplaceAtomically(Path.Combine(folder, UnansweredFile), json.ToString());
@@ -108,6 +111,7 @@ namespace ClaudiaKermin.Core.Missions
                 Effort = JsonNode.Str(root["effort"]),
                 UserText = JsonNode.Str(root["user_text"]) ?? "",
                 Notice = JsonNode.Str(root["notice"]) ?? "",
+                ScriptRewrite = JsonNode.Bool(root["script_rewrite"]) ?? false,
                 BaseMessages = (int)(JsonNode.Long(root["base_messages"]) ?? 0),
             };
         }

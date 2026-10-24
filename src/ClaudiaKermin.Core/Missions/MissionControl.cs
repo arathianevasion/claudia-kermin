@@ -21,8 +21,10 @@ namespace ClaudiaKermin.Core.Missions
     /// writes to the Mission folder. Main thread only; Claude's replies arrive through <see cref="Background"/>,
     /// which the adapter drains each frame. One request per Mission is in flight at a time.
     ///
-    /// Later tickets plug in here: the Spending Cap pre-send check (<see cref="MaySend"/>), the Script Check
-    /// before a Sequence Plan is offered (<see cref="OfferSequencePlan"/>), the Craft Check before planning,
+    /// No script reaches Approval or runs unless it passes the Script Check (ADR 0003, <see cref="CheckScript"/>):
+    /// a fresh plan, a rewrite, a retry, a re-plan and a plan restored from a save alike.
+    ///
+    /// The Spending Cap pre-send check is <see cref="MaySend"/>, the Craft Check runs before a Mission starts,
     /// and persistence of the loop state across saves lives in MissionControl.Persistence.cs.
     /// </summary>
     public sealed partial class MissionControl
@@ -31,6 +33,7 @@ namespace ClaudiaKermin.Core.Missions
         private readonly Background _background;
         private readonly PlayerConfig _config;
         private readonly Func<bool> _hasKey;
+        private readonly IScriptCheck _scriptCheck;
         private readonly List<AdapterCommand> _commands = new List<AdapterCommand>();
 
         private string _saveDirectory;
@@ -44,12 +47,13 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>Start Mission was pressed and the Craft Check it triggered is running; a Pass lets the Mission start.</summary>
         private StartMission _pendingStart;
 
-        public MissionControl(ClaudeClient client, Background background, PlayerConfig config, Func<bool> hasKey)
+        public MissionControl(ClaudeClient client, Background background, PlayerConfig config, Func<bool> hasKey, IScriptCheck scriptCheck)
         {
             _client = client;
             _background = background;
             _config = config;
             _hasKey = hasKey;
+            _scriptCheck = scriptCheck;
             _craftCheck = new CraftCheckFlow(client, background, config, hasKey, CraftCheckCompleted);
             Rebuild();
         }
@@ -87,6 +91,8 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is AskQuestion) Asked(((AskQuestion)input).Text);
             else if (input is Retry || input is Resume) Retried();
             else if (input is RaiseCap) Raised(((RaiseCap)input).SpendingCap);
+            else if (input is RetryWithNote) ScriptRetried(((RetryWithNote)input).Note ?? "", false);
+            else if (input is Replan) ScriptRetried(null, true);
             else if (input is CaptureSnapshot) Capture();
             else if (input is KosRunRefused) RunRefused((KosRunRefused)input);
             else if (input is KosRunEnded) RunEnded((KosRunEnded)input);
@@ -118,6 +124,8 @@ namespace ClaudiaKermin.Core.Missions
             public string Effort;
             public string UserText;
             public string Notice;
+            /// <summary>A rewrite after a failed Script Check: if this script fails too, there is no further automatic rewrite.</summary>
+            public bool ScriptRewrite;
             public List<Message> Messages;
             public CancellationTokenSource Cancel;
         }
@@ -142,6 +150,10 @@ namespace ClaudiaKermin.Core.Missions
             public MissionPlan Plan;
             public SequencePlan PendingSequence;
             public int SequencesProposed;
+            /// <summary>The Maneuver Sequence in hand has had a Sequence Plan offered (so revisions don't count again).</summary>
+            public bool SequenceCounted;
+            /// <summary>What the Script Check last found, while "Couldn't produce a safe script" is shown.</summary>
+            public IList<string> UnsafeProblems;
             public readonly List<LogEntry> Log = new List<LogEntry>();
             public string LatestLine = "";
             public string Activity = "";
@@ -321,6 +333,7 @@ namespace ClaudiaKermin.Core.Missions
             {
                 Note(LogKind.Notice, "Mission Plan approved.");
                 mission.Stage = MissionStage.Sequencing;
+                mission.SequenceCounted = false;
                 Begin(new Turn
                 {
                     Purpose = Purpose.SequencePlan,
@@ -338,11 +351,20 @@ namespace ClaudiaKermin.Core.Missions
                 Note(LogKind.Notice, "Can't run the script: the craft has no kOS processor.");
                 return;
             }
+            // The plan was checked before it was offered; the bundle that starts is checked again, whatever path
+            // (a reply, a restored save, a refused start) brought the plan here. No automatic rewrite: the plan
+            // was offered already, so the player decides what happens next.
+            var bundle = Bundle(plan);
+            var check = _scriptCheck.Check(bundle);
+            if (!check.Passed)
+            {
+                ShowUnsafeScript(mission, plan, check.Problems);
+                return;
+            }
             Note(LogKind.Notice, "Sequence Plan approved: the mod is starting the script.");
             mission.Stage = MissionStage.Running;
             mission.RunningProcessor = processor.Value;
             mission.RunId = ++_lastRunId;
-            var bundle = CoreLibrary.Bundle(plan.Script, _config.WaitCapOrbits, _config.WaitCapGroundSeconds);
             _commands.Add(new StartScript(processor.Value, "claudia:" + mission.Id + ":" + plan.Name, bundle, mission.RunId.Value));
         }
 
@@ -630,9 +652,21 @@ namespace ClaudiaKermin.Core.Missions
 
         private void Apply(Mission mission, Turn turn, MissionReply reply, string answeredBy)
         {
+            var planPending = mission.Stage == MissionStage.AwaitingPlanApproval;
+            // The Script Check (ADR 0003) comes first: the player never sees a plan whose script fails it.
+            var offered = SequenceOffered(turn.Purpose, reply, planPending);
+            if (offered != null)
+            {
+                var check = CheckScript(offered);
+                if (!check.Passed)
+                {
+                    ScriptCheckFailed(mission, turn, offered, check.Problems);
+                    return;
+                }
+            }
+
             mission.LatestLine = reply.Say;
             Note(LogKind.Claudia, reply.Say).AnsweredBy = answeredBy;
-            var planPending = mission.Stage == MissionStage.AwaitingPlanApproval;
 
             switch (turn.Purpose)
             {
@@ -657,6 +691,105 @@ namespace ClaudiaKermin.Core.Missions
             }
         }
 
+        /// <summary>The Sequence Plan this reply would offer for Approval, or null (the same cases as <see cref="Apply"/>).</summary>
+        private static SequencePlan SequenceOffered(Purpose purpose, MissionReply reply, bool planPending)
+        {
+            var plan = reply.SequencePlan;
+            if (plan == null || plan.Script.Trim().Length == 0) return null;
+            switch (purpose)
+            {
+                case Purpose.SequencePlan:
+                    return plan;
+                case Purpose.Reply:
+                    return planPending || reply.Intent == ReplyIntent.Approve || reply.Intent == ReplyIntent.Unclear ? null : plan;
+                case Purpose.Change:
+                    return planPending ? null : plan;
+                default:
+                    return null;
+            }
+        }
+
+        /// <summary>
+        /// A script failed the Script Check. The first time, it goes back to Claudia for one automatic (billed)
+        /// rewrite, and the player sees neither the plan nor its line. If a rewrite fails too, the plan is shown
+        /// as "Couldn't produce a safe script" with Retry, Retry with a note or Re-plan, and nothing can be approved.
+        /// </summary>
+        private void ScriptCheckFailed(Mission mission, Turn turn, SequencePlan plan, IList<string> problems)
+        {
+            if (!turn.ScriptRewrite)
+            {
+                Note(LogKind.Notice, "The script didn't pass the Script Check; Claudia is rewriting it.");
+                Begin(new Turn
+                {
+                    Purpose = Purpose.SequencePlan,
+                    Effort = "high",
+                    ScriptRewrite = true,
+                    UserText = MissionPrompts.ScriptCheckFailed(problems),
+                    Notice = MissionPrompts.RewriteNotice,
+                });
+                return;
+            }
+            ShowUnsafeScript(mission, plan, problems);
+        }
+
+        /// <summary>"Couldn't produce a safe script": the plan is dropped, nothing can be approved, and the player chooses Retry, Retry with a note or Re-plan.</summary>
+        private void ShowUnsafeScript(Mission mission, SequencePlan plan, IList<string> problems)
+        {
+            mission.Stage = MissionStage.UnsafeScript;
+            mission.PendingSequence = null;
+            mission.ConfirmPrompt = null;
+            mission.UnsafeProblems = problems;
+            UnsafeScriptCard(mission, plan);
+            NeedsPlayer("Claudia couldn't produce a safe script.");
+        }
+
+        /// <summary>The card for "Couldn't produce a safe script"; <paramref name="plan"/> is null once the failed plan is gone (after a load).</summary>
+        private static void UnsafeScriptCard(Mission mission, SequencePlan plan)
+        {
+            var card = AddCard(mission, LogKind.SequencePlan, plan != null ? plan.Name : "Sequence Plan",
+                "Couldn't produce a safe script. The Script Check found: " + string.Join("; ", (mission.UnsafeProblems ?? new List<string>()).ToArray()),
+                plan != null ? plan.Why : "");
+            if (plan == null) return;
+            card.CustomScript = plan.CustomScript;
+            card.CustomScriptReason = plan.CustomScriptReason;
+        }
+
+        /// <summary>What actually runs: the plan's script bundled with the Core Library and the player's wait caps.</summary>
+        private string Bundle(SequencePlan plan)
+        {
+            return CoreLibrary.Bundle(plan.Script, _config.WaitCapOrbits, _config.WaitCapGroundSeconds);
+        }
+
+        /// <summary>The Script Check over what would run (<see cref="Bundle"/>): the script comes first in it, so the line numbers are the script's.</summary>
+        private ScriptCheckResult CheckScript(SequencePlan plan)
+        {
+            return _scriptCheck.Check(Bundle(plan));
+        }
+
+        /// <summary>Retry, Retry with a note (<paramref name="note"/>) or Re-plan, after "Couldn't produce a safe script".</summary>
+        private void ScriptRetried(string note, bool replan)
+        {
+            var mission = _mission;
+            if (mission == null || mission.Stage != MissionStage.UnsafeScript || mission.InFlight) return;
+            if (note != null)
+            {
+                note = note.Trim();
+                if (note.Length == 0) return;
+                Note(LogKind.Player, "Retry with a note: " + note);
+            }
+            mission.Stage = MissionStage.Sequencing;
+            Begin(new Turn
+            {
+                Purpose = Purpose.SequencePlan,
+                Effort = "high",
+                // A Re-plan is a new plan, so it gets its own automatic rewrite; a retry of the script doesn't.
+                ScriptRewrite = !replan,
+                UserText = replan ? MissionPrompts.ReplanAfterScriptCheck(mission.UnsafeProblems)
+                    : MissionPrompts.RetryAfterScriptCheck(mission.UnsafeProblems, note),
+                Notice = replan ? MissionPrompts.ReplanNotice : MissionPrompts.RewriteNotice,
+            });
+        }
+
         private void Revised(Mission mission, MissionReply reply, bool planPending)
         {
             if (planPending && reply.MissionPlan != null && reply.MissionPlan.Sequences.Count > 0) OfferMissionPlan(mission, reply.MissionPlan);
@@ -679,10 +812,14 @@ namespace ClaudiaKermin.Core.Missions
             NeedsPlayer("Claudia has a Mission Plan for your Approval.");
         }
 
-        /// <summary>The Script Check (ADR 0003) will check the script here, before the plan is offered (a later ticket).</summary>
+        /// <summary>Offers a Sequence Plan for Approval; its script has passed the Script Check (<see cref="Apply"/>).</summary>
         private void OfferSequencePlan(Mission mission, SequencePlan plan)
         {
-            if (mission.Stage != MissionStage.AwaitingSequenceApproval) mission.SequencesProposed++;
+            if (!mission.SequenceCounted)
+            {
+                mission.SequencesProposed++;
+                mission.SequenceCounted = true;
+            }
             mission.PendingSequence = plan;
             mission.Stage = MissionStage.AwaitingSequenceApproval;
             var body = new StringBuilder();
@@ -692,7 +829,10 @@ namespace ClaudiaKermin.Core.Missions
                 .Append(plan.ExpectedDurationSeconds.ToString("0", CultureInfo.InvariantCulture)).Append(" s");
             if (plan.AbortConditions.Count > 0) body.Append("\nAbort if: ").Append(string.Join("; ", plan.AbortConditions.ToArray()));
             if (plan.Risks.Count > 0) body.Append("\nRisks: ").Append(string.Join("; ", plan.Risks.ToArray()));
-            AddCard(mission, LogKind.SequencePlan, plan.Name, body.ToString(), plan.Why).Script = plan.Script;
+            var card = AddCard(mission, LogKind.SequencePlan, plan.Name, body.ToString(), plan.Why);
+            card.Script = plan.Script;
+            card.CustomScript = plan.CustomScript;
+            card.CustomScriptReason = plan.CustomScriptReason;
             NeedsPlayer("Claudia has a Sequence Plan for your Approval.");
         }
 
@@ -719,6 +859,7 @@ namespace ClaudiaKermin.Core.Missions
                 return;
             }
             mission.Stage = MissionStage.Sequencing;
+            mission.SequenceCounted = false;
             Begin(new Turn
             {
                 Purpose = Purpose.SequencePlan,
@@ -740,6 +881,11 @@ namespace ClaudiaKermin.Core.Missions
         private void Retried()
         {
             var mission = _mission;
+            if (mission != null && mission.Stage == MissionStage.UnsafeScript)
+            {
+                ScriptRetried(null, false);
+                return;
+            }
             if (mission == null || mission.Stage != MissionStage.Paused || mission.InFlight) return;
             CraftCheckOnResume(mission);
             mission.Stage = mission.StageBeforePause;
@@ -972,6 +1118,8 @@ namespace ClaudiaKermin.Core.Missions
                     view.QuickReplies = mission.PausedForCap
                         ? new List<QuickReply> { QuickReply.RaiseCap, QuickReply.EndMission }
                         : new List<QuickReply> { mission.AwaitingResume ? QuickReply.Resume : QuickReply.Retry };
+                else if (mission.Stage == MissionStage.UnsafeScript && !mission.InFlight)
+                    view.QuickReplies = new List<QuickReply> { QuickReply.Retry, QuickReply.RetryWithNote, QuickReply.Replan };
                 else if (mission.AwaitingApproval && !mission.InFlight)
                 {
                     view.QuickReplies = mission.ConfirmPrompt != null

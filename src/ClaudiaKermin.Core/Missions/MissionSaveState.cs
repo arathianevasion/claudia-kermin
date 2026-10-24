@@ -33,6 +33,10 @@ namespace ClaudiaKermin.Core.Missions
         /// </summary>
         public int TranscriptMarker;
         public int SequencesProposed;
+        /// <summary>The Maneuver Sequence in hand has already counted towards <see cref="SequencesProposed"/>.</summary>
+        public bool SequenceCounted;
+        /// <summary>What the Script Check found, while the Mission is at "Couldn't produce a safe script".</summary>
+        public readonly List<string> UnsafeProblems = new List<string>();
         public string LatestLine = "";
         public string PauseReason = "";
         public MissionPlan MissionPlan;
@@ -40,6 +44,7 @@ namespace ClaudiaKermin.Core.Missions
         public SequencePlan SequencePlan;
 
         private const string SettingPrefix = "setting.";
+        private const string UnsafeProblemPrefix = "unsafeProblem.";
 
         public IDictionary<string, string> ToValues()
         {
@@ -60,10 +65,12 @@ namespace ClaudiaKermin.Core.Missions
                 { "spendingCap", SpendingCap.ToString(CultureInfo.InvariantCulture) },
                 { "transcriptMarker", TranscriptMarker.ToString(CultureInfo.InvariantCulture) },
                 { "sequencesProposed", SequencesProposed.ToString(CultureInfo.InvariantCulture) },
+                { "sequenceCounted", SequenceCounted ? "true" : "false" },
                 { "latestLine", LatestLine },
                 { "pauseReason", PauseReason },
             };
             foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
+            for (var i = 0; i < UnsafeProblems.Count; i++) values[UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture)] = UnsafeProblems[i];
             if (MissionPlan != null || SequencePlan != null) values["plans"] = WritePlans(MissionPlan, SequencePlan);
             return values;
         }
@@ -95,8 +102,12 @@ namespace ClaudiaKermin.Core.Missions
             int number;
             if (int.TryParse(Get(values, "transcriptMarker"), NumberStyles.Integer, CultureInfo.InvariantCulture, out number)) state.TranscriptMarker = number;
             if (int.TryParse(Get(values, "sequencesProposed"), NumberStyles.Integer, CultureInfo.InvariantCulture, out number)) state.SequencesProposed = number;
+            state.SequenceCounted = Get(values, "sequenceCounted") == "true";
             foreach (var pair in values)
                 if (pair.Key.StartsWith(SettingPrefix, StringComparison.Ordinal)) state.Settings[pair.Key.Substring(SettingPrefix.Length)] = pair.Value;
+            // In order: unsafeProblem.0, unsafeProblem.1, ... up to the first one missing.
+            string problem;
+            for (var i = 0; values.TryGetValue(UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture), out problem); i++) state.UnsafeProblems.Add(problem);
             string plans;
             if (values.TryGetValue("plans", out plans))
             {
@@ -188,7 +199,8 @@ namespace ClaudiaKermin.Core.Missions
                     .Field("expected_delta_v", sequence.ExpectedDeltaV).Field("expected_duration_s", sequence.ExpectedDurationSeconds);
                 Strings(json, "abort_conditions", sequence.AbortConditions);
                 Strings(json, "risks", sequence.Risks);
-                json.Field("script", sequence.Script).EndObject();
+                json.Field("custom_script", sequence.CustomScript).Field("custom_script_reason", sequence.CustomScriptReason)
+                    .Field("script", sequence.Script).EndObject();
             }
             return json.EndObject().ToString();
         }

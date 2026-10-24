@@ -10,6 +10,6 @@
 
 wait until ship:unpacked.
 add node(time:seconds + 600, 0, 0, 120).
-local r is exec_node(lexicon("stage_limit", 2)).
-print "exec_node test: success " + r:success + ", residual " + r:residual + " m/s, " + r:reason.
-addons:claudia:report(r).
+local result is exec_node(lexicon("stage_limit", 2)).
+print "exec_node test: success " + result:success + ", residual " + result:residual + " m/s, " + result:reason.
+addons:claudia:report(result).

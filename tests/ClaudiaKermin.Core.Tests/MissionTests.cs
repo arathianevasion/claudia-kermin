@@ -53,7 +53,7 @@ namespace ClaudiaKermin.Core.Tests
         {
             var client = new ClaudeClient(new CraftCheckRouter(transport), () => "sk-ant-test", l => { });
             client.Timing.Wait = (d, c) => { };
-            var mission = new MissionControl(client, _background, config ?? new PlayerConfig(), () => true);
+            var mission = new MissionControl(client, _background, config ?? new PlayerConfig(), () => true, new PassingScriptCheck());
             mission.Send(new SaveLoaded(_save.Path));
             return mission;
         }
@@ -468,9 +468,10 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void EndingAMissionWhileARequestIsInFlightIgnoresTheLateReply()
         {
-            var transport = new StreamingFakeTransport(
-                ScriptedResponse.Fixture("mission-plan.sse", 64),
-                ScriptedResponse.Fixture("mission-plan.sse"));
+            // Held part-way, so the request is surely still in flight when the Mission ends (Drain can otherwise run a fast stream to its end).
+            var late = ScriptedResponse.Fixture("mission-plan.sse", 64);
+            late.PauseAt = 100;
+            var transport = new StreamingFakeTransport(late, ScriptedResponse.Fixture("mission-plan.sse"));
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(OnPad());
@@ -479,6 +480,7 @@ namespace ClaudiaKermin.Core.Tests
             var folder = MissionFolder(mission);
 
             mission.Send(new EndMission());
+            late.Gate.Set();
             AssertEndedAndFree(mission, folder);
 
             StartChecked(mission, new StartMission("Another goal.", 5m, "claude-sonnet-5-5"));

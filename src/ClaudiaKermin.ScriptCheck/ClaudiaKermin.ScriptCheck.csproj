@@ -1,0 +1,23 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  The Script Check (ADR 0003): compiles kerboscript with kOS.Safe and reads the opcodes against the
+  forbidden list. Unity-free, so CI builds and tests it with kOS.Safe from the public kOS release.
+  kOS.Safe is compile-only and never shipped: KSP already loads it through kOS.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>ClaudiaKermin.ScriptCheck</AssemblyName>
+    <RootNamespace>ClaudiaKermin.ScriptCheck</RootNamespace>
+    <NeedsKOS>true</NeedsKOS>
+    <ShipsInGameData>true</ShipsInGameData>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ClaudiaKermin.Core/ClaudiaKermin.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="kOS.Safe" HintPath="$(KOSPluginsDir)/kOS.Safe.dll" Private="false" />
+  </ItemGroup>
+</Project>
