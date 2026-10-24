@@ -18,7 +18,7 @@ namespace ClaudiaKermin.Adapter.Roster
             for (var i = 0; i < roster.Count; i++)
             {
                 var kerbal = roster[i];
-                snapshots.Add(new KerbalSnapshot(kerbal.persistentID, kerbal.name, kerbal.trait, KindOf(kerbal), StandingOf(kerbal)));
+                snapshots.Add(new KerbalSnapshot(kerbal.name, kerbal.trait, KindOf(kerbal), StandingOf(kerbal)));
             }
             return snapshots;
         }
@@ -28,47 +28,52 @@ namespace ClaudiaKermin.Adapter.Roster
             return kerbal != null && kerbal.trait == ClaudiaIdentity.TraitName;
         }
 
-        public static ProtoCrewMember Find(KerbalRoster roster, uint id)
+        /// <summary>The Kerbal with this exact name (KSP keeps roster names unique), or null. Never goes by persistentID, which is 0 for most roster Kerbals.</summary>
+        public static ProtoCrewMember Find(KerbalRoster roster, string name)
         {
+            if (name == null) return null;
             for (var i = 0; i < roster.Count; i++)
-                if (roster[i].persistentID == id) return roster[i];
+                if (roster[i].name == name) return roster[i];
             return null;
         }
 
         /// <summary>Applies one action; PromptRename goes to <paramref name="onPromptRename"/> since it needs the player.</summary>
         public static void Apply(KerbalRoster roster, RosterAction action, Action<ProtoCrewMember> onPromptRename)
         {
-            var kerbal = action.KerbalId == 0 ? null : Find(roster, action.KerbalId);
+            if (action.Type == RosterActionType.AddClaudia)
+            {
+                AddClaudia(roster);
+                return;
+            }
+
+            var kerbal = Find(roster, action.Target);
+            if (kerbal == null)
+            {
+                Debug.LogWarning(ModInfo.LogTag + " skipped " + action.Type + ": no Kerbal named \"" + action.Target + "\" on the roster");
+                return;
+            }
+
             switch (action.Type)
             {
-                case RosterActionType.AddClaudia:
-                    AddClaudia(roster);
-                    break;
                 case RosterActionType.RerollTrait:
-                    if (kerbal != null) KerbalRoster.SetExperienceTrait(kerbal, action.Trait);
+                    KerbalRoster.SetExperienceTrait(kerbal, action.Trait);
                     break;
                 case RosterActionType.ReplaceApplicant:
-                    if (kerbal != null) roster.Remove(kerbal);
+                    roster.Remove(kerbal);
                     break;
                 case RosterActionType.PromptRename:
-                    if (kerbal != null) onPromptRename(kerbal);
+                    onPromptRename(kerbal);
                     break;
                 case RosterActionType.RevertName:
-                    if (kerbal != null) kerbal.ChangeName(action.Name);
+                    kerbal.ChangeName(action.NewName);
                     break;
                 case RosterActionType.SetMissing:
-                    if (kerbal != null)
-                    {
-                        kerbal.rosterStatus = ProtoCrewMember.RosterStatus.Missing;
-                        kerbal.UTaR = action.UT;
-                    }
+                    kerbal.rosterStatus = ProtoCrewMember.RosterStatus.Missing;
+                    kerbal.UTaR = action.UT;
                     break;
                 case RosterActionType.Respawn:
-                    if (kerbal != null)
-                    {
-                        kerbal.rosterStatus = ProtoCrewMember.RosterStatus.Available;
-                        kerbal.UTaR = 0;
-                    }
+                    kerbal.rosterStatus = ProtoCrewMember.RosterStatus.Available;
+                    kerbal.UTaR = 0;
                     break;
             }
         }
