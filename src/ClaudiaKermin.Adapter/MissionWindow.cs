@@ -233,6 +233,8 @@ namespace ClaudiaKermin.Adapter
             }
             DrawProcessorChoice(check);
 
+            // Any result after a pause (Running, Error, ...) is new, even if it matches the last one.
+            if (check.State != CraftCheckState.Done) _seenCheckResult = "";
             switch (check.State)
             {
                 case CraftCheckState.None:
