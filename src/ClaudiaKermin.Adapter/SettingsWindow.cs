@@ -10,8 +10,11 @@ namespace ClaudiaKermin.Adapter
     /// <summary>The Claudia settings window: a masked API key field and the result of checking it.</summary>
     public class SettingsWindow
     {
+        private const string KeyControl = "ClaudiaSettingsKey";
+
         private readonly KeySettings _settings;
-        private Rect _rect = new Rect(200, 120, 360, 260);
+        private readonly WindowFrame _frame =
+            new WindowFrame(0x434B01, "Claudia Kermin settings", "ClaudiaKerminSettings", new Rect(200, 120, 360, 260), Vector2.zero, false);
         private string _typed = "";
         private string _uninstallStatus = "";
 
@@ -24,9 +27,20 @@ namespace ClaudiaKermin.Adapter
 
         public void OnGUI()
         {
-            if (!Visible) return;
+            if (!Visible)
+            {
+                Unlock();
+                return;
+            }
             GUI.skin = HighLogic.Skin;
-            _rect = GUILayout.Window(0x434B01, _rect, Draw, "Claudia Kermin settings");
+            _frame.Show(Draw);
+            _frame.SetTyping(GUI.GetNameOfFocusedControl() == KeyControl);
+        }
+
+        /// <summary>Releases the mouse lock; call when the window goes away.</summary>
+        public void Unlock()
+        {
+            _frame.Unlock();
         }
 
         private void Draw(int id)
@@ -38,6 +52,7 @@ namespace ClaudiaKermin.Adapter
             if (_settings.UsingEnvironmentKey)
                 GUILayout.Label("ANTHROPIC_API_KEY is set and takes priority.");
 
+            GUI.SetNextControlName(KeyControl);
             _typed = GUILayout.PasswordField(_typed, '*', 200);
 
             GUILayout.BeginHorizontal();
