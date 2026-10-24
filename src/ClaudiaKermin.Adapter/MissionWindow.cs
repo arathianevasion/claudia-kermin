@@ -274,6 +274,7 @@ namespace ClaudiaKermin.Adapter
                 case MissionStage.Running: return "Running";
                 case MissionStage.Debriefing: return "Debriefing";
                 case MissionStage.Succeeded: return "Mission Goal met";
+                case MissionStage.Ended: return "Mission ended (Failed Debrief)";
                 case MissionStage.Paused: return "Paused: " + view.PauseReason;
                 default: return "";
             }

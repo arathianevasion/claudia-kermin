@@ -18,12 +18,14 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>Claudia is writing the next Sequence Plan.</summary>
         Sequencing,
         AwaitingSequenceApproval,
-        /// <summary>A Maneuver Sequence's script is executing; ends at the Debrief.</summary>
+        /// <summary>A Maneuver Sequence's script is running on the craft; ends at the Debrief.</summary>
         Running,
         /// <summary>Claudia is writing the Debrief.</summary>
         Debriefing,
         /// <summary>The Mission Goal is met.</summary>
         Succeeded,
+        /// <summary>A Failed Debrief: the Mission Goal can't be reached as stated. (Offering a reduced goal comes later.)</summary>
+        Ended,
         /// <summary>Stopped on an error; Retry resumes.</summary>
         Paused,
     }
@@ -101,9 +103,9 @@ namespace ClaudiaKermin.Core.Missions
         public string Activity = "";
 
         /// <summary>The Mission Plan's Maneuver Sequences, for the stepper.</summary>
-        public IList<string> PlanSteps = new List<string>();
-        /// <summary>Index into <see cref="PlanSteps"/> of the sequence in hand; -1 before the first.</summary>
-        public int CurrentStep = -1;
+        public IList<string> PlanSequences = new List<string>();
+        /// <summary>Index into <see cref="PlanSequences"/> of the Maneuver Sequence in hand; -1 before the first.</summary>
+        public int CurrentSequence = -1;
 
         /// <summary>While Running, what is running; "" otherwise.</summary>
         public string RunStatus = "";
