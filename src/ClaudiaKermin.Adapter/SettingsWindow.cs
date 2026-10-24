@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Andrew Watson
 
+using ClaudiaKermin.Adapter.Roster;
 using ClaudiaKermin.Core.Config;
 using UnityEngine;
 
@@ -10,8 +11,9 @@ namespace ClaudiaKermin.Adapter
     public class SettingsWindow
     {
         private readonly KeySettings _settings;
-        private Rect _rect = new Rect(200, 120, 360, 170);
+        private Rect _rect = new Rect(200, 120, 360, 260);
         private string _typed = "";
+        private string _uninstallStatus = "";
 
         public bool Visible;
 
@@ -53,6 +55,17 @@ namespace ClaudiaKermin.Adapter
 
             if (_settings.Status.Length > 0)
                 GUILayout.Label(_settings.Status);
+
+            GUILayout.Space(8);
+            GUILayout.Label("Before removing the mod");
+            GUI.enabled = UninstallPrep.SaveIsLoaded;
+            if (GUILayout.Button("Prepare to uninstall"))
+                _uninstallStatus = UninstallPrep.Run();
+            GUI.enabled = true;
+            if (!UninstallPrep.SaveIsLoaded)
+                GUILayout.Label("Load a save to use this.");
+            if (_uninstallStatus.Length > 0)
+                GUILayout.Label(_uninstallStatus);
             GUI.DragWindow();
         }
     }
