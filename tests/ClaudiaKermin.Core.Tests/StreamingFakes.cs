@@ -29,6 +29,9 @@ namespace ClaudiaKermin.Core.Tests
         public int ChunkSize = 4096;
         public StreamEnd End = StreamEnd.Close;
         public bool NoNetwork;
+        /// <summary>When set, delivery pauses at this byte offset until <see cref="Gate"/> opens.</summary>
+        public int PauseAt = -1;
+        public readonly ManualResetEventSlim Gate = new ManualResetEventSlim();
         public readonly Dictionary<string, string> Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         public static ScriptedResponse Fixture(string name, int chunkSize = 4096, StreamEnd end = StreamEnd.Close)
@@ -122,10 +125,13 @@ namespace ClaudiaKermin.Core.Tests
         public int Read(byte[] buffer, int offset, int count)
         {
             if (_aborted.IsSet) throw new IOException("aborted");
+            if (_position == _response.PauseAt && !_response.Gate.Wait(TimeSpan.FromSeconds(30)))
+                throw new TimeoutException("test gate was never opened");
             var left = _response.Body.Length - _position;
             if (left > 0)
             {
                 var n = Math.Min(Math.Min(count, left), _response.ChunkSize);
+                if (_position < _response.PauseAt) n = Math.Min(n, _response.PauseAt - _position);
                 Array.Copy(_response.Body, _position, buffer, offset, n);
                 _position += n;
                 return n;
