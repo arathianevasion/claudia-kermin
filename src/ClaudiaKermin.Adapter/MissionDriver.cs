@@ -114,12 +114,12 @@ namespace ClaudiaKermin.Adapter
             var runner = ScriptRunner.Current;
             if (runner == null)
             {
-                Send(new KosRunRefused("kOS isn't running in this scene, so the script can't start."));
+                Send(new KosRunRefused("kOS isn't running in this scene, so the script can't start.", start.RunId));
                 return;
             }
             runner.BeginRun(start.ProcessorPartId, start.Label, start.Source,
-                outcome => Send(new KosRunEnded(outcome)),
-                reason => Send(new KosRunRefused(reason)));
+                outcome => Send(new KosRunEnded(outcome, start.RunId)),
+                reason => Send(new KosRunRefused(reason, start.RunId)));
         }
     }
 }

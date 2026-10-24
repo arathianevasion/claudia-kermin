@@ -118,13 +118,17 @@ namespace ClaudiaKermin.Core.Missions
     public sealed class KosRunRefused : MissionInput
     {
         public readonly string Reason;
-        public KosRunRefused(string reason) { Reason = reason; }
+        /// <summary>The <see cref="StartScript.RunId"/> this answers.</summary>
+        public readonly int RunId;
+        public KosRunRefused(string reason, int runId) { Reason = reason; RunId = runId; }
     }
 
     /// <summary>The script started by <see cref="StartScript"/> ended: its report, or why it didn't report, and any error text.</summary>
     public sealed class KosRunEnded : MissionInput
     {
         public readonly RunOutcome Outcome;
-        public KosRunEnded(RunOutcome outcome) { Outcome = outcome; }
+        /// <summary>The <see cref="StartScript.RunId"/> this answers.</summary>
+        public readonly int RunId;
+        public KosRunEnded(RunOutcome outcome, int runId) { Outcome = outcome; RunId = runId; }
     }
 }
