@@ -61,6 +61,13 @@ namespace ClaudiaKermin.Adapter
                 Send(new UtAdvanced(Planetarium.GetUniversalTime()));
                 Send(SnapshotReader.Read(vessel));
             }
+            else if (scene == GameScene.Editor && EditorLogic.fetch != null && Time.realtimeSinceStartup >= _nextSnapshot)
+            {
+                // The ship on the VAB/SPH floor is what the Craft Check judges before launch.
+                _nextSnapshot = Time.realtimeSinceStartup + SnapshotSeconds;
+                var ship = SnapshotReader.ReadEditor(EditorLogic.fetch.ship);
+                if (ship != null) Send(ship);
+            }
             Carry();
         }
 
