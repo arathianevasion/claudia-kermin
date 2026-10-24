@@ -30,6 +30,8 @@ namespace ClaudiaKermin.Core.Missions
         Paused,
         /// <summary>"Couldn't produce a safe script": the Sequence Plan's script failed the Script Check twice. Retry, Retry with a note or Re-plan.</summary>
         UnsafeScript,
+        /// <summary>Claudia was killed aboard the craft: the Mission is over, closed by a final Debrief from Mission Control.</summary>
+        Lost,
     }
 
     public enum QuickReply
@@ -182,6 +184,8 @@ namespace ClaudiaKermin.Core.Missions
         public IDictionary<string, decimal> Estimates = new Dictionary<string, decimal>();
         /// <summary>The Mission Settings the form starts with (from the player config).</summary>
         public MissionSettingsValues DefaultSettings = new MissionSettingsValues();
+        /// <summary>Why the last Start Mission was turned away before the Craft Check (Claudia Missing for a crewed Mission, no link for a remote one); "" otherwise.</summary>
+        public string Refusal = "";
     }
 
     /// <summary>The Due Time of the Sequence Plan awaiting Approval, for the board and the Capcom strip.</summary>
@@ -241,6 +245,10 @@ namespace ClaudiaKermin.Core.Missions
         public string RunStatus = "";
         /// <summary>Why the Mission is Paused; "" otherwise.</summary>
         public string PauseReason = "";
+        /// <summary>The Mission is flown remotely: Claudia is at Mission Control, not aboard.</summary>
+        public bool Remote;
+        /// <summary>While Paused for EVA science: what the player is to do by hand, then Resume; "" otherwise.</summary>
+        public string EvaScience = "";
         /// <summary>The question shown with Yes/Not yet after a typed reply; null otherwise.</summary>
         public string ConfirmPrompt;
 

@@ -28,6 +28,36 @@ namespace ClaudiaKermin.Adapter.Roster
             return kerbal != null && kerbal.trait == ClaudiaIdentity.TraitName;
         }
 
+        /// <summary>Claudia's standing on this roster as the Game Snapshot names it (Available, Assigned, Missing, Dead); "" when she isn't on it.</summary>
+        public static string ClaudiaStanding(KerbalRoster roster)
+        {
+            var claudia = Find(roster, ClaudiaIdentity.Name);
+            return claudia == null ? "" : StandingOf(claudia).ToString();
+        }
+
+        /// <summary>
+        /// Puts Claudia in the first open seat of the editor's crew manifest. Nobody else is moved: the Kerbals the player
+        /// seated stay put and ride as passengers. False when she isn't available or no seat is free.
+        /// </summary>
+        public static bool SeatInEditor(KerbalRoster roster)
+        {
+            var claudia = Find(roster, ClaudiaIdentity.Name);
+            var manifest = ShipConstruction.ShipManifest;
+            if (claudia == null || manifest == null || claudia.rosterStatus != ProtoCrewMember.RosterStatus.Available) return false;
+            foreach (var part in manifest.GetCrewableParts())
+            {
+                var seats = part.GetPartCrew();
+                for (var seat = 0; seat < seats.Length; seat++)
+                {
+                    if (seats[seat] != null) continue;
+                    part.AddCrewToSeat(claudia, seat);
+                    if (KSP.UI.CrewAssignmentDialog.Instance != null) KSP.UI.CrewAssignmentDialog.Instance.RefreshCrewLists(manifest, true, true);
+                    return true;
+                }
+            }
+            return false;
+        }
+
         /// <summary>The Kerbal with this exact name (KSP keeps roster names unique), or null. Never goes by persistentID, which is 0 for most roster Kerbals.</summary>
         public static ProtoCrewMember Find(KerbalRoster roster, string name)
         {

@@ -69,6 +69,7 @@ namespace ClaudiaKermin.Adapter
             _mission = mission;
             Window = new MissionWindow(Send, debugTools);
             Strip = new CapcomStrip(Window);
+            GameEvents.onKerbalStatusChange.Add(OnKerbalStatusChange);
         }
 
         public void Send(MissionInput input)
@@ -179,6 +180,11 @@ namespace ClaudiaKermin.Adapter
                     if (runner != null) runner.Abort(abort.ProcessorPartId, abort.Reason);
                     continue;
                 }
+                if (command is SeatClaudia)
+                {
+                    SeatClaudia();
+                    continue;
+                }
                 if (command is SetDueTimeAlarm) DueTimeActions.SetAlarm((SetDueTimeAlarm)command);
                 else if (command is ClearDueTimeAlarm) DueTimeActions.ClearAlarm(((ClearDueTimeAlarm)command).MissionId);
                 else if (command is WarpToUt) DueTimeActions.WarpTo(((WarpToUt)command).Ut);
@@ -209,6 +215,20 @@ namespace ClaudiaKermin.Adapter
             Flashing = true;
             ScreenMessages.PostScreenMessage(attention.Text, 6f, ScreenMessageStyle.UPPER_CENTER);
             if (TimeWarp.fetch != null && TimeWarp.CurrentRateIndex > 0) TimeWarp.SetRate(0, true);
+        }
+
+        /// <summary>A crewed Mission started in the editor with her not aboard: she takes a free seat.</summary>
+        private static void SeatClaudia()
+        {
+            var game = HighLogic.CurrentGame;
+            if (game != null && game.CrewRoster != null && Roster.RosterGateway.SeatInEditor(game.CrewRoster)) return;
+            ScreenMessages.PostScreenMessage("Claudia could not be seated: seat her in the crew dialog yourself before launch.", 8f, ScreenMessageStyle.UPPER_CENTER);
+        }
+
+        /// <summary>Her death is a game event for the core; only a crewed Mission cares (the core ignores it for a remote one).</summary>
+        private void OnKerbalStatusChange(ProtoCrewMember kerbal, ProtoCrewMember.RosterStatus oldStatus, ProtoCrewMember.RosterStatus newStatus)
+        {
+            if (newStatus == ProtoCrewMember.RosterStatus.Dead && Roster.RosterGateway.IsClaudia(kerbal)) Send(new ClaudiaKilled());
         }
 
         private void StartScript(StartScript start)

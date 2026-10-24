@@ -44,6 +44,10 @@ namespace ClaudiaKermin.Core.Missions
         public string VesselName = "";
         /// <summary>The Due Time of the Sequence Plan in hand has been reached and announced.</summary>
         public bool DueNotified;
+        /// <summary>The Mission is remote: Claudia is at Mission Control, not aboard. A save from before this existed reads as crewed.</summary>
+        public bool Remote;
+        /// <summary>While Paused for EVA science: what the player is to do by hand; "" otherwise.</summary>
+        public string EvaScience = "";
         public MissionPlan MissionPlan;
         /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
         public SequencePlan SequencePlan;
@@ -76,6 +80,8 @@ namespace ClaudiaKermin.Core.Missions
                 { "vesselId", VesselId },
                 { "vesselName", VesselName },
                 { "dueNotified", DueNotified ? "true" : "false" },
+                { "remote", Remote ? "true" : "false" },
+                { "evaScience", EvaScience },
             };
             foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
             for (var i = 0; i < UnsafeProblems.Count; i++) values[UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture)] = UnsafeProblems[i];
@@ -107,6 +113,8 @@ namespace ClaudiaKermin.Core.Missions
                 VesselId = Get(values, "vesselId"),
                 VesselName = Get(values, "vesselName"),
                 DueNotified = Get(values, "dueNotified") == "true",
+                Remote = Get(values, "remote") == "true",
+                EvaScience = Get(values, "evaScience"),
             };
             decimal cap;
             if (decimal.TryParse(Get(values, "spendingCap"), NumberStyles.Number, CultureInfo.InvariantCulture, out cap)) state.SpendingCap = cap;

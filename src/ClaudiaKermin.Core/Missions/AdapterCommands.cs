@@ -46,6 +46,15 @@ namespace ClaudiaKermin.Core.Missions
         }
     }
 
+    /// <summary>
+    /// Seat Claudia in the editor's crew manifest, in a free seat, for a crewed Mission that has just started
+    /// with her not aboard. The rest of the manifest is left as the player set it: the other Kerbals ride as
+    /// passengers.
+    /// </summary>
+    public sealed class SeatClaudia : AdapterCommand
+    {
+    }
+
     /// <summary>A short on-screen message, for when Claudia needs the player (a plan to approve, a Debrief).</summary>
     public sealed class PostScreenMessage : AdapterCommand
     {

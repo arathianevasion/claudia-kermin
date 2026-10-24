@@ -34,6 +34,9 @@ namespace ClaudiaKermin.Adapter
             snapshot.Craft.Stage = vessel.currentStage;
             ReadParts(snapshot, vessel.parts, vessel.VesselDeltaV);
             snapshot.Crew.AddRange(vessel.GetVesselCrew().Select(Crew));
+            ReadAboard(snapshot);
+            // A save with CommNet off counts as linked, whatever the connection says.
+            snapshot.HasLink = vessel.connection != null && vessel.connection.IsConnectedHome;
 
             var orbit = vessel.orbit;
             if (orbit != null)
@@ -67,7 +70,16 @@ namespace ClaudiaKermin.Adapter
             ReadParts(snapshot, ship.parts, ship.vesselDeltaV);
             var manifest = ShipConstruction.ShipManifest;
             if (manifest != null) snapshot.Crew.AddRange(manifest.GetAllCrew(false).Where(c => c != null).Select(Crew));
+            ReadAboard(snapshot);
             return snapshot;
+        }
+
+        /// <summary>Claudia's roster standing and whether the save has CommNet: the facts the aboard and remote rules judge.</summary>
+        private static void ReadAboard(GameSnapshot snapshot)
+        {
+            var game = HighLogic.CurrentGame;
+            if (game != null && game.CrewRoster != null) snapshot.ClaudiaStanding = Roster.RosterGateway.ClaudiaStanding(game.CrewRoster);
+            snapshot.CommNetEnabled = CommNet.CommNetScenario.CommNetEnabled;
         }
 
         private static SnapshotCrewMember Crew(ProtoCrewMember crew)

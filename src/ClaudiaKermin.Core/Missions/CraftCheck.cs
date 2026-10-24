@@ -74,6 +74,10 @@ namespace ClaudiaKermin.Core.Missions
         private List<CraftFinding> _findings = new List<CraftFinding>();
         private string _craftKey;
         private string _goal;
+        /// <summary>The result is for a remote Mission (Claudia stays at Mission Control); false is crewed.</summary>
+        private bool _remote;
+        /// <summary>The mod saw for itself that this crewed Mission has no seat for Claudia, so that Blocker doesn't wait on Claude.</summary>
+        private bool _noSeat;
         private uint? _preferredProcessor;
         private List<string> _keptAcknowledgements = new List<string>();
         private CancellationTokenSource _cancel;
@@ -99,15 +103,15 @@ namespace ClaudiaKermin.Core.Missions
         }
 
         /// <summary>The result is for this goal and this craft (with this processor), so it still holds.</summary>
-        public bool IsCurrent(string goal, GameSnapshot snapshot)
+        public bool IsCurrent(string goal, GameSnapshot snapshot, bool remote = false)
         {
-            return _state == CraftCheckState.Done && snapshot != null && _goal == goal.Trim() && _craftKey == CraftKey(snapshot);
+            return _state == CraftCheckState.Done && snapshot != null && _goal == goal.Trim() && _remote == remote && _craftKey == CraftKey(snapshot);
         }
 
         /// <summary>A current result with no Blocker and every Warning acknowledged.</summary>
-        public bool Allows(string goal, GameSnapshot snapshot)
+        public bool Allows(string goal, GameSnapshot snapshot, bool remote = false)
         {
-            return IsCurrent(goal, snapshot) && Cleared;
+            return IsCurrent(goal, snapshot, remote) && Cleared;
         }
 
         /// <summary>The check came out Pass, or Pass with Warnings that are all acknowledged.</summary>
@@ -144,12 +148,12 @@ namespace ClaudiaKermin.Core.Missions
         }
 
         /// <summary>Checks the craft. Stops and asks when the stock simulator is off; does nothing without a craft or a goal.</summary>
-        public void Run(string goal, string model, GameSnapshot snapshot)
+        public void Run(string goal, string model, GameSnapshot snapshot, bool remote = false)
         {
             goal = (goal ?? "").Trim();
             if (snapshot == null || goal.Length == 0 || Running) return;
             // Running the same check again on the same craft doesn't make the player accept the same risks twice.
-            _keptAcknowledgements = IsCurrent(goal, snapshot)
+            _keptAcknowledgements = IsCurrent(goal, snapshot, remote)
                 ? _findings.Where(f => f.Acknowledged).Select(f => f.Code).ToList() : new List<string>();
             Forget();
             if (!snapshot.DeltaVSimulator)
@@ -168,6 +172,8 @@ namespace ClaudiaKermin.Core.Missions
 
             _state = CraftCheckState.Running;
             _goal = goal;
+            _remote = remote;
+            _noSeat = !remote && !snapshot.ClaudiaAboard && snapshot.FreeSeats == 0;
             _craftKey = CraftKey(snapshot);
             var request = new MessagesRequest
             {
@@ -178,7 +184,7 @@ namespace ClaudiaKermin.Core.Missions
                 CompactionTriggerTokens = _config.CompactionTriggerTokens,
             };
             request.System.Add(CraftCheckPrompts.System);
-            request.Messages.Add(Message.UserText(CraftCheckPrompts.Facts(goal, snapshot, _config.CraftCheckMarginPercent, _preferredProcessor)));
+            request.Messages.Add(Message.UserText(CraftCheckPrompts.Facts(goal, snapshot, _config.CraftCheckMarginPercent, _preferredProcessor, remote)));
 
             var cancel = new CancellationTokenSource();
             _cancel = cancel;
@@ -249,6 +255,19 @@ namespace ClaudiaKermin.Core.Missions
                 return;
             }
             _findings = reply.Findings;
+            // A fact the mod can count itself doesn't depend on Claude noticing it.
+            if (_noSeat && _findings.All(f => f.Code != "no_seat_for_claudia"))
+            {
+                var rule = CraftCheckRules.Find("no_seat_for_claudia");
+                _findings.Insert(0, new CraftFinding
+                {
+                    Code = rule.Code,
+                    Severity = rule.Severity,
+                    Title = rule.Title,
+                    Explanation = "Claudia isn't aboard and every crew seat on the craft is taken (or the craft has none).",
+                    Fix = "Add a crew seat, or take another Kerbal out of the crew manifest so she can have the seat. A craft with no one aboard can fly as a remote Mission.",
+                });
+            }
             foreach (var finding in _findings.Where(f => f.Severity == CraftFindingSeverity.Warning && _keptAcknowledgements.Contains(f.Code)))
                 finding.Acknowledged = true;
             _summary = reply.Summary;
@@ -337,11 +356,12 @@ namespace ClaudiaKermin.Core.Missions
             + "Reply with one JSON object in the given schema: summary is your line to the player in a concise mission-control voice, "
             + "key numbers first, one or two sentences; findings is the list. Use m/s for delta-v.";
 
-        public static string Facts(string goal, GameSnapshot snapshot, int marginPercent, uint? preferredProcessor)
+        public static string Facts(string goal, GameSnapshot snapshot, int marginPercent, uint? preferredProcessor, bool remote = false)
         {
             var home = CraftCheckFlow.HomeBody;
             var text = new StringBuilder();
             text.Append("Mission Goal, in the player's words (quoted data): ").Append(MissionPrompts.Quoted(goal)).Append('\n');
+            text.Append(MissionPrompts.ModeFacts(remote, snapshot)).Append('\n');
             text.Append("Delta-v margin wanted over the Delta-v Map: ").Append(marginPercent.ToString(CultureInfo.InvariantCulture)).Append("%.\n");
             text.Append("Game mode: ").Append(snapshot.GameMode.Length > 0 ? snapshot.GameMode : "unknown")
                 .Append(snapshot.GameMode == "SANDBOX" ? " (science isn't tracked; check only the experiment parts).\n" : ".\n");
