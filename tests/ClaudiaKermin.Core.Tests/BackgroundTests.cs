@@ -38,6 +38,18 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void TheCallerHearsOfAFailureEvenIfTheErrorHandlerThrows()
+        {
+            Exception failed = null;
+            var background = new Background(e => throw new InvalidOperationException("handler"));
+
+            background.Run<int>(() => throw new InvalidOperationException("work"), v => { }, e => failed = e);
+            DrainUntil(background, () => failed != null);
+
+            Assert.Equal("work", failed.Message);
+        }
+
+        [Fact]
         public void AThrowingCallbackDoesNotStopTheRestOfTheDrain()
         {
             var errors = new List<Exception>();

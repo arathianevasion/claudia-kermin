@@ -117,7 +117,15 @@ namespace ClaudiaKermin.Core.Claude
             {
                 _request = request;
                 _response = response;
-                _body = response.GetResponseStream();
+                try
+                {
+                    _body = response.GetResponseStream();
+                }
+                catch
+                {
+                    response.Close();
+                    throw;
+                }
             }
 
             public int StatusCode

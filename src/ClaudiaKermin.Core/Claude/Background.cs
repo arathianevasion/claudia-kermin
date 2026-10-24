@@ -36,11 +36,9 @@ namespace ClaudiaKermin.Core.Claude
                 }
                 catch (Exception e)
                 {
-                    _mainThread.Enqueue(() =>
-                    {
-                        _onError(e);
-                        if (failed != null) failed(e);
-                    });
+                    // Two queued actions, so a throwing error handler cannot stop the caller hearing of the failure.
+                    _mainThread.Enqueue(() => _onError(e));
+                    if (failed != null) _mainThread.Enqueue(() => failed(e));
                 }
             });
             thread.IsBackground = true;
@@ -71,6 +69,7 @@ namespace ClaudiaKermin.Core.Claude
                     }
                     catch (Exception)
                     {
+                        // Nothing left to report it to.
                     }
                 }
             }

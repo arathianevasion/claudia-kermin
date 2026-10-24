@@ -47,7 +47,7 @@ namespace ClaudiaKermin.Core.Claude
         }
 
         private const string MessagesPath = "/v1/messages";
-        private const int MaxErrorBodyChars = 64 * 1024;
+        private const int MaxErrorBodyBytes = 64 * 1024;
 
         private static int _nextRequestId;
 
@@ -195,83 +195,82 @@ namespace ClaudiaKermin.Core.Claude
                 return attempt;
             }
 
+            // Both the error body and the event stream are read under the stall watchdog and cancel.
             using (stream)
+            using (var watchdog = new StallWatchdog(stream, Timing.StallTimeout))
+            using (cancel.Register(stream.Abort))
             {
                 attempt.HttpStatus = stream.StatusCode;
                 if (stream.StatusCode < 200 || stream.StatusCode >= 300)
                 {
-                    ReadError(stream, attempt);
+                    ReadError(stream, watchdog, attempt);
+                    attempt.Cancelled = cancel.IsCancellationRequested;
                     return attempt;
                 }
-                ReadEvents(id, number, stream, attempt, listener, cancel, dump);
+                ReadEvents(id, number, stream, watchdog, attempt, listener, cancel, dump);
             }
             return attempt;
         }
 
-        private void ReadEvents(int id, int number, IHttpStream stream, Attempt attempt, Action<StreamUpdate> listener,
-            CancellationToken cancel, IRawStreamDump dump)
+        private void ReadEvents(int id, int number, IHttpStream stream, StallWatchdog watchdog, Attempt attempt,
+            Action<StreamUpdate> listener, CancellationToken cancel, IRawStreamDump dump)
         {
             var parser = new SseParser();
-            var assembler = new StreamAssembler(listener, what => _log(ModInfo.LogTag + " request id="
-                + id.ToString(CultureInfo.InvariantCulture) + " ignored " + what));
+            var assembler = new StreamAssembler(listener, what => _log(RequestTag(id) + " ignored " + what));
             var buffer = new byte[8192];
 
-            using (var watchdog = new StallWatchdog(stream, Timing.StallTimeout))
-            using (cancel.Register(stream.Abort))
+            try
             {
-                try
+                while (!assembler.Stopped)
                 {
-                    while (!assembler.Stopped)
+                    if (cancel.IsCancellationRequested) break;
+                    var read = stream.Read(buffer, 0, buffer.Length);
+                    if (read == 0) break;
+                    watchdog.BytesArrived();
+                    foreach (var sse in parser.Feed(buffer, read))
                     {
-                        if (cancel.IsCancellationRequested) break;
-                        var read = stream.Read(buffer, 0, buffer.Length);
-                        if (read == 0) break;
-                        watchdog.Bytes();
-                        foreach (var sse in parser.Feed(buffer, read))
-                        {
-                            if (dump != null) Dump(dump, id, number, sse.Raw);
-                            assembler.Apply(sse);
-                            if (assembler.Stopped) break;
-                        }
+                        if (dump != null) Dump(dump, id, number, sse.Raw);
+                        assembler.Apply(sse);
+                        if (assembler.Stopped) break;
                     }
                 }
-                catch (IOException)
-                {
-                }
-                catch (StreamErrorEventException e)
-                {
-                    attempt.Failure = StreamFailure.StreamError;
-                    attempt.ErrorType = e.ErrorType;
-                    attempt.ErrorMessage = e.Message;
-                    attempt.Retryable = RetryableErrorType(e.ErrorType);
-                    attempt.ContentStarted = assembler.ContentStarted;
-                    return;
-                }
-                catch (BadStreamException)
-                {
-                    attempt.Failure = StreamFailure.BadStream;
-                    attempt.Retryable = true;
-                    attempt.ContentStarted = assembler.ContentStarted;
-                    return;
-                }
-
-                attempt.ContentStarted = assembler.ContentStarted;
-                if (cancel.IsCancellationRequested)
-                {
-                    attempt.Cancelled = true;
-                    return;
-                }
-                if (assembler.Stopped)
-                {
-                    attempt.Message = assembler.Message;
-                    return;
-                }
-                attempt.Failure = watchdog.Fired ? StreamFailure.Stalled : StreamFailure.EndedEarly;
-                attempt.Retryable = true;
             }
+            catch (IOException)
+            {
+            }
+            catch (StreamErrorEventException e)
+            {
+                attempt.Failure = e.ErrorType == "billing_error" ? StreamFailure.LowCredit : StreamFailure.StreamError;
+                attempt.ErrorType = e.ErrorType;
+                attempt.ErrorMessage = e.Message;
+                attempt.Retryable = RetryableErrorType(e.ErrorType);
+                attempt.ContentStarted = assembler.ContentStarted;
+                return;
+            }
+            catch (BadStreamException)
+            {
+                attempt.Failure = StreamFailure.BadStream;
+                attempt.Retryable = true;
+                attempt.ContentStarted = assembler.ContentStarted;
+                return;
+            }
+
+            attempt.ContentStarted = assembler.ContentStarted;
+            if (cancel.IsCancellationRequested)
+            {
+                attempt.Cancelled = true;
+                return;
+            }
+            if (assembler.Stopped)
+            {
+                attempt.Message = assembler.Message;
+                return;
+            }
+            attempt.Failure = watchdog.Fired ? StreamFailure.Stalled : StreamFailure.EndedEarly;
+            attempt.Retryable = true;
         }
 
-        private static void ReadError(IHttpStream stream, Attempt attempt)
+        private static void ReadError(IHttpStream stream, StallWatchdog watchdog, Attempt attempt)
         {
             var status = stream.StatusCode;
             attempt.RetryAfter = ParseRetryAfter(stream.Header("retry-after"));
@@ -281,8 +280,11 @@ namespace ClaudiaKermin.Core.Claude
                 var bytes = new MemoryStream();
                 var buffer = new byte[4096];
                 int read;
-                while (bytes.Length < MaxErrorBodyChars && (read = stream.Read(buffer, 0, buffer.Length)) > 0)
+                while (bytes.Length < MaxErrorBodyBytes && (read = stream.Read(buffer, 0, buffer.Length)) > 0)
+                {
                     bytes.Write(buffer, 0, read);
+                    watchdog.BytesArrived();
+                }
                 text = Encoding.UTF8.GetString(bytes.ToArray());
             }
             catch (IOException)
@@ -326,7 +328,7 @@ namespace ClaudiaKermin.Core.Claude
             }
         }
 
-        internal static TimeSpan? ParseRetryAfter(string header)
+        private static TimeSpan? ParseRetryAfter(string header)
         {
             double seconds;
             if (header == null) return null;
@@ -347,10 +349,16 @@ namespace ClaudiaKermin.Core.Claude
             {
                 dump.Write(id, attempt, raw);
             }
-            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+            catch (Exception)
             {
-                _log(ModInfo.LogTag + " request id=" + id.ToString(CultureInfo.InvariantCulture) + " raw dump failed");
+                // A debug dump must never break the request.
+                _log(RequestTag(id) + " raw dump failed");
             }
+        }
+
+        private static string RequestTag(int id)
+        {
+            return ModInfo.LogTag + " request id=" + id.ToString(CultureInfo.InvariantCulture);
         }
 
         private void AddCommonHeaders(HttpRequestSpec request)
@@ -363,7 +371,7 @@ namespace ClaudiaKermin.Core.Claude
         // Only ids, the path, model, status, timing and token counts: never headers, the key, or any request or response text.
         private void Log(int id, string method, string path, string status, Stopwatch timer)
         {
-            _log(ModInfo.LogTag + " request id=" + id.ToString(CultureInfo.InvariantCulture) + " " + method + " " + path
+            _log(RequestTag(id) + " " + method + " " + path
                 + " " + status + " ms=" + timer.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture));
         }
 
@@ -416,7 +424,7 @@ namespace ClaudiaKermin.Core.Claude
                 _timer = new Timer(Check, null, period, period);
             }
 
-            public void Bytes()
+            public void BytesArrived()
             {
                 Interlocked.Exchange(ref _lastBytes, _clock.Elapsed.Ticks);
             }
