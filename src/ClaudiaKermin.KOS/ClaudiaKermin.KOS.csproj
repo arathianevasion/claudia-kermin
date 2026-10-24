@@ -20,9 +20,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="Assembly-CSharp" HintPath="$(KSPManagedDir)/Assembly-CSharp.dll" Private="false" />
-    <Reference Include="UnityEngine" HintPath="$(KSPManagedDir)/UnityEngine.dll" Private="false" />
-    <Reference Include="UnityEngine.CoreModule" HintPath="$(KSPManagedDir)/UnityEngine.CoreModule.dll" Private="false" />
     <Reference Include="kOS" HintPath="$(KOSPluginsDir)/kOS.dll" Private="false" />
     <Reference Include="kOS.Safe" HintPath="$(KOSPluginsDir)/kOS.Safe.dll" Private="false" />
   </ItemGroup>
