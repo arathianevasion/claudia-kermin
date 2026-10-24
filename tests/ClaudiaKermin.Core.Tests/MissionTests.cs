@@ -290,6 +290,92 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ATypedApprovalOfASequencePlanOnlyAsksForConfirmationAndTheButtonStartsTheScript()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                ScriptedResponse.Fixture("mission-reply-approve.sse"));
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+
+            mission.Send(new Reply("yes, go ahead"));
+            DrainUntil(mission, v => !v.Busy && v.ConfirmPrompt != null);
+            Assert.Empty(Started(mission));
+            Assert.Equal(MissionStage.AwaitingSequenceApproval, mission.View.Stage);
+            Assert.Equal(new[] { QuickReply.ConfirmApproval, QuickReply.NotYet }, mission.View.QuickReplies);
+            Assert.Equal("Sounds like a yes. Approve this plan?", mission.View.LatestLine);
+
+            mission.Send(new ConfirmApproval(false));
+            Assert.Empty(Started(mission));
+            Assert.Equal(MissionStage.AwaitingSequenceApproval, mission.View.Stage);
+
+            transport.Add(ScriptedResponse.Fixture("mission-reply-approve.sse"));
+            mission.Send(new Reply("yes, go ahead"));
+            DrainUntil(mission, v => !v.Busy && v.ConfirmPrompt != null);
+            Assert.Empty(Started(mission));
+            mission.Send(new ConfirmApproval(true));
+            var start = Assert.Single(Started(mission));
+            Assert.Equal(3102u, start.ProcessorPartId);
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+        }
+
+        [Fact]
+        public void ATypedApprovalOfTheMissionPlanRequestsNoSequencePlanUntilConfirmed()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-reply-approve.sse"),
+                ScriptedResponse.Fixture("mission-reply-approve.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+
+            mission.Send(new Reply("looks good"));
+            DrainUntil(mission, v => !v.Busy && v.ConfirmPrompt != null);
+            Assert.Equal(MissionStage.AwaitingPlanApproval, mission.View.Stage);
+            Assert.Equal(new[] { QuickReply.ConfirmApproval, QuickReply.NotYet }, mission.View.QuickReplies);
+            Assert.Equal(2, transport.Requests.Count);
+
+            mission.Send(new ConfirmApproval(false));
+            Assert.Equal(MissionStage.AwaitingPlanApproval, mission.View.Stage);
+            Assert.Equal(2, transport.Requests.Count);
+
+            mission.Send(new Reply("looks good"));
+            DrainUntil(mission, v => !v.Busy && v.ConfirmPrompt != null);
+            Assert.Equal(3, transport.Requests.Count);
+            mission.Send(new ConfirmApproval(true));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+            Assert.Equal(4, transport.Requests.Count);
+        }
+
+        [Fact]
+        public void TheApproveButtonStartsTheScriptWithNoConfirmation()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+            mission.Send(new Approve());
+            Assert.Single(Started(mission));
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+        }
+
+        [Fact]
         public void AFailedDebriefEndsTheMissionAndAsksForNoFurtherSequence()
         {
             var transport = new StreamingFakeTransport(

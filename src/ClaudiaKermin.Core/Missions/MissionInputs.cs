@@ -56,7 +56,7 @@ namespace ClaudiaKermin.Core.Missions
         public Reply(string text) { Text = text; }
     }
 
-    /// <summary>The player's answer to "Approve the pending plan?" after an ambiguous reply.</summary>
+    /// <summary>The player's answer to "Approve the pending plan?" after a typed reply.</summary>
     public sealed class ConfirmApproval : MissionInput
     {
         public readonly bool Yes;
