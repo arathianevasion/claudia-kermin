@@ -19,6 +19,13 @@ namespace ClaudiaKermin.Adapter
     [KSPAddon(KSPAddon.Startup.Instantly, true)]
     public class Loader : MonoBehaviour
     {
+        // Settings: the Space Center, the VAB/SPH and Flight (map view counts as Flight); not the main
+        // menu, the Tracking Station or other KSC buildings.
+        private const ApplicationLauncher.AppScenes SettingsScenes =
+            ApplicationLauncher.AppScenes.SPACECENTER | ApplicationLauncher.AppScenes.FLIGHT
+            | ApplicationLauncher.AppScenes.MAPVIEW | ApplicationLauncher.AppScenes.VAB
+            | ApplicationLauncher.AppScenes.SPH;
+
         private const ApplicationLauncher.AppScenes ChatScenes =
             ApplicationLauncher.AppScenes.FLIGHT | ApplicationLauncher.AppScenes.MAPVIEW
             | ApplicationLauncher.AppScenes.VAB | ApplicationLauncher.AppScenes.SPH;
@@ -90,8 +97,10 @@ namespace ClaudiaKermin.Adapter
         }
 
         // The chat keeps running across the change; only the keyboard lock is released.
+        // The settings window closes: its button is rebuilt unpressed in the next scene, or absent there.
         private void SceneChanging(GameScenes scene)
         {
+            _window.Visible = false;
             _chatWindow.Unlock();
             _chatWindow.UiHidden = false;
         }
@@ -102,7 +111,7 @@ namespace ClaudiaKermin.Adapter
             {
                 _button = ApplicationLauncher.Instance.AddModApplication(
                     () => _window.Visible = true, () => _window.Visible = false,
-                    null, null, null, null, ApplicationLauncher.AppScenes.ALWAYS, MakeIcon(new Color(0.85f, 0.45f, 0.2f, 1f)));
+                    null, null, null, null, SettingsScenes, MakeIcon(new Color(0.85f, 0.45f, 0.2f, 1f)));
             }
             if (_chatButton == null)
             {
