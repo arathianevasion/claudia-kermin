@@ -31,6 +31,14 @@ namespace ClaudiaKermin.Core.Missions
         public int BaseMessages;
     }
 
+    /// <summary>What a Mission has cost so far, as its cost log says.</summary>
+    internal sealed class CostTotals
+    {
+        public decimal Spent;
+        public decimal Held;
+        public int Requests;
+    }
+
     /// <summary>The transcript as read back from the Mission folder: the frozen system layers and every message.</summary>
     internal sealed class StoredTranscript
     {
@@ -151,6 +159,53 @@ namespace ClaudiaKermin.Core.Missions
                 if (info != null) return info;
             }
             return null;
+        }
+
+        /// <summary>
+        /// Spent and Held as the cost log last recorded them: the log is append-only and never rewound, so it is
+        /// the truth whatever save is loaded. A pending charge with no settlement after it (a crash mid-request)
+        /// counts as kept. A torn last line (a crash mid-append) is skipped. Zero when there is no log.
+        /// </summary>
+        public static CostTotals ReadCostTotals(string folder)
+        {
+            var totals = new CostTotals();
+            var path = Path.Combine(folder, MissionFolder.CostLogFile);
+            if (!File.Exists(path)) return totals;
+            string[] lines;
+            try
+            {
+                lines = File.ReadAllLines(path, Utf8);
+            }
+            catch (IOException)
+            {
+                return totals;
+            }
+            for (var i = lines.Length - 1; i >= 0; i--)
+            {
+                JsonNode line;
+                try
+                {
+                    line = JsonReader.Parse(lines[i]);
+                }
+                catch (JsonException)
+                {
+                    continue;
+                }
+                decimal spent, held, amount;
+                if (line.Kind != JsonKind.Object || !TryDecimal(line["spent"], out spent) || !TryDecimal(line["held"], out held)) continue;
+                totals.Spent = spent;
+                totals.Held = held;
+                totals.Requests = (int)(JsonNode.Long(line["request"]) ?? 0);
+                if (JsonNode.Str(line["event"]) == "pending" && TryDecimal(line["amount"], out amount)) totals.Held += amount;
+                return totals;
+            }
+            return totals;
+        }
+
+        private static bool TryDecimal(JsonNode node, out decimal value)
+        {
+            value = 0m;
+            return node != null && node.Kind == JsonKind.Number && decimal.TryParse(node.Raw, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
         }
 
         /// <summary>The transcript the Mission folder holds, or null when there is none or it is unreadable.</summary>

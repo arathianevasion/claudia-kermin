@@ -328,6 +328,13 @@ namespace ClaudiaKermin.Core.Missions
                 mission.System.Add(MissionPrompts.MissionLayer(state.Id));
             }
             if (_config.DebugTools) mission.Dump = new FileStreamDump(Path.Combine(mission.Folder, "stream-dumps"));
+
+            // Spend is never the save's: the cost log is never rewound, so a load cannot refund anything.
+            var cost = MissionStore.ReadCostTotals(mission.Folder);
+            mission.Spent = cost.Spent;
+            mission.Held = cost.Held;
+            mission.Requests = cost.Requests;
+            mission.Warned = mission.Committed >= mission.SpendingCap * 0.8m;
             _mission = mission;
 
             if (restore.NoSnapshot) NoSnapshotMission(mission);

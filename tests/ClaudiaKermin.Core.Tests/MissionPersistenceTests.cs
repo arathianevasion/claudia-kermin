@@ -328,6 +328,130 @@ namespace ClaudiaKermin.Core.Tests
             Assert.True(mission.View.StartForm.CanStart);
         }
 
+        // ---- Spend survives a load: the cost log is the truth, never the save ----
+
+        [Fact]
+        public void RestoringAnEarlierSaveKeepsAllSpendAndTheCapCheckSeesIt()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan-priced.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-priced.sse"));
+            var mission = Control(transport);
+            ToMissionPlan(mission, 1.20m);
+            var saved = Saved(mission);
+            Assert.Equal(0.54m, mission.View.Spent);
+
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+            Assert.Equal(1.08m, mission.View.Spent);
+
+            mission.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Equal(MissionStage.AwaitingPlanApproval, mission.View.Stage);
+            Assert.Equal(1.08m, mission.View.Spent);
+            Assert.Equal(0m, mission.View.HeldCharges);
+
+            // $1.08 of $1.20 leaves no room for another request's worst case; at the save's $0.54 there was.
+            mission.Send(new Approve());
+            Assert.Equal(2, transport.Requests.Count);
+            Assert.Equal(MissionStage.Paused, mission.View.Stage);
+            Assert.Equal(new[] { QuickReply.RaiseCap, QuickReply.EndMission }, mission.View.QuickReplies);
+        }
+
+        [Fact]
+        public void ACrashMidRequestCountsTheWorstCaseAsKeptInAFreshGame()
+        {
+            var held = ScriptedResponse.Fixture("mission-plan-priced.sse", 64);
+            held.PauseAt = 100;
+            _gates.Add(held);
+            var crashed = Crashable(new StreamingFakeTransport(held));
+            crashed.Send(new SceneChanged(GameScene.Flight));
+            crashed.Send(OnPad());
+            crashed.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            Assert.True(crashed.View.Busy);
+            var worstCase = crashed.View.PendingCharge;
+            Assert.True(worstCase > 0m);
+            var saved = Saved(crashed);
+
+            // The resumed game has no snapshot yet, so the unanswered turn waits; nothing is sent to settle it.
+            var resumed = Control(new StreamingFakeTransport());
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Equal(worstCase, resumed.View.HeldCharges);
+            Assert.Equal(0m, resumed.View.Spent);
+        }
+
+        [Fact]
+        public void AMissionFolderWithNoSnapshotRestoresItsSpendFromTheCostLog()
+        {
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-priced.sse"));
+            var mission = Control(transport);
+            ToMissionPlan(mission);
+            Assert.Equal(0.54m, mission.View.Spent);
+
+            var later = Control(new StreamingFakeTransport());
+            later.Send(new MissionsRestored(_save.Path, new List<MissionSaveState>()));
+            Assert.Equal(mission.View.MissionId, later.View.MissionId);
+            Assert.Equal(0.54m, later.View.Spent);
+        }
+
+        [Fact]
+        public void ATornLastLineInTheCostLogFallsBackToTheLineBeforeIt()
+        {
+            var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-priced.sse")));
+            ToMissionPlan(mission);
+            File.AppendAllText(Path.Combine(MissionFolder(mission), "cost-log.jsonl"), "{\"event\":\"pend");
+
+            var later = Control(new StreamingFakeTransport());
+            later.Send(new MissionsRestored(_save.Path, new List<MissionSaveState>()));
+            Assert.Equal(0.54m, later.View.Spent);
+        }
+
+        [Fact]
+        public void ALoadDuringARequestRestoresTheSavedStateWithTheSpendIncludingThatRequest()
+        {
+            var plan = ScriptedResponse.Fixture("mission-plan-priced.sse");
+            var sequence = ScriptedResponse.Fixture("mission-sequence-plan-priced.sse");
+            sequence.PauseAt = 200;
+            _gates.Add(sequence);
+            var mission = Control(new StreamingFakeTransport(plan, sequence));
+            ToMissionPlan(mission);
+            var saved = Saved(mission);
+
+            mission.Send(new Approve());
+            Assert.True(mission.View.Busy);
+            mission.Send(new MissionsRestored(_save.Path, saved));
+            sequence.Gate.Set();
+            DrainUntil(mission, v => !v.Busy && v.Stage == MissionStage.AwaitingPlanApproval);
+            Assert.Equal(1.08m, mission.View.Spent);
+        }
+
+        [Fact]
+        public void ARestoredMissionPastEightyPercentDoesNotWarnAgainAndOneAtTheCapPausesOnItsNextRequest()
+        {
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-big.sse"));
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            mission.Send(new StartMission(Goal, 0.50m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.Paused);
+            Assert.Equal(0.80m, mission.View.Spent);
+            var saved = Saved(mission);
+
+            var resumed = Control(new StreamingFakeTransport());
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Equal(0.80m, resumed.View.Spent);
+            Assert.True(resumed.View.CapWarning);
+            Assert.DoesNotContain(resumed.View.Log, e => e.Text.Contains("80%"));
+            Assert.DoesNotContain(resumed.TakeCommands(), c => c is PostScreenMessage && ((PostScreenMessage)c).Text.Contains("80%"));
+
+            // Its next request is turned away: Raise cap or End Mission.
+            resumed.Send(new Retry());
+            Assert.Equal(MissionStage.AwaitingPlanApproval, resumed.View.Stage);
+            resumed.Send(new Approve());
+            Assert.Equal(MissionStage.Paused, resumed.View.Stage);
+            Assert.Equal(new[] { QuickReply.RaiseCap, QuickReply.EndMission }, resumed.View.QuickReplies);
+            Assert.Equal(0m, resumed.View.PendingCharge);
+        }
+
         // ---- Crash or quit mid-request ----
 
         [Fact]
