@@ -58,7 +58,8 @@ namespace ClaudiaKermin.Core.Roster
             if (claudia.Name != ClaudiaIdentity.Name)
                 actions.Add(new RosterAction(RosterActionType.RevertName, claudia.Name, ClaudiaIdentity.Name));
 
-            PlanRespawn(claudia, state, nowUT, respawnTimer, actions);
+            // The actions run in order, so any after the revert address her under her restored name.
+            PlanRespawn(claudia,state, nowUT, respawnTimer, actions);
             return actions;
         }
 
@@ -92,7 +93,7 @@ namespace ClaudiaKermin.Core.Roster
             {
                 case KerbalStanding.Dead:
                     state.RespawnAtUT = nowUT + respawnTimer;
-                    actions.Add(new RosterAction(RosterActionType.SetMissing, claudia.Name, ut: state.RespawnAtUT.Value));
+                    actions.Add(new RosterAction(RosterActionType.SetMissing, ClaudiaIdentity.Name, ut: state.RespawnAtUT.Value));
                     break;
                 case KerbalStanding.Missing:
                     if (!state.RespawnAtUT.HasValue)
@@ -100,7 +101,7 @@ namespace ClaudiaKermin.Core.Roster
                     else if (state.RespawnAtUT.Value <= nowUT)
                     {
                         state.RespawnAtUT = null;
-                        actions.Add(new RosterAction(RosterActionType.Respawn, claudia.Name));
+                        actions.Add(new RosterAction(RosterActionType.Respawn, ClaudiaIdentity.Name));
                     }
                     break;
                 default:
