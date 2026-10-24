@@ -59,6 +59,25 @@ namespace ClaudiaKermin.Core.Missions
         public const int MaxTokens = 32000;
 
         /// <summary>
+        /// The summarization prompt for server-side compaction (it replaces the API's default). It lists what a
+        /// long Mission must not lose; the summary is all Claude has of the compacted turns.
+        /// </summary>
+        public const string CompactionInstructions =
+            "You are summarizing a long Kerbal Space Program Mission so that Claudia Kermin, the mission controller, can "
+            + "carry on from the summary alone. Write the summary in plain text and keep, exactly and in full:\n"
+            + "- the Mission Goal, word for word;\n"
+            + "- the Mission Plan and every revision of it, with each Maneuver Sequence's name, intent, delta-v budget and "
+            + "timing, and which sequences are done;\n"
+            + "- each Debrief's outcome (Nominal, Off-Nominal or Failed) and its figures (for example apoapsis, periapsis, "
+            + "delta-v used, situation);\n"
+            + "- the delta-v remaining;\n"
+            + "- failed attempts and the lessons from them (what was tried, why it failed, what to do differently), "
+            + "including Script Check refusals and failed runs;\n"
+            + "- the player's preferences and instructions, as they said them.\n"
+            + "Drop pleasantries, repeated Game Snapshots, full scripts that already ran and anything else not listed. Do "
+            + "not call any tool; reply with the summary only.";
+
+        /// <summary>
         /// The per-Mission layer, frozen when the Mission starts: full docs for the Building Blocks this
         /// Mission likely needs. Until the Craft Check picks them, that is every shipped block.
         /// </summary>

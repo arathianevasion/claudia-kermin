@@ -29,6 +29,8 @@ namespace ClaudiaKermin.Core.Config
 
         /// <summary>Input tokens at which server-side compaction runs.</summary>
         public int CompactionTriggerTokens = 150000;
+        /// <summary>The API rejects a compaction trigger below this.</summary>
+        public const int MinCompactionTriggerTokens = 50000;
 
         /// <summary>What each model costs; add models with <c>price.&lt;model&gt; = input, output</c> lines (USD per million tokens).</summary>
         public PriceTable Prices = PriceTable.Default();
@@ -121,7 +123,7 @@ namespace ClaudiaKermin.Core.Config
                         break;
                     case "compaction_trigger":
                         int trigger;
-                        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out trigger) && trigger > 0)
+                        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out trigger) && trigger >= MinCompactionTriggerTokens)
                             config.CompactionTriggerTokens = trigger;
                         break;
                     case "wait_cap_orbits":
