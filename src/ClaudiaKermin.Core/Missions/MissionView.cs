@@ -35,9 +35,9 @@ namespace ClaudiaKermin.Core.Missions
         Approve,
         ChangeSomething,
         AskQuestion,
-        /// <summary>"Yes, approve" after an ambiguous reply.</summary>
+        /// <summary>"Yes, approve" after a typed reply.</summary>
         ConfirmApproval,
-        /// <summary>"Not yet" after an ambiguous reply.</summary>
+        /// <summary>"Not yet" after a typed reply.</summary>
         NotYet,
         Retry,
     }
@@ -111,7 +111,7 @@ namespace ClaudiaKermin.Core.Missions
         public string RunStatus = "";
         /// <summary>Why the Mission is Paused; "" otherwise.</summary>
         public string PauseReason = "";
-        /// <summary>The question shown with Yes/Not yet after an ambiguous reply; null otherwise.</summary>
+        /// <summary>The question shown with Yes/Not yet after a typed reply; null otherwise.</summary>
         public string ConfirmPrompt;
 
         /// <summary>Quick replies for the current state, in display order.</summary>

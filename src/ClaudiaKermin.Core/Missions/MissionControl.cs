@@ -233,7 +233,7 @@ namespace ClaudiaKermin.Core.Missions
             else Note(LogKind.Notice, "Not approved yet.");
         }
 
-        /// <summary>An unambiguous Approval: a button press, a confirmation, or a reply Claude classified as approve.</summary>
+        /// <summary>An Approval: the Approve button, or "Yes, approve" after a typed reply.</summary>
         private void Approval()
         {
             var mission = _mission;
@@ -510,8 +510,8 @@ namespace ClaudiaKermin.Core.Missions
                     Debriefed(mission, reply);
                     break;
                 case Purpose.Reply:
-                    if (reply.Intent == ReplyIntent.Approve) Approval();
-                    else if (reply.Intent == ReplyIntent.Unclear)
+                    // ADR 0002: Claude's reading of typed words never starts anything; only a button press does.
+                    if (reply.Intent == ReplyIntent.Approve || reply.Intent == ReplyIntent.Unclear)
                         mission.ConfirmPrompt = planPending ? "Approve the Mission Plan?" : "Approve the Sequence Plan?";
                     else Revised(mission, reply, planPending);
                     break;
