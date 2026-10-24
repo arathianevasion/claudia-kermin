@@ -34,11 +34,9 @@ namespace ClaudiaKermin.Adapter
         // Large enough by default to read a Sequence Plan card and its script without resizing.
         private readonly WindowFrame _frame =
             new WindowFrame(0x434B03, "Claudia: Mission", LockId, new Rect(260, 80, 700, 700), new Vector2(420, 360), true);
-        private Vector2 _scroll;
-        private int _seenLogCount = -1;
+        private readonly LogDrawer _log = new LogDrawer();
         private GUIStyle _wrap;
         private GUIStyle _bold;
-        private GUIStyle _script;
         private GUIStyle _goalStyle;
 
         // Start form.
@@ -61,10 +59,6 @@ namespace ClaudiaKermin.Adapter
         private string _typed = "";
         private TypingFor _typingFor = TypingFor.Reply;
 
-        // Expanded "why" and "Show script" per log entry.
-        private readonly HashSet<LogEntry> _showWhy = new HashSet<LogEntry>();
-        private readonly HashSet<LogEntry> _showScript = new HashSet<LogEntry>();
-
         public bool Visible;
         public bool UiHidden;
 
@@ -75,6 +69,9 @@ namespace ClaudiaKermin.Adapter
         {
             _send = send;
             _debugTools = debugTools;
+            _frame.Remember("mission");
+            // The VAB/SPH Mission board has two panes, so it opens wider.
+            _frame.EditorDefault = new Rect(160, 80, 980, 640);
         }
 
         public void OnGUI()
@@ -161,23 +158,87 @@ namespace ClaudiaKermin.Adapter
             {
                 _wrap = new GUIStyle(GUI.skin.label) { richText = false, wordWrap = true };
                 _bold = new GUIStyle(_wrap) { fontStyle = FontStyle.Bold };
-                // Scripts wrap to the card instead of running off the right edge; the log scrolls them.
-                _script = new GUIStyle(GUI.skin.textArea) { wordWrap = true, richText = false };
                 _goalStyle = new GUIStyle(GUI.skin.textArea) { wordWrap = true, richText = false };
             }
+            if (HighLogic.LoadedSceneIsEditor) DrawBoard();
+            else DrawFlight();
+            _frame.DrawGrip();
+            WindowFrame.DrawTooltip();
+            GUI.DragWindow();
+        }
+
+        /// <summary>Flight and the Space Center: one column, the Mission log over the start form and the Craft Check.</summary>
+        private void DrawFlight()
+        {
             if (View.StartForm.CanStart) DrawStartForm();
             // The start form's goal is spent once a Mission is under way.
             if (View.CanEndMission) _goal = "";
             if (View.Stage != MissionStage.None) DrawMission();
             if (View.StartForm.CanStart || View.CraftCheck.State != CraftCheckState.None) DrawCraftCheck();
-            if (_debugTools)
+            DrawDebugTools();
+        }
+
+        /// <summary>
+        /// The VAB/SPH Mission board: on the left the Mission Goal, the craft, its delta-v margin and the cost,
+        /// with the Craft Check pinned below; on the right the conversation with Claudia.
+        /// </summary>
+        private void DrawBoard()
+        {
+            if (View.CanEndMission) _goal = "";
+            var left = Mathf.Clamp(_frame.Rect.width * 0.42f, 300f, 460f);
+            GUILayout.BeginHorizontal();
+
+            GUILayout.BeginVertical(GUILayout.Width(left));
+            if (View.StartForm.CanStart) DrawStartForm();
+            else if (View.Stage != MissionStage.None) DrawMissionHeader();
+            DrawCraftFacts();
+            if (View.StartForm.CanStart || View.CraftCheck.State != CraftCheckState.None) DrawCraftCheck();
+            DrawDebugTools();
+            GUILayout.EndVertical();
+
+            GUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandWidth(true));
+            GUILayout.Label("Conversation", _bold);
+            if (View.Stage == MissionStage.None)
+                GUILayout.Label("Write the Mission Goal on the left and press Start Mission. Claudia checks the craft first, then answers here.", _wrap);
+            else DrawConversation();
+            GUILayout.EndVertical();
+
+            GUILayout.EndHorizontal();
+        }
+
+        /// <summary>The craft, its delta-v against the margin the Craft Check wants, and the cost.</summary>
+        private void DrawCraftFacts()
+        {
+            var check = View.CraftCheck;
+            GUILayout.Box("", GUILayout.Height(2), GUILayout.ExpandWidth(true));
+            GUILayout.Label("Craft: " + (check.CraftName.Length > 0 ? check.CraftName : "none on the floor"), _bold);
+            GUILayout.Label(check.CraftDeltaV.HasValue
+                ? "Delta-v: " + check.CraftDeltaV.Value.ToString("#,0", CultureInfo.InvariantCulture) + " m/s; margin wanted over the Delta-v Map: "
+                    + check.MarginPercent.ToString(CultureInfo.InvariantCulture) + "%. " + MarginVerdict(check)
+                : "Delta-v: unknown (turn on the stock delta-v simulator in the editor).", _wrap);
+            if (View.Stage != MissionStage.None)
+                GUILayout.Label("Cost: " + SpendText(View) + "  Model: " + View.Model, _wrap);
+            else if (View.StartForm.CanStart && View.StartForm.Models.Count > 0)
             {
-                GUI.enabled = View.CanCaptureSnapshot;
-                if (GUILayout.Button("Capture Game Snapshot (debug)")) _send(new CaptureSnapshot());
-                GUI.enabled = true;
+                decimal estimate;
+                var model = View.StartForm.Models[Mathf.Clamp(_modelIndex, 0, View.StartForm.Models.Count - 1)];
+                if (View.StartForm.Estimates.TryGetValue(model, out estimate))
+                    GUILayout.Label("Cost: a whole Mission is about $" + estimate.ToString("0.00", CultureInfo.InvariantCulture) + " with " + model + ".", _wrap);
             }
-            _frame.DrawGrip();
-            GUI.DragWindow();
+        }
+
+        private static string MarginVerdict(CraftCheckView check)
+        {
+            if (check.State != CraftCheckState.Done || check.Stale) return "Check the craft to judge it against the Mission Goal.";
+            return check.DeltaVShort ? "Short of the delta-v this Mission Goal needs." : "Enough for this Mission Goal.";
+        }
+
+        private void DrawDebugTools()
+        {
+            if (!_debugTools) return;
+            GUI.enabled = View.CanCaptureSnapshot;
+            if (GUILayout.Button("Capture Game Snapshot (debug)")) _send(new CaptureSnapshot());
+            GUI.enabled = true;
         }
 
         private void DrawStartForm()
@@ -345,18 +406,20 @@ namespace ClaudiaKermin.Adapter
 
         private void DrawMission()
         {
+            DrawMissionHeader();
+            DrawConversation();
+        }
+
+        private void DrawMissionHeader()
+        {
             GUILayout.Label("Mission Goal: " + View.Goal, _wrap);
             GUILayout.Label("Model: " + View.Model + "   Spent: " + SpendText(View) + "   " + StageText(View), _wrap);
+        }
 
-            if (View.Log.Count != _seenLogCount)
-            {
-                _seenLogCount = View.Log.Count;
-                _scroll.y = float.MaxValue;
-            }
-            _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.ExpandHeight(true));
-            foreach (var entry in View.Log) DrawEntry(entry);
-            if (View.Busy) GUILayout.Label("Claudia: (" + (View.Activity.Length > 0 ? View.Activity : "thinking") + "...)", _wrap);
-            GUILayout.EndScrollView();
+        /// <summary>The log, the quick replies, the reply box and End Mission.</summary>
+        private void DrawConversation()
+        {
+            _log.Draw(View, GUILayout.ExpandHeight(true));
 
             if (View.ConfirmPrompt != null) GUILayout.Label(View.ConfirmPrompt, _bold);
             if (View.QuickReplies.Count > 0)
@@ -459,45 +522,6 @@ namespace ClaudiaKermin.Adapter
                 if (enter) Event.current.Use();
             }
             GUI.enabled = true;
-        }
-
-        // Plain text only: Claude's replies may contain '<', which rich text would misread.
-        private void DrawEntry(LogEntry entry)
-        {
-            switch (entry.Kind)
-            {
-                case LogKind.Player:
-                    GUILayout.Label("You: " + entry.Text, _wrap);
-                    return;
-                case LogKind.Claudia:
-                    GUILayout.Label("Claudia: " + entry.Text + (entry.AnsweredBy.Length > 0 ? "  [answered by " + entry.AnsweredBy + "]" : ""), _wrap);
-                    return;
-                case LogKind.Notice:
-                    GUILayout.Label("[" + entry.Text + "]", _wrap);
-                    return;
-            }
-
-            GUILayout.BeginVertical(GUI.skin.box);
-            GUILayout.BeginHorizontal();
-            GUILayout.Label(entry.Kind == LogKind.SequencePlan ? "Sequence Plan: " + entry.Title : entry.Title, _bold);
-            if (entry.CustomScript) GUILayout.Label("[Custom Script]", _bold, GUILayout.ExpandWidth(false));
-            GUILayout.EndHorizontal();
-            if (entry.CustomScript && entry.CustomScriptReason.Length > 0) GUILayout.Label("Custom Script: " + entry.CustomScriptReason, _wrap);
-            GUILayout.Label(entry.Text, _wrap);
-            GUILayout.BeginHorizontal();
-            if (entry.Why.Length > 0 && GUILayout.Button(_showWhy.Contains(entry) ? "Hide why" : "Why", GUILayout.ExpandWidth(false)))
-                Toggle(_showWhy, entry);
-            if (entry.Script.Length > 0 && GUILayout.Button(_showScript.Contains(entry) ? "Hide script" : "Show script", GUILayout.ExpandWidth(false)))
-                Toggle(_showScript, entry);
-            GUILayout.EndHorizontal();
-            if (_showWhy.Contains(entry)) GUILayout.Label("Why: " + entry.Why, _wrap);
-            if (_showScript.Contains(entry)) GUILayout.TextArea(entry.Script, _script);
-            GUILayout.EndVertical();
-        }
-
-        private static void Toggle(HashSet<LogEntry> set, LogEntry entry)
-        {
-            if (!set.Remove(entry)) set.Add(entry);
         }
 
         public static string StageText(MissionView view)

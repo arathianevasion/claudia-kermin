@@ -4,6 +4,7 @@
 using System.Collections.Generic;
 using System.IO;
 using ClaudiaKermin.Core.Missions;
+using ClaudiaKermin.Core.Ui;
 using UnityEngine;
 
 namespace ClaudiaKermin.Adapter
@@ -23,9 +24,27 @@ namespace ClaudiaKermin.Adapter
         private Game _game;
         private GameScene? _scene;
         private float _nextSnapshot;
+        private readonly AttentionWatch _watch = new AttentionWatch();
+        private int _watchedVersion = -1;
 
         public readonly MissionWindow Window;
         public readonly CapcomStrip Strip;
+
+        /// <summary>
+        /// Claudia needs the player (a Debrief, an Approval or a Pause) and the Mission window was closed when
+        /// she did: the toolbar button flashes until the window or the strip's log is opened.
+        /// </summary>
+        public bool Flashing { get; private set; }
+
+        /// <summary>The player can read Claudia now: the Mission window or the strip's log drawer is up and not hidden by F2.</summary>
+        private bool Watching
+        {
+            get
+            {
+                return !Window.UiHidden
+                    && (Window.Visible || (HighLogic.LoadedSceneIsFlight && Strip.Showing && Strip.DrawerOpen));
+            }
+        }
 
         /// <summary>The driver of this game session, for the scenario module and the leave-Flight guard.</summary>
         public static MissionDriver Current { get; private set; }
@@ -134,6 +153,7 @@ namespace ClaudiaKermin.Adapter
         /// <summary>Carries out the commands issued since the last call.</summary>
         private void Carry()
         {
+            var attention = WatchAttention();
             foreach (var command in _mission.TakeCommands())
             {
                 var start = command as StartScript;
@@ -151,9 +171,30 @@ namespace ClaudiaKermin.Adapter
                     continue;
                 }
                 var message = command as PostScreenMessage;
-                if (message != null && !Window.Visible)
+                // The alert below says it better when it fires for the same moment.
+                if (message != null && attention == null && !Watching)
                     ScreenMessages.PostScreenMessage(message.Text, 6f, ScreenMessageStyle.UPPER_CENTER);
             }
+            if (attention != null) NotifyPlayer(attention);
+        }
+
+        /// <summary>The new moment Claudia needs the player in the latest view, if the window is closed for it; null otherwise.</summary>
+        private Attention WatchAttention()
+        {
+            if (Watching) Flashing = false;
+            var view = _mission.View;
+            if (view.Version == _watchedVersion) return null;
+            _watchedVersion = view.Version;
+            var attention = _watch.Observe(view);
+            return attention != null && !Watching ? attention : null;
+        }
+
+        // Closed window: flash the toolbar button, say it on screen, and drop to 1x so the player isn't warped past it.
+        private void NotifyPlayer(Attention attention)
+        {
+            Flashing = true;
+            ScreenMessages.PostScreenMessage(attention.Text, 6f, ScreenMessageStyle.UPPER_CENTER);
+            if (TimeWarp.fetch != null && TimeWarp.CurrentRateIndex > 0) TimeWarp.SetRate(0, true);
         }
 
         private void StartScript(StartScript start)

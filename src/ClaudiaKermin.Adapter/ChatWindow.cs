@@ -37,6 +37,7 @@ namespace ClaudiaKermin.Adapter
         {
             _chat = chat;
             _dumpFolder = dumpFolder;
+            _frame.Remember("chat");
             if (dumpFolder != null) _dump = new FileStreamDump(dumpFolder);
         }
 

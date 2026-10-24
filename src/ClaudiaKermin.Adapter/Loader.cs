@@ -39,6 +39,9 @@ namespace ClaudiaKermin.Adapter
         private ApplicationLauncherButton _button;
         private ApplicationLauncherButton _chatButton;
         private ApplicationLauncherButton _missionButton;
+        private Texture2D _missionIcon;
+        private Texture2D _missionIconBright;
+        private bool _missionBright;
 
         private void Awake()
         {
@@ -47,6 +50,7 @@ namespace ClaudiaKermin.Adapter
 
             var directory = ConfigDirectory.ResolveCurrent();
             var config = PlayerConfig.LoadOrCreate(directory);
+            WindowMemory.Init(directory);
             var store = new ApiKeyStore(directory, System.Environment.GetEnvironmentVariable);
             var client = new ClaudeClient(new HttpWebRequestTransport(), store.Load, Debug.Log);
             _window = new SettingsWindow(new KeySettings(store, client, _background));
@@ -96,12 +100,20 @@ namespace ClaudiaKermin.Adapter
             _background.Drain();
             _missions.Update();
 
-            // "Show log" on the Capcom strip also opens and closes the Mission window: keep its button in step.
             if (_missionButton != null)
             {
+                // The window can be opened from elsewhere (Raise cap, Change something): keep its button in step.
                 var pressed = _missionButton.toggleButton.CurrentState == KSP.UI.UIRadioButton.State.True;
                 if (_missions.Window.Visible && !pressed) _missionButton.SetTrue(false);
                 else if (!_missions.Window.Visible && pressed) _missionButton.SetFalse(false);
+
+                // Claudia needs the player and the window is closed: the button flashes between its two tiles.
+                var bright = _missions.Flashing && Mathf.FloorToInt(Time.realtimeSinceStartup * 2f) % 2 == 0;
+                if (bright != _missionBright)
+                {
+                    _missionBright = bright;
+                    _missionButton.SetTexture(bright ? _missionIconBright : _missionIcon);
+                }
             }
         }
 
@@ -128,6 +140,7 @@ namespace ClaudiaKermin.Adapter
 
         private void HideUI()
         {
+            _window.UiHidden = true;
             _chatWindow.UiHidden = true;
             _missions.Window.UiHidden = true;
             _missions.Strip.UiHidden = true;
@@ -135,6 +148,7 @@ namespace ClaudiaKermin.Adapter
 
         private void ShowUI()
         {
+            _window.UiHidden = false;
             _chatWindow.UiHidden = false;
             _missions.Window.UiHidden = false;
             _missions.Strip.UiHidden = false;
@@ -148,6 +162,7 @@ namespace ClaudiaKermin.Adapter
             RemoveButtons();
             _window.Visible = false;
             UnlockAll();
+            _window.UiHidden = false;
             _chatWindow.UiHidden = false;
             _missions.Window.UiHidden = false;
             _missions.Strip.UiHidden = false;
@@ -179,9 +194,15 @@ namespace ClaudiaKermin.Adapter
             if (ChatSceneLoaded())
             {
                 var window = _missions.Window;
+                if (_missionIcon == null)
+                {
+                    _missionIcon = MakeIcon(new Color(0.3f, 0.75f, 0.35f, 1f));
+                    _missionIconBright = MakeIcon(new Color(1f, 0.9f, 0.2f, 1f));
+                }
+                _missionBright = false;
                 _missionButton = ApplicationLauncher.Instance.AddModApplication(
                     () => window.Visible = true, () => window.Visible = false,
-                    null, null, null, null, ChatScenes, MakeIcon(new Color(0.3f, 0.75f, 0.35f, 1f)));
+                    null, null, null, null, ChatScenes, _missionIcon);
                 if (window.Visible) _missionButton.SetTrue(false);
             }
         }

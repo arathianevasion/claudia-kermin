@@ -1101,6 +1101,7 @@ namespace ClaudiaKermin.Core.Missions
             var view = new MissionView
             {
                 Version = _view.Version + 1,
+                Ut = _ut,
                 CanCaptureSnapshot = _snapshot != null && _saveDirectory != null,
                 CanEndMission = !MissionOver,
             };
@@ -1128,6 +1129,9 @@ namespace ClaudiaKermin.Core.Missions
                 view.Activity = mission.Activity;
                 view.PauseReason = mission.PauseReason;
                 view.ConfirmPrompt = mission.ConfirmPrompt;
+                // Entries are stamped with the UT of the rebuild that first shows them, for "3h 5m ago" in the log.
+                foreach (var entry in mission.Log)
+                    if (entry.Ut <= 0) entry.Ut = _ut;
                 view.Log = mission.Log.ToList();
                 if (mission.Plan != null) view.PlanSequences = mission.Plan.Sequences.Select(s => s.Name).ToList();
                 view.CurrentSequence = Math.Min(mission.SequencesProposed, view.PlanSequences.Count) - 1;
