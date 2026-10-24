@@ -79,8 +79,12 @@ The player's go-ahead, given in chat, for Claudia to execute the proposed Maneuv
 _Avoid_: confirmation, sign-off
 
 **Mission**:
-One Mission Goal pursued by Claudia with one craft, from its Craft Check until it succeeds or is abandoned.
+One Mission Goal pursued by Claudia with one craft and any Child Vessels, from its Craft Check until it succeeds or is abandoned.
 _Avoid_: flight, run, job
+
+**Child Vessel**:
+A vessel that separated from a Mission's craft during the Mission and carries a kOS processor, which Claudia may fly with Maneuver Sequences of its own while she has a link to it. The craft stays the vessel Claudia is aboard (or, for a remote Mission, the one with the original processor).
+_Avoid_: probe, drone, secondary craft
 
 **Spending Cap**:
 The most a Mission may spend on Claudia's API calls, set by the player when the Mission starts and raisable later.
