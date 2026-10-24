@@ -19,12 +19,12 @@ namespace ClaudiaKermin.Adapter
         private readonly ChatSession _chat;
         private readonly IRawStreamDump _dump;
         private readonly string _dumpFolder;
-        private Rect _rect = new Rect(240, 140, 440, 460);
+        private readonly WindowFrame _frame =
+            new WindowFrame(0x434B02, "Claudia", LockId, new Rect(240, 140, 520, 480), new Vector2(320, 260), true);
         private Vector2 _scroll;
         private string _typed = "";
         private int _seenVersion = -1;
         private bool _dumping;
-        private bool _locked;
         private GUIStyle _lineStyle;
 
         public bool Visible;
@@ -48,26 +48,16 @@ namespace ClaudiaKermin.Adapter
                 return;
             }
             GUI.skin = HighLogic.Skin;
-            _rect = GUILayout.Window(0x434B02, _rect, Draw, "Claudia");
+            _frame.Show(Draw);
 
             // Keys typed into the chat must not stage, throttle or rotate the craft.
-            if (GUI.GetNameOfFocusedControl() == InputControl) Lock();
-            else Unlock();
+            _frame.SetTyping(GUI.GetNameOfFocusedControl() == InputControl);
         }
 
-        /// <summary>Releases the input lock; call when the window goes away.</summary>
+        /// <summary>Releases the input locks; call when the window goes away.</summary>
         public void Unlock()
         {
-            if (!_locked) return;
-            InputLockManager.RemoveControlLock(LockId);
-            _locked = false;
-        }
-
-        private void Lock()
-        {
-            if (_locked) return;
-            InputLockManager.SetControlLock(ControlTypes.KEYBOARDINPUT, LockId);
-            _locked = true;
+            _frame.Unlock();
         }
 
         private void Draw(int id)
@@ -116,6 +106,7 @@ namespace ClaudiaKermin.Adapter
                 if (_dumping) GUILayout.Label("To " + _dumpFolder);
             }
 
+            _frame.DrawGrip();
             GUI.DragWindow();
         }
 
