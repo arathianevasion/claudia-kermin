@@ -17,8 +17,7 @@ namespace ClaudiaKermin.Core.Roster
         public static List<RosterAction> Plan(IList<KerbalSnapshot> kerbals, RosterState state, double nowUT, double respawnTimer, Func<int, int> pick)
         {
             var actions = new List<RosterAction>();
-            var claudia = FindClaudia(kerbals, state);
-            if (claudia != null) state.ClaudiaId = claudia.Id;
+            var claudia = FindClaudia(kerbals);
 
             KerbalSnapshot hiredClash = null;
             foreach (var kerbal in kerbals)
@@ -68,15 +67,23 @@ namespace ClaudiaKermin.Core.Roster
             return name != null && name.IndexOf(ClaudiaIdentity.ClashFragment, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        private static KerbalSnapshot FindClaudia(IList<KerbalSnapshot> kerbals, RosterState state)
+        // Her trait is unique by construction (out of the hiring pool, re-rolled on anyone else), so it survives a
+        // rename; her name is the fallback when a mod changed her trait. Kerbal ids are not saved by KSP: never used.
+        private static KerbalSnapshot FindClaudia(IList<KerbalSnapshot> kerbals)
         {
+            KerbalSnapshot firstWithTrait = null;
             KerbalSnapshot byName = null;
             foreach (var kerbal in kerbals)
             {
-                if (state.ClaudiaId.HasValue && kerbal.Id == state.ClaudiaId.Value) return kerbal;
-                if (kerbal.Name == ClaudiaIdentity.Name && kerbal.Kind != KerbalKind.Applicant) byName = kerbal;
+                if (kerbal.Kind == KerbalKind.Applicant) continue;
+                if (kerbal.Trait == ClaudiaIdentity.TraitName)
+                {
+                    if (kerbal.Name == ClaudiaIdentity.Name) return kerbal;
+                    if (firstWithTrait == null) firstWithTrait = kerbal;
+                }
+                else if (kerbal.Name == ClaudiaIdentity.Name && byName == null) byName = kerbal;
             }
-            return byName;
+            return firstWithTrait ?? byName;
         }
 
         private static void PlanRespawn(KerbalSnapshot claudia, RosterState state, double nowUT, double respawnTimer, List<RosterAction> actions)
