@@ -24,8 +24,13 @@ namespace ClaudiaKermin.Adapter.Roster
             if (actions.Count == 0) return "Nothing to do: nobody in this save has the Super Intelligence role.";
 
             foreach (var action in actions) RosterGateway.Apply(roster, action, null);
-            UnityEngine.Debug.Log(ModInfo.LogTag + " prepared to uninstall: " + actions.Count + " Kerbal(s) set to " + UninstallPlanner.ReplacementTrait);
-            return "Claudia is now a " + UninstallPlanner.ReplacementTrait + " in this save. Save the game, then remove the mod.";
+
+            var changed = UninstallPlanner.CountChanged(actions, RosterGateway.Snapshot(roster));
+            UnityEngine.Debug.Log(ModInfo.LogTag + " prepared to uninstall: " + changed + " of " + actions.Count + " Kerbal(s) set to " + UninstallPlanner.ReplacementTrait);
+            if (changed == 0) return "Nothing changed: the Super Intelligence role is still in this save. See the log for why.";
+            if (changed < actions.Count)
+                return changed + " of " + actions.Count + " Kerbal(s) are now a " + UninstallPlanner.ReplacementTrait + "; the rest kept the Super Intelligence role. Run it again or see the log.";
+            return changed + " Kerbal(s) with the Super Intelligence role are now a " + UninstallPlanner.ReplacementTrait + " in this save. Save the game, then remove the mod.";
         }
     }
 }

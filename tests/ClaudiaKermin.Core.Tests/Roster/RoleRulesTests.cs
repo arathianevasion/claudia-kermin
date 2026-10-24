@@ -73,9 +73,9 @@ namespace ClaudiaKermin.Core.Tests.Roster
 
     public class UninstallPlannerTests
     {
-        private static KerbalSnapshot Kerbal(uint id, string trait, KerbalKind kind = KerbalKind.Crew, KerbalStanding standing = KerbalStanding.Available)
+        private static KerbalSnapshot Kerbal(string name, string trait, KerbalKind kind = KerbalKind.Crew, KerbalStanding standing = KerbalStanding.Available)
         {
-            return new KerbalSnapshot(id, "Kerbal " + id, trait, kind, standing);
+            return new KerbalSnapshot(name, trait, kind, standing);
         }
 
         [Fact]
@@ -83,13 +83,13 @@ namespace ClaudiaKermin.Core.Tests.Roster
         {
             var actions = UninstallPlanner.Plan(new[]
             {
-                Kerbal(1, "Engineer"),
-                Kerbal(2, ClaudiaIdentity.TraitName),
-                Kerbal(3, ClaudiaIdentity.TraitName, standing: KerbalStanding.Missing),
-                Kerbal(4, ClaudiaIdentity.TraitName, standing: KerbalStanding.Dead),
+                Kerbal("Kerbal 1", "Engineer"),
+                Kerbal("Kerbal 2", ClaudiaIdentity.TraitName),
+                Kerbal("Kerbal 3", ClaudiaIdentity.TraitName, standing: KerbalStanding.Missing),
+                Kerbal("Kerbal 4", ClaudiaIdentity.TraitName, standing: KerbalStanding.Dead),
             });
 
-            Assert.Equal(new uint[] { 2, 3, 4 }, actions.Select(a => a.KerbalId).ToArray());
+            Assert.Equal(new[] { "Kerbal 2", "Kerbal 3", "Kerbal 4" }, actions.Select(a => a.Target).ToArray());
             Assert.All(actions, a =>
             {
                 Assert.Equal(RosterActionType.RerollTrait, a.Type);
@@ -100,19 +100,38 @@ namespace ClaudiaKermin.Core.Tests.Roster
         [Fact]
         public void DoesNothingWhenNobodyHasTheRole()
         {
-            Assert.Empty(UninstallPlanner.Plan(new[] { Kerbal(1, "Pilot"), Kerbal(2, "Scientist") }));
+            Assert.Empty(UninstallPlanner.Plan(new[] { Kerbal("Kerbal 1", "Pilot"), Kerbal("Kerbal 2", "Scientist") }));
         }
 
         [Fact]
         public void IsIdempotentOnceTheTraitHasBeenSwitched()
         {
-            Assert.Empty(UninstallPlanner.Plan(new[] { Kerbal(2, UninstallPlanner.ReplacementTrait) }));
+            Assert.Empty(UninstallPlanner.Plan(new[] { Kerbal("Kerbal 2", UninstallPlanner.ReplacementTrait) }));
+        }
+
+        [Fact]
+        public void CountsOnlyTheKerbalsWhoseTraitReallyChanged()
+        {
+            var before = new[] { Kerbal("Kerbal 1", ClaudiaIdentity.TraitName), Kerbal("Kerbal 2", ClaudiaIdentity.TraitName), Kerbal("Kerbal 3", ClaudiaIdentity.TraitName) };
+            var actions = UninstallPlanner.Plan(before);
+            var after = new[] { Kerbal("Kerbal 1", "Pilot"), Kerbal("Kerbal 2", ClaudiaIdentity.TraitName), Kerbal("Kerbal 3", "Engineer") };
+
+            Assert.Equal(1, UninstallPlanner.CountChanged(actions, after));
+        }
+
+        [Fact]
+        public void CountsNothingChangedWhenTheTargetsAreMissingOrUntouched()
+        {
+            var actions = UninstallPlanner.Plan(new[] { Kerbal("Kerbal 1", ClaudiaIdentity.TraitName), Kerbal("Kerbal 2", ClaudiaIdentity.TraitName) });
+            var after = new[] { Kerbal("Kerbal 1", ClaudiaIdentity.TraitName) };
+
+            Assert.Equal(0, UninstallPlanner.CountChanged(actions, after));
         }
 
         [Fact]
         public void LeavesApplicantsAndTouristsToTheHiringPool()
         {
-            var actions = UninstallPlanner.Plan(new[] { Kerbal(5, ClaudiaIdentity.TraitName, KerbalKind.Applicant) });
+            var actions = UninstallPlanner.Plan(new[] { Kerbal("Kerbal 5", ClaudiaIdentity.TraitName, KerbalKind.Applicant) });
             Assert.Single(actions);
         }
     }
