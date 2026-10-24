@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# CI has no KSP, so it builds and tests the Unity-free core only, and compiles the shipped
-# kerboscript with kOS.Safe taken from the public kOS release. The adapter and kOS addon
-# need a local KSP install and are built on a developer machine (see README, Building).
-# The compile check only proves the kerboscript compiles; the Script Check (ADR 0003) is separate.
+# CI has no KSP, so it builds and tests the Unity-free core; then, with kOS.Safe taken from the
+# public kOS release, it tests the Script Check (ADR 0003) and runs it over every shipped script.
+# The adapter and kOS addon need a local KSP install and are built on a developer machine
+# (see README, Building).
 name: CI
 
 on:
@@ -16,7 +16,7 @@ permissions:
 env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
-  # kOS release whose kOS.Safe.dll compiles the kerboscript; keep in step with the supported kOS.
+  # kOS release whose kOS.Safe.dll the Script Check compiles with; keep in step with the supported kOS.
   KOS_RELEASE_TAG: 1.6.0.1
 
 jobs:
@@ -45,18 +45,25 @@ jobs:
           if [ -z "$safe" ]; then echo "kOS.Safe.dll not found in the $KOS_RELEASE_TAG release"; exit 1; fi
           echo "KOS_PLUGINS_DIR=$(dirname "$safe")" >> "$GITHUB_ENV"
 
-      - name: Build the kerboscript compile check
+      - name: Test the Script Check with kOS.Safe
+        run: dotnet test tests/ClaudiaKermin.ScriptCheck.Tests -c Release -p:KOSPluginsDir="$KOS_PLUGINS_DIR"
+
+      - name: Build the Script Check command line
         run: dotnet build tools/ClaudiaKermin.KsCompile -c Release -p:KOSPluginsDir="$KOS_PLUGINS_DIR"
 
-      - name: Compile the shipped kerboscript and the block test scripts
+      # Every shipped script under kerboscript/ (the Core Library in kerboscript/library, RSVP and
+      # the debug scripts) and the block test scripts: a compile error or a forbidden call fails CI.
+      - name: Script Check the shipped kerboscript and the block test scripts
         run: dotnet run --project tools/ClaudiaKermin.KsCompile -c Release --no-build -- kerboscript tests/blocks
 
       - name: Test the Core Library on kOS.Safe
         run: dotnet test tests/ClaudiaKermin.Kerboscript.Tests -c Release -p:KOSPluginsDir="$KOS_PLUGINS_DIR"
 
-      - name: Check that a syntax error fails the compile check
+      - name: Check that a syntax error and a forbidden call fail the Script Check
         run: |
-          if dotnet run --project tools/ClaudiaKermin.KsCompile -c Release --no-build -- tools/ClaudiaKermin.KsCompile/fixtures/syntax-error.ks; then
-            echo "The compile check passed a file with a syntax error"
-            exit 1
-          fi
+          for fixture in syntax-error forbidden-call; do
+            if dotnet run --project tools/ClaudiaKermin.KsCompile -c Release --no-build -- "tools/ClaudiaKermin.KsCompile/fixtures/$fixture.ks"; then
+              echo "The Script Check passed $fixture.ks"
+              exit 1
+            fi
+          done

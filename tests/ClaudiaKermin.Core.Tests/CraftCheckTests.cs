@@ -33,7 +33,7 @@ namespace ClaudiaKermin.Core.Tests
         {
             var client = new ClaudeClient(transport, () => "sk-ant-test", l => { });
             client.Timing.Wait = (d, c) => { };
-            var mission = new MissionControl(client, _background, config ?? new PlayerConfig(), () => true);
+            var mission = new MissionControl(client, _background, config ?? new PlayerConfig(), () => true, new PassingScriptCheck());
             mission.Send(new SaveLoaded(_save.Path));
             mission.Send(new SceneChanged(GameScene.Editor));
             return mission;

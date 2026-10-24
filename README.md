@@ -61,7 +61,8 @@ The key is stored as **plain text** in `~/Library/Application Support/ClaudiaKer
 - Stock contracts, EVA welding and the construction combine bonus count Claudia as a Pilot, Engineer and Scientist (Harmony patches on `FinePrint.Utilities.VesselUtilities`). ModuleManager patches in `GameData/ClaudiaKermin/Compatibility` cover Kerbalism and Community Trait Icons.
 - These mods check crew roles by name and **do not** count Claudia as a Pilot, Engineer or Scientist: KER, USI, Near Future Electrical, SystemHeat, SSPX, StationScience, WildBlue and Contract Configurator contract packs.
 - Claudia doesn't go on EVA in v1. When a goal needs EVA science, she asks you to do it by hand.
-- In this development build, Missions are a first pass: scripts are not yet Script-Checked (read a Sequence Plan's script with **Show script** before you approve it), and the Craft Check does not yet recheck margins in each Debrief. A Mission is kept across scene changes, quicksaves, reverts, quits and crashes: loading a save puts its state back without rewinding Claudia's conversation, a sequence that was Running at a load, quit or crash is marked interrupted and Debriefed (never restarted), and leaving Flight while Running asks first.
+- In this development build, Missions are a first pass: the runtime guards are not in yet (scripts are Script-Checked, but still read a Sequence Plan's script with **Show script** before you approve it), and the Craft Check does not yet recheck margins in each Debrief. A Mission is kept across scene changes, quicksaves, reverts, quits and crashes: loading a save puts its state back without rewinding Claudia's conversation, a sequence that was Running at a load, quit or crash is marked interrupted and Debriefed (never restarted), and leaving Flight while Running asks first.
+- If a script fails the Script Check, Claudia rewrites it once automatically; that rewrite is a billed request under the Spending Cap like any other. If the rewrite fails too, the plan shows **Couldn't produce a safe script** with **Retry**, **Retry with a note** or **Re-plan**. A Sequence Plan restored from a save is Script-Checked again before you can approve it.
 - **Before uninstalling**, press **Prepare to uninstall** in Claudia's settings in every save that has her. Removing the mod without it is likely to break those saves.
 
 ## Building
@@ -72,10 +73,11 @@ You need the .NET 10 SDK. The adapter and kOS addon compile against your own KSP
 | --- | --- |
 | Build everything | `dotnet build ClaudiaKermin.sln -p:KSPRoot=/path/to/KSP` |
 | Core tests (no KSP needed) | `dotnet test tests/ClaudiaKermin.Core.Tests` |
-| Kerboscript compile check (needs only kOS.Safe) | `dotnet run --project tools/ClaudiaKermin.KsCompile -p:KSPRoot=/path/to/KSP -- kerboscript tests/blocks` |
+| Script Check tests (need only kOS.Safe) | `dotnet test tests/ClaudiaKermin.ScriptCheck.Tests -p:KSPRoot=/path/to/KSP` |
+| Script Check the shipped kerboscript and block tests (needs only kOS.Safe) | `dotnet run --project tools/ClaudiaKermin.KsCompile -p:KSPRoot=/path/to/KSP -- kerboscript tests/blocks` |
 | Core Library tests on kOS.Safe (no KSP needed) | `dotnet test tests/ClaudiaKermin.Kerboscript.Tests -p:KSPRoot=/path/to/KSP` |
 
-A failing test or a kerboscript compile error exits non-zero. A build stages the mod in `dist/GameData/ClaudiaKermin/`. To install it, copy that folder into your KSP `GameData` folder, next to kOS and HarmonyKSP. kOS and HarmonyKSP are dependencies you install yourself; they are never bundled.
+A failing test, or a script that doesn't compile or uses something forbidden, exits non-zero. A build stages the mod in `dist/GameData/ClaudiaKermin/`. To install it, copy that folder into your KSP `GameData` folder, next to kOS and HarmonyKSP. kOS and HarmonyKSP are dependencies you install yourself; they are never bundled.
 
 The layout follows [ADR 0001](docs/adr/0001-single-in-process-ksp-mod.md):
 
@@ -85,14 +87,15 @@ The layout follows [ADR 0001](docs/adr/0001-single-in-process-ksp-mod.md):
 - Craft Check: the mod computes the facts (per-stage delta-v and thrust from the stock simulator, thrust over weight per body, the part inventory, crew, experiments and science left) into the Game Snapshot, and the core computes the Delta-v Map from the snapshot's body data. Claude judges them against the spec's fixed Blocker and Warning lists with the margin from `craft_check_margin` (percent, default 15) in the player config. The Mission board pins the result (Pass, Pass with Warnings or Fail); Start Mission is closed on a Blocker and until every Warning is acknowledged, and runs the check itself if the craft or goal changed. The craft is never edited and the delta-v app's body setting is never touched. If the stock delta-v calculations are off, the check stops and asks you to enable them. You can pick which kOS processor Claudia uses (default: nearest the root); a boot file on it is a Warning.
 - `tests/ClaudiaKermin.Core.Tests/Fixtures/streams`: hand-written, byte-exact Claude streams that the client tests replay through the real parser.
 - `GameData/ClaudiaKermin`: static mod files (the Super Intelligence trait config and icon), copied into the staged mod on build. `tools/make-trait-icon.cs` regenerates the icon.
-- `kerboscript/library`: the Core Library. `claudia_lib.ks` holds the shared helpers and, in its header, the conventions every Building Block follows; each block is one file named after it (`exec_node.ks`). The core embeds them (`CoreLibrary`), bundles them after each Mission Script into one compile unit, and puts their `//|` doc lines into Claudia's cached prompt layers.
+- `kerboscript/library`: the Core Library. `claudia_lib.ks` holds the shared helpers and, in its header, the conventions every Building Block follows; each block is one file named after it (`exec_node.ks`). The core embeds them (`CoreLibrary`), bundles them after each Mission Script into one compile unit, and puts their `//|` doc lines into Claudia's cached prompt layers. The Script Check runs over that whole bundle, the Mission Script with the Core Library, because that is what runs.
 - `src/ClaudiaKermin.KOS`: the kOS addon (`net48`, like kOS 1.6.0.1): `ADDONS:CLAUDIA` and the kOS bridge that runs scripts on a processor. With `debug_tools = true` in the player config, a Flight window runs the test scripts in `kerboscript/debug/` through it, and a block test runner window (main menu, Space Center, Flight) runs the tests in `tests/blocks/`.
+- `src/ClaudiaKermin.ScriptCheck`: the Script Check ([ADR 0003](docs/adr/0003-script-check-and-runtime-gates.md)). It compiles a script with kOS.Safe and reads its opcodes against the forbidden list. It is Unity-free (`net48`) and references kOS.Safe compile-only; kOS.Safe is never shipped. The core sees it only through `ClaudiaKermin.Core.Kos.IScriptCheck`, and the adapter passes it in.
 - `tests/blocks/<test>`: debug block tests. Each has `test.cfg` (block, craft, orbit, timeout and the contract ranges to check), `test.ks` (the Mission Script to run), `scenario.sfs` (the save it starts from) and `reference.craft` (stock parts plus kOS, KSP 1.12.5). They ship inside the kOS addon DLL. **Run** in the runner window writes them to `saves/claudia_block_tests/`, loads that save, spawns the craft into orbit, runs the block unattended and logs PASS or FAIL to KSP.log and `saves/claudia_block_tests/block-tests.log`. Run them whenever a block changes.
-- `tests/ClaudiaKermin.Core.Tests`: the core tests.
+- `tests/ClaudiaKermin.Core.Tests`: the core tests. `tests/ClaudiaKermin.ScriptCheck.Tests`: the real Script Check, with a test for each forbidden and allowed item.
 - `tests/ClaudiaKermin.Kerboscript.Tests`: runs the Core Library's pure helpers on a kOS CPU from kOS.Safe, with no KSP, through the same bundle the mod starts.
-- `tools/ClaudiaKermin.KsCompile`: compiles `.ks` files with kOS.Safe outside KSP.
+- `tools/ClaudiaKermin.KsCompile`: the Script Check from the command line. It runs over `.ks` files (CI gives it `kerboscript/`, which holds the Core Library, and `tests/blocks`) with the same code the mod uses.
 
-CI (`.github/workflows/ci.yml`) runs on every push. It runs the core tests, the Core Library tests and the kerboscript compile check, taking kOS.Safe from the public kOS release.
+CI (`.github/workflows/ci.yml`) runs on every push. It runs the core tests, then takes kOS.Safe from the public kOS release to run the Script Check tests, Script Check every shipped script and the block test scripts, run the Core Library tests, and require the syntax-error and forbidden-call fixtures to fail.
 
 ## Project docs
 

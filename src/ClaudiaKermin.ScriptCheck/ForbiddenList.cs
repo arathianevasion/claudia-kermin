@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Andrew Watson
+
+using System;
+using System.Collections.Generic;
+
+namespace ClaudiaKermin.ScriptCheck
+{
+    /// <summary>
+    /// The forbidden list, in the spec's words (user story 139), and the kOS 1.6 names behind each item.
+    /// Allowed, and so absent here: staging, action groups, DOEVENT and DOACTION on own parts, rails warp,
+    /// maneuver nodes, HUDTEXT, VECDRAW, reading other vessels and targeting bodies.
+    /// </summary>
+    internal static class ForbiddenList
+    {
+        public const string Revert = "revert";
+        public const string Quickload = "quickload";
+        public const string Quicksave = "quicksave";
+        public const string SwitchVessels = "switch vessels";
+        public const string LaunchCraft = "launch craft";
+        public const string Pause = "pause";
+        public const string PhysicsWarp = "use physics warp";
+        public const string TouchFiles = "touch files";
+        public const string ChangeConfig = "change kOS config";
+        public const string RebootOrShutDown = "reboot or shut down processors";
+        public const string SetBootFiles = "set boot files";
+        public const string OtherAddons = "use addons other than Claudia's";
+        public const string OtherVessels = "change or message other vessels";
+        public const string GuiWindows = "open GUI windows";
+        public const string FreezeGame = "freeze the game";
+        /// <summary>From the allowed list: <c>makebuiltindelegate</c> is allowed only with a constant argument.</summary>
+        public const string ComputedDelegate = "makebuiltindelegate without a constant argument";
+
+        /// <summary>Built-in functions (OpcodeCall targets, and function pointers to them).</summary>
+        public static readonly Dictionary<string, string> Functions = Table(
+            TouchFiles, "copypath movepath deletepath create createdir open exists writejson readjson volume run runpath runoncepath "
+                + "load logfile switch edit cd chdir compile copy_deprecated delete_deprecated rename_file_deprecated rename_volume_deprecated",
+            RebootOrShutDown, "reboot shutdown",
+            GuiWindows, "gui",
+            FreezeGame, "debugfreezegame");
+
+        /// <summary>Suffixes forbidden on anything (they exist only on KUNIVERSE, processors, volumes or connections).</summary>
+        public static readonly Dictionary<string, string> Suffixes = Table(
+            Revert, "revertto reverttolaunch reverttoeditor",
+            Quickload, "quickload quickloadfrom",
+            Quicksave, "quicksave quicksaveto",
+            SwitchVessels, "forcesetactivevessel forceactive",
+            LaunchCraft, "launchcraft launchcraftfrom launchcraftwithcrewfrom",
+            Pause, "pause",
+            TouchFiles, "volume",
+            RebootOrShutDown, "deactivate",
+            OtherVessels, "sendmessage");
+
+        /// <summary>Suffixes forbidden on another vessel or its parts: they change it. Reading stays allowed.</summary>
+        public static readonly HashSet<string> OtherVesselMutators = Set(
+            "doevent doaction setfield undock controlfrom activate shutdown control starttracking");
+
+        /// <summary>The ADDONS suffixes a script may use: Claudia's own addon, and asking whether an addon is there.</summary>
+        public static readonly HashSet<string> AllowedAddonSuffixes = Set("claudia available hasaddon");
+
+        /// <summary>LIST kinds that read volumes or files (<c>list files</c>, <c>list volumes in v</c>).</summary>
+        public static readonly HashSet<string> FileListKinds = Set("files volumes");
+
+        /// <summary>
+        /// Every kOS 1.6.0.1 built-in function name, so the check compiles exactly as kOS does (built-ins as
+        /// built-in calls, <c>name@</c> as <c>makebuiltindelegate</c>). Taken from the [Function] attributes
+        /// in kOS.Safe.dll and kOS.dll.
+        /// </summary>
+        public static readonly HashSet<string> BuiltIns = Set(
+            "droppriority debugdump debugfreezegame abs anglediff arccos arcsin arctan arctan2 cd chdir ceiling char constant "
+            + "copy_deprecated copypath cos create createdir delete_deprecated deletepath exists floor lex lexicon list ln load "
+            + "log10 logfile max min mod movepath open path print printat queue random randomseed range readjson reboot "
+            + "rename_file_deprecated rename_volume_deprecated round run scriptpath selectautopilotmode uniqueset shutdown sin "
+            + "sqrt stack switch tan toggleflybywire unchar volume writejson makebuiltindelegate pidloop profileresult "
+            + "addalarm add allwaypoints angleaxis body bodyatmosphere bodyexists bounds buildlist career clearguis clearscreen "
+            + "createorbit deletealarm edit getvoice heading highlight hsv hsva hudtext latlng listalarms lookdirup node note "
+            + "orbitat positionat printlist processor q remove rgb rgba rotatefromto r slidenote stage stopallvoices timespan "
+            + "timestamp time transfer transferall clearvecdraws vecdraw vecdrawargs v vang vectorangle vcrs vectorcrossproduct "
+            + "vdot vectordotproduct vxcl vectorexclude velocityat vessel waypoint gui warpto");
+
+        private static Dictionary<string, string> Table(params string[] itemsAndNames)
+        {
+            var table = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < itemsAndNames.Length; i += 2)
+                foreach (var name in Set(itemsAndNames[i + 1])) table.Add(name, itemsAndNames[i]);
+            return table;
+        }
+
+        private static HashSet<string> Set(string names)
+        {
+            return new HashSet<string>(names.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries), StringComparer.OrdinalIgnoreCase);
+        }
+    }
+}

@@ -97,8 +97,20 @@ namespace ClaudiaKermin.Core.Missions
         public RaiseCap(decimal spendingCap) { SpendingCap = spendingCap; }
     }
 
-    /// <summary>Sends the turn that failed again, unchanged.</summary>
+    /// <summary>Sends the turn that failed again, unchanged; after "Couldn't produce a safe script", asks for the script again.</summary>
     public sealed class Retry : MissionInput
+    {
+    }
+
+    /// <summary>After "Couldn't produce a safe script": Claudia writes the script again, with the player's note.</summary>
+    public sealed class RetryWithNote : MissionInput
+    {
+        public readonly string Note;
+        public RetryWithNote(string note) { Note = note; }
+    }
+
+    /// <summary>After "Couldn't produce a safe script": Claudia proposes a different Sequence Plan.</summary>
+    public sealed class Replan : MissionInput
     {
     }
 
