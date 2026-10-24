@@ -65,15 +65,11 @@ namespace ClaudiaKermin.Core.Roster
         public double UT { get; private set; }
     }
 
-    /// <summary>What the roster scenario module remembers about Claudia in one save.</summary>
+    /// <summary>What the roster scenario module remembers about Claudia in one save. A claudiaId from an older save is ignored.</summary>
     public sealed class RosterState
     {
-        private const string IdKey = "claudiaId";
         private const string DeclinedKey = "renameDeclined";
         private const string RespawnKey = "respawnAtUT";
-
-        /// <summary>The persistent id of her roster entry, so a rename can't lose her.</summary>
-        public uint? ClaudiaId { get; set; }
 
         /// <summary>The player declined to rename a Kerbal who clashes with her name: she stays off the roster.</summary>
         public bool RenameDeclined { get; set; }
@@ -94,7 +90,6 @@ namespace ClaudiaKermin.Core.Roster
         public Dictionary<string, string> ToValues()
         {
             var values = new Dictionary<string, string>();
-            if (ClaudiaId.HasValue) values[IdKey] = ClaudiaId.Value.ToString(CultureInfo.InvariantCulture);
             if (RenameDeclined) values[DeclinedKey] = "True";
             if (RespawnAtUT.HasValue) values[RespawnKey] = RespawnAtUT.Value.ToString("R", CultureInfo.InvariantCulture);
             return values;
@@ -104,10 +99,7 @@ namespace ClaudiaKermin.Core.Roster
         {
             var state = new RosterState();
             string text;
-            uint id;
             double ut;
-            if (values.TryGetValue(IdKey, out text) && uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out id))
-                state.ClaudiaId = id;
             state.RenameDeclined = values.TryGetValue(DeclinedKey, out text) && text == "True";
             if (values.TryGetValue(RespawnKey, out text) && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out ut))
                 state.RespawnAtUT = ut;

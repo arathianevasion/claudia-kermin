@@ -131,7 +131,7 @@ namespace ClaudiaKermin.Core.Tests.Roster
         [Fact]
         public void AClashDoesNotStopHerBeingLookedAfterOnceSheIsOnTheRoster()
         {
-            var state = new RosterState { ClaudiaId = 7, RenameDeclined = true, RespawnAtUT = Now };
+            var state = new RosterState { RenameDeclined = true, RespawnAtUT = Now };
             var actions = Plan(state, Crew(4, "Claudia Smith"), Claudia(7, KerbalStanding.Missing, "Clod Kerman"));
             Assert.Contains(actions, a => a.Type == RosterActionType.RevertName);
             Assert.Contains(actions, a => a.Type == RosterActionType.Respawn);
@@ -156,9 +156,9 @@ namespace ClaudiaKermin.Core.Tests.Roster
         }
 
         [Fact]
-        public void RevertsARenameFoundByPersistentId()
+        public void RevertsARenameFoundByTrait()
         {
-            var state = new RosterState { ClaudiaId = 7 };
+            var state = new RosterState();
             var actions = Plan(state, Claudia(7, name: "Clod Kerman"));
             var revert = Assert.Single(actions);
             Assert.Equal(RosterActionType.RevertName, revert.Type);
@@ -166,11 +166,54 @@ namespace ClaudiaKermin.Core.Tests.Roster
         }
 
         [Fact]
-        public void RemembersTheIdOfTheClaudiaItFinds()
+        public void ARenamedClaudiaIsFoundByHerTraitAndRevertedWithoutAddingAnother()
+        {
+            var actions = Plan(new RosterState(), Crew(1, "Jebediah Kerman"), Claudia(7, name: "Clod Kerman"));
+            var revert = Assert.Single(actions);
+            Assert.Equal(RosterActionType.RevertName, revert.Type);
+            Assert.Equal(7u, revert.KerbalId);
+            Assert.Equal(ClaudiaIdentity.Name, revert.Name);
+        }
+
+        [Fact]
+        public void AKerbalWithIdZeroAheadOfClaudiaIsNeverTakenForHer()
         {
             var state = new RosterState();
-            Plan(state, Claudia(9));
-            Assert.Equal(9u, state.ClaudiaId);
+            var roster = new[] { Crew(0, "Jebediah Kerman"), Claudia(0, standing: KerbalStanding.Missing) };
+            RosterPlanner.Plan(roster, state, Now, Timer, max => 0);
+            var actions = RosterPlanner.Plan(roster, state, Now + Timer + 1, Timer, max => 0);
+            var respawn = Assert.Single(actions);
+            Assert.Equal(RosterActionType.Respawn, respawn.Type);
+        }
+
+        [Fact]
+        public void ClaudiaIsStillFoundWhenHerIdChangesBetweenPlans()
+        {
+            var state = new RosterState();
+            Assert.Empty(Plan(state, Crew(1, "Jebediah Kerman"), Claudia(7)));
+            Assert.Empty(Plan(state, Crew(1, "Jebediah Kerman"), Claudia(42)));
+        }
+
+        [Fact]
+        public void ClaudiaWhoseTraitWasChangedByAModIsFoundByName()
+        {
+            var modded = new KerbalSnapshot(7, ClaudiaIdentity.Name, "Pilot", KerbalKind.Crew, KerbalStanding.Available);
+            Assert.Empty(Plan(new RosterState(), Crew(1, "Jebediah Kerman"), modded));
+        }
+
+        [Fact]
+        public void ClaudiaIsTheTraitHolderNamedAfterHerWhenSeveralHaveTheTrait()
+        {
+            var actions = Plan(new RosterState(), Crew(2, "Bill Kerman", ClaudiaIdentity.TraitName), Claudia(7));
+            Assert.Equal(2u, Assert.Single(actions).KerbalId);
+        }
+
+        [Fact]
+        public void ALegacyClaudiaIdIsIgnoredOnLoad()
+        {
+            var state = RosterState.FromValues(new Dictionary<string, string> { { "claudiaId", "0" } });
+            Assert.DoesNotContain("claudiaId", state.ToValues().Keys);
+            Assert.Empty(Plan(state, Crew(0, "Jebediah Kerman"), Claudia(5)));
         }
 
         [Fact]
@@ -226,9 +269,8 @@ namespace ClaudiaKermin.Core.Tests.Roster
         [Fact]
         public void StateRoundTripsThroughItsPersistedValues()
         {
-            var state = new RosterState { ClaudiaId = 12, RenameDeclined = true, RespawnAtUT = 99.5 };
+            var state = new RosterState { RenameDeclined = true, RespawnAtUT = 99.5 };
             var copy = RosterState.FromValues(state.ToValues());
-            Assert.Equal(12u, copy.ClaudiaId);
             Assert.True(copy.RenameDeclined);
             Assert.Equal(99.5, copy.RespawnAtUT);
         }
@@ -237,7 +279,6 @@ namespace ClaudiaKermin.Core.Tests.Roster
         public void EmptyValuesGiveAFreshState()
         {
             var copy = RosterState.FromValues(new Dictionary<string, string>());
-            Assert.Null(copy.ClaudiaId);
             Assert.False(copy.RenameDeclined);
             Assert.Null(copy.RespawnAtUT);
         }
