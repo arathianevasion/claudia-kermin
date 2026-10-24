@@ -22,11 +22,20 @@ namespace ClaudiaKermin.Core.Missions
         public readonly decimal SpendingCap;
         public readonly string Model;
 
+        /// <summary>The Mission Settings chosen in the form; null takes the defaults from the player config.</summary>
+        public readonly MissionSettingsValues Settings;
+
         public StartMission(string goal, decimal spendingCap, string model)
         {
             Goal = goal;
             SpendingCap = spendingCap;
             Model = model;
+        }
+
+        public StartMission(string goal, decimal spendingCap, string model, MissionSettingsValues settings)
+            : this(goal, spendingCap, model)
+        {
+            Settings = settings;
         }
     }
 

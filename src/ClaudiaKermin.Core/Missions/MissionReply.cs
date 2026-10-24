@@ -15,6 +15,8 @@ namespace ClaudiaKermin.Core.Missions
         public double DeltaV;
         /// <summary>Due Time or rough timing, in Claudia's words.</summary>
         public string Timing = "";
+        /// <summary>The Due Time (UT, s) when the wait before this sequence is longer than the in-sequence cap; null for "right after the previous one".</summary>
+        public double? DueTimeUt;
     }
 
     /// <summary>The ordered Maneuver Sequences Claudia intends to fly to reach the Mission Goal.</summary>
@@ -24,6 +26,8 @@ namespace ClaudiaKermin.Core.Missions
         public List<PlannedSequence> Sequences = new List<PlannedSequence>();
         public double TotalDeltaV;
         public string ExpectedDuration = "";
+        /// <summary>The expected total Mission time in seconds, waits between sequences included; null when Claudia gave none.</summary>
+        public double? MissionTimeSeconds;
     }
 
     /// <summary>Claudia's proposal for the next Maneuver Sequence, with its Mission Script.</summary>
@@ -44,6 +48,12 @@ namespace ClaudiaKermin.Core.Missions
         public bool CustomScript;
         /// <summary>Why no Building Block fits, for the Custom Script badge; "" otherwise.</summary>
         public string CustomScriptReason = "";
+        /// <summary>The earliest UT the sequence may start (a wait longer than the in-sequence cap comes first); null when it can start right away.</summary>
+        public double? DueTimeUt;
+        /// <summary>The UT after which the planned window is missed; null when the plan has no window to miss.</summary>
+        public double? WindowClosesUt;
+        /// <summary>The delta-v (m/s) of the next window if the planned one is missed; null when there is no usable one.</summary>
+        public double? LateWindowDeltaV;
     }
 
     public sealed class Debrief
@@ -99,17 +109,19 @@ namespace ClaudiaKermin.Core.Missions
             + "\"reply_intent\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"approve\",\"revise\",\"question\",\"unclear\"]},{\"type\":\"null\"}],"
             + "\"description\":\"Only when classifying the player's typed reply to a pending plan; otherwise null.\"},"
             + "\"mission_plan\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"why\",\"sequences\",\"total_delta_v\",\"expected_duration\"],\"properties\":{"
+            + "\"required\":[\"why\",\"sequences\",\"total_delta_v\",\"expected_duration\",\"mission_time_s\"],\"properties\":{"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
             + "\"sequences\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"name\",\"intent\",\"delta_v\",\"timing\"],\"properties\":{"
+            + "\"required\":[\"name\",\"intent\",\"delta_v\",\"timing\",\"due_time_ut\"],\"properties\":{"
             + "\"name\":{\"type\":\"string\"},\"intent\":{\"type\":\"string\"},"
             + "\"delta_v\":{\"type\":\"number\",\"description\":\"m/s\"},"
-            + "\"timing\":{\"type\":\"string\",\"description\":\"Due Time or rough timing\"}}}},"
+            + "\"timing\":{\"type\":\"string\",\"description\":\"Due Time or rough timing\"},"
+            + "\"due_time_ut\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"description\":\"The Due Time as UT in seconds when the wait before this sequence is longer than the in-sequence wait cap; otherwise null.\"}}}},"
             + "\"total_delta_v\":{\"type\":\"number\",\"description\":\"m/s\"},"
-            + "\"expected_duration\":{\"type\":\"string\"}}},{\"type\":\"null\"}]},"
+            + "\"expected_duration\":{\"type\":\"string\"},"
+            + "\"mission_time_s\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"description\":\"Expected total Mission time in seconds, waits between sequences included.\"}}},{\"type\":\"null\"}]},"
             + "\"sequence_plan\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"name\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"risks\",\"custom_script\",\"custom_script_reason\",\"script\"],"
+            + "\"required\":[\"name\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"risks\",\"custom_script\",\"custom_script_reason\",\"script\",\"due_time_ut\",\"window_closes_ut\",\"late_window_dv\"],"
             + "\"properties\":{"
             + "\"name\":{\"type\":\"string\"},\"intent\":{\"type\":\"string\"},"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
@@ -120,7 +132,10 @@ namespace ClaudiaKermin.Core.Missions
             + "\"risks\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},"
             + "\"custom_script\":{\"type\":\"boolean\",\"description\":\"True when the script is written from scratch instead of from Building Blocks.\"},"
             + "\"custom_script_reason\":{\"type\":\"string\",\"description\":\"For a Custom Script, one short sentence on why no Building Block fits; otherwise empty.\"},"
-            + "\"script\":{\"type\":\"string\",\"description\":\"The complete Mission Script in kerboscript.\"}}},{\"type\":\"null\"}]},"
+            + "\"script\":{\"type\":\"string\",\"description\":\"The complete Mission Script in kerboscript.\"},"
+            + "\"due_time_ut\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"description\":\"The earliest UT in seconds the sequence may start, when a wait longer than the in-sequence wait cap comes first; otherwise null.\"},"
+            + "\"window_closes_ut\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"description\":\"UT in seconds after which the planned window is missed, if the sequence depends on one; otherwise null.\"},"
+            + "\"late_window_dv\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"description\":\"Delta-v in m/s of the next window if the planned one is missed; null when there is none.\"}}},{\"type\":\"null\"}]},"
             + "\"debrief\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
             + "\"required\":[\"outcome\",\"why\",\"what_happened\",\"goal_reached\",\"next\"],\"properties\":{"
             + "\"outcome\":{\"type\":\"string\",\"enum\":[\"Nominal\",\"Off-Nominal\",\"Failed\"]},"
@@ -158,6 +173,7 @@ namespace ClaudiaKermin.Core.Missions
                     Why = JsonNode.Str(plan["why"]) ?? "",
                     TotalDeltaV = JsonNode.Double(plan["total_delta_v"]) ?? 0,
                     ExpectedDuration = JsonNode.Str(plan["expected_duration"]) ?? "",
+                    MissionTimeSeconds = JsonNode.Double(plan["mission_time_s"]),
                 };
                 var sequences = plan["sequences"];
                 if (sequences != null)
@@ -170,6 +186,7 @@ namespace ClaudiaKermin.Core.Missions
                             Intent = JsonNode.Str(s["intent"]) ?? "",
                             DeltaV = JsonNode.Double(s["delta_v"]) ?? 0,
                             Timing = JsonNode.Str(s["timing"]) ?? "",
+                            DueTimeUt = JsonNode.Double(s["due_time_ut"]),
                         });
                     }
                 }
@@ -192,6 +209,9 @@ namespace ClaudiaKermin.Core.Missions
                     Script = JsonNode.Str(sequence["script"]) ?? "",
                     CustomScript = JsonNode.Bool(sequence["custom_script"]) ?? false,
                     CustomScriptReason = JsonNode.Str(sequence["custom_script_reason"]) ?? "",
+                    DueTimeUt = JsonNode.Double(sequence["due_time_ut"]),
+                    WindowClosesUt = JsonNode.Double(sequence["window_closes_ut"]),
+                    LateWindowDeltaV = JsonNode.Double(sequence["late_window_dv"]),
                 };
             }
 

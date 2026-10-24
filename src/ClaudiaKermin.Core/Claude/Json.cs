@@ -314,6 +314,7 @@ namespace ClaudiaKermin.Core.Claude
         }
 
         public JsonWriter Field(string name, double value) { return Name(name).Number(value); }
+        public JsonWriter Field(string name, double? value) { return value.HasValue ? Name(name).Number(value.Value) : Name(name).Null(); }
         public JsonWriter Null() { Separate(); _out.Append("null"); return this; }
 
         /// <summary>Writes already-encoded JSON text exactly as given.</summary>

@@ -154,7 +154,9 @@ namespace ClaudiaKermin.Core.Tests
             // The cached system layers teach Claudia the Building Blocks: summaries in the base layer,
             // full docs in the per-Mission layer.
             var system = Body(transport.Requests[0]).GetProperty("system").EnumerateArray().Select(b => b.GetProperty("text").GetString()).ToArray();
-            Assert.Equal(2, system.Length);
+            Assert.Equal(3, system.Length);
+            Assert.Contains("Daylight landing: on", system[2]);
+            Assert.Contains("Balanced: wait up to 6 h", system[2]);
             Assert.Contains("- exec_node(options): flies a maneuver node", system[0]);
             Assert.Contains("unknown option <name>", system[0]);
             Assert.Contains("max_residual [0.5]", system[1]);
@@ -243,7 +245,7 @@ namespace ClaudiaKermin.Core.Tests
                 // The model chosen at Mission start, locked for the Mission.
                 Assert.Equal("claude-opus-5-5", body.GetProperty("model").GetString());
                 var system = body.GetProperty("system");
-                Assert.Equal(2, system.GetArrayLength());
+                Assert.Equal(3, system.GetArrayLength());
                 foreach (var layer in system.EnumerateArray())
                     Assert.Equal("1h", layer.GetProperty("cache_control").GetProperty("ttl").GetString());
                 Assert.Equal(bodies[0].GetProperty("system").GetRawText(), system.GetRawText());

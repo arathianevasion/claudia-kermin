@@ -69,6 +69,64 @@ namespace ClaudiaKermin.Core.Missions
                 + CoreLibrary.FullDocs();
         }
 
+        // ---- Mission Settings and timing ----
+
+        /// <summary>
+        /// The timing rules and the Mission Settings as they stood when the Mission started: a system layer,
+        /// frozen with the others. Later edits arrive as a notice (<see cref="SettingsChanged"/>), which supersedes it.
+        /// </summary>
+        public static string TimingLayer(MissionSettingsValues settings, double waitCapOrbits, double waitCapGroundSeconds)
+        {
+            return "Timing. A wait inside a Maneuver Sequence is capped at "
+                + waitCapOrbits.ToString("0.##", CultureInfo.InvariantCulture) + " orbit(s) in orbit, or "
+                + waitCapGroundSeconds.ToString("0", CultureInfo.InvariantCulture) + " s on the ground; the Core Library enforces it. "
+                + "A longer wait does not go inside the script: it becomes the Due Time of the next Maneuver Sequence, the earliest UT "
+                + "(seconds) that sequence may start. Put it in due_time_ut in the Mission Plan's sequence and in the Sequence Plan "
+                + "(null when the sequence can start right away), and give the Mission Plan's mission_time_s as the total Mission time "
+                + "including those waits. The mod sets an alarm and offers the player a Warp to Due Time button; it never warps between "
+                + "sequences itself. If a sequence depends on a window, set window_closes_ut to the UT after which that window is missed "
+                + "and late_window_dv to the delta-v (m/s) of the next window; when the player approves after the window has closed, "
+                + "the mod lets the script take the next window if late_window_dv is within tolerance of expected_delta_v, and "
+                + "otherwise asks you to re-plan. A Due Time the player has missed just waits; revise the Sequence Plan only if its "
+                + "timing no longer works.\n\n" + SettingsText(settings);
+        }
+
+        /// <summary>The Mission Settings in words, as Claudia must apply them.</summary>
+        public static string SettingsText(MissionSettingsValues settings)
+        {
+            var time = settings.TimeVersusDeltaV == TimeVersusDeltaV.Fastest
+                ? "Fastest: never wait for a better window; take the next one."
+                : settings.TimeVersusDeltaV == TimeVersusDeltaV.MostEfficient
+                    ? "Most efficient: wait for the cheapest window, however long (a long wait becomes a Due Time)."
+                    : "Balanced: wait up to 6 h to save delta-v; do not wait longer than that for a better window.";
+            return "Mission Settings. Daylight landing: " + (settings.DaylightLanding
+                    ? "on. Set the land block's daylight option to true and prefer a daylight landing."
+                    : "off. Do not wait for daylight.")
+                + " Time versus delta-v, " + time;
+        }
+
+        public static string SettingsChanged(MissionSettingsValues settings)
+        {
+            return "The player changed the Mission Settings. They now read (these replace the settings you were given before):\n"
+                + SettingsText(settings);
+        }
+
+        public const string SettingsNotice =
+            "Revise the Mission Plan for the new Mission Settings: reply with kind \"mission_plan\" and mission_plan filled in, "
+            + "with the Due Times and total Mission time they imply. The player must approve it again.";
+
+        public static string LateApprovalReplan(double ut, double plannedDv, double? lateDv)
+        {
+            return "The player approved your Sequence Plan after its window closed (UT now "
+                + ut.ToString("0.##", CultureInfo.InvariantCulture) + " s). The next window "
+                + (lateDv.HasValue ? "costs " + lateDv.Value.ToString("0.##", CultureInfo.InvariantCulture) + " m/s against " : "is not known, against ")
+                + plannedDv.ToString("0.##", CultureInfo.InvariantCulture) + " m/s planned, which is outside tolerance, so the mod did not start the script.";
+        }
+
+        public const string LateReplanNotice =
+            "Revise the Sequence Plan for the current time: reply with kind \"sequence_plan\" and sequence_plan filled in, including "
+            + "its complete Mission Script and a new Due Time if the next window is far off. The mod runs it only after the player's Approval.";
+
         public const string PlanNotice =
             "The craft is in Flight. Propose the Mission Plan now: reply with kind \"mission_plan\" and mission_plan filled in.";
 

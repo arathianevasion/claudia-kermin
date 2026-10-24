@@ -40,6 +40,8 @@ namespace ClaudiaKermin.Core.Missions
         public int Stage;
         /// <summary>Crew seats on the craft.</summary>
         public int Seats;
+        /// <summary>The vessel's id (its persistent GUID) in Flight, for the Go to button; "" in the editor.</summary>
+        public string VesselId = "";
         public List<SnapshotPart> Parts = new List<SnapshotPart>();
     }
 
@@ -123,6 +125,7 @@ namespace ClaudiaKermin.Core.Missions
                 .Field("mass_t", Craft.MassTonnes)
                 .Field("stage", Craft.Stage)
                 .Field("seats", Craft.Seats);
+            if (Craft.VesselId.Length > 0) json.Field("vessel_id", Craft.VesselId);
             json.Name("parts").BeginArray();
             foreach (var part in Craft.Parts)
             {
@@ -210,6 +213,7 @@ namespace ClaudiaKermin.Core.Missions
                 snapshot.Craft.MassTonnes = JsonNode.Double(craft["mass_t"]) ?? 0;
                 snapshot.Craft.Stage = (int)(JsonNode.Long(craft["stage"]) ?? 0);
                 snapshot.Craft.Seats = (int)(JsonNode.Long(craft["seats"]) ?? 0);
+                snapshot.Craft.VesselId = JsonNode.Str(craft["vessel_id"]) ?? "";
                 var parts = craft["parts"];
                 if (parts != null)
                 {
