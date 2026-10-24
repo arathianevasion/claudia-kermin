@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Andrew Watson
 
+using System;
 using System.Globalization;
 using ClaudiaKermin.Core.Kos;
 
@@ -27,7 +28,8 @@ namespace ClaudiaKermin.Core.Missions
             if (mission == null || !IsRunning(mission) || !mission.RunId.HasValue || !mission.RunningProcessor.HasValue) return;
             if (!mission.RunDeadlineUt.HasValue || _ut < mission.RunDeadlineUt.Value || mission.StopReason != null) return;
             mission.StopReason = RunawayStop.Reason;
-            var planned = mission.PendingSequence != null ? mission.PendingSequence.ExpectedDurationSeconds : 0;
+            // As the deadline counted it: a plan of under a minute is held to one.
+            var planned = Math.Max(mission.PendingSequence != null ? mission.PendingSequence.ExpectedDurationSeconds : 0, RunawayStop.MinimumPlannedSeconds);
             var text = "The script was still running at " + Percent(_config.RunawayMultiplier) + " of its planned "
                 + planned.ToString("0", CultureInfo.InvariantCulture) + " s: the mod stopped it and made the craft safe.";
             Note(LogKind.Notice, text);

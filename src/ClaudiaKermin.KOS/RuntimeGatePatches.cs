@@ -161,13 +161,8 @@ namespace ClaudiaKermin.KOS
         {
             var shared = Gated();
             if (shared == null || desiredRate == null) return;
-            // The physics rate index nearest the rate asked for, as kOS picks it.
-            var rates = TimeWarp.fetch != null ? TimeWarp.fetch.physicsWarpRates : new[] { 1f };
-            var rate = (float)desiredRate.GetDoubleValue();
-            var index = 0;
-            for (var i = 1; i < rates.Length; i++)
-                if (Mathf.Abs(rate - rates[i]) < Mathf.Abs(rate - rates[index])) index = i;
-            GateWarp(shared, index);
+            // Any rate above 1x is a warp; kOS rounds it to a rate index (ties go up), so don't second-guess which.
+            GateWarp(shared, desiredRate.GetDoubleValue() > 1 ? 1 : 0);
         }
 
         private static void GateWarp(SharedObjects shared, int index)
