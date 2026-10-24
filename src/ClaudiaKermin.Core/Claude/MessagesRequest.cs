@@ -32,6 +32,8 @@ namespace ClaudiaKermin.Core.Claude
         /// <summary>A JSON Schema (as JSON text) for structured output, or null.</summary>
         public string OutputSchemaJson;
         public int CompactionTriggerTokens = 150000;
+        /// <summary>Replaces the API's default summarization prompt when compaction runs; null keeps the default.</summary>
+        public string CompactionInstructions;
 
         internal string ToJson()
         {
@@ -76,8 +78,9 @@ namespace ClaudiaKermin.Core.Claude
 
             json.Name("context_management").BeginObject().Name("edits").BeginArray()
                 .BeginObject().Field("type", "compact_20260112")
-                .Name("trigger").BeginObject().Field("type", "input_tokens").Field("value", CompactionTriggerTokens).EndObject()
-                .EndObject()
+                .Name("trigger").BeginObject().Field("type", "input_tokens").Field("value", CompactionTriggerTokens).EndObject();
+            if (CompactionInstructions != null) json.Field("instructions", CompactionInstructions);
+            json.EndObject()
                 .EndArray().EndObject();
 
             json.Name("messages").BeginArray();

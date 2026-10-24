@@ -517,6 +517,7 @@ namespace ClaudiaKermin.Core.Missions
                 MaxTokens = MissionPrompts.MaxTokens,
                 OutputSchemaJson = MissionReply.SchemaJson,
                 CompactionTriggerTokens = _config.CompactionTriggerTokens,
+                CompactionInstructions = MissionPrompts.CompactionInstructions,
             };
             request.System.AddRange(mission.System);
             request.Messages.AddRange(mission.Conversation);

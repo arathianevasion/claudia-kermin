@@ -29,6 +29,8 @@ namespace ClaudiaKermin.Core.Config
 
         /// <summary>Input tokens at which server-side compaction runs.</summary>
         public int CompactionTriggerTokens = 150000;
+        /// <summary>The API rejects a compaction trigger below this.</summary>
+        public const int MinCompactionTriggerTokens = 50000;
 
         /// <summary>What each model costs; add models with <c>price.&lt;model&gt; = input, output</c> lines (USD per million tokens).</summary>
         public PriceTable Prices = PriceTable.Default();
@@ -56,7 +58,7 @@ namespace ClaudiaKermin.Core.Config
             + "default_spending_cap = 10\n"
             + "# Delta-v margin, in percent, the Craft Check wants over the Delta-v Map.\n"
             + "craft_check_margin = 15\n"
-            + "# Input tokens at which the conversation is compacted server-side.\n"
+            + "# Input tokens at which the conversation is compacted server-side (at least 50000).\n"
             + "compaction_trigger = 150000\n"
             + "# Price table, USD per million tokens (input, output). A model not listed is charged at the highest price here.\n"
             + "# Add a model you want to try at your own risk: price.<model> = input, output\n"
@@ -121,7 +123,7 @@ namespace ClaudiaKermin.Core.Config
                         break;
                     case "compaction_trigger":
                         int trigger;
-                        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out trigger) && trigger > 0)
+                        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out trigger) && trigger >= MinCompactionTriggerTokens)
                             config.CompactionTriggerTokens = trigger;
                         break;
                     case "wait_cap_orbits":
