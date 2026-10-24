@@ -9,22 +9,48 @@ namespace ClaudiaKermin.Core.Claude
 {
     /// <summary>
     /// Runs blocking work on a worker thread and queues its result for the main thread, which drains
-    /// the queue each frame (ADR 0001).
+    /// the queue each frame (ADR 0001). No exception escapes a worker thread (an unhandled one would
+    /// take KSP down) or stops a drain part-way: each goes to the error handler instead.
     /// </summary>
     public sealed class Background
     {
         private readonly ConcurrentQueue<Action> _mainThread = new ConcurrentQueue<Action>();
+        private readonly Action<Exception> _onError;
+
+        /// <param name="onError">Told, on the main thread, about any exception from work or a callback; null to drop them.</param>
+        public Background(Action<Exception> onError = null)
+        {
+            _onError = onError ?? (e => { });
+        }
 
         /// <summary>Runs <paramref name="work"/> on a worker thread; <paramref name="done"/> runs on whoever calls <see cref="Drain"/>.</summary>
-        public void Run<T>(Func<T> work, Action<T> done)
+        /// <param name="failed">Runs on the drain thread instead of <paramref name="done"/> if the work throws; the error handler also hears of it.</param>
+        public void Run<T>(Func<T> work, Action<T> done, Action<Exception> failed = null)
         {
             var thread = new Thread(() =>
             {
-                var result = work();
-                _mainThread.Enqueue(() => done(result));
+                try
+                {
+                    var result = work();
+                    _mainThread.Enqueue(() => done(result));
+                }
+                catch (Exception e)
+                {
+                    _mainThread.Enqueue(() =>
+                    {
+                        _onError(e);
+                        if (failed != null) failed(e);
+                    });
+                }
             });
             thread.IsBackground = true;
             thread.Start();
+        }
+
+        /// <summary>Queues <paramref name="action"/> for the next <see cref="Drain"/>; safe from any thread.</summary>
+        public void Post(Action action)
+        {
+            _mainThread.Enqueue(action);
         }
 
         /// <summary>Call from the main thread each frame.</summary>
@@ -32,7 +58,22 @@ namespace ClaudiaKermin.Core.Claude
         {
             Action action;
             while (_mainThread.TryDequeue(out action))
-                action();
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception e)
+                {
+                    try
+                    {
+                        _onError(e);
+                    }
+                    catch (Exception)
+                    {
+                    }
+                }
+            }
         }
     }
 }
