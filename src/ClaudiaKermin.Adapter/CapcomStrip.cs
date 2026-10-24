@@ -61,7 +61,7 @@ namespace ClaudiaKermin.Adapter
             GUILayout.BeginHorizontal();
             GUILayout.Label(Stepper(View), _wrap);
             GUILayout.FlexibleSpace();
-            GUILayout.Label("Cap $" + View.SpendingCap.ToString("0.00", CultureInfo.InvariantCulture), GUILayout.ExpandWidth(false));
+            GUILayout.Label("Spent " + MissionWindow.SpendText(View), GUILayout.ExpandWidth(false));
             GUILayout.EndHorizontal();
 
             var status = View.RunStatus.Length > 0 ? View.RunStatus : MissionWindow.StageText(View);
