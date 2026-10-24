@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Config;
+using ClaudiaKermin.Core.Kos;
 
 namespace ClaudiaKermin.Core.Missions
 {
@@ -24,7 +25,7 @@ namespace ClaudiaKermin.Core.Missions
     /// before a Sequence Plan is offered (<see cref="OfferSequencePlan"/>), the Craft Check before planning,
     /// and persistence of the loop state across saves (the transcript is already written).
     /// </summary>
-    public sealed class MissionControl
+    public sealed partial class MissionControl
     {
         private readonly ClaudeClient _client;
         private readonly Background _background;
@@ -66,7 +67,8 @@ namespace ClaudiaKermin.Core.Missions
         {
             if (input is GameSnapshot) Snapshot((GameSnapshot)input);
             else if (input is SaveLoaded) Loaded(((SaveLoaded)input).SaveDirectory);
-            else if (input is SceneChanged) _scene = ((SceneChanged)input).Scene;
+            else if (input is MissionsRestored) Restored((MissionsRestored)input);
+            else if (input is SceneChanged) SceneChanging(((SceneChanged)input).Scene);
             else if (input is UtAdvanced) _ut = ((UtAdvanced)input).Ut;
             else if (input is StartMission) Start((StartMission)input);
             else if (input is EndMission) EndRequested();
@@ -75,11 +77,12 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is Reply) Replied(((Reply)input).Text);
             else if (input is ChangeSomething) ChangeRequested(((ChangeSomething)input).Text);
             else if (input is AskQuestion) Asked(((AskQuestion)input).Text);
-            else if (input is Retry) Retried();
+            else if (input is Retry || input is Resume) Retried();
             else if (input is CaptureSnapshot) Capture();
             else if (input is KosRunRefused) RunRefused(((KosRunRefused)input).Reason);
             else if (input is KosRunEnded) RunEnded((KosRunEnded)input);
             TryPlan();
+            TryOwed();
             Rebuild();
         }
 
@@ -139,6 +142,17 @@ namespace ClaudiaKermin.Core.Missions
             /// <summary>A turn that must follow the one in flight (a Debrief after a mid-run question).</summary>
             public Turn Next;
             public IRawStreamDump Dump;
+            /// <summary>The Mission Settings, by name; persisted with the Mission, edited by a later ticket.</summary>
+            public readonly Dictionary<string, string> Settings = new Dictionary<string, string>();
+            /// <summary>Persistence (MissionControl.Persistence.cs): a turn the loop owes Claudia once the craft is in Flight.</summary>
+            public Owed Owed;
+            public RunOutcome OwedOutcome;
+            /// <summary>Said to Claudia with the next turn (a save was loaded, or the Mission was resumed without a snapshot).</summary>
+            public string LoadNotice;
+            /// <summary>A save was loaded during a request: it completes, then this state is restored.</summary>
+            public Restore DeferredRestore;
+            /// <summary>No snapshot in the loaded save: Paused until the player resumes it or ends it.</summary>
+            public bool AwaitingResume;
 
             public bool AwaitingApproval
             {
@@ -175,6 +189,7 @@ namespace ClaudiaKermin.Core.Missions
             if (_config.DebugTools) mission.Dump = new FileStreamDump(Path.Combine(mission.Folder, "stream-dumps"));
             _mission = mission;
             Note(LogKind.Player, "Mission Goal: " + goal);
+            RecordStart(mission);
         }
 
         private void TryPlan()
@@ -381,6 +396,7 @@ namespace ClaudiaKermin.Core.Missions
                 return;
             }
             mission.Pending = turn;
+            RecordUnanswered(mission, turn);
             Send(mission, turn);
         }
 
@@ -454,6 +470,7 @@ namespace ClaudiaKermin.Core.Missions
             }
             finally
             {
+                if (mission.DeferredRestore != null) CompleteDeferredRestore(mission);
                 Rebuild();
             }
         }
@@ -496,6 +513,9 @@ namespace ClaudiaKermin.Core.Missions
                 if (m.Effort != null) mission.Effort = m.Effort;
             mission.Pending = null;
             WriteTranscript(mission);
+            ClearUnanswered(mission);
+            // A save was loaded while this ran: the reply stays in the conversation, the loop state is the save's.
+            if (mission.DeferredRestore != null) return;
 
             Apply(mission, turn, reply, message.FallbackRan ? message.Model ?? "" : "");
 
@@ -601,6 +621,7 @@ namespace ClaudiaKermin.Core.Missions
             {
                 mission.Stage = MissionStage.Succeeded;
                 Note(LogKind.Notice, "Mission Goal met: the Mission is over.");
+                RecordFinished(mission);
                 return;
             }
             if (debrief.Outcome == "Failed")
@@ -608,6 +629,7 @@ namespace ClaudiaKermin.Core.Missions
                 // A reduced goal for Approval is a later ticket; for now a Failed Debrief ends the Mission.
                 mission.Stage = MissionStage.Ended;
                 Note(LogKind.Notice, "The Mission Goal can't be reached as stated: the Mission has ended.");
+                RecordFinished(mission);
                 return;
             }
             mission.Stage = MissionStage.Sequencing;
@@ -633,9 +655,15 @@ namespace ClaudiaKermin.Core.Missions
         {
             var mission = _mission;
             if (mission == null || mission.Stage != MissionStage.Paused || mission.InFlight) return;
+            CraftCheckOnResume(mission);
             mission.Stage = mission.StageBeforePause;
             mission.PauseReason = "";
-            if (mission.Pending != null) Send(mission, mission.Pending);
+            mission.AwaitingResume = false;
+            if (mission.Pending != null)
+            {
+                if (mission.Pending.Messages == null) ApplyLoadNotice(mission, mission.Pending);
+                Send(mission, mission.Pending);
+            }
             else if (mission.Next != null)
             {
                 var next = mission.Next;
@@ -734,8 +762,9 @@ namespace ClaudiaKermin.Core.Missions
                     view.RunStatus = "Running: " + mission.PendingSequence.Name;
                 view.CanType = !mission.InFlight && mission.Stage != MissionStage.Paused && mission.Stage != MissionStage.WaitingForFlight;
 
+                view.LeavingFlightNeedsConfirmation = IsRunning(mission);
                 if (mission.Stage == MissionStage.Paused && !mission.InFlight)
-                    view.QuickReplies = new List<QuickReply> { QuickReply.Retry };
+                    view.QuickReplies = new List<QuickReply> { mission.AwaitingResume ? QuickReply.Resume : QuickReply.Retry };
                 else if (mission.AwaitingApproval && !mission.InFlight)
                 {
                     view.QuickReplies = mission.ConfirmPrompt != null
