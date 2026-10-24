@@ -31,6 +31,12 @@
     <EmbeddedResource Include="$(RepoRoot)kerboscript/debug/*.ks" LogicalName="ClaudiaKermin.KOS.debug.%(Filename).ks" />
   </ItemGroup>
 
+  <!-- The debug block test runner's tests (scenario save, reference craft, test.cfg, test.ks), also inside the DLL. -->
+  <ItemGroup>
+    <BlockTestFile Include="$(RepoRoot)tests/blocks/*/*" />
+    <EmbeddedResource Include="@(BlockTestFile)" LogicalName="ClaudiaKermin.KOS.blocktests.$([System.IO.Path]::GetFileName($([System.IO.Path]::GetDirectoryName('%(FullPath)')))).%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <!--
     Compile-only: players get 0Harmony.dll from the community Harmony mod (HarmonyKSP 2.2.1.0),
     so the reference is pinned to the same version.

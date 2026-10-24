@@ -41,6 +41,18 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         [Fact]
+        public void Every_block_test_script_compiles_bundled_with_the_library()
+        {
+            var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "ClaudiaKermin.sln"))) dir = dir.Parent;
+            Assert.NotNull(dir);
+            var scripts = System.IO.Directory.GetFiles(System.IO.Path.Combine(dir.FullName, "tests", "blocks"), "test.ks", System.IO.SearchOption.AllDirectories);
+            Assert.NotEmpty(scripts);
+            foreach (var script in scripts)
+                Assert.True(KosHarness.CompileError(CoreLibrary.Bundle(System.IO.File.ReadAllText(script), 1, 10800)) == null, script);
+        }
+
+        [Fact]
         public void A_mission_script_can_call_the_library_and_read_the_wait_caps()
         {
             var bundle = CoreLibrary.Bundle("@lazyglobal off.\nprint claudia_config():wait_cap_orbits.\nprint claudia_config():wait_cap_ground_s.", 1.5, 7200);
