@@ -44,7 +44,7 @@ While Claudia's programs run, runtime guards block the most harmful calls. Your 
 
 - Kerbal Space Program **1.12.5** on **macOS**. Windows and Linux are untested and planned for a later release.
 - [kOS](https://github.com/KSP-KOS/KOS) 1.6 or later.
-- Harmony, the community KSP build.
+- [HarmonyKSP](https://github.com/KSPModdingLibs/HarmonyKSP) 2.2.1 (the community Harmony build for KSP, installed as `GameData/000_Harmony`).
 - ModuleManager (optional), for the compatibility patches.
 - Your own **Anthropic API key**.
 
@@ -72,7 +72,7 @@ You need the .NET 10 SDK. The adapter and kOS addon compile against your own KSP
 | Core tests (no KSP needed) | `dotnet test tests/ClaudiaKermin.Core.Tests` |
 | Kerboscript compile check (needs only kOS.Safe) | `dotnet run --project tools/ClaudiaKermin.KsCompile -p:KSPRoot=/path/to/KSP -- kerboscript` |
 
-A failing test or a kerboscript compile error exits non-zero. A build stages the mod in `dist/GameData/ClaudiaKermin/`. To install it, copy that folder into your KSP `GameData` folder, next to kOS and Harmony. kOS and Harmony are dependencies you install yourself; they are never bundled.
+A failing test or a kerboscript compile error exits non-zero. A build stages the mod in `dist/GameData/ClaudiaKermin/`. To install it, copy that folder into your KSP `GameData` folder, next to kOS and HarmonyKSP. kOS and HarmonyKSP are dependencies you install yourself; they are never bundled.
 
 The layout follows [ADR 0001](docs/adr/0001-single-in-process-ksp-mod.md):
 
