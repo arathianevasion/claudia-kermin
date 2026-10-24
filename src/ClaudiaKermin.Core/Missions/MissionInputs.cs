@@ -137,6 +137,34 @@ namespace ClaudiaKermin.Core.Missions
     {
     }
 
+    /// <summary>
+    /// The Manual Control button. A running script is aborted and the craft made safe first; the controls are then
+    /// the player's until <see cref="HandBack"/>. Refused without a link or other non-Tourist crew aboard.
+    /// </summary>
+    public sealed class TakeManualControl : MissionInput
+    {
+    }
+
+    /// <summary>
+    /// The adapter saw attitude, translation or throttle input held for <see cref="Seconds"/> without a break.
+    /// The core decides: held over <c>PlayerConfig.ManualHoldSeconds</c> starts Manual Control as the button does.
+    /// </summary>
+    public sealed class ManualInputHeld : MissionInput
+    {
+        public readonly double Seconds;
+        public ManualInputHeld(double seconds) { Seconds = seconds; }
+    }
+
+    /// <summary>
+    /// Hand back to Claudia, with an optional message about what the player did. Claudia Debriefs the stretch (judged for
+    /// a planned stretch, a plain account for Manual Control nobody planned) and revises the Mission Plan for Approval.
+    /// </summary>
+    public sealed class HandBack : MissionInput
+    {
+        public readonly string Message;
+        public HandBack(string message) { Message = message; }
+    }
+
     /// <summary>The debug capture button: writes the latest Game Snapshot to the save's <c>ClaudiaKermin/snapshots</c> folder.</summary>
     public sealed class CaptureSnapshot : MissionInput
     {

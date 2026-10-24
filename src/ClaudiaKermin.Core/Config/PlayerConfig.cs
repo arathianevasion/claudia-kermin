@@ -53,6 +53,12 @@ namespace ClaudiaKermin.Core.Config
         /// <summary>How much more delta-v a late Approval may cost (the next window against the planned one) before Claudia re-plans, in percent.</summary>
         public int LateApprovalToleranceDvPercent = 10;
 
+        /// <summary>How long attitude, translation or throttle input must be held, in seconds, before it starts Manual Control.</summary>
+        public double ManualHoldSeconds = 1;
+
+        /// <summary>How far the craft may drift from the pending plan's baseline, in percent, before Approve turns into Re-plan.</summary>
+        public int ReplanTolerancePercent = 15;
+
         public string DefaultModel
         {
             get { return Models[0]; }
@@ -84,7 +90,11 @@ namespace ClaudiaKermin.Core.Config
             + "daylight_landing = true\n"
             + "time_vs_dv = Balanced\n"
             + "# How much more delta-v, in percent, a late Approval may cost before Claudia re-plans instead of taking the next window.\n"
-            + "late_approval_dv_tolerance = 10\n";
+            + "late_approval_dv_tolerance = 10\n"
+            + "# Seconds attitude, translation or throttle input must be held to start Manual Control.\n"
+            + "manual_hold_s = 1\n"
+            + "# How far, in percent, the craft may change from a pending plan before Approve becomes Re-plan.\n"
+            + "replan_tolerance = 15\n";
 
         /// <summary>Loads the file, writing it with defaults first if it does not exist.</summary>
         public static PlayerConfig LoadOrCreate(string directory)
@@ -145,6 +155,16 @@ namespace ClaudiaKermin.Core.Config
                         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out orbits) && orbits > 0)
                             config.WaitCapOrbits = orbits;
                         break;
+                    case "manual_hold_s":
+                        double hold;
+                        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out hold) && hold > 0)
+                            config.ManualHoldSeconds = hold;
+                        break;
+                    case "replan_tolerance":
+                        int tolerance;
+                        if (int.TryParse(value.TrimEnd('%'), NumberStyles.Integer, CultureInfo.InvariantCulture, out tolerance) && tolerance >= 0 && tolerance <= 200)
+                            config.ReplanTolerancePercent = tolerance;
+                        break;
                     case "wait_cap_ground_s":
                         double ground;
                         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out ground) && ground > 0)
@@ -158,9 +178,9 @@ namespace ClaudiaKermin.Core.Config
                         if (Enum.TryParse(value, true, out priority)) config.DefaultTimeVersusDeltaV = priority;
                         break;
                     case "late_approval_dv_tolerance":
-                        int tolerance;
-                        if (int.TryParse(value.TrimEnd('%'), NumberStyles.Integer, CultureInfo.InvariantCulture, out tolerance) && tolerance >= 0 && tolerance <= 200)
-                            config.LateApprovalToleranceDvPercent = tolerance;
+                        int lateTolerance;
+                        if (int.TryParse(value.TrimEnd('%'), NumberStyles.Integer, CultureInfo.InvariantCulture, out lateTolerance) && lateTolerance >= 0 && lateTolerance <= 200)
+                            config.LateApprovalToleranceDvPercent = lateTolerance;
                         break;
                 }
             }

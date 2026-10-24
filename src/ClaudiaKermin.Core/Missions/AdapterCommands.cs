@@ -55,6 +55,16 @@ namespace ClaudiaKermin.Core.Missions
     {
     }
 
+    /// <summary>
+    /// Make the active craft safe with no script to abort: throttle 0 and steering held (the make-safe the abort path
+    /// uses). Issued when Claudia takes the craft back from Manual Control because the link dropped.
+    /// </summary>
+    public sealed class MakeCraftSafe : AdapterCommand
+    {
+        public readonly string Reason;
+        public MakeCraftSafe(string reason) { Reason = reason; }
+    }
+
     /// <summary>A short on-screen message, for when Claudia needs the player (a plan to approve, a Debrief).</summary>
     public sealed class PostScreenMessage : AdapterCommand
     {

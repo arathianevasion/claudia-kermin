@@ -94,7 +94,10 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is Retry || input is Resume) Retried();
             else if (input is RaiseCap) Raised(((RaiseCap)input).SpendingCap);
             else if (input is RetryWithNote) ScriptRetried(((RetryWithNote)input).Note ?? "", false);
-            else if (input is Replan) ScriptRetried(null, true);
+            else if (input is Replan) Replanned();
+            else if (input is TakeManualControl) TakeManual("the Manual Control button");
+            else if (input is ManualInputHeld) InputHeld(((ManualInputHeld)input).Seconds);
+            else if (input is HandBack) HandedBack(((HandBack)input).Message);
             else if (input is CaptureSnapshot) Capture();
             else if (input is KosRunRefused) RunRefused((KosRunRefused)input);
             else if (input is KosRunEnded) RunEnded((KosRunEnded)input);
@@ -139,7 +142,7 @@ namespace ClaudiaKermin.Core.Missions
             public CancellationTokenSource Cancel;
         }
 
-        private sealed class Mission
+        private sealed partial class Mission
         {
             public string Id;
             public string Goal;
@@ -368,6 +371,11 @@ namespace ClaudiaKermin.Core.Missions
             _snapshot = snapshot;
             _craftCheck.OnSnapshot(snapshot);
             if (snapshot.Ut > _ut) _ut = snapshot.Ut;
+            var mission = _mission;
+            if (mission == null) return;
+            // A plan restored from a save was never offered against a snapshot: the first one after the load is its baseline.
+            if (mission.AwaitingApproval && mission.PlanBaseline == null && !mission.InFlight && _scene == GameScene.Flight) mission.PlanBaseline = snapshot;
+            if (mission.Stage == MissionStage.ManualControl && !snapshot.HasLink && !snapshot.HasOtherCrew && _scene == GameScene.Flight) LinkLostDuringManual();
         }
 
         // ---- Approval ----
@@ -396,6 +404,13 @@ namespace ClaudiaKermin.Core.Missions
         private void Approval()
         {
             var mission = _mission;
+            // Approve is Re-plan once the craft has changed beyond the plan's tolerances: a stale plan never runs.
+            var stale = StaleBecause(mission);
+            if (stale.Length > 0)
+            {
+                Note(LogKind.Notice, "The craft has changed since this plan was made (" + stale + "). Re-plan instead.");
+                return;
+            }
             if (mission.Stage == MissionStage.AwaitingPlanApproval)
             {
                 Note(LogKind.Notice, "Mission Plan approved.");
@@ -420,6 +435,11 @@ namespace ClaudiaKermin.Core.Missions
                 return;
             }
             if (WindowMissed(plan) && !TakeNextWindow(mission, plan)) return;
+            if (plan.Manual)
+            {
+                StartPlannedManual(mission, plan);
+                return;
+            }
             var processor = _craftCheck.ProcessorFor(_snapshot);
             if (!processor.HasValue)
             {
@@ -932,7 +952,8 @@ namespace ClaudiaKermin.Core.Missions
                     // A Mission Plan with no sequences is valid: it is how Claudia declines a goal that can't be flown.
                     return reply.MissionPlan == null ? "no Mission Plan" : null;
                 case Purpose.SequencePlan:
-                    return reply.SequencePlan == null || reply.SequencePlan.Script.Trim().Length == 0 ? "no Sequence Plan with a script" : null;
+                    // A manual stretch has no script: the player flies it.
+                    return reply.SequencePlan == null || (reply.SequencePlan.Script.Trim().Length == 0 && !reply.SequencePlan.Manual) ? "no Sequence Plan with a script" : null;
                 case Purpose.Debrief:
                     return reply.Debrief == null ? "no Debrief" : null;
                 default:
@@ -994,7 +1015,8 @@ namespace ClaudiaKermin.Core.Missions
         private static SequencePlan SequenceOffered(Purpose purpose, MissionReply reply, bool planPending)
         {
             var plan = reply.SequencePlan;
-            if (plan == null || plan.Script.Trim().Length == 0) return null;
+            // A manual stretch has no script to check.
+            if (plan == null || plan.Manual || plan.Script.Trim().Length == 0) return null;
             switch (purpose)
             {
                 case Purpose.SequencePlan:
@@ -1092,12 +1114,13 @@ namespace ClaudiaKermin.Core.Missions
         private void Revised(Mission mission, MissionReply reply, bool planPending)
         {
             if (planPending && reply.MissionPlan != null) OfferMissionPlan(mission, reply.MissionPlan);
-            else if (!planPending && reply.SequencePlan != null && reply.SequencePlan.Script.Trim().Length > 0) OfferSequencePlan(mission, reply.SequencePlan);
+            else if (!planPending && reply.SequencePlan != null && (reply.SequencePlan.Manual || reply.SequencePlan.Script.Trim().Length > 0)) OfferSequencePlan(mission, reply.SequencePlan);
         }
 
         private void OfferMissionPlan(Mission mission, MissionPlan plan)
         {
             mission.Plan = plan;
+            mission.PlanBaseline = _snapshot;
             mission.Stage = MissionStage.AwaitingPlanApproval;
             if (plan.Sequences.Count == 0)
             {
@@ -1109,7 +1132,7 @@ namespace ClaudiaKermin.Core.Missions
             for (var i = 0; i < plan.Sequences.Count; i++)
             {
                 var s = plan.Sequences[i];
-                body.Append(i + 1).Append(". ").Append(s.Name).Append(": ").Append(s.Intent)
+                body.Append(i + 1).Append(". ").Append(s.Name).Append(s.Manual ? " [you fly this by hand]" : "").Append(": ").Append(s.Intent)
                     .Append(" (").Append(MetresPerSecond(s.DeltaV)).Append(", ").Append(s.Timing);
                 if (s.DueTimeUt.HasValue) body.Append("; Due Time ").Append(MissionClock.Ut(s.DueTimeUt.Value));
                 body.Append(")\n");
@@ -1129,6 +1152,7 @@ namespace ClaudiaKermin.Core.Missions
                 mission.SequenceCounted = true;
             }
             mission.PendingSequence = plan;
+            mission.PlanBaseline = _snapshot;
             mission.Stage = MissionStage.AwaitingSequenceApproval;
             var body = new StringBuilder();
             if (plan.DueTimeUt.HasValue)
@@ -1140,6 +1164,7 @@ namespace ClaudiaKermin.Core.Missions
                 mission.DueNotified = plan.DueTimeUt.Value <= _ut;
             }
             else mission.DueNotified = false;
+            if (plan.Manual) body.Append("Manual stretch: you fly this one by hand; Approve gives you the controls.\n");
             body.Append(plan.Intent).Append('\n')
                 .Append("Target: ").Append(plan.Target).Append(" (tolerances: ").Append(plan.Tolerances).Append(")\n")
                 .Append("Expected: ").Append(MetresPerSecond(plan.ExpectedDeltaV)).Append(", ")
@@ -1156,6 +1181,12 @@ namespace ClaudiaKermin.Core.Missions
         private void Debriefed(Mission mission, MissionReply reply)
         {
             var debrief = reply.Debrief;
+            // The Debrief of a manual stretch ends it: a revised Mission Plan follows, not the next Sequence Plan.
+            var handedBack = mission.HandBack;
+            mission.HandBack = false;
+            mission.ManualPlanned = false;
+            mission.ManualOrigin = "";
+            mission.HandBackMessage = "";
             var entry = AddCard(mission, LogKind.Debrief, "Debrief: " + debrief.Outcome,
                 debrief.WhatHappened + (debrief.Next.Length > 0 ? "\nNext: " + debrief.Next : ""), debrief.Why);
             entry.Outcome = debrief.Outcome;
@@ -1173,6 +1204,11 @@ namespace ClaudiaKermin.Core.Missions
                 mission.Stage = MissionStage.Ended;
                 Note(LogKind.Notice, "The Mission Goal can't be reached as stated: the Mission has ended.");
                 RecordFinished(mission);
+                return;
+            }
+            if (handedBack)
+            {
+                RevisePlanAfterHandBack(mission);
                 return;
             }
             mission.Stage = MissionStage.Sequencing;
@@ -1486,7 +1522,16 @@ namespace ClaudiaKermin.Core.Missions
                         VesselName = mission.VesselName,
                     };
                 }
-                if (mission.Stage == MissionStage.Paused && !mission.InFlight)
+                view.Locks = LocksNow();
+                view.ManualControlAllowed = ManualAllowed;
+                view.PlanStale = StaleBecause(mission);
+                if (mission.Stage == MissionStage.ManualControl)
+                    view.QuickReplies = new List<QuickReply> { QuickReply.HandBack };
+                else if (mission.Stage == MissionStage.Running)
+                {
+                    if (CanTakeManual && ManualAllowed) view.QuickReplies = new List<QuickReply> { QuickReply.ManualControl };
+                }
+                else if (mission.Stage == MissionStage.Paused && !mission.InFlight)
                     view.QuickReplies = mission.PausedForCap
                         ? new List<QuickReply> { QuickReply.RaiseCap, QuickReply.EndMission }
                         : new List<QuickReply> { mission.AwaitingResume || mission.EvaScience.Length > 0 ? QuickReply.Resume : QuickReply.Retry };
@@ -1494,6 +1539,8 @@ namespace ClaudiaKermin.Core.Missions
                     view.QuickReplies = new List<QuickReply> { QuickReply.Retry, QuickReply.RetryWithNote, QuickReply.Replan };
                 else if (mission.Declined && !mission.InFlight)
                     view.QuickReplies = new List<QuickReply> { QuickReply.ChangeSomething, QuickReply.EndMission };
+                else if (mission.AwaitingApproval && !mission.InFlight && view.PlanStale.Length > 0)
+                    view.QuickReplies = new List<QuickReply> { QuickReply.Replan, QuickReply.ChangeSomething, QuickReply.AskQuestion };
                 else if (mission.AwaitingApproval && !mission.InFlight)
                 {
                     // Before the Due Time: Warp to Due Time instead of Approve. At it, away from the vessel: Go to the vessel first.

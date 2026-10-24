@@ -120,6 +120,13 @@ namespace ClaudiaKermin.Adapter
                 case QuickReply.Replan: _send(new Replan()); break;
                 case QuickReply.WarpToDueTime: _send(new WarpToDueTime()); break;
                 case QuickReply.GoToVessel: _send(new GoToVessel()); break;
+                case QuickReply.ManualControl: _send(new TakeManualControl()); break;
+                case QuickReply.HandBack:
+                    // Whatever is in the reply box goes with it as the optional message about what the player did.
+                    _send(new HandBack(_typed));
+                    _typed = "";
+                    _typingFor = TypingFor.Reply;
+                    break;
                 case QuickReply.RetryWithNote:
                     _typingFor = TypingFor.Note;
                     Visible = true;
@@ -164,6 +171,8 @@ namespace ClaudiaKermin.Adapter
                 case QuickReply.Replan: return "Re-plan";
                 case QuickReply.WarpToDueTime: return "Warp to Due Time";
                 case QuickReply.GoToVessel: return "Go to vessel";
+                case QuickReply.ManualControl: return "Manual Control";
+                case QuickReply.HandBack: return "Hand back to Claudia";
                 default: return "Retry";
             }
         }
@@ -570,7 +579,9 @@ namespace ClaudiaKermin.Adapter
             var awaiting = View.Stage == MissionStage.AwaitingPlanApproval || View.Stage == MissionStage.AwaitingSequenceApproval;
             var unsafeScript = View.Stage == MissionStage.UnsafeScript;
             if (!awaiting && _typingFor != TypingFor.Question && !(unsafeScript && _typingFor == TypingFor.Note)) _typingFor = TypingFor.Reply;
-            GUILayout.Label(_typingFor == TypingFor.Change ? "What should change?"
+            var manual = View.Stage == MissionStage.ManualControl;
+            GUILayout.Label(manual ? "Ask Claudia, or write what you did and Hand back:"
+                : _typingFor == TypingFor.Change ? "What should change?"
                 : _typingFor == TypingFor.Note ? "Note for Claudia's retry:"
                 : _typingFor == TypingFor.Question || !awaiting ? "Ask Claudia:" : "Reply to Claudia:");
 
@@ -613,6 +624,7 @@ namespace ClaudiaKermin.Adapter
                 case MissionStage.Lost: return "Mission Lost (Claudia was killed aboard)";
                 case MissionStage.Paused: return "Paused: " + view.PauseReason;
                 case MissionStage.UnsafeScript: return "Couldn't produce a safe script";
+                case MissionStage.ManualControl: return "Manual Control: you have the controls";
                 default: return "";
             }
         }

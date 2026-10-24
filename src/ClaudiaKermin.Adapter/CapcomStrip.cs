@@ -85,6 +85,9 @@ namespace ClaudiaKermin.Adapter
 
             var status = View.RunStatus.Length > 0 ? View.RunStatus : MissionWindow.StageText(View);
             if (View.ConfirmPrompt != null) status = View.ConfirmPrompt;
+            if (View.PlanStale.Length > 0) status += " | The craft has changed (" + View.PlanStale + "): Re-plan.";
+            else if (View.Stage == MissionStage.Running && !View.ManualControlAllowed) status += " | Manual Control unavailable: no link, no other crew aboard.";
+            else if (View.Locks != ControlLocks.None) status += " | Staging, groups, SAS, RCS, gear and brakes are locked while Claudia flies.";
             GUILayout.Label(status, _wrap);
             GUILayout.EndVertical();
             GUILayout.EndHorizontal();

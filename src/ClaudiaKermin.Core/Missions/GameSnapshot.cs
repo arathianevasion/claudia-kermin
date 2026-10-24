@@ -127,6 +127,12 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The game's bodies, for the Delta-v Map and thrust over weight.</summary>
         public List<SnapshotBody> Bodies = new List<SnapshotBody>();
 
+        /// <summary>Crew aboard other than Claudia herself and Tourists: the Kerbals who could really fly the craft.</summary>
+        public bool HasOtherCrew
+        {
+            get { return Crew.Any(c => c.Trait != Roster.ClaudiaIdentity.TraitName && c.Trait != "Tourist"); }
+        }
+
         /// <summary>The kOS processor Claudia would use: the one nearest the root. Null if the craft has none.</summary>
         public uint? ProcessorPartId
         {

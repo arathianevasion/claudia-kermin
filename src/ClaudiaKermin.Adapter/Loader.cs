@@ -93,6 +93,7 @@ namespace ClaudiaKermin.Adapter
             _chatWindow.Unlock();
             _missions.Window.Unlock();
             _missions.Strip.Unlock();
+            _missions.Locks.Release();
         }
 
         private void Update()

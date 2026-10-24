@@ -179,6 +179,27 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ManualStretchesWithNoOtherCrewAreAWarningClaudiaJudgesFromTheCrewList()
+        {
+            var transport = Replies("craft-check-manual-no-crew.sse");
+            var mission = Checked(transport);
+
+            // The rule says who counts as other crew: not Claudia, not Tourists. The crew list is in the facts.
+            var system = SystemText(transport.Requests.Single());
+            Assert.Contains("manual_stretches_without_crew", system);
+            Assert.Contains("SuperIntelligence", system);
+            Assert.Contains("Tourist", system);
+            Assert.Contains("\"trait\":\"SuperIntelligence\"", UserFacts(transport.Requests.Single()));
+
+            var finding = Assert.Single(mission.View.CraftCheck.Findings);
+            Assert.Equal("manual_stretches_without_crew", finding.Code);
+            Assert.Equal(CraftFindingSeverity.Warning, finding.Severity);
+            Assert.False(mission.View.CraftCheck.StartAllowed);
+            mission.Send(new AcknowledgeWarning("manual_stretches_without_crew"));
+            Assert.True(mission.View.CraftCheck.StartAllowed);
+        }
+
+        [Fact]
         public void RunningTheSameCheckAgainKeepsTheWarningsAlreadyAcknowledged()
         {
             var mission = Checked(Replies("craft-check-warnings.sse", "craft-check-warnings.sse"));
