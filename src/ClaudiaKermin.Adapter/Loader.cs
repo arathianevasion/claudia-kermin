@@ -7,6 +7,7 @@ using ClaudiaKermin.Core.Chat;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Config;
 using KSP.UI.Screens;
+using MissionControl = ClaudiaKermin.Core.Missions.MissionControl;
 using UnityEngine;
 
 namespace ClaudiaKermin.Adapter
@@ -33,8 +34,10 @@ namespace ClaudiaKermin.Adapter
         private readonly Background _background = new Background(Debug.LogException);
         private SettingsWindow _window;
         private ChatWindow _chatWindow;
+        private MissionDriver _missions;
         private ApplicationLauncherButton _button;
         private ApplicationLauncherButton _chatButton;
+        private ApplicationLauncherButton _missionButton;
 
         private void Awake()
         {
@@ -49,8 +52,16 @@ namespace ClaudiaKermin.Adapter
 
             // Raw stream dumps are a debug tool: offered only with debug_tools = true in the player config.
             var dumpFolder = config.DebugTools ? Path.Combine(directory, "stream-dumps") : null;
-            var chat = new ChatSession(client, _background, () => store.Load() != null);
+            var chat = new ChatSession(client, _background, () => store.Load() != null)
+            {
+                Model = config.DefaultModel,
+                CompactionTriggerTokens = config.CompactionTriggerTokens,
+            };
             _chatWindow = new ChatWindow(chat, dumpFolder);
+
+            // Missions dump raw streams into their own Mission folder when debug_tools is on.
+            var missions = new MissionControl(client, _background, config, () => store.Load() != null);
+            _missions = new MissionDriver(missions, config.DebugTools);
 
             GameEvents.onGUIApplicationLauncherReady.Add(AddButtons);
             GameEvents.onGUIApplicationLauncherDestroyed.Add(RemoveButtons);
@@ -68,17 +79,31 @@ namespace ClaudiaKermin.Adapter
             GameEvents.onGameSceneLoadRequested.Remove(SceneChanging);
             RemoveButtons();
             _chatWindow.Unlock();
+            _missions.Window.Unlock();
         }
 
         private void Update()
         {
             _background.Drain();
+            _missions.Update();
+
+            // "Show log" on the Capcom strip also opens and closes the Mission window: keep its button in step.
+            if (_missionButton != null)
+            {
+                var pressed = _missionButton.toggleButton.CurrentState == KSP.UI.UIRadioButton.State.True;
+                if (_missions.Window.Visible && !pressed) _missionButton.SetTrue(false);
+                else if (!_missions.Window.Visible && pressed) _missionButton.SetFalse(false);
+            }
         }
 
         private void OnGUI()
         {
             _window.OnGUI();
-            if (ChatSceneLoaded()) _chatWindow.OnGUI();
+            if (ChatSceneLoaded())
+            {
+                _chatWindow.OnGUI();
+                _missions.OnGUI();
+            }
         }
 
         private static bool ChatSceneLoaded()
@@ -89,14 +114,18 @@ namespace ClaudiaKermin.Adapter
         private void HideUI()
         {
             _chatWindow.UiHidden = true;
+            _missions.Window.UiHidden = true;
+            _missions.Strip.UiHidden = true;
         }
 
         private void ShowUI()
         {
             _chatWindow.UiHidden = false;
+            _missions.Window.UiHidden = false;
+            _missions.Strip.UiHidden = false;
         }
 
-        // The chat keeps running across the change; only the keyboard lock is released.
+        // The chat and the Mission keep running across the change; only the keyboard locks are released.
         // The settings window closes: the buttons are removed here and rebuilt unpressed when the launcher is
         // ready in the next scene, or not at all if that scene doesn't allow them.
         private void SceneChanging(GameScenes scene)
@@ -105,6 +134,9 @@ namespace ClaudiaKermin.Adapter
             _window.Visible = false;
             _chatWindow.Unlock();
             _chatWindow.UiHidden = false;
+            _missions.Window.Unlock();
+            _missions.Window.UiHidden = false;
+            _missions.Strip.UiHidden = false;
         }
 
         private static bool SettingsSceneLoaded()
@@ -128,6 +160,14 @@ namespace ClaudiaKermin.Adapter
                     null, null, null, null, ChatScenes, MakeIcon(new Color(0.25f, 0.6f, 0.85f, 1f)));
                 if (_chatWindow.Visible) _chatButton.SetTrue(false);
             }
+            if (ChatSceneLoaded())
+            {
+                var window = _missions.Window;
+                _missionButton = ApplicationLauncher.Instance.AddModApplication(
+                    () => window.Visible = true, () => window.Visible = false,
+                    null, null, null, null, ChatScenes, MakeIcon(new Color(0.3f, 0.75f, 0.35f, 1f)));
+                if (window.Visible) _missionButton.SetTrue(false);
+            }
         }
 
         private void RemoveButtons()
@@ -136,12 +176,14 @@ namespace ClaudiaKermin.Adapter
             {
                 if (_button != null) ApplicationLauncher.Instance.RemoveModApplication(_button);
                 if (_chatButton != null) ApplicationLauncher.Instance.RemoveModApplication(_chatButton);
+                if (_missionButton != null) ApplicationLauncher.Instance.RemoveModApplication(_missionButton);
             }
             _button = null;
             _chatButton = null;
+            _missionButton = null;
         }
 
-        // Plain placeholder tiles (orange: settings, blue: chat); real artwork is a later ticket.
+        // Plain placeholder tiles (orange: settings, blue: chat, green: Mission); real artwork is a later ticket.
         private static Texture2D MakeIcon(Color color)
         {
             var icon = new Texture2D(38, 38, TextureFormat.ARGB32, false);

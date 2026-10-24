@@ -49,6 +49,19 @@ namespace ClaudiaKermin.Core.Claude
             return node != null && node.Kind == JsonKind.String ? node.StringValue : null;
         }
 
+        /// <summary>The number's value, or null for anything that is not a JSON number.</summary>
+        public static double? Double(JsonNode node)
+        {
+            double value;
+            if (node == null || node.Kind != JsonKind.Number) return null;
+            return double.TryParse(node.Raw, NumberStyles.Float, CultureInfo.InvariantCulture, out value) ? value : (double?)null;
+        }
+
+        public static bool? Bool(JsonNode node)
+        {
+            return node != null && node.Kind == JsonKind.Bool ? node.BoolValue : (bool?)null;
+        }
+
         /// <summary>The integer value, or null for anything that is not a whole JSON number.</summary>
         public static long? Long(JsonNode node)
         {
@@ -290,6 +303,18 @@ namespace ClaudiaKermin.Core.Claude
 
         public JsonWriter Number(long value) { Separate(); _out.Append(value.ToString(CultureInfo.InvariantCulture)); return this; }
         public JsonWriter Bool(bool value) { Separate(); _out.Append(value ? "true" : "false"); return this; }
+
+        /// <summary>Round-trippable; NaN and infinities (which JSON can't hold) are written as null.</summary>
+        public JsonWriter Number(double value)
+        {
+            Separate();
+            if (double.IsNaN(value) || double.IsInfinity(value)) _out.Append("null");
+            else _out.Append(value.ToString("R", CultureInfo.InvariantCulture));
+            return this;
+        }
+
+        public JsonWriter Field(string name, double value) { return Name(name).Number(value); }
+        public JsonWriter Null() { Separate(); _out.Append("null"); return this; }
 
         /// <summary>Writes already-encoded JSON text exactly as given.</summary>
         public JsonWriter Raw(string json) { Separate(); _out.Append(json); return this; }
