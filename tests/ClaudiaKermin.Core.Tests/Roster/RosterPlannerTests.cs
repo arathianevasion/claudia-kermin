@@ -229,14 +229,16 @@ namespace ClaudiaKermin.Core.Tests.Roster
             var revert = Single(actions, RosterActionType.RevertName);
             Assert.Equal("Clod Kerman", revert.Target);
             Assert.Equal(ClaudiaIdentity.Name, revert.NewName);
-            Assert.Equal("Clod Kerman", Single(actions, RosterActionType.Respawn).Target);
+            // Actions are applied in order, so after the revert she is already back under her own name.
+            Assert.Equal(ClaudiaIdentity.Name, Single(actions, RosterActionType.Respawn).Target);
         }
 
         [Fact]
-        public void ADeadRenamedClaudiaIsSetMissingByHerCurrentName()
+        public void ADeadRenamedClaudiaIsSetMissingUnderTheNameTheRevertRestores()
         {
             var actions = Plan(new RosterState(), Crew("Jebediah Kerman"), Claudia(KerbalStanding.Dead, "Clod Kerman"));
-            Assert.Equal("Clod Kerman", Single(actions, RosterActionType.SetMissing).Target);
+            Assert.Equal("Clod Kerman", Single(actions, RosterActionType.RevertName).Target);
+            Assert.Equal(ClaudiaIdentity.Name, Single(actions, RosterActionType.SetMissing).Target);
         }
 
         [Fact]
