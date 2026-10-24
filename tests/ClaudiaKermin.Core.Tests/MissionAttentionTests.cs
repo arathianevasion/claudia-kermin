@@ -45,7 +45,7 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Null(watch.Observe(mission.View));
 
             var deadline = DateTime.UtcNow.AddSeconds(10);
-            while (mission.View.Stage != MissionStage.AwaitingPlanApproval && DateTime.UtcNow < deadline)
+            while ((mission.View.Stage != MissionStage.AwaitingPlanApproval || mission.View.Busy) && DateTime.UtcNow < deadline)
             {
                 _background.Drain();
                 Thread.Sleep(2);

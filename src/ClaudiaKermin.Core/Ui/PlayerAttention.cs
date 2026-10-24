@@ -74,20 +74,22 @@ namespace ClaudiaKermin.Core.Ui
         }
 
         /// <summary>A key for what the player is being waited on for, "" when nothing: it changes with each new plan or pause.</summary>
-        private static string Waiting(MissionView view)
+        private string Waiting(MissionView view)
         {
-            if (view.Busy) return "";
             switch (view.Stage)
             {
                 case MissionStage.AwaitingPlanApproval:
                 case MissionStage.AwaitingSequenceApproval:
+                    // A question asked meanwhile hides the quick replies; it is the same wait, so no new alert.
+                    if (view.Busy) return _waiting.StartsWith("approval:", System.StringComparison.Ordinal) ? _waiting : "";
                     // A declined goal has no plan to approve; the card count tells one plan from the next.
                     return view.QuickReplies.Contains(QuickReply.Approve) || view.QuickReplies.Contains(QuickReply.ConfirmApproval)
                         ? "approval:" + view.Log.Count(e => e.Kind == LogKind.MissionPlan || e.Kind == LogKind.SequencePlan) + ":" + view.Stage
                         : "";
                 case MissionStage.Paused:
                 case MissionStage.UnsafeScript:
-                    return "pause:" + view.Stage + ":" + view.Log.Count + ":" + view.PauseReason;
+                    // Leaving the Paused stage (a Retry) clears the key, so a Pause that comes back alerts again.
+                    return "pause:" + view.Stage + ":" + view.PauseReason;
                 default:
                     return "";
             }

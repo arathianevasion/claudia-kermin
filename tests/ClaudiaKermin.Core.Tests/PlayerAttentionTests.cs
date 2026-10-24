@@ -130,6 +130,33 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AQuestionAskedWhileWaitingDoesNotAlertAgainWhenClaudiaAnswers()
+        {
+            var watch = new AttentionWatch();
+            watch.Observe(View(MissionStage.Planning));
+            var plan = Card(LogKind.SequencePlan);
+            Assert.NotNull(watch.Observe(Awaiting(plan)));
+            var asking = Awaiting(plan);
+            asking.Busy = true;
+            asking.QuickReplies = new List<QuickReply>();
+            Assert.Null(watch.Observe(asking));
+            Assert.Null(watch.Observe(Awaiting(plan, new LogEntry { Kind = LogKind.Claudia })));
+        }
+
+        [Fact]
+        public void LogGrowingWhilePausedDoesNotAlertAgain()
+        {
+            var watch = new AttentionWatch();
+            watch.Observe(View(MissionStage.Running));
+            var paused = View(MissionStage.Paused);
+            paused.PauseReason = "No network";
+            Assert.NotNull(watch.Observe(paused));
+            var later = View(MissionStage.Paused, new LogEntry { Kind = LogKind.Player });
+            later.PauseReason = "No network";
+            Assert.Null(watch.Observe(later));
+        }
+
+        [Fact]
         public void ACouldntProduceASafeScriptIsAPause()
         {
             var watch = new AttentionWatch();

@@ -108,7 +108,7 @@ namespace ClaudiaKermin.Adapter
                 else if (!_missions.Window.Visible && pressed) _missionButton.SetFalse(false);
 
                 // Claudia needs the player and the window is closed: the button flashes between its two tiles.
-                var bright = _missions.Alerting && Mathf.FloorToInt(Time.realtimeSinceStartup * 2f) % 2 == 0;
+                var bright = _missions.Flashing && Mathf.FloorToInt(Time.realtimeSinceStartup * 2f) % 2 == 0;
                 if (bright != _missionBright)
                 {
                     _missionBright = bright;

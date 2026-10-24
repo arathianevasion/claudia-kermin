@@ -85,7 +85,7 @@ namespace ClaudiaKermin.Core.Missions
         public string Outcome = "";
         /// <summary>The model that answered, when a fallback model served the reply; "" otherwise.</summary>
         public string AnsweredBy = "";
-        /// <summary>The universal time the entry was made; 0 when none had been reported yet (or the entry predates a load).</summary>
+        /// <summary>The universal time the entry was made; stamped when the entry first reaches a view (so an entry from before a load reads as the load time); 0 until a UT has been reported.</summary>
         public double Ut;
     }
 

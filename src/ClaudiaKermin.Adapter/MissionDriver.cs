@@ -34,7 +34,7 @@ namespace ClaudiaKermin.Adapter
         /// Claudia needs the player (a Debrief, an Approval or a Pause) and the Mission window was closed when
         /// she did: the toolbar button flashes until the window or the strip's log is opened.
         /// </summary>
-        public bool Alerting { get; private set; }
+        public bool Flashing { get; private set; }
 
         /// <summary>The player can read Claudia now: the Mission window or the strip's log drawer is up and not hidden by F2.</summary>
         private bool Watching
@@ -175,13 +175,13 @@ namespace ClaudiaKermin.Adapter
                 if (message != null && attention == null && !Watching)
                     ScreenMessages.PostScreenMessage(message.Text, 6f, ScreenMessageStyle.UPPER_CENTER);
             }
-            if (attention != null) Alert(attention);
+            if (attention != null) NotifyPlayer(attention);
         }
 
         /// <summary>The new moment Claudia needs the player in the latest view, if the window is closed for it; null otherwise.</summary>
         private Attention WatchAttention()
         {
-            if (Watching) Alerting = false;
+            if (Watching) Flashing = false;
             var view = _mission.View;
             if (view.Version == _watchedVersion) return null;
             _watchedVersion = view.Version;
@@ -190,9 +190,9 @@ namespace ClaudiaKermin.Adapter
         }
 
         // Closed window: flash the toolbar button, say it on screen, and drop to 1x so the player isn't warped past it.
-        private void Alert(Attention attention)
+        private void NotifyPlayer(Attention attention)
         {
-            Alerting = true;
+            Flashing = true;
             ScreenMessages.PostScreenMessage(attention.Text, 6f, ScreenMessageStyle.UPPER_CENTER);
             if (TimeWarp.fetch != null && TimeWarp.CurrentRateIndex > 0) TimeWarp.SetRate(0, true);
         }
