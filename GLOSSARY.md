@@ -24,6 +24,10 @@ _Avoid_: trait (alone), class, profession
 The player's plain-language statement of what a mission must achieve, e.g. "Land on the Mun, run 3 experiments, return to Kerbin."
 _Avoid_: objective, prompt, task
 
+**Mission Settings**:
+The player's choices for how Claudia meets a Mission Goal (e.g. daylight landing, time versus delta-v), set when the Mission starts and editable later; changing one makes Claudia revise the Mission Plan.
+_Avoid_: mission parameters, options (which are Building Block settings)
+
 **Craft Check**:
 Claudia's assessment of whether a player-supplied craft can achieve a Mission Goal.
 _Avoid_: validation, craft verification
@@ -45,11 +49,15 @@ One self-contained stretch of flight that Claudia plans and kOS executes in a si
 _Avoid_: step, phase, maneuver (alone), burn
 
 **Mission Plan**:
-The ordered list of Maneuver Sequences Claudia intends to fly to reach a Mission Goal, each with its delta-v budget and rough timing; approved once to start the Mission and revised as Debriefs require.
+The ordered list of Maneuver Sequences Claudia intends to fly to reach a Mission Goal, each with its delta-v budget and Due Time or rough timing; approved once to start the Mission and revised as Debriefs require.
 _Avoid_: flight plan, roadmap
 
+**Due Time**:
+The earliest time a Maneuver Sequence may start, set in its Sequence Plan when a wait is too long to sit inside the sequence; the player may fly elsewhere until then.
+_Avoid_: window (which is a transfer window), scheduled time
+
 **Sequence Plan**:
-Claudia's proposal for the next Maneuver Sequence: its intent, Building Blocks and settings, target outcome with tolerances, expected delta-v and duration, abort conditions, Telemetry Checks and risks.
+Claudia's proposal for the next Maneuver Sequence: its intent, Building Blocks and settings, Due Time, target outcome with tolerances, expected delta-v and duration, abort conditions, Telemetry Checks and risks.
 _Avoid_: maneuver plan, proposal, step plan
 
 **Telemetry Check**:
