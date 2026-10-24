@@ -342,7 +342,8 @@ namespace ClaudiaKermin.Core.Missions
             mission.Stage = MissionStage.Running;
             mission.RunningProcessor = processor.Value;
             mission.RunId = ++_lastRunId;
-            _commands.Add(new StartScript(processor.Value, "claudia:" + mission.Id + ":" + plan.Name, plan.Script, mission.RunId.Value));
+            var bundle = CoreLibrary.Bundle(plan.Script, _config.WaitCapOrbits, _config.WaitCapGroundSeconds);
+            _commands.Add(new StartScript(processor.Value, "claudia:" + mission.Id + ":" + plan.Name, bundle, mission.RunId.Value));
         }
 
         private void Replied(string text)

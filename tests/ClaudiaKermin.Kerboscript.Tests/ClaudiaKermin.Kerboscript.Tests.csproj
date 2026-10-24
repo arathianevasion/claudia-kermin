@@ -1,0 +1,31 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  Core Library tests on kOS.Safe outside KSP (spec, Testing: seam 2). They compile the shipped
+  kerboscript and run its pure helpers on a kOS CPU with stubbed structures, so they need kOS.Safe
+  (from a local kOS install, KOSPluginsDir, or in CI from the public kOS release) but no KSP.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <NeedsKOS>true</NeedsKOS>
+    <!-- NU1702: referencing the net48 core and kOS.Safe from net10.0 is deliberate. -->
+    <NoWarn>$(NoWarn);NU1702</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="kOS.Safe" HintPath="$(KOSPluginsDir)/kOS.Safe.dll" />
+    <Reference Include="ICSharpCode.SharpZipLib" HintPath="$(KOSPluginsDir)/ICSharpCode.SharpZipLib.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/ClaudiaKermin.Core/ClaudiaKermin.Core.csproj" />
+  </ItemGroup>
+</Project>

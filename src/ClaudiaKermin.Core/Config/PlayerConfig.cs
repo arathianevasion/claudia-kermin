@@ -11,7 +11,7 @@ namespace ClaudiaKermin.Core.Config
 {
     /// <summary>
     /// The player config file (outside the save). Holds <c>debug_tools</c>, the models offered at Mission
-    /// start (the first is the default), the default Spending Cap and the compaction trigger; later tickets
+    /// start (the first is the default), the default Spending Cap, the compaction trigger and the wait caps; later tickets
     /// add the price table and the rest of the spec's settings. Format: <c>name = value</c> lines,
     /// <c>#</c> comments. A missing or unreadable value keeps its default.
     /// </summary>
@@ -36,6 +36,12 @@ namespace ClaudiaKermin.Core.Config
         /// <summary>The delta-v margin the Craft Check wants over the Delta-v Map, in percent.</summary>
         public int CraftCheckMarginPercent = 15;
 
+        /// <summary>The longest wait a Building Block sits through in orbit, in orbits; longer waits become a Due Time.</summary>
+        public double WaitCapOrbits = 1;
+
+        /// <summary>The longest wait a Building Block sits through on the ground (or with no closed orbit), in seconds.</summary>
+        public double WaitCapGroundSeconds = 10800;
+
         public string DefaultModel
         {
             get { return Models[0]; }
@@ -59,7 +65,10 @@ namespace ClaudiaKermin.Core.Config
             + "price.claude-sonnet-5 = 2, 10\n"
             + "price.claude-opus-5 = 5, 25\n"
             + "price.claude-opus-4-8 = 5, 25\n"
-            + "price.claude-fable-5-1 = 10, 50\n";
+            + "price.claude-fable-5-1 = 10, 50\n"
+            + "# Longest wait inside a Maneuver Sequence: orbits in orbit, seconds on the ground. Longer waits become a Due Time.\n"
+            + "wait_cap_orbits = 1\n"
+            + "wait_cap_ground_s = 10800\n";
 
         /// <summary>Loads the file, writing it with defaults first if it does not exist.</summary>
         public static PlayerConfig LoadOrCreate(string directory)
@@ -114,6 +123,16 @@ namespace ClaudiaKermin.Core.Config
                         int trigger;
                         if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out trigger) && trigger > 0)
                             config.CompactionTriggerTokens = trigger;
+                        break;
+                    case "wait_cap_orbits":
+                        double orbits;
+                        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out orbits) && orbits > 0)
+                            config.WaitCapOrbits = orbits;
+                        break;
+                    case "wait_cap_ground_s":
+                        double ground;
+                        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out ground) && ground > 0)
+                            config.WaitCapGroundSeconds = ground;
                         break;
                 }
             }

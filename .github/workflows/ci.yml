@@ -48,8 +48,11 @@ jobs:
       - name: Build the kerboscript compile check
         run: dotnet build tools/ClaudiaKermin.KsCompile -c Release -p:KOSPluginsDir="$KOS_PLUGINS_DIR"
 
-      - name: Compile the shipped kerboscript
-        run: dotnet run --project tools/ClaudiaKermin.KsCompile -c Release --no-build -- kerboscript
+      - name: Compile the shipped kerboscript and the block test scripts
+        run: dotnet run --project tools/ClaudiaKermin.KsCompile -c Release --no-build -- kerboscript tests/blocks
+
+      - name: Test the Core Library on kOS.Safe
+        run: dotnet test tests/ClaudiaKermin.Kerboscript.Tests -c Release -p:KOSPluginsDir="$KOS_PLUGINS_DIR"
 
       - name: Check that a syntax error fails the compile check
         run: |

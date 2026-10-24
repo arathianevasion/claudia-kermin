@@ -72,7 +72,8 @@ You need the .NET 10 SDK. The adapter and kOS addon compile against your own KSP
 | --- | --- |
 | Build everything | `dotnet build ClaudiaKermin.sln -p:KSPRoot=/path/to/KSP` |
 | Core tests (no KSP needed) | `dotnet test tests/ClaudiaKermin.Core.Tests` |
-| Kerboscript compile check (needs only kOS.Safe) | `dotnet run --project tools/ClaudiaKermin.KsCompile -p:KSPRoot=/path/to/KSP -- kerboscript` |
+| Kerboscript compile check (needs only kOS.Safe) | `dotnet run --project tools/ClaudiaKermin.KsCompile -p:KSPRoot=/path/to/KSP -- kerboscript tests/blocks` |
+| Core Library tests on kOS.Safe (no KSP needed) | `dotnet test tests/ClaudiaKermin.Kerboscript.Tests -p:KSPRoot=/path/to/KSP` |
 
 A failing test or a kerboscript compile error exits non-zero. A build stages the mod in `dist/GameData/ClaudiaKermin/`. To install it, copy that folder into your KSP `GameData` folder, next to kOS and HarmonyKSP. kOS and HarmonyKSP are dependencies you install yourself; they are never bundled.
 
@@ -84,11 +85,14 @@ The layout follows [ADR 0001](docs/adr/0001-single-in-process-ksp-mod.md):
 - Craft Check: the mod computes the facts (per-stage delta-v and thrust from the stock simulator, thrust over weight per body, the part inventory, crew, experiments and science left) into the Game Snapshot, and the core computes the Delta-v Map from the snapshot's body data. Claude judges them against the spec's fixed Blocker and Warning lists with the margin from `craft_check_margin` (percent, default 15) in the player config. The Mission board pins the result (Pass, Pass with Warnings or Fail); Start Mission is closed on a Blocker and until every Warning is acknowledged, and runs the check itself if the craft or goal changed. The craft is never edited and the delta-v app's body setting is never touched. If the stock delta-v calculations are off, the check stops and asks you to enable them. You can pick which kOS processor Claudia uses (default: nearest the root); a boot file on it is a Warning.
 - `tests/ClaudiaKermin.Core.Tests/Fixtures/streams`: hand-written, byte-exact Claude streams that the client tests replay through the real parser.
 - `GameData/ClaudiaKermin`: static mod files (the Super Intelligence trait config and icon), copied into the staged mod on build. `tools/make-trait-icon.cs` regenerates the icon.
-- `src/ClaudiaKermin.KOS`: the kOS addon (`net48`, like kOS 1.6.0.1): `ADDONS:CLAUDIA` and the kOS bridge that runs scripts on a processor. With `debug_tools = true` in the player config, a Flight window runs the test scripts in `kerboscript/debug/` through it.
+- `kerboscript/library`: the Core Library. `claudia_lib.ks` holds the shared helpers and, in its header, the conventions every Building Block follows; each block is one file named after it (`exec_node.ks`). The core embeds them (`CoreLibrary`), bundles them after each Mission Script into one compile unit, and puts their `//|` doc lines into Claudia's cached prompt layers.
+- `src/ClaudiaKermin.KOS`: the kOS addon (`net48`, like kOS 1.6.0.1): `ADDONS:CLAUDIA` and the kOS bridge that runs scripts on a processor. With `debug_tools = true` in the player config, a Flight window runs the test scripts in `kerboscript/debug/` through it, and a block test runner window (main menu, Space Center, Flight) runs the tests in `tests/blocks/`.
+- `tests/blocks/<test>`: debug block tests. Each has `test.cfg` (block, craft, orbit, timeout and the contract ranges to check), `test.ks` (the Mission Script to run), `scenario.sfs` (the save it starts from) and `reference.craft` (stock parts plus kOS, KSP 1.12.5). They ship inside the kOS addon DLL. **Run** in the runner window writes them to `saves/claudia_block_tests/`, loads that save, spawns the craft into orbit, runs the block unattended and logs PASS or FAIL to KSP.log and `saves/claudia_block_tests/block-tests.log`. Run them whenever a block changes.
 - `tests/ClaudiaKermin.Core.Tests`: the core tests.
-- `tools/ClaudiaKermin.KsCompile`: compiles the `.ks` files under `kerboscript/` with kOS.Safe outside KSP.
+- `tests/ClaudiaKermin.Kerboscript.Tests`: runs the Core Library's pure helpers on a kOS CPU from kOS.Safe, with no KSP, through the same bundle the mod starts.
+- `tools/ClaudiaKermin.KsCompile`: compiles `.ks` files with kOS.Safe outside KSP.
 
-CI (`.github/workflows/ci.yml`) runs on every push. It runs the core tests and the kerboscript compile check, taking kOS.Safe from the public kOS release.
+CI (`.github/workflows/ci.yml`) runs on every push. It runs the core tests, the Core Library tests and the kerboscript compile check, taking kOS.Safe from the public kOS release.
 
 ## Project docs
 

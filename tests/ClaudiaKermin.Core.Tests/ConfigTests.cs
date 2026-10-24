@@ -159,6 +159,28 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void PlayerConfigReadsTheWaitCapsWithOneOrbitAndThreeHoursOnTheGroundByDefault()
+        {
+            using (var dir = new TempDir())
+            {
+                var config = PlayerConfig.LoadOrCreate(dir.Sub);
+                Assert.Equal(1.0, config.WaitCapOrbits);
+                Assert.Equal(10800.0, config.WaitCapGroundSeconds);
+                Assert.Contains("wait_cap_orbits = 1", File.ReadAllText(Path.Combine(dir.Sub, PlayerConfig.FileName)));
+
+                File.WriteAllText(Path.Combine(dir.Sub, PlayerConfig.FileName), "wait_cap_orbits = 2.5\nwait_cap_ground_s = 3600\n");
+                config = PlayerConfig.LoadOrCreate(dir.Sub);
+                Assert.Equal(2.5, config.WaitCapOrbits);
+                Assert.Equal(3600.0, config.WaitCapGroundSeconds);
+
+                File.WriteAllText(Path.Combine(dir.Sub, PlayerConfig.FileName), "wait_cap_orbits = 0\nwait_cap_ground_s = soon\n");
+                config = PlayerConfig.LoadOrCreate(dir.Sub);
+                Assert.Equal(1.0, config.WaitCapOrbits);
+                Assert.Equal(10800.0, config.WaitCapGroundSeconds);
+            }
+        }
+
+        [Fact]
         public void SavingChecksTheKeyAndReportsTheResult()
         {
             using (var dir = new TempDir())

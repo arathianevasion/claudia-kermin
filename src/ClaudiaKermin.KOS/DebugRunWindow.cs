@@ -30,8 +30,8 @@ namespace ClaudiaKermin.KOS
             if (!DebugToolsOn()) Destroy(this);
         }
 
-        // Decided once per Flight scene. Any failure reading the player config counts as off.
-        private static bool DebugToolsOn()
+        // Decided once per scene by each debug tool. Any failure reading the player config counts as off.
+        internal static bool DebugToolsOn()
         {
             try
             {
@@ -39,7 +39,7 @@ namespace ClaudiaKermin.KOS
             }
             catch (System.Exception e)
             {
-                Debug.LogWarning("Claudia Kermin: could not read the player config; kOS bridge test window stays off: " + e.Message);
+                Debug.LogWarning("Claudia Kermin: could not read the player config; debug tools stay off: " + e.Message);
                 return false;
             }
         }
