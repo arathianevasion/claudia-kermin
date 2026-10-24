@@ -1,0 +1,115 @@
+[LOG 01:21:09.793] [ClaudiaApiSpike] === spike loaded. Unity 2019.4.18f1, platform OSXPlayer, runtime 4.0.30319.42000. Key file /Users/andrewwatson/KSP_spike/KSP.app/Contents/../../GameData/ClaudiaApiSpike/PluginData/api_key.txt: length 106, starts sk-ant-
+[LOG 01:21:10.038] [ClaudiaApiSpike] ServicePointManager.SecurityProtocol at load = Tls, Tls11, Tls12 (4032)
+[LOG 01:21:10.873] [ClaudiaApiSpike] EVENT scene loaded LOADING (run active: False, chunks so far: 0)
+[LOG 01:21:32.639] [ClaudiaApiSpike] EVENT scene loaded PSYSTEM (run active: False, chunks so far: 0)
+[LOG 01:21:32.808] [ClaudiaApiSpike] EVENT scene change requested -> MAINMENU (run active: False)
+[LOG 01:21:33.665] [ClaudiaApiSpike] EVENT scene loaded MAINMENU (run active: False, chunks so far: 0)
+[LOG 01:23:45.615] [ClaudiaApiSpike] START B:HWR, body 272 bytes, SecurityProtocol=Tls, Tls11, Tls12
+[LOG 01:23:47.693] [ClaudiaApiSpike] B:HWR: response headers at 2075 ms, http 200
+[LOG 01:23:58.012] [ClaudiaApiSpike] END B:HWR: ok | http=200 request-id=req_011CgLakZFBywYPBEvR6Kkca model=claude-opus-5-5
+  timing ms: first chunk=2084 first text=2344 last chunk=12386 total=12397 | chunks=630 max gap=461
+  sse events=210 text deltas=200 thinking blocks=1 stop_reason=end_turn text chars=2742
+  usage: {"input_tokens":43,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":1125,"service_tier":"standard","inference_geo":"global","speed":"standard","output_tokens_details":{"thinking_tokens":30},"iterations":[{"input_tokens":43,"output_tokens":1125,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"type":"message","model":null}]}
+  chunk arrival ms: 2084 2085 2085 2085 2085 2085 2334 2334 2334 2334 2334 2334 2334 2335 2335 2335 2335 2335 2335 2336 2336 2336 2336 2336 2381 2381 2381 2432 2432 2432 2482 2482 2482 2533 2533 2533 2584 2584 2584 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3045 3083 3083 3083 3132 3132 3132 3184 3184 3184 3426 3426 3426 3426 3426
+  text tail: …nauts to lose bone density during long missions. ⏎ 39. The Soviet Luna 9 achieved the first lunar soft landing in 1966. ⏎ 40. Gemini missions practiced rendezvous and docking techniques needed for Apollo.
+[LOG 01:24:10.724] [ClaudiaApiSpike] START A:UWR, body 272 bytes
+[LOG 01:24:12.874] [ClaudiaApiSpike] A:UWR: response headers at 2150 ms, http 200
+[LOG 01:24:22.874] [ClaudiaApiSpike] END A:UWR: ok | http=200 request-id=req_011CgLanNaJBwYUpe88Ux2WT model=claude-opus-5-5
+  timing ms: first chunk=2147 first text=2372 last chunk=12128 total=12149 | chunks=178 max gap=500
+  sse events=206 text deltas=196 thinking blocks=1 stop_reason=end_turn text chars=2836
+  usage: {"input_tokens":43,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":1166,"service_tier":"standard","inference_geo":"global","speed":"standard","output_tokens_details":{"thinking_tokens":25},"iterations":[{"input_tokens":43,"output_tokens":1166,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"type":"message","model":null}]}
+  chunk arrival ms: 2147 2372 2430 2479 2529 2579 2629 3129 3179 3233 3513 3534 3588 3638 3688 3842 3954 3988 4038 4088 4138 4188 4238 4280 4333 4388 4438 4484 4534 4580 4646 4680 4730 4780 4830 4888 4938 4988 5038 5088 5138 5188 5238 5288 5338 5404 5455 5488 5530 5580 5630 5679 5729 5780 5829 5879 5929 5979 6033 6079 6130 6184 6230 6280 6330 6379 6430 6479 6529 6580 6636 6688 6741 6788 6825 6888 6938 6975 7038 7088
+  text tail: …ear Earth is roughly 28,000 kilometers per hour. ⏎ 39. New Horizons flew past Pluto in July 2015, revealing its icy landscapes. ⏎ 40. India's Chandrayaan-3 landed near the lunar south pole in August 2023.
+[LOG 01:24:33.841] [ClaudiaApiSpike] SecurityProtocol Tls, Tls11, Tls12 (4032) -> Tls, Tls11, Tls12 (4032)
+[LOG 01:24:36.471] [ClaudiaApiSpike] SecurityProtocol Tls, Tls11, Tls12 (4032) -> Tls, Tls11, Tls12 (4032)
+[LOG 01:24:38.942] [ClaudiaApiSpike] START B:HWR, body 272 bytes, SecurityProtocol=Tls, Tls11, Tls12
+[LOG 01:24:40.195] [ClaudiaApiSpike] B:HWR: response headers at 1241 ms, http 200
+[LOG 01:24:50.103] [ClaudiaApiSpike] END B:HWR: ok | http=200 request-id=req_011CgLapSmrbrkZMX7XzeLNZ model=claude-opus-5-5
+  timing ms: first chunk=1242 first text=1486 last chunk=11151 total=11160 | chunks=612 max gap=490
+  sse events=204 text deltas=194 thinking blocks=1 stop_reason=end_turn text chars=2661
+  usage: {"input_tokens":43,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":1119,"service_tier":"standard","inference_geo":"global","speed":"standard","output_tokens_details":{"thinking_tokens":30},"iterations":[{"input_tokens":43,"output_tokens":1119,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"type":"message","model":null}]}
+  chunk arrival ms: 1242 1242 1242 1242 1242 1242 1484 1484 1484 1484 1484 1484 1484 1484 1484 1484 1484 1484 1484 1484 1484 1484 1484 1484 1547 1547 1547 1585 1585 1585 1634 1634 1634 1685 1685 1685 1756 1756 1756 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2246 2247 2247 2247 2286 2286 2286 2336 2336 2336 2606 2606 2606 2606 2606
+  text tail: …pacesuits must supply oxygen and regulate temperature for astronauts. ⏎ 39. Dennis Tito became the first paying space tourist in 2001. ⏎ 40. Parker Solar Probe is the fastest human-made object ever built.
+[LOG 01:24:55.905] [ClaudiaApiSpike] START A:UWR bad key, body 161 bytes
+[LOG 01:24:55.989] [ClaudiaApiSpike] A:UWR bad key: response headers at 84 ms, http 401
+[LOG 01:24:56.006] [ClaudiaApiSpike] END A:UWR bad key: HTTP ERROR HTTP/1.1 401 Unauthorized | http=401 request-id=req_011CgLaqgztpFf7C2Zg48fji model=
+  timing ms: first chunk=84 first text=-1 last chunk=84 total=101 | chunks=1 max gap=0
+  sse events=0 text deltas=0 thinking blocks=0 stop_reason= text chars=0
+  usage: none
+  chunk arrival ms: 84
+  raw body: {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},"request_id":"req_011CgLaqgztpFf7C2Zg48fji"} ⏎ 
+
+[LOG 01:25:21.500] [ClaudiaApiSpike] START B:HWR bad key, body 161 bytes, SecurityProtocol=Tls, Tls11, Tls12
+[LOG 01:25:21.604] [ClaudiaApiSpike] B:HWR bad key: response headers at 95 ms, http 401
+[LOG 01:25:21.604] [ClaudiaApiSpike] END B:HWR bad key: HTTP ERROR 401 | http=401 request-id=req_011CgLasaS5JARafndL6kHX8 model=
+  timing ms: first chunk=96 first text=-1 last chunk=96 total=103 | chunks=1 max gap=0
+  sse events=0 text deltas=0 thinking blocks=0 stop_reason= text chars=0
+  usage: none
+  chunk arrival ms: 96
+  raw body: {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},"request_id":"req_011CgLasaS5JARafndL6kHX8"} ⏎ 
+
+[LOG 01:25:31.650] [ClaudiaApiSpike] START A:UWR cache 1, body 63446 bytes
+[LOG 01:25:34.646] [ClaudiaApiSpike] A:UWR cache 1: response headers at 2995 ms, http 200
+[LOG 01:25:34.660] [ClaudiaApiSpike] END A:UWR cache 1: ok | http=200 request-id=req_011CgLatL3QeiMHXHrqdCGAi model=claude-opus-5-5
+  timing ms: first chunk=2994 first text=2995 last chunk=2994 total=3010 | chunks=1 max gap=0
+  sse events=7 text deltas=1 thinking blocks=0 stop_reason=end_turn text chars=2
+  usage: {"input_tokens":16,"cache_creation_input_tokens":30784,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":30784},"output_tokens":4,"service_tier":"standard","inference_geo":"global","speed":"standard","output_tokens_details":{"thinking_tokens":0},"iterations":[{"input_tokens":16,"output_tokens":4,"cache_read_input_tokens":0,"cache_creation_input_tokens":30784,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":30784},"type":"message","model":null}]}
+  chunk arrival ms: 2994
+  text tail: OK
+[LOG 01:25:34.661] [ClaudiaApiSpike] START A:UWR cache 2, body 63446 bytes
+[LOG 01:25:37.657] [ClaudiaApiSpike] A:UWR cache 2: response headers at 2995 ms, http 200
+[LOG 01:25:37.674] [ClaudiaApiSpike] END A:UWR cache 2: ok | http=200 request-id=req_011CgLatYo7jJ9yd2sasLkSf model=claude-opus-5-5
+  timing ms: first chunk=2994 first text=2994 last chunk=2994 total=3012 | chunks=1 max gap=0
+  sse events=7 text deltas=1 thinking blocks=0 stop_reason=end_turn text chars=2
+  usage: {"input_tokens":16,"cache_creation_input_tokens":0,"cache_read_input_tokens":30784,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":4,"service_tier":"standard","inference_geo":"global","speed":"standard","output_tokens_details":{"thinking_tokens":0},"iterations":[{"input_tokens":16,"output_tokens":4,"cache_read_input_tokens":30784,"cache_creation_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"type":"message","model":null}]}
+  chunk arrival ms: 2994
+  text tail: OK
+[LOG 01:26:47.292] [ClaudiaApiSpike] EVENT scene change requested -> SPACECENTER (run active: False)
+[LOG 01:26:50.483] [ClaudiaApiSpike] EVENT scene loaded SPACECENTER (run active: False, chunks so far: 1)
+[LOG 01:26:56.051] [ClaudiaApiSpike] START A:UWR, body 272 bytes
+[LOG 01:26:57.516] [ClaudiaApiSpike] A:UWR: response headers at 1464 ms, http 200
+[LOG 01:26:58.428] [ClaudiaApiSpike] EVENT scene change requested -> EDITOR (run active: True)
+[LOG 01:27:00.212] [ClaudiaApiSpike] EVENT scene loaded EDITOR (run active: True, chunks so far: 14)
+[LOG 01:27:06.444] [ClaudiaApiSpike] END A:UWR: ok | http=200 request-id=req_011CgLazYtVxnM7devckysCe model=claude-opus-5-5
+  timing ms: first chunk=1463 first text=1464 last chunk=10384 total=10393 | chunks=139 max gap=1743
+  sse events=186 text deltas=180 thinking blocks=0 stop_reason=end_turn text chars=2613
+  usage: {"input_tokens":43,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":1063,"service_tier":"standard","inference_geo":"global","speed":"standard","output_tokens_details":{"thinking_tokens":0},"iterations":[{"input_tokens":43,"output_tokens":1063,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"type":"message","model":null}]}
+  chunk arrival ms: 1463 1519 1569 1616 1665 1714 1765 1814 1863 1919 1961 2414 4157 4157 4210 4254 4323 4359 4409 4449 4525 4549 4599 4650 4699 4748 4799 4849 4900 4957 4999 5056 5098 5149 5200 5258 5299 5348 5400 5450 5499 5557 5607 5649 5699 5750 5799 5849 5899 5948 5998 6050 6100 6150 6198 6248 6299 6349 6400 6451 6499 6550 6599 6650 6697 6755 6803 6846 6897 6949 7000 7050 7101 7144 7195 7247 7298 7350 7400 7451
+  text tail: …. Pioneer 10 was the first spacecraft to fly past Jupiter. ⏎ 39. Cassini plunged deliberately into Saturn's atmosphere in September 2017. ⏎ 40. Apollo 8 astronauts were the first humans to orbit the Moon.
+[LOG 01:27:18.020] [ClaudiaApiSpike] START B:HWR, body 272 bytes, SecurityProtocol=Tls, Tls11, Tls12
+[LOG 01:27:19.909] [ClaudiaApiSpike] B:HWR: response headers at 1885 ms, http 200
+[LOG 01:27:21.351] [ClaudiaApiSpike] EVENT scene change requested -> SPACECENTER (run active: True)
+[LOG 01:27:23.389] [ClaudiaApiSpike] EVENT scene loaded SPACECENTER (run active: True, chunks so far: 219)
+[LOG 01:27:29.647] [ClaudiaApiSpike] END B:HWR: ok | http=200 request-id=req_011CgLb2BF4BMtfTVDWNV7AQ model=claude-opus-5-5
+  timing ms: first chunk=1886 first text=2090 last chunk=11623 total=11626 | chunks=606 max gap=368
+  sse events=202 text deltas=192 thinking blocks=1 stop_reason=end_turn text chars=2661
+  usage: {"input_tokens":43,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":1103,"service_tier":"standard","inference_geo":"global","speed":"standard","output_tokens_details":{"thinking_tokens":30},"iterations":[{"input_tokens":43,"output_tokens":1103,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"type":"message","model":null}]}
+  chunk arrival ms: 1886 1886 1886 1886 1886 1886 2087 2087 2087 2087 2087 2087 2087 2087 2087 2087 2087 2087 2087 2087 2087 2087 2087 2087 2135 2135 2135 2181 2181 2181 2232 2232 2232 2281 2281 2281 2335 2335 2335 2381 2381 2381 2749 2749 2749 2749 2749 2749 2749 2749 2749 2749 2749 2749 2749 2749 2749 2749 2749 2749 2749 2749 2749 2782 2782 2782 2832 2832 2832 2881 2881 2881 2931 2931 2931 2983 2983 2983 3178 3178
+  text tail: …inked American and Soviet spacecraft in 1975. ⏎ 39. Mars rover Opportunity operated nearly fifteen years despite a 90-day plan. ⏎ 40. Microgravity causes astronauts to lose bone and muscle mass over time.
+[LOG 01:27:56.027] [ClaudiaApiSpike] EVENT scene change requested -> FLIGHT (run active: False)
+[LOG 01:28:01.437] [ClaudiaApiSpike] EVENT scene loaded FLIGHT (run active: False, chunks so far: 606)
+[LOG 01:28:45.367] [ClaudiaApiSpike] START A:UWR, body 272 bytes
+[LOG 01:28:46.820] [ClaudiaApiSpike] A:UWR: response headers at 1453 ms, http 200
+[LOG 01:28:47.507] [ClaudiaApiSpike] EVENT game paused
+[LOG 01:28:51.978] [ClaudiaApiSpike] EVENT game unpaused
+[LOG 01:28:56.423] [ClaudiaApiSpike] END A:UWR: ok | http=200 request-id=req_011CgLb8cJ6zMDHj1hV2MCTs model=claude-opus-5-5
+  timing ms: first chunk=1449 first text=1568 last chunk=11043 total=11057 | chunks=150 max gap=340
+  sse events=199 text deltas=189 thinking blocks=1 stop_reason=end_turn text chars=2656
+  usage: {"input_tokens":43,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":1098,"service_tier":"standard","inference_geo":"global","speed":"standard","output_tokens_details":{"thinking_tokens":20},"iterations":[{"input_tokens":43,"output_tokens":1098,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"type":"message","model":null}]}
+  chunk arrival ms: 1449 1568 1620 1671 1784 1818 1865 1967 2307 2315 2365 2497 2514 2832 2865 2914 3022 3065 3115 3197 3213 3265 3356 3363 3407 3456 3540 3566 3607 3657 3707 3757 3880 3915 3965 4073 4114 4163 4223 4265 4315 4406 4415 4464 4590 4615 4664 4706 4765 4807 4923 4957 5006 5122 5164 5222 5264 5330 5355 5455 5465 5506 5648 5657 5705 5806 5823 5855 5973 6006 6056 6164 6206 6256 6306 6356 6506 6557 6692 6717
+  text tail: …andrayaan-3 landed near the lunar south pole in 2023. ⏎ 39. Parker Solar Probe is the fastest human-made object ever built. ⏎ 40. Apollo astronauts left retroreflectors still used for lunar laser ranging.
+[LOG 01:29:04.098] [ClaudiaApiSpike] START B:HWR, body 272 bytes, SecurityProtocol=Tls, Tls11, Tls12
+[LOG 01:29:05.341] [ClaudiaApiSpike] B:HWR: response headers at 1241 ms, http 200
+[LOG 01:29:07.242] [ClaudiaApiSpike] CANCEL requested for B:HWR
+[LOG 01:29:07.446] [ClaudiaApiSpike] END B:HWR: ok | http=200 request-id=req_011CgLb9zHTcyvWxcgXoADmf model=claude-opus-5-5
+  timing ms: first chunk=1241 first text=1406 last chunk=3133 total=3348 | chunks=132 max gap=381
+  sse events=44 text deltas=37 thinking blocks=1 stop_reason= text chars=552
+  usage: {"input_tokens":43,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":7,"service_tier":"standard","inference_geo":"global","speed":"standard"}
+  chunk arrival ms: 1241 1241 1241 1241 1241 1241 1395 1395 1395 1395 1395 1395 1395 1395 1395 1395 1395 1395 1395 1395 1395 1395 1395 1395 1396 1396 1396 1428 1428 1428 1476 1476 1476 1533 1533 1533 1580 1580 1580 1631 1631 1631 1681 1681 1681 1731 1731 1731 2112 2112 2112 2112 2112 2112 2112 2112 2112 2112 2112 2112 2112 2112 2112 2112 2112 2112 2112 2112 2112 2136 2136 2136 2190 2190 2190 2229 2229 2229 2282 2282
+  text tail: …k 2 in 1957. ⏎ 7. Alexei Leonov performed the first spacewalk in March 1965. ⏎ 8. Twelve astronauts walked on the Moon between 1969 and 1972. ⏎ 9. The International Space Station orbits Earth roughly every 
+[LOG 01:29:20.490] [ClaudiaApiSpike] EVENT game paused
+[LOG 01:29:29.509] [ClaudiaApiSpike] EVENT scene change requested -> FLIGHT (run active: False)
+[LOG 01:29:32.059] [ClaudiaApiSpike] EVENT scene loaded FLIGHT (run active: False, chunks so far: 132)
+[LOG 01:29:34.354] [ClaudiaApiSpike] EVENT game paused
+[LOG 01:29:36.438] [ClaudiaApiSpike] EVENT scene change requested -> MAINMENU (run active: False)
+[LOG 01:29:37.159] [ClaudiaApiSpike] EVENT scene loaded MAINMENU (run active: False, chunks so far: 132)
