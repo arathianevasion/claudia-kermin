@@ -30,7 +30,7 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
-        public void NoReportMeansFailedWithTheErrorTextKosPrintedNulsStripped()
+        public void NoReportWithTheErrorTextKosPrintedNulsStripped()
         {
             var before = new[] { "my own output\0\0\0", "\0\0\0\0" };
             var run = new KosRun(before);
@@ -44,7 +44,7 @@ namespace ClaudiaKermin.Core.Tests
                 "\0\0\0\0",
             });
 
-            Assert.Equal(RunOutcomeKind.Failed, outcome.Kind);
+            Assert.Equal(RunOutcomeKind.NoReport, outcome.Kind);
             Assert.Null(outcome.Report);
             Assert.Equal("Undefined Variable Name 'nope'.\nAt claudia-test on line 2:", outcome.ErrorText);
         }
@@ -59,6 +59,21 @@ namespace ClaudiaKermin.Core.Tests
             var outcome = run.Finish(new[] { "Program aborted." });
 
             Assert.Equal(RunOutcomeKind.Aborted, outcome.Kind);
+            Assert.Equal("player pressed Abort", outcome.Reason);
+        }
+
+        [Fact]
+        public void AnAbortAfterAReportStillFinishesButKeepsTheAbortOnRecord()
+        {
+            var run = new KosRun(Blank);
+            run.Report(Report("ok", true));
+            run.Aborted("player pressed Abort");
+            run.ProgramEnded();
+
+            var outcome = run.Finish(Blank);
+
+            Assert.Equal(RunOutcomeKind.Finished, outcome.Kind);
+            Assert.True(outcome.WasAborted);
             Assert.Equal("player pressed Abort", outcome.Reason);
         }
 
@@ -81,7 +96,7 @@ namespace ClaudiaKermin.Core.Tests
 
             var outcome = run.Finish(new[] { "Program aborted.", "Undefined Variable Name 'x'." });
 
-            Assert.Equal(RunOutcomeKind.Failed, outcome.Kind);
+            Assert.Equal(RunOutcomeKind.NoReport, outcome.Kind);
             Assert.Equal("Undefined Variable Name 'x'.", outcome.ErrorText);
         }
 
@@ -93,7 +108,7 @@ namespace ClaudiaKermin.Core.Tests
             run.Report(Report("ok", true));
 
             Assert.True(run.HasEnded);
-            Assert.Equal(RunOutcomeKind.Failed, run.Finish(Blank).Kind);
+            Assert.Equal(RunOutcomeKind.NoReport, run.Finish(Blank).Kind);
         }
 
         [Fact]

@@ -5,13 +5,17 @@ using System.Collections.Generic;
 
 namespace ClaudiaKermin.Core.Kos
 {
-    /// <summary>How a mod-started kOS program ended.</summary>
+    /// <summary>
+    /// How a mod-started kOS program ended. Only Finished means the script reported; every other kind
+    /// is a run that failed, was aborted or was interrupted. (Not a Debrief outcome: a Debrief can be
+    /// Nominal, Off-Nominal or Failed whatever the run's kind.)
+    /// </summary>
     public enum RunOutcomeKind
     {
         /// <summary>The script reported before the program ended.</summary>
         Finished,
-        /// <summary>No report: the script errored or returned without reporting.</summary>
-        Failed,
+        /// <summary>The script errored, or returned without reporting.</summary>
+        NoReport,
         /// <summary>The mod stopped the program (<c>BreakExecution</c>) and recorded why.</summary>
         Aborted,
         /// <summary>The player pressed Ctrl+C in the terminal: kOS printed its break message.</summary>
@@ -33,12 +37,22 @@ namespace ClaudiaKermin.Core.Kos
         /// <summary>Why the run was aborted or interrupted; "" otherwise.</summary>
         public string Reason { get; private set; }
 
-        public RunOutcome(RunOutcomeKind kind, IDictionary<string, object> report, string errorText, string reason)
+        /// <summary>The mod aborted the run, even if the script had already reported.</summary>
+        public bool WasAborted { get; private set; }
+
+        public RunOutcome(RunOutcomeKind kind, IDictionary<string, object> report, string errorText, string reason, bool wasAborted)
         {
             Kind = kind;
             Report = report;
             ErrorText = errorText ?? "";
             Reason = reason ?? "";
+            WasAborted = wasAborted;
+        }
+
+        /// <summary>One line for logs and the debug window, e.g. "Aborted (player pressed Abort)".</summary>
+        public string Summary
+        {
+            get { return Kind + (Reason.Length > 0 ? " (" + Reason + ")" : ""); }
         }
     }
 
@@ -48,7 +62,10 @@ namespace ClaudiaKermin.Core.Kos
     /// </summary>
     public sealed class KosRun
     {
-        /// <summary>What kOS 1.6 prints when a program is broken manually (Ctrl+C or <c>BreakExecution(true)</c>).</summary>
+        /// <summary>
+        /// What kOS 1.6 prints when a program is broken manually (Ctrl+C or <c>BreakExecution(true)</c>);
+        /// a string literal in kOS.Safe 1.6.0.1.
+        /// </summary>
         public const string BreakMessage = "Program aborted.";
 
         private readonly IList<string> _terminalBefore;
@@ -98,13 +115,14 @@ namespace ClaudiaKermin.Core.Kos
         /// </summary>
         public RunOutcome Finish(IList<string> terminalAfter)
         {
-            if (_report != null) return new RunOutcome(RunOutcomeKind.Finished, _report, "", "");
+            var aborted = _abortReason != null;
+            if (_report != null) return new RunOutcome(RunOutcomeKind.Finished, _report, "", _abortReason, aborted);
             var lines = TerminalText.LinesSince(_terminalBefore, terminalAfter);
             var printed = string.Join("\n", lines);
-            if (_abortReason != null) return new RunOutcome(RunOutcomeKind.Aborted, null, printed, _abortReason);
-            if (_interruptReason != null) return new RunOutcome(RunOutcomeKind.Interrupted, null, printed, _interruptReason);
-            if (lines.Contains(BreakMessage)) return new RunOutcome(RunOutcomeKind.StoppedByPlayer, null, printed, "");
-            return new RunOutcome(RunOutcomeKind.Failed, null, printed, "");
+            if (aborted) return new RunOutcome(RunOutcomeKind.Aborted, null, printed, _abortReason, true);
+            if (_interruptReason != null) return new RunOutcome(RunOutcomeKind.Interrupted, null, printed, _interruptReason, false);
+            if (lines.Contains(BreakMessage)) return new RunOutcome(RunOutcomeKind.StoppedByPlayer, null, printed, "", false);
+            return new RunOutcome(RunOutcomeKind.NoReport, null, printed, "", false);
         }
     }
 }

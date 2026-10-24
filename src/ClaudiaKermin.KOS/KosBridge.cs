@@ -66,6 +66,14 @@ namespace ClaudiaKermin.KOS
         {
             _fixedWork.Enqueue(() =>
             {
+                // A start still waiting for the processor never begins.
+                foreach (var pending in _pending.Where(p => p.PartId == partId).ToList())
+                {
+                    _pending.Remove(pending);
+                    Debug.Log(ModInfo.LogTag + " cancelled '" + pending.Label + "' before it started: " + reason);
+                    pending.OnRefused("Aborted before it started: " + reason);
+                }
+
                 ActiveRun run;
                 if (!_runs.TryGetValue(partId, out run) || run.Run.HasEnded) return;
                 run.Run.Aborted(reason);
@@ -218,9 +226,8 @@ namespace ClaudiaKermin.KOS
             if (!run.Addon.IsStale) run.Addon.Shared.Cpu.RemovePopContextNotifyee(run);
             var outcome = run.Run.Finish(ReadTerminal(run.Addon));
             // kOS hands controls back as the program ends, so make safe again once it has.
-            if (outcome.Kind == RunOutcomeKind.Aborted) CraftSafety.MakeSafe(run.Vessel);
-            Debug.Log(ModInfo.LogTag + " '" + run.Label + "' ended: " + outcome.Kind +
-                      (outcome.Reason.Length > 0 ? " (" + outcome.Reason + ")" : "") +
+            if (outcome.WasAborted) CraftSafety.MakeSafe(run.Vessel);
+            Debug.Log(ModInfo.LogTag + " '" + run.Label + "' ended: " + outcome.Summary +
                       (outcome.ErrorText.Length > 0 ? "\n" + outcome.ErrorText : ""));
             run.OnOutcome(outcome);
         }
