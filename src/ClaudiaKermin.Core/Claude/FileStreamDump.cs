@@ -8,12 +8,14 @@ using System.Text;
 namespace ClaudiaKermin.Core.Claude
 {
     /// <summary>
-    /// Writes raw stream events to <c>request-&lt;id&gt;.sse</c> in a folder, as received, with a comment line
+    /// Writes raw stream events to <c>request-&lt;session start&gt;-&lt;id&gt;.sse</c> in a folder, as received, with a comment line
     /// at the start of each attempt. A debug tool: only used when <c>debug_tools</c> is on.
     /// </summary>
     public sealed class FileStreamDump : IRawStreamDump
     {
         private readonly string _directory;
+        // Request ids restart with every KSP session, so each session's files carry when it started.
+        private readonly string _session = System.DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
         private readonly object _gate = new object();
         private int _lastRequest = -1;
         private int _lastAttempt = -1;
@@ -23,9 +25,9 @@ namespace ClaudiaKermin.Core.Claude
             _directory = directory;
         }
 
-        public string PathFor(int requestId)
+        private string PathFor(int requestId)
         {
-            return Path.Combine(_directory, "request-" + requestId.ToString(CultureInfo.InvariantCulture) + ".sse");
+            return Path.Combine(_directory, "request-" + _session + "-" + requestId.ToString(CultureInfo.InvariantCulture) + ".sse");
         }
 
         public void Write(int requestId, int attempt, string rawEvent)

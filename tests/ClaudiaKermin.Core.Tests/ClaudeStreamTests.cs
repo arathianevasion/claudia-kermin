@@ -454,6 +454,30 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void CancelWhileAnErrorBodyHangsStillCancels()
+        {
+            var hanging = ScriptedResponse.Error(503, "api_error", "Unavailable");
+            hanging.End = StreamEnd.Stall;
+            var client = Client(new StreamingFakeTransport(hanging), stallMs: 20000);
+            var cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+            var started = DateTime.UtcNow;
+
+            var result = client.Stream(Ask(), null, cancel.Token);
+            Assert.Equal(StreamStatus.Cancelled, result.Status);
+            Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(5));
+        }
+
+        [Fact]
+        public void AMidStreamBillingErrorIsLowCreditAndNotRetried()
+        {
+            var body = Fixtures.Text("overloaded-error.sse").Replace("overloaded_error", "billing_error");
+            var transport = new StreamingFakeTransport(new ScriptedResponse { Body = Encoding.UTF8.GetBytes(body) }, ScriptedResponse.Fixture("text.sse"));
+            var result = Run(Client(transport));
+            Assert.Equal(StreamFailure.LowCredit, result.Failure);
+            Assert.Equal(1, result.Attempts);
+        }
+
+        [Fact]
         public void CancelDuringBackoffStopsRetrying()
         {
             var transport = new StreamingFakeTransport(ScriptedResponse.Error(529, "overloaded_error", "Overloaded"), ScriptedResponse.Fixture("text.sse"));

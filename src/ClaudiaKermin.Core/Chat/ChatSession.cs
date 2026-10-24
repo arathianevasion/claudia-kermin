@@ -41,7 +41,7 @@ namespace ClaudiaKermin.Core.Chat
         public const string SystemPrompt =
             "You are Claudia, a Kerbal and the mission controller in this game of Kerbal Space Program (KSP), "
             + "where kOS is the in-game scripting language. Your crew role is Super Intelligence: Pilot, Engineer and "
-            + "Scientist in one. The player is chatting with you in the game. No Mission is running, so you cannot see "
+            + "Scientist in one. The player is chatting with you in the game. There is no Mission yet, so you cannot see "
             + "or fly their craft yet. Answer as Claudia, briefly and plainly: a few sentences unless they ask for more. "
             + "The home planet is Kerbin.";
 
@@ -117,14 +117,14 @@ namespace ClaudiaKermin.Core.Chat
         /// <summary>Aborts the reply in progress. Nothing from it is added to the conversation.</summary>
         public void Cancel()
         {
-            if (_pending != null) _pending.Cancel.Cancel();
+            if (_pending != null) _pending.CancelSource.Cancel();
         }
 
         private sealed class Pending
         {
             public string Text;
             public ChatLine Line;
-            public CancellationTokenSource Cancel;
+            public CancellationTokenSource CancelSource;
         }
 
         private void Start(string text)
@@ -138,7 +138,7 @@ namespace ClaudiaKermin.Core.Chat
             {
                 Text = text,
                 Line = AddLine(ChatSpeaker.Claudia, ""),
-                Cancel = new CancellationTokenSource(),
+                CancelSource = new CancellationTokenSource(),
             };
             pending.Line.Streaming = true;
             _pending = pending;
@@ -146,7 +146,7 @@ namespace ClaudiaKermin.Core.Chat
 
             var dump = RawDump;
             _background.Run(
-                () => _client.Stream(request, update => _background.Post(() => Apply(pending, update)), pending.Cancel.Token, dump),
+                () => _client.Stream(request, update => _background.Post(() => Apply(pending, update)), pending.CancelSource.Token, dump),
                 result => Finish(pending, result),
                 error => Crashed(pending));
         }
@@ -176,23 +176,15 @@ namespace ClaudiaKermin.Core.Chat
 
         private void Finish(Pending pending, StreamResult result)
         {
-            if (pending != _pending) return;
-            _pending = null;
-            var line = pending.Line;
-            line.Streaming = false;
-            line.Thinking = false;
-
+            if (!Settle(pending)) return;
             switch (result.Status)
             {
                 case StreamStatus.Cancelled:
-                    line.Speaker = ChatSpeaker.Notice;
-                    line.Text = line.Text.Length == 0 ? "Cancelled." : line.Text + " [cancelled]";
-                    _lastUnanswered = pending.Text;
+                    var partial = pending.Line.Text;
+                    Unanswered(pending, partial.Length == 0 ? "Cancelled." : partial + " [cancelled]");
                     break;
                 case StreamStatus.Failed:
-                    line.Speaker = ChatSpeaker.Notice;
-                    line.Text = Describe(result);
-                    _lastUnanswered = pending.Text;
+                    Unanswered(pending, Describe(result));
                     break;
                 default:
                     Completed(pending, result.Message);
@@ -214,11 +206,9 @@ namespace ClaudiaKermin.Core.Chat
             var answered = (message.StopReason == StopReason.EndTurn || message.StopReason == StopReason.MaxTokens) && text.Trim().Length > 0;
             if (!answered)
             {
-                line.Speaker = ChatSpeaker.Notice;
-                line.Text = message.StopReason == StopReason.ModelContextWindowExceeded
+                Unanswered(pending, message.StopReason == StopReason.ModelContextWindowExceeded
                     ? "This chat has grown too long for Claudia to read. Restart KSP to clear it."
-                    : "Claudia gave no answer (" + (message.RawStopReason ?? "no stop reason") + ").";
-                _lastUnanswered = pending.Text;
+                    : "Claudia gave no answer (" + (message.RawStopReason ?? "no stop reason") + ").");
                 return;
             }
 
@@ -233,14 +223,28 @@ namespace ClaudiaKermin.Core.Chat
 
         private void Crashed(Pending pending)
         {
-            if (pending != _pending) return;
+            if (!Settle(pending)) return;
+            Unanswered(pending, "Something went wrong getting Claudia's reply; see KSP.log.");
+            Version++;
+        }
+
+        /// <summary>Ends the pending reply; false when it was already superseded.</summary>
+        private bool Settle(Pending pending)
+        {
+            if (pending != _pending) return false;
             _pending = null;
             pending.Line.Streaming = false;
             pending.Line.Thinking = false;
+            pending.CancelSource.Dispose();
+            return true;
+        }
+
+        /// <summary>Turns the reply line into a notice; the player's message can be sent again.</summary>
+        private void Unanswered(Pending pending, string notice)
+        {
             pending.Line.Speaker = ChatSpeaker.Notice;
-            pending.Line.Text = "Something went wrong getting Claudia's reply; see KSP.log.";
+            pending.Line.Text = notice;
             _lastUnanswered = pending.Text;
-            Version++;
         }
 
         private static string Describe(StreamResult result)
