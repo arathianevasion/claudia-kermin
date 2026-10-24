@@ -24,8 +24,12 @@ namespace ClaudiaKermin.Adapter
         private GameScene? _scene;
         private float _nextSnapshot;
 
+        private readonly ManualInputWatcher _inputWatcher = new ManualInputWatcher();
+
         public readonly MissionWindow Window;
         public readonly CapcomStrip Strip;
+        /// <summary>The control locks while Claudia has the craft; the owner releases them with the other locks (scene change, shutdown).</summary>
+        public readonly CraftLocks Locks = new CraftLocks();
 
         /// <summary>The driver of this game session, for the scenario module and the leave-Flight guard.</summary>
         public static MissionDriver Current { get; private set; }
@@ -94,6 +98,12 @@ namespace ClaudiaKermin.Adapter
                 var ship = SnapshotReader.ReadEditor(EditorLogic.fetch.ship);
                 if (ship != null) Send(ship);
             }
+
+            // The core says what Claudia's hold on the craft locks; the player's own input held over a second is
+            // reported back, and the core decides whether that takes Manual Control.
+            var locks = scene == GameScene.Flight ? _mission.View.Locks : ControlLocks.None;
+            Locks.Apply(locks);
+            _inputWatcher.Update(locks != ControlLocks.None, seconds => Send(new ManualInputHeld(seconds)));
             Carry();
         }
 
@@ -148,6 +158,12 @@ namespace ClaudiaKermin.Adapter
                     // The existing abort path: stops the program and makes the craft safe.
                     var runner = ScriptRunner.Current;
                     if (runner != null) runner.Abort(abort.ProcessorPartId, abort.Reason);
+                    continue;
+                }
+                var safe = command as MakeCraftSafe;
+                if (safe != null)
+                {
+                    CraftSafety.MakeSafe(FlightGlobals.ActiveVessel);
                     continue;
                 }
                 var message = command as PostScreenMessage;

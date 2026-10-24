@@ -33,6 +33,7 @@ namespace ClaudiaKermin.Adapter
             snapshot.Craft.Stage = vessel.currentStage;
             ReadParts(snapshot, vessel.parts, vessel.VesselDeltaV);
             snapshot.Crew.AddRange(vessel.GetVesselCrew().Select(Crew));
+            snapshot.HasLink = LinkedHome(vessel);
 
             var orbit = vessel.orbit;
             if (orbit != null)
@@ -48,6 +49,13 @@ namespace ClaudiaKermin.Adapter
                 };
             }
             return snapshot;
+        }
+
+        /// <summary>A link to Kerbin; CommNet off in the save counts as linked (spec: Manual Control and Blackout).</summary>
+        private static bool LinkedHome(Vessel vessel)
+        {
+            if (!CommNet.CommNetScenario.CommNetEnabled) return true;
+            return vessel.connection != null && vessel.connection.IsConnectedHome;
         }
 
         /// <summary>The ship being built in the VAB/SPH; null when there is none or it has no parts yet.</summary>
