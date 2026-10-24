@@ -228,4 +228,17 @@ namespace ClaudiaKermin.Core.Missions
         public readonly int RunId;
         public KosRunEnded(RunOutcome outcome, int runId) { Outcome = outcome; RunId = runId; }
     }
+
+    /// <summary>
+    /// A runtime gate (ADR 0003) refused a call from the script started by <see cref="StartScript"/>: the bridge
+    /// has stopped the program and made the craft safe, and its <see cref="KosRunEnded"/> follows.
+    /// </summary>
+    public sealed class KosRunBlocked : MissionInput
+    {
+        /// <summary>What the script tried, e.g. "KUNIVERSE:QUICKSAVE"; the Debrief reason is "blocked: " and this.</summary>
+        public readonly string What;
+        /// <summary>The <see cref="StartScript.RunId"/> this answers.</summary>
+        public readonly int RunId;
+        public KosRunBlocked(string what, int runId) { What = what; RunId = runId; }
+    }
 }

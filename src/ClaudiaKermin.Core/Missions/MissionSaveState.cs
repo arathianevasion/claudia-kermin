@@ -56,6 +56,8 @@ namespace ClaudiaKermin.Core.Missions
         public bool HandBack;
         /// <summary>The player's optional message with Hand back.</summary>
         public string HandBackMessage = "";
+        /// <summary>Why the mod stopped the last run ("blocked: …", "timed out") until its Debrief; null otherwise.</summary>
+        public string StopReason;
         public MissionPlan MissionPlan;
         /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
         public SequencePlan SequencePlan;
@@ -95,6 +97,7 @@ namespace ClaudiaKermin.Core.Missions
                 { "handBack", HandBack ? "true" : "false" },
                 { "handBackMessage", HandBackMessage },
             };
+            if (StopReason != null) values["stopReason"] = StopReason;
             foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
             for (var i = 0; i < UnsafeProblems.Count; i++) values[UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture)] = UnsafeProblems[i];
             if (MissionPlan != null || SequencePlan != null) values["plans"] = WritePlans(MissionPlan, SequencePlan);
@@ -138,6 +141,8 @@ namespace ClaudiaKermin.Core.Missions
             if (int.TryParse(Get(values, "transcriptMarker"), NumberStyles.Integer, CultureInfo.InvariantCulture, out number)) state.TranscriptMarker = number;
             if (int.TryParse(Get(values, "sequencesProposed"), NumberStyles.Integer, CultureInfo.InvariantCulture, out number)) state.SequencesProposed = number;
             state.SequenceCounted = Get(values, "sequenceCounted") == "true";
+            string stopReason;
+            if (values.TryGetValue("stopReason", out stopReason)) state.StopReason = stopReason;
             foreach (var pair in values)
                 if (pair.Key.StartsWith(SettingPrefix, StringComparison.Ordinal)) state.Settings[pair.Key.Substring(SettingPrefix.Length)] = pair.Value;
             // In order: unsafeProblem.0, unsafeProblem.1, ... up to the first one missing.

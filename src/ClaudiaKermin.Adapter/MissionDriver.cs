@@ -187,7 +187,8 @@ namespace ClaudiaKermin.Adapter
                 {
                     // The existing abort path: stops the program and makes the craft safe.
                     var runner = ScriptRunner.Current;
-                    if (runner != null) runner.Abort(abort.ProcessorPartId, abort.Reason);
+                    if (runner != null && abort.RunId.HasValue) runner.Abort(abort.ProcessorPartId, abort.RunId.Value, abort.Reason);
+                    else if (runner != null) runner.Abort(abort.ProcessorPartId, abort.Reason);
                     continue;
                 }
                 var safe = command as MakeCraftSafe;
@@ -255,9 +256,10 @@ namespace ClaudiaKermin.Adapter
                 Send(new KosRunRefused("kOS isn't running in this scene, so the script can't start.", start.RunId));
                 return;
             }
-            runner.BeginRun(start.ProcessorPartId, start.Label, start.Source,
+            runner.BeginRun(start.ProcessorPartId, start.RunId, start.Label, start.Source,
                 outcome => Send(new KosRunEnded(outcome, start.RunId)),
-                reason => Send(new KosRunRefused(reason, start.RunId)));
+                reason => Send(new KosRunRefused(reason, start.RunId)),
+                what => Send(new KosRunBlocked(what, start.RunId)));
         }
     }
 }

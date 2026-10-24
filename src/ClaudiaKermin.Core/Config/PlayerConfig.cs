@@ -11,7 +11,7 @@ namespace ClaudiaKermin.Core.Config
 {
     /// <summary>
     /// The player config file (outside the save). Holds <c>debug_tools</c>, the models offered at Mission
-    /// start (the first is the default), the default Spending Cap, the compaction trigger and the wait caps; later tickets
+    /// start (the first is the default), the default Spending Cap, the compaction trigger, the wait caps and the runaway multiplier; later tickets
     /// add the price table and the rest of the spec's settings. Format: <c>name = value</c> lines,
     /// <c>#</c> comments. A missing or unreadable value keeps its default.
     /// </summary>
@@ -59,6 +59,9 @@ namespace ClaudiaKermin.Core.Config
         /// <summary>How far the craft may drift from the pending plan's baseline, in percent, before Approve turns into Re-plan.</summary>
         public int ReplanTolerancePercent = 15;
 
+        /// <summary>The runaway hard stop, as a multiple of a Sequence Plan's planned duration (waits included); 3 is 300%.</summary>
+        public double RunawayMultiplier = 3;
+
         public string DefaultModel
         {
             get { return Models[0]; }
@@ -94,7 +97,9 @@ namespace ClaudiaKermin.Core.Config
             + "# Seconds attitude, translation or throttle input must be held to start Manual Control.\n"
             + "manual_hold_s = 1\n"
             + "# How far, in percent, the craft may change from a pending plan before Approve becomes Re-plan.\n"
-            + "replan_tolerance = 15\n";
+            + "replan_tolerance = 15\n"
+            + "# A script still running at this percentage of its planned duration (waits included) is stopped and made safe.\n"
+            + "runaway_multiplier = 300%\n";
 
         /// <summary>Loads the file, writing it with defaults first if it does not exist.</summary>
         public static PlayerConfig LoadOrCreate(string directory)
@@ -181,6 +186,15 @@ namespace ClaudiaKermin.Core.Config
                         int lateTolerance;
                         if (int.TryParse(value.TrimEnd('%'), NumberStyles.Integer, CultureInfo.InvariantCulture, out lateTolerance) && lateTolerance >= 0 && lateTolerance <= 200)
                             config.LateApprovalToleranceDvPercent = lateTolerance;
+                        break;
+                    case "runaway_multiplier":
+                        // "300%" or "3". Below 100% would stop a script before its own plan says it ends.
+                        double multiplier;
+                        if (double.TryParse(value.TrimEnd('%').Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out multiplier))
+                        {
+                            if (value.EndsWith("%", StringComparison.Ordinal)) multiplier /= 100;
+                            if (multiplier >= 1 && multiplier <= 100) config.RunawayMultiplier = multiplier;
+                        }
                         break;
                 }
             }

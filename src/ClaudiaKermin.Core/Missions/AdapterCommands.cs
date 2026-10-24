@@ -32,17 +32,24 @@ namespace ClaudiaKermin.Core.Missions
 
     /// <summary>
     /// Abort the script running on the kOS processor in part <see cref="ProcessorPartId"/>, with make-safe
-    /// (the existing abort path). Issued when the player ends a Mission that is Running.
+    /// (the existing abort path). Issued when the player ends a Mission that is Running, and by the runaway hard stop.
     /// </summary>
     public sealed class AbortScript : AdapterCommand
     {
         public readonly uint ProcessorPartId;
         public readonly string Reason;
+        /// <summary>When set, only that run is aborted: a later run on the same processor is left alone.</summary>
+        public readonly int? RunId;
 
         public AbortScript(uint processorPartId, string reason)
         {
             ProcessorPartId = processorPartId;
             Reason = reason;
+        }
+
+        public AbortScript(uint processorPartId, string reason, int runId) : this(processorPartId, reason)
+        {
+            RunId = runId;
         }
     }
 

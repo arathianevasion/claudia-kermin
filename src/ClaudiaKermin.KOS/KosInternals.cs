@@ -22,7 +22,7 @@ namespace ClaudiaKermin.KOS
         /// <summary>The check's result; Compatible until the check has run.</summary>
         public static KosCompatibility Result { get; private set; }
 
-        // "Type, assembly", member, parameter count (-1: a property).
+        // "Type, assembly", member, parameter count (-1: a property, -2: a field).
         private static readonly string[][] Needed =
         {
             new[] { "kOS.Safe.Execution.ICpu, kOS.Safe", "SwitchToProgramContext", "0" },
@@ -59,6 +59,27 @@ namespace ClaudiaKermin.KOS
             new[] { "kOS.SharedObjects, kOS", "Vessel", "-1" },
             new[] { "kOS.Module.kOSProcessor, kOS", "ProcessorMode", "-1" },
             new[] { "kOS.Suffixed.Addon, kOS", ".ctor", "1" },
+            // The runtime gates (RuntimeGatePatches).
+            new[] { "kOS.Safe.Execution.CPU, kOS.Safe", "KOSFixedUpdate", "1" },
+            new[] { "kOS.Safe.Execution.CPU, kOS.Safe", "shared", "-2" },
+            new[] { "kOS.Safe.Encapsulation.Structure, kOS.Safe", "GetSuffix", "2" },
+            new[] { "kOS.Safe.Encapsulation.Structure, kOS.Safe", "SetSuffix", "3" },
+            new[] { "kOS.Suffixed.Config, kOS", "SetSuffix", "3" },
+            new[] { "kOS.Suffixed.KUniverseValue, kOS", ".ctor", "1" },
+            new[] { "kOS.Suffixed.TimeWarpValue, kOS", "SetModeAsString", "1" },
+            new[] { "kOS.Suffixed.TimeWarpValue, kOS", "SetWarp", "1" },
+            new[] { "kOS.Suffixed.TimeWarpValue, kOS", "SetRate", "1" },
+            new[] { "kOS.Safe.Persistence.Archive, kOS.Safe", "CreateFile", "1" },
+            new[] { "kOS.Safe.Persistence.Archive, kOS.Safe", "CreateDirectory", "1" },
+            new[] { "kOS.Safe.Persistence.Archive, kOS.Safe", "SaveFile", "3" },
+            new[] { "kOS.Safe.Persistence.Archive, kOS.Safe", "Delete", "2" },
+            new[] { "kOS.Safe.Persistence.Archive, kOS.Safe", "Clear", "0" },
+            new[] { "kOS.Safe.Persistence.ArchiveFile, kOS.Safe", "Write", "1" },
+            new[] { "kOS.Safe.Persistence.ArchiveFile, kOS.Safe", "Clear", "0" },
+            new[] { "kOS.Safe.Function.DebugFreezeGame, kOS.Safe", "Execute", "1" },
+            new[] { "kOS.Suffixed.VesselTarget, kOS", "Vessel", "-1" },
+            new[] { "kOS.Suffixed.Part.PartValue, kOS", "Part", "-1" },
+            new[] { "kOS.Suffixed.PartModuleField.PartModuleFields, kOS", "partModule", "-2" },
         };
 
         static KosInternals()
@@ -113,6 +134,7 @@ namespace ClaudiaKermin.KOS
         {
             if (type == null) return false;
             if (member == ".ctor") return type.GetConstructors(Any).Any(c => c.GetParameters().Length == parameters);
+            if (parameters == -2) return type.GetField(member, Any) != null;
             if (parameters < 0) return SelfAndInterfaces(type).Any(t => t.GetProperty(member, Any) != null);
             return SelfAndInterfaces(type).SelectMany(t => t.GetMethods(Any))
                 .Any(m => m.Name == member && m.GetParameters().Length == parameters);

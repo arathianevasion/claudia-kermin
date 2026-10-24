@@ -134,7 +134,7 @@ namespace ClaudiaKermin.Core.Missions
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
             + "\"target\":{\"type\":\"string\"},\"tolerances\":{\"type\":\"string\"},"
             + "\"expected_delta_v\":{\"type\":\"number\",\"description\":\"m/s\"},"
-            + "\"expected_duration_s\":{\"type\":\"number\"},"
+            + "\"expected_duration_s\":{\"type\":\"number\",\"description\":\"Seconds of game time from start to report, waits included; the mod stops a script still running at 300% of it.\"},"
             + "\"abort_conditions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},"
             + "\"risks\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},"
             + "\"custom_script\":{\"type\":\"boolean\",\"description\":\"True when the script is written from scratch instead of from Building Blocks.\"},"

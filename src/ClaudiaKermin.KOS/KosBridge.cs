@@ -34,6 +34,10 @@ namespace ClaudiaKermin.KOS
         private readonly List<PendingStart> _pending = new List<PendingStart>();
         private readonly Dictionary<uint, ActiveRun> _runs = new Dictionary<uint, ActiveRun>();
         private readonly Queue<Action> _fixedWork = new Queue<Action>();
+        /// <summary>Gate trips to report, from inside kOS's execution, delivered in Update.</summary>
+        private readonly Queue<Action> _tripped = new Queue<Action>();
+        /// <summary>Gate keys for runs with no Mission run id (debug tools): negative, so never a core run id.</summary>
+        private int _nextUnkeyedRun = -1;
 
         /// <summary>The processor Claudia would use on this vessel: the player's choice if still aboard, else the one nearest the root.</summary>
         public static uint? ChooseProcessor(Vessel vessel, uint? preferred)
@@ -53,7 +57,12 @@ namespace ClaudiaKermin.KOS
         /// </summary>
         public void BeginRun(uint partId, string label, string source, Action<RunOutcome> onOutcome, Action<string> onRefused)
         {
-            _pending.Add(new PendingStart(partId, label, source, onOutcome, onRefused, Time.realtimeSinceStartup));
+            BeginRun(partId, _nextUnkeyedRun--, label, source, onOutcome, onRefused, null);
+        }
+
+        public void BeginRun(uint partId, int runId, string label, string source, Action<RunOutcome> onOutcome, Action<string> onRefused, Action<string> onBlocked)
+        {
+            _pending.Add(new PendingStart(partId, runId, label, source, onOutcome, onRefused, onBlocked, Time.realtimeSinceStartup));
         }
 
         public bool IsRunning(uint partId)
@@ -64,10 +73,21 @@ namespace ClaudiaKermin.KOS
         /// <summary>Stops the mod's program on that processor, records why, and makes the craft safe.</summary>
         public void Abort(uint partId, string reason)
         {
+            Abort(partId, null, reason);
+        }
+
+        public void Abort(uint partId, int runId, string reason)
+        {
+            Abort(partId, (int?)runId, reason);
+        }
+
+        /// <summary>With <paramref name="runId"/>, only that run is stopped: a newer one on the processor is left alone.</summary>
+        private void Abort(uint partId, int? runId, string reason)
+        {
             _fixedWork.Enqueue(() =>
             {
                 // A start still waiting for the processor never begins.
-                foreach (var pending in _pending.Where(p => p.PartId == partId).ToList())
+                foreach (var pending in _pending.Where(p => p.PartId == partId && (!runId.HasValue || p.RunId == runId.Value)).ToList())
                 {
                     _pending.Remove(pending);
                     Debug.Log(ModInfo.LogTag + " cancelled '" + pending.Label + "' before it started: " + reason);
@@ -76,11 +96,26 @@ namespace ClaudiaKermin.KOS
 
                 ActiveRun run;
                 if (!_runs.TryGetValue(partId, out run) || run.Run.HasEnded) return;
+                if (runId.HasValue && run.RunId != runId.Value) return;
                 run.Run.Aborted(reason);
                 Debug.Log(ModInfo.LogTag + " aborting '" + run.Label + "': " + reason);
                 if (!run.Addon.IsStale) run.Addon.Shared.Cpu.BreakExecution(true);
                 CraftSafety.MakeSafe(run.Vessel);
             });
+        }
+
+        /// <summary>
+        /// A runtime gate refused a call from the program on <paramref name="partId"/>; called from inside kOS's
+        /// execution, just before the gate throws to stop the program. Records the abort and its reason (so the
+        /// outcome is Aborted, "blocked: …") and makes the craft safe now; the Mission hears of it in Update.
+        /// </summary>
+        public void Tripped(uint partId, GateTrip trip)
+        {
+            ActiveRun run;
+            if (!_runs.TryGetValue(partId, out run) || run.RunId != trip.RunId || run.Run.HasEnded) return;
+            run.Run.Aborted("blocked: " + trip.What);
+            CraftSafety.MakeSafe(run.Vessel);
+            if (run.OnBlocked != null) _tripped.Enqueue(() => run.OnBlocked(trip.What));
         }
 
         /// <summary>From <c>ADDONS:CLAUDIA:REPORT</c>. Reports from programs the mod didn't start are ignored.</summary>
@@ -111,6 +146,7 @@ namespace ClaudiaKermin.KOS
             GameEvents.onGameSceneLoadRequested.Remove(OnSceneLoadRequested);
             foreach (var pending in _pending) Guard(() => pending.OnRefused("Left Flight before the script could start."));
             _pending.Clear();
+            while (_tripped.Count > 0) Guard(_tripped.Dequeue());
             // Deliver every outcome before this scene's bridge goes away.
             foreach (var run in _runs.Values.ToList())
             {
@@ -134,6 +170,8 @@ namespace ClaudiaKermin.KOS
 
         private void Update()
         {
+            // A trip is reported before its run's outcome, which comes at least a frame after the program ends.
+            while (_tripped.Count > 0) Guard(_tripped.Dequeue());
             foreach (var run in _runs.Values.ToList())
             {
                 if (!run.Run.HasEnded && run.Addon.IsStale)
@@ -150,7 +188,11 @@ namespace ClaudiaKermin.KOS
         private void TryStart(PendingStart pending)
         {
             var addon = ClaudiaAddon.ForPart(pending.PartId);
-            var decision = RunStart.Decide(KosInternals.Result, StateOf(addon, pending.PartId), Time.realtimeSinceStartup - pending.Since);
+            // No run starts without its runtime gates (ADR 0003).
+            var kos = KosInternals.Result.IsCompatible && KosGates.Failure != null
+                ? KosCompatibility.FromMissing(new[] { KosGates.Failure })
+                : KosInternals.Result;
+            var decision = RunStart.Decide(kos, StateOf(addon, pending.PartId), Time.realtimeSinceStartup - pending.Since);
             if (decision.Kind == StartDecisionKind.Wait) return;
             _pending.Remove(pending);
             if (decision.Kind == StartDecisionKind.Refuse)
@@ -166,6 +208,7 @@ namespace ClaudiaKermin.KOS
             catch (Exception e)
             {
                 _runs.Remove(pending.PartId);
+                KosGates.Runs.Close(pending.PartId, pending.RunId);
                 Debug.LogError(ModInfo.LogTag + " couldn't start '" + pending.Label + "': " + e);
                 pending.OnRefused("kOS wouldn't start the script: " + e.Message);
             }
@@ -213,6 +256,7 @@ namespace ClaudiaKermin.KOS
             };
 
             _runs[pending.PartId] = run;
+            KosGates.Runs.Open(pending.PartId, pending.RunId);
             shared.Cpu.AddPopContextNotifyee(run);
             shared.ScriptHandler.ClearContext(ProgramContext);
             var context = shared.Cpu.SwitchToProgramContext();
@@ -226,6 +270,7 @@ namespace ClaudiaKermin.KOS
         {
             // Removed first, so a throw below can't make Update finish the same run every frame.
             _runs.Remove(run.PartId);
+            KosGates.Runs.Close(run.PartId, run.RunId);
             if (!run.Addon.IsStale) run.Addon.Shared.Cpu.RemovePopContextNotifyee(run);
             var outcome = run.Run.Finish(ReadTerminal(run.Addon));
             // kOS hands controls back as the program ends, so make safe again once it has.
@@ -256,19 +301,26 @@ namespace ClaudiaKermin.KOS
         private sealed class PendingStart
         {
             public readonly uint PartId;
+            /// <summary>The Mission's run id, or a negative key for a debug run; the runtime gates are keyed on it.</summary>
+            public readonly int RunId;
             public readonly string Label;
             public readonly string Source;
             public readonly Action<RunOutcome> OnOutcome;
             public readonly Action<string> OnRefused;
+            /// <summary>What a tripped gate refused; null for debug runs.</summary>
+            public readonly Action<string> OnBlocked;
             public readonly float Since;
 
-            public PendingStart(uint partId, string label, string source, Action<RunOutcome> onOutcome, Action<string> onRefused, float since)
+            public PendingStart(uint partId, int runId, string label, string source, Action<RunOutcome> onOutcome, Action<string> onRefused,
+                Action<string> onBlocked, float since)
             {
                 PartId = partId;
+                RunId = runId;
                 Label = label;
                 Source = source;
                 OnOutcome = onOutcome;
                 OnRefused = onRefused;
+                OnBlocked = onBlocked;
                 Since = since;
             }
         }
@@ -277,17 +329,21 @@ namespace ClaudiaKermin.KOS
         private sealed class ActiveRun : IPopContextNotifyee
         {
             public readonly uint PartId;
+            public readonly int RunId;
             public readonly string Label;
             public readonly ClaudiaAddon Addon;
             public readonly KosRun Run;
             public readonly Action<RunOutcome> OnOutcome;
+            public readonly Action<string> OnBlocked;
             public int EndedFrame = int.MaxValue;
 
             public ActiveRun(PendingStart start, ClaudiaAddon addon, IList<string> terminal)
             {
                 PartId = start.PartId;
+                RunId = start.RunId;
                 Label = start.Label;
                 OnOutcome = start.OnOutcome;
+                OnBlocked = start.OnBlocked;
                 Addon = addon;
                 Run = new KosRun(terminal);
             }
@@ -299,6 +355,8 @@ namespace ClaudiaKermin.KOS
             {
                 if (Run.HasEnded) return false;
                 Run.ProgramEnded();
+                // The gates come down with the program, before the player can type at this terminal again.
+                KosGates.Runs.Close(PartId, RunId);
                 EndedFrame = Time.frameCount;
                 // One program per notifyee: don't stay registered.
                 return false;

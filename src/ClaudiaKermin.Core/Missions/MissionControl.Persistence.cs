@@ -69,6 +69,7 @@ namespace ClaudiaKermin.Core.Missions
                 ManualOrigin = mission.ManualOrigin,
                 HandBack = mission.HandBack,
                 HandBackMessage = mission.HandBackMessage,
+                StopReason = mission.StopReason,
                 MissionPlan = mission.Plan,
                 SequencePlan = mission.PendingSequence,
             };
@@ -211,7 +212,7 @@ namespace ClaudiaKermin.Core.Missions
                 {
                     Purpose = Purpose.Debrief,
                     Effort = "high",
-                    UserText = MissionPrompts.RunReport(plan, mission.OwedOutcome) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
+                    UserText = MissionPrompts.RunReport(plan, StoppedOutcome(mission, mission.OwedOutcome)) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
                     Notice = MissionPrompts.DebriefNotice,
                 };
             }
@@ -400,6 +401,9 @@ namespace ClaudiaKermin.Core.Missions
             }
 
             mission.PauseReason = state.PauseReason;
+            // A run the mod stopped itself is Debriefed with its reason even after a load (no timer: no run survives one).
+            mission.StopReason = state.StopReason;
+            mission.RunDeadlineUt = null;
             if (unanswered != null)
             {
                 var purpose = (Purpose)Enum.Parse(typeof(Purpose), unanswered.Purpose);

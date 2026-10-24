@@ -18,7 +18,17 @@ namespace ClaudiaKermin.Adapter
         /// </summary>
         void BeginRun(uint partId, string label, string source, Action<RunOutcome> onOutcome, Action<string> onRefused);
 
+        /// <summary>
+        /// A Mission's run, with the core's run id: the runtime gates (ADR 0003) are keyed on it while it runs.
+        /// If a gate trips, <paramref name="onBlocked"/> gets what the script tried (on the main thread) before
+        /// <paramref name="onOutcome"/> reports the stopped run.
+        /// </summary>
+        void BeginRun(uint partId, int runId, string label, string source, Action<RunOutcome> onOutcome, Action<string> onRefused, Action<string> onBlocked);
+
         void Abort(uint partId, string reason);
+
+        /// <summary>Aborts the program on that processor only if it is still run <paramref name="runId"/>.</summary>
+        void Abort(uint partId, int runId, string reason);
     }
 
     public static class ScriptRunner

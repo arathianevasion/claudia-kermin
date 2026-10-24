@@ -105,7 +105,9 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is WarpToDueTime) WarpRequested();
             else if (input is GoToVessel) GoToRequested();
             else if (input is ClaudiaKilled) Killed();
+            else if (input is KosRunBlocked) RunBlocked((KosRunBlocked)input);
             CheckDue();
+            CheckRunaway();
             TryPlan();
             TryOwed();
             Rebuild();
@@ -159,6 +161,10 @@ namespace ClaudiaKermin.Core.Missions
             public uint? RunningProcessor;
             /// <summary>The id of the current run; run events carrying any other id are late and ignored.</summary>
             public int? RunId;
+            /// <summary>The runaway hard stop's UT for the current run (MissionControl.Gates.cs); null when nothing runs.</summary>
+            public double? RunDeadlineUt;
+            /// <summary>Why the mod stopped the current run ("blocked: …", "timed out"), for its Debrief; null otherwise.</summary>
+            public string StopReason;
             public MissionPlan Plan;
             public SequencePlan PendingSequence;
             public int SequencesProposed;
@@ -461,6 +467,7 @@ namespace ClaudiaKermin.Core.Missions
             if (plan.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
             mission.RunningProcessor = processor.Value;
             mission.RunId = ++_lastRunId;
+            StartRunawayTimer(mission, plan);
             _commands.Add(new StartScript(processor.Value, "claudia:" + mission.Id + ":" + plan.Name, bundle, mission.RunId.Value));
         }
 
@@ -655,6 +662,7 @@ namespace ClaudiaKermin.Core.Missions
             var mission = _mission;
             if (mission == null || mission.Stage != MissionStage.Running || mission.RunId != refused.RunId) return;
             mission.RunId = null;
+            mission.RunDeadlineUt = null;
             mission.Stage = MissionStage.AwaitingSequenceApproval;
             Note(LogKind.Notice, "The script didn't start: " + reason);
         }
@@ -667,12 +675,14 @@ namespace ClaudiaKermin.Core.Missions
                 || (mission.Stage == MissionStage.Paused && mission.StageBeforePause == MissionStage.Running);
             if (!running || mission.RunId != ended.RunId) return;
             mission.RunId = null;
-            Note(LogKind.Notice, "The script ended: " + ended.Outcome.Summary + ".");
+            mission.RunDeadlineUt = null;
+            var outcome = StoppedOutcome(mission, ended.Outcome);
+            Note(LogKind.Notice, "The script ended: " + outcome.Summary + ".");
             var turn = new Turn
             {
                 Purpose = Purpose.Debrief,
                 Effort = "high",
-                UserText = MissionPrompts.RunReport(mission.PendingSequence, ended.Outcome) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
+                UserText = MissionPrompts.RunReport(mission.PendingSequence, outcome) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.DebriefNotice,
             };
             if (mission.Stage == MissionStage.Paused) mission.StageBeforePause = MissionStage.Debriefing;
@@ -1187,7 +1197,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.ManualPlanned = false;
             mission.ManualOrigin = "";
             mission.HandBackMessage = "";
-            var entry = AddCard(mission, LogKind.Debrief, "Debrief: " + debrief.Outcome,
+            var entry = AddCard(mission, LogKind.Debrief, "Debrief: " + debrief.Outcome + TakeStopReason(mission),
                 debrief.WhatHappened + (debrief.Next.Length > 0 ? "\nNext: " + debrief.Next : ""), debrief.Why);
             entry.Outcome = debrief.Outcome;
             NeedsPlayer("Claudia's Debrief: " + debrief.Outcome + ".");
