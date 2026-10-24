@@ -239,7 +239,7 @@ namespace ClaudiaKermin.Adapter
         {
             var verdict = check.Verdict == CraftVerdict.Pass ? "Pass"
                 : check.Verdict == CraftVerdict.PassWithWarnings ? "Pass with Warnings" : "Fail";
-            GUILayout.Label(verdict + (check.Stale ? " (the craft or goal changed since; Start Mission checks again)" : ""), _bold);
+            GUILayout.Label(verdict + (check.Stale ? " (the craft changed since; Start Mission checks again)" : ""), _bold);
             if (check.Summary.Length > 0) GUILayout.Label("Claudia: " + check.Summary, _wrap);
             foreach (var finding in check.Findings)
             {

@@ -42,6 +42,9 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>Low orbit round an airless body, as a fraction of its radius above the surface.</summary>
         private const double AirlessOrbitFraction = 0.07;
 
+        /// <summary>The body whose system the Map covers by default.</summary>
+        public const string DefaultHome = "Kerbin";
+
         public readonly List<DeltaVLeg> Legs = new List<DeltaVLeg>();
         public readonly List<string> Moons = new List<string>();
         public string Home = "";

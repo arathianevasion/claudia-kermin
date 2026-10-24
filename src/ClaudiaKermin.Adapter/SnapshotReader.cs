@@ -58,7 +58,7 @@ namespace ClaudiaKermin.Adapter
             {
                 Ut = Planetarium.GetUniversalTime(),
                 Situation = "PRELAUNCH",
-                Body = CraftCheckFlowBody(),
+                Body = DeltaVMap.DefaultHome,
             };
             snapshot.Craft.Name = ship.shipName ?? "";
             snapshot.Craft.MassTonnes = ship.parts.Sum(p => (double)(p.mass + p.GetResourceMass()));
@@ -67,11 +67,6 @@ namespace ClaudiaKermin.Adapter
             var manifest = ShipConstruction.ShipManifest;
             if (manifest != null) snapshot.Crew.AddRange(manifest.GetAllCrew(false).Where(c => c != null).Select(Crew));
             return snapshot;
-        }
-
-        private static string CraftCheckFlowBody()
-        {
-            return "Kerbin";
         }
 
         private static SnapshotCrewMember Crew(ProtoCrewMember crew)

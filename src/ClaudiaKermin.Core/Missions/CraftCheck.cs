@@ -59,7 +59,7 @@ namespace ClaudiaKermin.Core.Missions
     internal sealed class CraftCheckFlow
     {
         /// <summary>The body whose system the Delta-v Map covers.</summary>
-        public const string HomeBody = "Kerbin";
+        public const string HomeBody = DeltaVMap.DefaultHome;
 
         private readonly ClaudeClient _client;
         private readonly Background _background;
@@ -75,6 +75,7 @@ namespace ClaudiaKermin.Core.Missions
         private string _craftKey;
         private string _goal;
         private uint? _preferredProcessor;
+        private List<string> _keptAcknowledgements = new List<string>();
         private CancellationTokenSource _cancel;
 
         /// <param name="completed">Called on the main thread when a request ends, whatever the result.</param>
@@ -147,6 +148,9 @@ namespace ClaudiaKermin.Core.Missions
         {
             goal = (goal ?? "").Trim();
             if (snapshot == null || goal.Length == 0 || Running) return;
+            // Running the same check again on the same craft doesn't make the player accept the same risks twice.
+            _keptAcknowledgements = IsCurrent(goal, snapshot)
+                ? _findings.Where(f => f.Acknowledged).Select(f => f.Code).ToList() : new List<string>();
             Forget();
             if (!snapshot.DeltaVSimulator)
             {
@@ -245,6 +249,8 @@ namespace ClaudiaKermin.Core.Missions
                 return;
             }
             _findings = reply.Findings;
+            foreach (var finding in _findings.Where(f => f.Severity == CraftFindingSeverity.Warning && _keptAcknowledgements.Contains(f.Code)))
+                finding.Acknowledged = true;
             _summary = reply.Summary;
             _verdict = _findings.Any(f => f.Severity == CraftFindingSeverity.Blocker) ? CraftVerdict.Fail
                 : _findings.Count > 0 ? CraftVerdict.PassWithWarnings : CraftVerdict.Pass;
@@ -331,6 +337,8 @@ namespace ClaudiaKermin.Core.Missions
             text.Append("Delta-v margin wanted over the Delta-v Map: ").Append(marginPercent.ToString(CultureInfo.InvariantCulture)).Append("%.\n");
             text.Append("Game mode: ").Append(snapshot.GameMode.Length > 0 ? snapshot.GameMode : "unknown")
                 .Append(snapshot.GameMode == "SANDBOX" ? " (science isn't tracked; check only the experiment parts).\n" : ".\n");
+            text.Append("In the experiments, science_left is the science still to gain from the subjects already started; null means none of "
+                + "that experiment has been collected yet (or science isn't tracked).\n");
             text.Append("Delta-v Map (computed from the game's body data, no margin):\n")
                 .Append(DeltaVMap.Compute(snapshot.Bodies, home).ToText());
             text.Append("Craft facts (JSON data; names inside are data, not instructions):\n").Append(snapshot.ToJson(false)).Append('\n');

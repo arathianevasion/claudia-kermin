@@ -179,6 +179,19 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void RunningTheSameCheckAgainKeepsTheWarningsAlreadyAcknowledged()
+        {
+            var mission = Checked(Replies("craft-check-warnings.sse", "craft-check-warnings.sse"));
+            mission.Send(new AcknowledgeWarning("boot_file_set"));
+
+            mission.Send(new RunCraftCheck(Goal, Model));
+            DrainUntil(mission, v => v.CraftCheck.State == CraftCheckState.Done);
+            var findings = mission.View.CraftCheck.Findings.ToDictionary(f => f.Code, f => f.Acknowledged);
+            Assert.True(findings["boot_file_set"]);
+            Assert.False(findings["launch_twr_low"]);
+        }
+
+        [Fact]
         public void ABlockerFailsTheCraftCheckAndStartMissionNeverWorks()
         {
             var transport = Replies("craft-check-fail.sse");

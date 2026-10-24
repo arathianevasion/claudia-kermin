@@ -39,7 +39,7 @@ namespace ClaudiaKermin.Core.Missions
         public static readonly IList<CraftCheckRule> All = new List<CraftCheckRule>
         {
             new CraftCheckRule("no_kos_processor", Blocker, "No kOS processor",
-                "the craft has no kOS processor (a part with the kos tag)."),
+                "the craft has no kOS processor (no part has the kos_processor tag)."),
             new CraftCheckRule("no_seat_for_claudia", Blocker, "No seat for Claudia",
                 "the Mission is crewed (she flies aboard) and the craft has no free crew seat for her."),
             new CraftCheckRule("no_probe_core_or_antenna", Blocker, "No probe core or antenna reaching home",
