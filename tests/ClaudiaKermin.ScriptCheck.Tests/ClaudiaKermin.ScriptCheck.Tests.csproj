@@ -1,0 +1,30 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  Tests of the real Script Check against kOS.Safe. They need kOS.Safe (KOSPluginsDir): a local kOS
+  install, or in CI the public kOS release. Here kOS.Safe is copied next to the tests so they can load it.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <NeedsKOS>true</NeedsKOS>
+    <!-- NU1702: referencing net48 projects from net10.0 is deliberate, as in the core tests. -->
+    <NoWarn>$(NoWarn);NU1702</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/ClaudiaKermin.ScriptCheck/ClaudiaKermin.ScriptCheck.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="kOS.Safe" HintPath="$(KOSPluginsDir)/kOS.Safe.dll" />
+    <Reference Include="ICSharpCode.SharpZipLib" HintPath="$(KOSPluginsDir)/ICSharpCode.SharpZipLib.dll" />
+  </ItemGroup>
+</Project>
