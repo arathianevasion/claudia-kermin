@@ -198,6 +198,12 @@ namespace ClaudiaKermin.Core.Missions
                 get { return Spent + Held; }
             }
 
+            /// <summary>Claudia answered the Mission Plan with no sequences: the goal can't be flown, and there is nothing to approve.</summary>
+            public bool Declined
+            {
+                get { return Stage == MissionStage.AwaitingPlanApproval && Plan != null && Plan.Sequences.Count == 0; }
+            }
+
             public bool AwaitingApproval
             {
                 get { return Stage == MissionStage.AwaitingPlanApproval || Stage == MissionStage.AwaitingSequenceApproval; }
@@ -312,14 +318,14 @@ namespace ClaudiaKermin.Core.Missions
 
         private void Approved()
         {
-            if (!CanAnswerPlan) return;
+            if (!CanAnswerPlan || _mission.Declined) return;
             _mission.ConfirmPrompt = null;
             Approval();
         }
 
         private void Confirmed(bool yes)
         {
-            if (!CanAnswerPlan || _mission.ConfirmPrompt == null) return;
+            if (!CanAnswerPlan || _mission.Declined || _mission.ConfirmPrompt == null) return;
             _mission.ConfirmPrompt = null;
             if (yes) Approval();
             else Note(LogKind.Notice, "Not approved yet.");
@@ -640,7 +646,8 @@ namespace ClaudiaKermin.Core.Missions
             switch (purpose)
             {
                 case Purpose.MissionPlan:
-                    return reply.MissionPlan == null || reply.MissionPlan.Sequences.Count == 0 ? "no Mission Plan" : null;
+                    // A Mission Plan with no sequences is valid: it is how Claudia declines a goal that can't be flown.
+                    return reply.MissionPlan == null ? "no Mission Plan" : null;
                 case Purpose.SequencePlan:
                     return reply.SequencePlan == null || reply.SequencePlan.Script.Trim().Length == 0 ? "no Sequence Plan with a script" : null;
                 case Purpose.Debrief:
@@ -665,8 +672,8 @@ namespace ClaudiaKermin.Core.Missions
                 }
             }
 
-            mission.LatestLine = reply.Say;
-            Note(LogKind.Claudia, reply.Say).AnsweredBy = answeredBy;
+            mission.LatestLine = SayWithWhy(turn.Purpose, reply);
+            Note(LogKind.Claudia, mission.LatestLine).AnsweredBy = answeredBy;
 
             switch (turn.Purpose)
             {
@@ -681,7 +688,7 @@ namespace ClaudiaKermin.Core.Missions
                     break;
                 case Purpose.Reply:
                     // ADR 0002: Claude's reading of typed words never starts anything; only a button press does.
-                    if (reply.Intent == ReplyIntent.Approve || reply.Intent == ReplyIntent.Unclear)
+                    if ((reply.Intent == ReplyIntent.Approve || reply.Intent == ReplyIntent.Unclear) && !mission.Declined)
                         mission.ConfirmPrompt = planPending ? "Approve the Mission Plan?" : "Approve the Sequence Plan?";
                     else Revised(mission, reply, planPending);
                     break;
@@ -689,6 +696,14 @@ namespace ClaudiaKermin.Core.Missions
                     Revised(mission, reply, planPending);
                     break;
             }
+        }
+
+        /// <summary>Claudia's line; when she declines the goal with a Mission Plan of no sequences, her <c>why</c> follows it (there is no card to carry it).</summary>
+        private static string SayWithWhy(Purpose purpose, MissionReply reply)
+        {
+            var plan = reply.MissionPlan;
+            if (purpose != Purpose.MissionPlan || plan == null || plan.Sequences.Count > 0 || string.IsNullOrWhiteSpace(plan.Why)) return reply.Say;
+            return reply.Say + " " + plan.Why;
         }
 
         /// <summary>The Sequence Plan this reply would offer for Approval, or null (the same cases as <see cref="Apply"/>).</summary>
@@ -792,7 +807,7 @@ namespace ClaudiaKermin.Core.Missions
 
         private void Revised(Mission mission, MissionReply reply, bool planPending)
         {
-            if (planPending && reply.MissionPlan != null && reply.MissionPlan.Sequences.Count > 0) OfferMissionPlan(mission, reply.MissionPlan);
+            if (planPending && reply.MissionPlan != null) OfferMissionPlan(mission, reply.MissionPlan);
             else if (!planPending && reply.SequencePlan != null && reply.SequencePlan.Script.Trim().Length > 0) OfferSequencePlan(mission, reply.SequencePlan);
         }
 
@@ -800,6 +815,12 @@ namespace ClaudiaKermin.Core.Missions
         {
             mission.Plan = plan;
             mission.Stage = MissionStage.AwaitingPlanApproval;
+            if (plan.Sequences.Count == 0)
+            {
+                // Claudia can't fly this goal: her line is in the log, and there is nothing to approve.
+                NeedsPlayer("Claudia can't fly this Mission Goal as stated.");
+                return;
+            }
             var body = new StringBuilder();
             for (var i = 0; i < plan.Sequences.Count; i++)
             {
@@ -1120,6 +1141,8 @@ namespace ClaudiaKermin.Core.Missions
                         : new List<QuickReply> { mission.AwaitingResume ? QuickReply.Resume : QuickReply.Retry };
                 else if (mission.Stage == MissionStage.UnsafeScript && !mission.InFlight)
                     view.QuickReplies = new List<QuickReply> { QuickReply.Retry, QuickReply.RetryWithNote, QuickReply.Replan };
+                else if (mission.Declined && !mission.InFlight)
+                    view.QuickReplies = new List<QuickReply> { QuickReply.ChangeSomething, QuickReply.EndMission };
                 else if (mission.AwaitingApproval && !mission.InFlight)
                 {
                     view.QuickReplies = mission.ConfirmPrompt != null
