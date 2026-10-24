@@ -13,7 +13,7 @@ namespace ClaudiaKermin.Core.Missions
     /// against the player's configured tolerance: the part list, the body, grounded or flying, the stock simulator's
     /// vacuum delta-v, and the size of a stable orbit.
     /// </summary>
-    internal static class PlanDrift
+    public static class PlanDrift
     {
         private static readonly string[] Grounded = { "PRELAUNCH", "LANDED", "SPLASHED" };
         private static readonly string[] Stable = { "ORBITING", "ESCAPING", "DOCKED" };
@@ -25,7 +25,7 @@ namespace ClaudiaKermin.Core.Missions
             if (baseline.Body != now.Body) return "the craft is now at " + now.Body + ", not " + baseline.Body;
             if (!new HashSet<uint>(baseline.Craft.Parts.Select(p => p.Id)).SetEquals(now.Craft.Parts.Select(p => p.Id)))
                 return "parts have been added or lost";
-            if (Array.IndexOf(Grounded, baseline.Situation) >= 0 != Array.IndexOf(Grounded, now.Situation) >= 0)
+            if ((Array.IndexOf(Grounded, baseline.Situation) >= 0) != (Array.IndexOf(Grounded, now.Situation) >= 0))
                 return "the craft is now " + now.Situation + ", not " + baseline.Situation;
 
             var tolerance = tolerancePercent / 100.0;
