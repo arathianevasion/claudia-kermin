@@ -44,6 +44,9 @@ namespace ClaudiaKermin.Adapter
         // Start form.
         private string _goal = "";
         private Vector2 _goalScroll;
+        // The Craft Check findings scroll; a new result (a different set of findings) jumps back to the top.
+        private Vector2 _checkScroll;
+        private string _seenCheckResult = "";
         // End Mission asked "End this Mission?" and awaits Yes / No.
         private bool _confirmingEnd;
         private string _cap;
@@ -270,6 +273,15 @@ namespace ClaudiaKermin.Adapter
             var verdict = check.Verdict == CraftVerdict.Pass ? "Pass"
                 : check.Verdict == CraftVerdict.PassWithWarnings ? "Pass with Warnings" : "Fail";
             GUILayout.Label(verdict + (check.Stale ? " (the craft changed since; Start Mission checks again)" : ""), _bold);
+            var signature = check.Summary;
+            foreach (var finding in check.Findings) signature += "|" + finding.Code;
+            if (signature != _seenCheckResult)
+            {
+                _seenCheckResult = signature;
+                _checkScroll = Vector2.zero;
+            }
+            // Takes the space left over, but no more than 45% of the window, so a Mission log below keeps room.
+            _checkScroll = GUILayout.BeginScrollView(_checkScroll, GUILayout.MinHeight(120), GUILayout.MaxHeight(_frame.Rect.height * 0.45f), GUILayout.ExpandHeight(true));
             if (check.Summary.Length > 0) GUILayout.Label("Claudia: " + check.Summary, _wrap);
             foreach (var finding in check.Findings)
             {
@@ -284,6 +296,7 @@ namespace ClaudiaKermin.Adapter
                 }
                 GUILayout.EndVertical();
             }
+            GUILayout.EndScrollView();
         }
 
         private void DrawMission()
