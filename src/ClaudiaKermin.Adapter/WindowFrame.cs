@@ -15,7 +15,7 @@ namespace ClaudiaKermin.Adapter
     public class WindowFrame
     {
         // Mouse: no camera moves (flight, map, editor), no part picking or editor actions under the window.
-        private const ControlTypes MouseTypes = ControlTypes.CAMERACONTROLS | ControlTypes.ACTIONS_ALL
+        private const ControlTypes MouseTypes = ControlTypes.CAMERACONTROLS | ControlTypes.ACTIONS_EXTERNAL
             | ControlTypes.EDITOR_ICON_PICK | ControlTypes.EDITOR_PAD_PICK_PLACE | ControlTypes.EDITOR_PAD_PICK_COPY
             | ControlTypes.EDITOR_ICON_HOVER | ControlTypes.EDITOR_GIZMO_TOOLS | ControlTypes.EDITOR_SOFT_LOCK;
 
@@ -56,7 +56,8 @@ namespace ClaudiaKermin.Adapter
                 ? GUILayout.Window(_windowId, Rect, draw, _title, GUILayout.Width(Rect.width), GUILayout.Height(Rect.height))
                 : GUILayout.Window(_windowId, Rect, draw, _title, options);
             Rect = KeepOnScreen(Rect);
-            SetMouseLock(_resizing || Rect.Contains(GuiMouse()));
+            // A held button keeps the lock, so a fast window drag can't outrun the pointer and drop it.
+            SetMouseLock(_resizing || Rect.Contains(GuiMouse()) || (_mouseLocked && Input.GetMouseButton(0)));
         }
 
         /// <summary>Call at the end of the draw function, before <c>GUI.DragWindow</c>: handles the grip.</summary>
