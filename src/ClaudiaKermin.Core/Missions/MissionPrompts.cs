@@ -16,8 +16,8 @@ namespace ClaudiaKermin.Core.Missions
     /// </summary>
     internal static class MissionPrompts
     {
-        /// <summary>The base layer, the same for every Mission.</summary>
-        public const string BaseLayer =
+        /// <summary>The base layer, the same for every Mission: ends with the Core Library's rules and block summaries.</summary>
+        public static readonly string BaseLayer =
             "You are Claudia Kermin, a Kerbal and the mission controller in this game of Kerbal Space Program (KSP), "
             + "the spaceflight game. kOS is the game's in-game scripting language: you fly the craft by writing kerboscript "
             + "that the mod runs on the craft's kOS processor. Your crew role is Super Intelligence: Pilot, Engineer and "
@@ -38,7 +38,10 @@ namespace ClaudiaKermin.Core.Missions
             + "voice, key numbers first, one or two sentences. Each why is one short sentence; never write out your "
             + "reasoning anywhere in the reply. Use m/s for delta-v, metres for distances and seconds for durations.\n\n"
             + "Mission Scripts. A script is complete kerboscript that runs from the top with no files: do not use RUN, "
-            + "RUNPATH, COPYPATH, LOG, file or volume commands, and do not rely on a boot file. Before it ends, every script "
+            + "RUNPATH, COPYPATH, LOG, file or volume commands, and do not rely on a boot file. The mod bundles the Core "
+            + "Library's Building Blocks (below) with every script, so call them by name; never define functions with "
+            + "their names or with the claudia_ prefix. Prefer Building Blocks; write your own kerboscript only where no "
+            + "block fits. Before it ends, every script "
             + "must call ADDONS:CLAUDIA:REPORT(LEXICON(...)) exactly once with its result, using at least the keys "
             + "\"success\" (boolean) and \"reason\" (string), plus any figures the Debrief needs (for example \"apoapsis\", "
             + "\"periapsis\", \"dv_used\", \"situation\"). A script that ends without reporting counts as failed. Keep "
@@ -48,17 +51,20 @@ namespace ClaudiaKermin.Core.Missions
             + "vessels; pausing the game; physics warp (on-rails warp only); reading, writing, copying or deleting files "
             + "or volumes; changing kOS CONFIG; rebooting or shutting down processors; setting boot files; using any "
             + "addon other than ADDONS:CLAUDIA; changing or messaging other vessels; opening GUI windows; freezing the "
-            + "game. A script that uses any of these will be refused.";
+            + "game. A script that uses any of these will be refused.\n\n"
+            + "The Core Library.\n" + CoreLibrary.Summaries();
 
         public const int MaxTokens = 32000;
 
-        /// <summary>The per-Mission layer, frozen when the Mission starts.</summary>
+        /// <summary>
+        /// The per-Mission layer, frozen when the Mission starts: full docs for the Building Blocks this
+        /// Mission likely needs. Until the Craft Check picks them, that is every shipped block.
+        /// </summary>
         public static string MissionLayer(string missionId)
         {
             return "Mission " + missionId + ".\n\n"
-                + "Building Blocks for this Mission: none. The Core Library of Building Blocks has not shipped yet, so "
-                + "write each Mission Script as plain kerboscript from scratch, keeping each Maneuver Sequence simple "
-                + "enough to fly reliably that way.";
+                + "Building Blocks for this Mission, in full. Blocks not shipped yet must be written as plain kerboscript.\n\n"
+                + CoreLibrary.FullDocs();
         }
 
         public const string PlanNotice =

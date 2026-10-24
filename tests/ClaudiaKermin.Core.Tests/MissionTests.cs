@@ -134,6 +134,15 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(new[] { QuickReply.Approve, QuickReply.ChangeSomething, QuickReply.AskQuestion }, mission.View.QuickReplies);
             Assert.Empty(Started(mission));
 
+            // The cached system layers teach Claudia the Building Blocks: summaries in the base layer,
+            // full docs in the per-Mission layer.
+            var system = Body(transport.Requests[0]).GetProperty("system").EnumerateArray().Select(b => b.GetProperty("text").GetString()).ToArray();
+            Assert.Equal(2, system.Length);
+            Assert.Contains("- exec_node(options): flies a maneuver node", system[0]);
+            Assert.Contains("unknown option <name>", system[0]);
+            Assert.Contains("max_residual [0.5]", system[1]);
+            Assert.Contains("lead [\"half_burn\"]", system[1]);
+
             var transcriptPath = Path.Combine(MissionFolder(mission), "transcript.json");
             var afterPlan = File.ReadAllText(transcriptPath);
 
@@ -151,7 +160,10 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(new Approve());
             var start = Assert.Single(Started(mission));
             Assert.Equal(3102u, start.ProcessorPartId);
-            Assert.Equal(sequenceCard.Script, start.Source);
+            // It runs as one compile unit: the Mission Script first, then the Core Library it calls.
+            Assert.Equal(CoreLibrary.Bundle(sequenceCard.Script, 1, 10800), start.Source);
+            Assert.StartsWith(sequenceCard.Script.TrimEnd('\n'), start.Source);
+            Assert.Contains("function exec_node {", start.Source);
             Assert.Equal(MissionStage.Running, mission.View.Stage);
             Assert.Contains("Link check", mission.View.RunStatus);
             Assert.Equal(2, transport.Requests.Count);

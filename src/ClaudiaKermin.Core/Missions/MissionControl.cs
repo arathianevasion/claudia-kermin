@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Config;
+using ClaudiaKermin.Core.Kos;
 
 namespace ClaudiaKermin.Core.Missions
 {
@@ -264,7 +265,8 @@ namespace ClaudiaKermin.Core.Missions
             Note(LogKind.Notice, "Sequence Plan approved: the mod is starting the script.");
             mission.Stage = MissionStage.Running;
             mission.RunningProcessor = processor.Value;
-            _commands.Add(new StartScript(processor.Value, "claudia:" + mission.Id + ":" + plan.Name, plan.Script));
+            var bundle = CoreLibrary.Bundle(plan.Script, _config.WaitCapOrbits, _config.WaitCapGroundSeconds);
+            _commands.Add(new StartScript(processor.Value, "claudia:" + mission.Id + ":" + plan.Name, bundle));
         }
 
         private void Replied(string text)
