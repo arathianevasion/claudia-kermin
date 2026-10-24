@@ -18,3 +18,6 @@ transport. None came from a live API call, and none holds a key.
 writes; replace or add captures from real play as they are taken.
 
 `.gitattributes` keeps git from changing their bytes.
+- `mission-*-priced.sse`, `mission-plan-big.sse`: the Mission replies above with large `usage.iterations`
+  (100000 input, 50000 cache write, 200000 cache read and 10000 output tokens, which costs $0.54 on
+  Sonnet 5.5; the big plan 100000 input, 100000 cache write and 20000 output, $0.80), for the Spending Cap tests.

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Andrew Watson
 
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -58,6 +59,36 @@ namespace ClaudiaKermin.Core.Missions
                 .Field("stage", stage)
                 .EndObject();
             ReplaceAtomically(Path.Combine(folder, EndedFile), json.ToString());
+        }
+
+        public const string CostLogFile = "cost-log.jsonl";
+
+        /// <summary>
+        /// Appends one line to the Mission's cost and event log: a request's pending charge, what it really
+        /// cost (refused, cut-off and off-schema replies too), a worst-case charge kept for a cancelled or
+        /// lost request, a request refused by the Spending Cap, or a raised cap. Never rewritten.
+        /// </summary>
+        public static void AppendCostEvent(string folder, string kind, int request, string model, decimal amount, string outcome,
+            decimal spent, decimal held, decimal cap)
+        {
+            Directory.CreateDirectory(folder);
+            var json = new JsonWriter().BeginObject()
+                .Field("event", kind)
+                .Field("request", request)
+                .Field("model", model)
+                .Name("amount").Raw(Dollars(amount))
+                .Field("outcome", outcome)
+                .Name("spent").Raw(Dollars(spent))
+                .Name("held").Raw(Dollars(held))
+                .Name("cap").Raw(Dollars(cap))
+                .Field("at", DateTime.UtcNow.ToString("o", System.Globalization.CultureInfo.InvariantCulture))
+                .EndObject();
+            File.AppendAllText(Path.Combine(folder, CostLogFile), json + "\n", Utf8);
+        }
+
+        private static string Dollars(decimal value)
+        {
+            return value.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
         /// <summary>Writes a temporary file beside the target, then swaps it in.</summary>

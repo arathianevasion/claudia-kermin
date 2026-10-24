@@ -40,6 +40,10 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>"Not yet" after a typed reply.</summary>
         NotYet,
         Retry,
+        /// <summary>Paused at the Spending Cap: asks for a higher cap.</summary>
+        RaiseCap,
+        /// <summary>Paused at the Spending Cap: End Mission (the adapter asks for confirmation).</summary>
+        EndMission,
     }
 
     public enum LogKind
@@ -78,6 +82,8 @@ namespace ClaudiaKermin.Core.Missions
         public IList<string> Models = new List<string>();
         public string DefaultModel = "";
         public decimal DefaultSpendingCap;
+        /// <summary>Estimated cost of a whole Mission (a Mun landing and return) per model in <see cref="Models"/>, USD.</summary>
+        public IDictionary<string, decimal> Estimates = new Dictionary<string, decimal>();
     }
 
     /// <summary>
@@ -94,6 +100,14 @@ namespace ClaudiaKermin.Core.Missions
         public string Goal = "";
         public string Model = "";
         public decimal SpendingCap;
+        /// <summary>Cost so far from real usage, USD. With <see cref="HeldCharges"/> and <see cref="PendingCharge"/> it is what counts against the Spending Cap.</summary>
+        public decimal Spent;
+        /// <summary>Worst-case charges kept for cancelled and lost requests; never refunded.</summary>
+        public decimal HeldCharges;
+        /// <summary>The worst case of the request in flight, recorded before sending and replaced by the real usage; 0 when none is.</summary>
+        public decimal PendingCharge;
+        /// <summary>Spent and held charges have reached 80% of the Spending Cap.</summary>
+        public bool CapWarning;
 
         /// <summary>Claudia's latest line, for the Capcom strip.</summary>
         public string LatestLine = "";
