@@ -1,0 +1,59 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Andrew Watson
+
+using ClaudiaKermin.Core.Config;
+using UnityEngine;
+
+namespace ClaudiaKermin.Adapter
+{
+    /// <summary>The Claudia settings window: a masked API key field and the result of checking it.</summary>
+    public class SettingsWindow
+    {
+        private readonly KeySettings _settings;
+        private Rect _rect = new Rect(200, 120, 360, 170);
+        private string _typed = "";
+
+        public bool Visible;
+
+        public SettingsWindow(KeySettings settings)
+        {
+            _settings = settings;
+        }
+
+        public void OnGUI()
+        {
+            if (!Visible) return;
+            GUI.skin = HighLogic.Skin;
+            _rect = GUILayout.Window(0x434B01, _rect, Draw, "Claudia Kermin settings");
+        }
+
+        private void Draw(int id)
+        {
+            GUILayout.Label("Anthropic API key");
+            var saved = _settings.MaskedKey;
+            if (saved.Length > 0)
+                GUILayout.Label("Saved: " + saved);
+            if (_settings.UsingEnvironmentKey)
+                GUILayout.Label("ANTHROPIC_API_KEY is set and takes priority.");
+
+            _typed = GUILayout.PasswordField(_typed, '*', 200);
+
+            GUILayout.BeginHorizontal();
+            GUI.enabled = !_settings.Checking && _typed.Trim().Length > 0;
+            if (GUILayout.Button("Save and check"))
+            {
+                _settings.Save(_typed);
+                _typed = "";
+            }
+            GUI.enabled = !_settings.Checking;
+            if (GUILayout.Button("Check saved key"))
+                _settings.Check();
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
+
+            if (_settings.Status.Length > 0)
+                GUILayout.Label(_settings.Status);
+            GUI.DragWindow();
+        }
+    }
+}
