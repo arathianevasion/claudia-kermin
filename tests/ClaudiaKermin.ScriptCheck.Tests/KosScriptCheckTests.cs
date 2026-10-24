@@ -289,6 +289,24 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             }
         }
 
+        // ---- The Core Library (ADR 0003: it must pass the same check), as the mod bundles it ----
+
+        [Fact]
+        public void TheCoreLibraryBundledWithAMissionScriptPasses()
+        {
+            // The block test's Mission Script: it stages, warps on rails and flies a maneuver node through exec_node.
+            var script = File.ReadAllText(Path.Combine(RepoRoot(), "tests", "blocks", "exec_node", "test.ks"));
+            AssertAllowed(CoreLibrary.Bundle(script, 1, 10800));
+        }
+
+        [Fact]
+        public void AForbiddenCallInABundledScriptFailsOnTheScriptsOwnLine()
+        {
+            var result = _check.Check(CoreLibrary.Bundle("print \"hello\".\nkuniverse:quicksave().", 1, 10800));
+            Assert.False(result.Passed);
+            Assert.Contains("line 2: :QUICKSAVE (quicksave)", result.Forbidden);
+        }
+
         private static string RepoRoot()
         {
             var dir = new DirectoryInfo(System.AppContext.BaseDirectory);
