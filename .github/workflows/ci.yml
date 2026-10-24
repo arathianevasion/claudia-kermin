@@ -17,7 +17,7 @@ env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   # kOS release whose kOS.Safe.dll compiles the kerboscript; keep in step with the supported kOS.
-  KOS_RELEASE_TAG: v1.6.0.1
+  KOS_RELEASE_TAG: 1.6.0.1
 
 jobs:
   core:
