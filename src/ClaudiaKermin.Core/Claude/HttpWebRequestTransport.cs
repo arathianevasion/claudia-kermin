@@ -75,19 +75,29 @@ namespace ClaudiaKermin.Core.Claude
             }
         }
 
-        private static HttpWebRequest Create(HttpRequestSpec request)
+        /// <summary>
+        /// Builds the request without sending it. Public so a test can check it without the network.
+        /// Restricted headers go through their HttpWebRequest property, because Mono and .NET Framework
+        /// throw if they are added through Headers; everything else is added through
+        /// <paramref name="addUnrestricted"/> (default: <c>web.Headers[name] = value</c>).
+        /// </summary>
+        public static HttpWebRequest Create(HttpRequestSpec request, Action<string, string> addUnrestricted = null)
         {
             var web = (HttpWebRequest)WebRequest.Create(request.Url);
             web.Method = request.Method;
             web.Timeout = ConnectTimeoutMs;
+            if (addUnrestricted == null)
+                addUnrestricted = (name, value) => web.Headers[name] = value;
             foreach (var header in request.Headers)
             {
                 if (string.Equals(header.Key, "User-Agent", StringComparison.OrdinalIgnoreCase))
                     web.UserAgent = header.Value;
                 else if (string.Equals(header.Key, "Content-Type", StringComparison.OrdinalIgnoreCase))
                     web.ContentType = header.Value;
+                else if (string.Equals(header.Key, "Accept", StringComparison.OrdinalIgnoreCase))
+                    web.Accept = header.Value;
                 else
-                    web.Headers[header.Key] = header.Value;
+                    addUnrestricted(header.Key, header.Value);
             }
             return web;
         }
