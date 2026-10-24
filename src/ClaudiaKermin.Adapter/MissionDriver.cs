@@ -48,6 +48,7 @@ namespace ClaudiaKermin.Adapter
             _mission = mission;
             Window = new MissionWindow(Send, debugTools);
             Strip = new CapcomStrip(Window);
+            GameEvents.onKerbalStatusChange.Add(OnKerbalStatusChange);
         }
 
         public void Send(MissionInput input)
@@ -150,10 +151,29 @@ namespace ClaudiaKermin.Adapter
                     if (runner != null) runner.Abort(abort.ProcessorPartId, abort.Reason);
                     continue;
                 }
+                if (command is SeatClaudia)
+                {
+                    SeatClaudia();
+                    continue;
+                }
                 var message = command as PostScreenMessage;
                 if (message != null && !Window.Visible)
                     ScreenMessages.PostScreenMessage(message.Text, 6f, ScreenMessageStyle.UPPER_CENTER);
             }
+        }
+
+        /// <summary>A crewed Mission started in the editor with her not aboard: she takes a free seat.</summary>
+        private static void SeatClaudia()
+        {
+            var game = HighLogic.CurrentGame;
+            if (game != null && game.CrewRoster != null && Roster.RosterGateway.SeatInEditor(game.CrewRoster)) return;
+            ScreenMessages.PostScreenMessage("Claudia could not be seated: seat her in the crew dialog yourself before launch.", 8f, ScreenMessageStyle.UPPER_CENTER);
+        }
+
+        /// <summary>Her death is a game event for the core; only a crewed Mission cares (the core ignores it for a remote one).</summary>
+        private void OnKerbalStatusChange(ProtoCrewMember kerbal, ProtoCrewMember.RosterStatus oldStatus, ProtoCrewMember.RosterStatus newStatus)
+        {
+            if (newStatus == ProtoCrewMember.RosterStatus.Dead && Roster.RosterGateway.IsClaudia(kerbal)) Send(new ClaudiaKilled());
         }
 
         private void StartScript(StartScript start)

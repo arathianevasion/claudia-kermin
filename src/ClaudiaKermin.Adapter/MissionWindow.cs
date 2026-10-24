@@ -43,6 +43,8 @@ namespace ClaudiaKermin.Adapter
 
         // Start form.
         private string _goal = "";
+        /// <summary>The start form's Mission type: Claudia stays at Mission Control (remote) or flies aboard (crewed, the default).</summary>
+        private bool _remote;
         private Vector2 _goalScroll;
         // The Craft Check findings scroll; a new result (a different set of findings) jumps back to the top.
         private Vector2 _checkScroll;
@@ -199,6 +201,9 @@ namespace ClaudiaKermin.Adapter
             _cap = GUILayout.TextField(_cap, 10, GUILayout.Width(80));
             GUILayout.EndHorizontal();
 
+            GUILayout.Label("Mission type:");
+            _remote = GUILayout.SelectionGrid(_remote ? 1 : 0, new[] { "Crewed (Claudia flies aboard)", "Remote (Claudia at Mission Control)" }, 1) == 1;
+
             GUILayout.Label("Model (locked for the Mission):");
             var names = new string[form.Models.Count];
             for (var i = 0; i < names.Length; i++)
@@ -218,9 +223,10 @@ namespace ClaudiaKermin.Adapter
             if (GUILayout.Button("Start Mission"))
             {
                 // The goal stays until the Mission has actually started: the Craft Check may still hold it back.
-                _send(new StartMission(_goal, cap, form.Models[_modelIndex]));
+                _send(new StartMission(_goal, cap, form.Models[_modelIndex], _remote));
             }
             GUI.enabled = true;
+            if (form.Refusal.Length > 0) GUILayout.Label(form.Refusal, _wrap);
             if (!capOk) GUILayout.Label("The Spending Cap must be a positive number of dollars.", _wrap);
         }
 
@@ -255,7 +261,7 @@ namespace ClaudiaKermin.Adapter
             {
                 GUI.enabled = _goal.Trim().Length > 0 && form.Models.Count > 0 && check.State != CraftCheckState.Running;
                 if (GUILayout.Button("Check craft", GUILayout.ExpandWidth(false)))
-                    _send(new RunCraftCheck(_goal, form.Models[Mathf.Clamp(_modelIndex, 0, form.Models.Count - 1)]));
+                    _send(new RunCraftCheck(_goal, form.Models[Mathf.Clamp(_modelIndex, 0, form.Models.Count - 1)], _remote));
                 GUI.enabled = true;
             }
             DrawProcessorChoice(check);
@@ -513,6 +519,7 @@ namespace ClaudiaKermin.Adapter
                 case MissionStage.Debriefing: return "Debriefing";
                 case MissionStage.Succeeded: return "Mission Goal met";
                 case MissionStage.Ended: return "Mission ended (Failed Debrief)";
+                case MissionStage.Lost: return "Mission Lost (Claudia was killed aboard)";
                 case MissionStage.Paused: return "Paused: " + view.PauseReason;
                 case MissionStage.UnsafeScript: return "Couldn't produce a safe script";
                 default: return "";
