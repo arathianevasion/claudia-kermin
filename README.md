@@ -78,6 +78,7 @@ The layout follows [ADR 0001](docs/adr/0001-single-in-process-ksp-mod.md):
 
 - `src/ClaudiaKermin.Core`: the Unity-free core. It never references Unity or KSP.
 - `src/ClaudiaKermin.Adapter`: the thin KSP adapter (`ClaudiaKermin.dll`).
+- `GameData/ClaudiaKermin`: static mod files (the Super Intelligence trait config and icon), copied into the staged mod on build. `tools/make-trait-icon.cs` regenerates the icon.
 - `src/ClaudiaKermin.KOS`: the kOS addon (`net48`, like kOS 1.6.0.1).
 - `tests/ClaudiaKermin.Core.Tests`: the core tests.
 - `tools/ClaudiaKermin.KsCompile`: compiles the `.ks` files under `kerboscript/` with kOS.Safe outside KSP.

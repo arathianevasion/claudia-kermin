@@ -5,7 +5,8 @@
     <Reference Include="Assembly-CSharp" HintPath="$(KSPManagedDir)/Assembly-CSharp.dll" Private="false" />
     <Reference Include="UnityEngine" HintPath="$(KSPManagedDir)/UnityEngine.dll" Private="false" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(KSPManagedDir)/UnityEngine.CoreModule.dll" Private="false" />
-  </ItemGroup>
+    <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(KSPManagedDir)/UnityEngine.TextRenderingModule.dll" Private="false" />
+    <Reference Include="UnityEngine.UI" HintPath="$(KSPManagedDir)/UnityEngine.UI.dll" Private="false" />  </ItemGroup>
 
   <!-- Projects that need KSP (and kOS) assemblies set NeedsKSP / NeedsKOS; fail early with a useful message. -->
   <Target Name="CheckKSPReferences" BeforeTargets="ResolveAssemblyReferences" Condition="'$(NeedsKSP)' == 'true' Or '$(NeedsKOS)' == 'true'">
@@ -23,5 +24,13 @@
     </ItemGroup>
     <Copy SourceFiles="@(_StagePlugin)" DestinationFolder="$(GameDataStageDir)Plugins" SkipUnchangedFiles="true" />
     <Copy SourceFiles="$(RepoRoot)LICENSE" DestinationFolder="$(GameDataStageDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- Static GameData files (trait config, icon) are copied as they are, under the staged mod folder. -->
+  <Target Name="StageGameDataFiles" AfterTargets="Build" Condition="'$(StagesGameDataFiles)' == 'true'">
+    <ItemGroup>
+      <_StageFile Include="$(RepoRoot)GameData/ClaudiaKermin/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_StageFile)" DestinationFiles="@(_StageFile->'$(GameDataStageDir)%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 </Project>
