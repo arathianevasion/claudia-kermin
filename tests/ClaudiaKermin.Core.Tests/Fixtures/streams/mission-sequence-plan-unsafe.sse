@@ -8,7 +8,7 @@ event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\"kind\":\"sequence_plan\",\"say\":\"Sequence Plan: link check with a quicksave first, 0 m/s, 5 s.\",\"reply_intent\":null,\"mission_plan\":null,"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\"sequence_plan\":{\"name\":\"Link check\",\"intent\":\"Quicksave, then report the craft’s status from the pad.\",\"why\":\"A save point before anything fires.\",\"target\":\"A report with success true\",\"tolerances\":\"none\",\"expected_delta_v\":0,\"expected_duration_s\":5,\"abort_conditions\":[\"no report within 30 s\"],\"risks\":[\"none: no engines fire\"],\"custom_script\":true,"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\"sequence_plan\":{\"name\":\"Link check\",\"intent\":\"Quicksave, then report the craft’s status from the pad.\",\"why\":\"A save point before anything fires.\",\"target\":\"A report with success true\",\"tolerances\":\"none\",\"expected_delta_v\":0,\"expected_duration_s\":5,\"abort_conditions\":[\"no report within 30 s\"],\"risks\":[\"none: no engines fire\"],\"custom_script\":true,\"custom_script_reason\":\"No Building Block reports a status from the pad.\","}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\"script\":\"KUNIVERSE:QUICKSAVE().\\nADDONS:CLAUDIA:REPORT(LEXICON(\\\"success\\\", TRUE, \\\"reason\\\", \\\"link check\\\")).\\n\"},\"debrief\":null}"}}

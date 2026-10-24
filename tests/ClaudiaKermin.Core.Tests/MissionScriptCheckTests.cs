@@ -238,7 +238,9 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             ApproveMissionPlan(mission);
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
-            Assert.True(Assert.Single(SequenceCards(mission.View)).CustomScript);
+            var card = Assert.Single(SequenceCards(mission.View));
+            Assert.True(card.CustomScript);
+            Assert.Equal("No Building Block reports a status from the pad.", card.CustomScriptReason);
         }
 
         [Fact]
@@ -262,6 +264,7 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(GameSnapshot.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "snapshots", "on-pad.json"))));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             Assert.Contains("custom_script", transport.Requests[0].Body);
+            Assert.Contains("custom_script_reason", transport.Requests[0].Body);
         }
     }
 }

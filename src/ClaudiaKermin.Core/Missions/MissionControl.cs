@@ -619,9 +619,10 @@ namespace ClaudiaKermin.Core.Missions
             mission.PendingSequence = null;
             mission.ConfirmPrompt = null;
             mission.UnsafeProblems = problems;
-            AddCard(mission, LogKind.SequencePlan, plan.Name,
-                "Couldn't produce a safe script. The Script Check found: " + string.Join("; ", problems.ToArray()), plan.Why)
-                .CustomScript = plan.CustomScript;
+            var card = AddCard(mission, LogKind.SequencePlan, plan.Name,
+                "Couldn't produce a safe script. The Script Check found: " + string.Join("; ", problems.ToArray()), plan.Why);
+            card.CustomScript = plan.CustomScript;
+            card.CustomScriptReason = plan.CustomScriptReason;
             NeedsPlayer("Claudia couldn't produce a safe script.");
         }
 
@@ -691,6 +692,7 @@ namespace ClaudiaKermin.Core.Missions
             var card = AddCard(mission, LogKind.SequencePlan, plan.Name, body.ToString(), plan.Why);
             card.Script = plan.Script;
             card.CustomScript = plan.CustomScript;
+            card.CustomScriptReason = plan.CustomScriptReason;
             NeedsPlayer("Claudia has a Sequence Plan for your Approval.");
         }
 

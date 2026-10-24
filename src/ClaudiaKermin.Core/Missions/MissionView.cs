@@ -73,6 +73,8 @@ namespace ClaudiaKermin.Core.Missions
         public string Script = "";
         /// <summary>A Sequence Plan whose script is a Custom Script (written from scratch, not from Building Blocks): show the badge.</summary>
         public bool CustomScript;
+        /// <summary>Why no Building Block fits, shown with the Custom Script badge; "" otherwise.</summary>
+        public string CustomScriptReason = "";
         /// <summary>A Debrief's outcome (Nominal, Off-Nominal, Failed); "" otherwise.</summary>
         public string Outcome = "";
         /// <summary>The model that answered, when a fallback model served the reply; "" otherwise.</summary>

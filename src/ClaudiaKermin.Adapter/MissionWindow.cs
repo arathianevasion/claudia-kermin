@@ -291,6 +291,7 @@ namespace ClaudiaKermin.Adapter
             GUILayout.Label(entry.Kind == LogKind.SequencePlan ? "Sequence Plan: " + entry.Title : entry.Title, _bold);
             if (entry.CustomScript) GUILayout.Label("[Custom Script]", _bold, GUILayout.ExpandWidth(false));
             GUILayout.EndHorizontal();
+            if (entry.CustomScript && entry.CustomScriptReason.Length > 0) GUILayout.Label("Custom Script: " + entry.CustomScriptReason, _wrap);
             GUILayout.Label(entry.Text, _wrap);
             GUILayout.BeginHorizontal();
             if (entry.Why.Length > 0 && GUILayout.Button(_showWhy.Contains(entry) ? "Hide why" : "Why", GUILayout.ExpandWidth(false)))
