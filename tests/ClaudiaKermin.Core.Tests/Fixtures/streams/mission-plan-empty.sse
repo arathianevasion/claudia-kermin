@@ -1,0 +1,33 @@
+event: message_start
+data: {"type":"message_start","message":{"id":"msg_01MissionPlanEmpty","type":"message","role":"assistant","content":[],"model":"claude-sonnet-5-5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":3100,"cache_creation_input_tokens":2600,"cache_read_input_tokens":0,"output_tokens":1}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"c2lnLW1pc3Npb24tcGxhbg=="}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}
+
+event: ping
+data: {"type": "ping"}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"{\"kind\":\"mission_plan\",\"say\":\"0 m/s, no sequences: I can't quicksave from a script, because saving, loading and reverting are forbidden in Mission Scripts and the mod would refuse it. Press F5 yourself, or give me a flight goal such as a launch to orbit.\",\"reply_intent\":null,"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"\"mission_plan\":{\"why\":\"A quicksave from kOS is on the forbidden list, so no script can fly this goal.\",\"sequences\":[],\"total_delta_v\":0,\"expected_duration\":\"0 s\"},\"sequence_plan\":null,\"debrief\":null}"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":240,"iterations":[{"type":"message","input_tokens":3100,"output_tokens":240}]}}
+
+event: message_stop
+data: {"type":"message_stop"}
+

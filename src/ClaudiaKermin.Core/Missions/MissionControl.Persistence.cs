@@ -479,7 +479,12 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The plan awaiting Approval is shown again as a card, so the player sees what they approve.</summary>
         private void OfferCards(Mission mission, MissionStage stage, MissionSaveState state)
         {
-            if (stage == MissionStage.AwaitingPlanApproval && mission.Plan != null) OfferMissionPlan(mission, mission.Plan);
+            if (stage == MissionStage.AwaitingPlanApproval && mission.Plan != null)
+            {
+                // A Mission Plan with no sequences has no card: Claudia's line is what the player needs to see again.
+                if (mission.Plan.Sequences.Count == 0 && !string.IsNullOrEmpty(state.LatestLine)) Note(LogKind.Claudia, state.LatestLine);
+                OfferMissionPlan(mission, mission.Plan);
+            }
             else if (stage == MissionStage.AwaitingSequenceApproval && mission.PendingSequence != null)
             {
                 mission.Stage = MissionStage.AwaitingSequenceApproval;
