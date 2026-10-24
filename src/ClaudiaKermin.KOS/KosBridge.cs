@@ -25,7 +25,7 @@ namespace ClaudiaKermin.KOS
     /// (where kOS runs), end-of-run reads in Update.
     /// </summary>
     [KSPAddon(KSPAddon.Startup.Flight, false)]
-    public class KosBridge : MonoBehaviour
+    public class KosBridge : MonoBehaviour, IScriptRunner
     {
         private const string ProgramContext = "program";
 
@@ -101,6 +101,8 @@ namespace ClaudiaKermin.KOS
         private void Awake()
         {
             Instance = this;
+            // The adapter's Mission driver starts approved scripts through this.
+            ScriptRunner.Current = this;
             GameEvents.onGameSceneLoadRequested.Add(OnSceneLoadRequested);
         }
 
@@ -116,6 +118,7 @@ namespace ClaudiaKermin.KOS
                 Guard(() => Finish(run));
             }
             if (Instance == this) Instance = null;
+            if (ScriptRunner.Current == (IScriptRunner)this) ScriptRunner.Current = null;
         }
 
         private void OnSceneLoadRequested(GameScenes scene)
