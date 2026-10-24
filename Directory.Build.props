@@ -1,0 +1,29 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<Project>
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <Authors>Andrew Watson</Authors>
+    <Product>Claudia Kermin</Product>
+    <Copyright>Copyright (C) 2026 Andrew Watson. Licensed GPL-3.0-or-later.</Copyright>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
+  </PropertyGroup>
+
+  <!--
+    Where the KSP and kOS reference assemblies come from. Nothing from KSP, Unity or kOS
+    is committed; point these at a local install, e.g.
+      dotnet build -p:KSPRoot=/path/to/KSP
+    KSPRoot defaults to ~/KSP_spike (a macOS install with KSP.app inside it).
+  -->
+  <PropertyGroup>
+    <KSPRoot Condition="'$(KSPRoot)' == ''">$(HOME)/KSP_spike</KSPRoot>
+    <KSPManagedDir Condition="'$(KSPManagedDir)' == ''">$(KSPRoot)/KSP.app/Contents/Resources/Data/Managed</KSPManagedDir>
+    <KOSPluginsDir Condition="'$(KOSPluginsDir)' == ''">$(KSPRoot)/GameData/kOS/Plugins</KOSPluginsDir>
+    <!-- The mod as it is laid out under GameData; copy dist/GameData/ClaudiaKermin into a KSP GameData folder. -->
+    <GameDataStageDir>$(RepoRoot)dist/GameData/ClaudiaKermin/</GameDataStageDir>
+  </PropertyGroup>
+</Project>

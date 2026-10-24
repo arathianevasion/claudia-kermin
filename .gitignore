@@ -40,6 +40,17 @@ venv/
 dist/
 build/
 coverage/
+bin/
+obj/
+*.user
+TestResults/
+
+# Local working files
+.scratch/
+prototypes/
+
+# KSP, Unity and kOS assemblies are never committed
+*.dll
 
 # Claude Code local settings
 .claude/settings.local.json

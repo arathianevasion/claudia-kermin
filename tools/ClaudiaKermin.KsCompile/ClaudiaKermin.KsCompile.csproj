@@ -1,0 +1,19 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  Compiles kerboscript with kOS.Safe outside KSP, so CI catches syntax errors in the scripts we ship.
+  Not part of the mod. kOS.Safe comes from a local kOS install (KOSPluginsDir) or, in CI, from the
+  public kOS release.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <NeedsKOS>true</NeedsKOS>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="kOS.Safe" HintPath="$(KOSPluginsDir)/kOS.Safe.dll" />
+    <Reference Include="ICSharpCode.SharpZipLib" HintPath="$(KOSPluginsDir)/ICSharpCode.SharpZipLib.dll" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,27 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<Project>
+  <!-- KSP and Unity ship with the game: projects that set NeedsKSP compile against them and never copy them. -->
+  <ItemGroup Condition="'$(NeedsKSP)' == 'true'">
+    <Reference Include="Assembly-CSharp" HintPath="$(KSPManagedDir)/Assembly-CSharp.dll" Private="false" />
+    <Reference Include="UnityEngine" HintPath="$(KSPManagedDir)/UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(KSPManagedDir)/UnityEngine.CoreModule.dll" Private="false" />
+  </ItemGroup>
+
+  <!-- Projects that need KSP (and kOS) assemblies set NeedsKSP / NeedsKOS; fail early with a useful message. -->
+  <Target Name="CheckKSPReferences" BeforeTargets="ResolveAssemblyReferences" Condition="'$(NeedsKSP)' == 'true' Or '$(NeedsKOS)' == 'true'">
+    <Error Condition="'$(NeedsKSP)' == 'true' And !Exists('$(KSPManagedDir)/Assembly-CSharp.dll')"
+           Text="KSP assemblies not found in '$(KSPManagedDir)'. Pass -p:KSPRoot=/path/to/KSP (or -p:KSPManagedDir=...)." />
+    <Error Condition="'$(NeedsKOS)' == 'true' And !Exists('$(KOSPluginsDir)/kOS.Safe.dll')"
+           Text="kOS assemblies not found in '$(KOSPluginsDir)'. Pass -p:KSPRoot=/path/to/KSP (or -p:KOSPluginsDir=...)." />
+  </Target>
+
+  <!-- Projects that ship in GameData set ShipsInGameData; their assembly and copy-local dlls go to the staged Plugins folder. -->
+  <Target Name="StageGameData" AfterTargets="Build" Condition="'$(ShipsInGameData)' == 'true'">
+    <ItemGroup>
+      <_StagePlugin Include="@(IntermediateAssembly->'$(OutDir)%(Filename)%(Extension)')" />
+      <_StagePlugin Include="@(ReferenceCopyLocalPaths)" Condition="'%(Extension)' == '.dll'" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_StagePlugin)" DestinationFolder="$(GameDataStageDir)Plugins" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(RepoRoot)LICENSE" DestinationFolder="$(GameDataStageDir)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

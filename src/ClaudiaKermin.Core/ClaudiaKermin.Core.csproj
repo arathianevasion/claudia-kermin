@@ -1,0 +1,13 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  The Unity-free core (ADR 0001): mission orchestration, the Claude client, prompt building and
+  Mission state. It must never reference Unity or KSP assemblies, so it builds and tests anywhere.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>ClaudiaKermin.Core</AssemblyName>
+    <RootNamespace>ClaudiaKermin.Core</RootNamespace>
+    <ShipsInGameData>true</ShipsInGameData>
+  </PropertyGroup>
+</Project>
