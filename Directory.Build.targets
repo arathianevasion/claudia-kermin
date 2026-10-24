@@ -5,6 +5,8 @@
     <Reference Include="Assembly-CSharp" HintPath="$(KSPManagedDir)/Assembly-CSharp.dll" Private="false" />
     <Reference Include="UnityEngine" HintPath="$(KSPManagedDir)/UnityEngine.dll" Private="false" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(KSPManagedDir)/UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.IMGUIModule" HintPath="$(KSPManagedDir)/UnityEngine.IMGUIModule.dll" Private="false" />
+    <Reference Include="UnityEngine.AnimationModule" HintPath="$(KSPManagedDir)/UnityEngine.AnimationModule.dll" Private="false" />
   </ItemGroup>
 
   <!-- Projects that need KSP (and kOS) assemblies set NeedsKSP / NeedsKOS; fail early with a useful message. -->
