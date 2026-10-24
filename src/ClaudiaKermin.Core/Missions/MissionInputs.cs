@@ -142,7 +142,7 @@ namespace ClaudiaKermin.Core.Missions
 
     /// <summary>
     /// Hand back to Claudia, with an optional message about what the player did. Claudia Debriefs the stretch (judged for
-    /// a planned stretch, a plain account for a takeover) and revises the Mission Plan for Approval.
+    /// a planned stretch, a plain account for Manual Control nobody planned) and revises the Mission Plan for Approval.
     /// </summary>
     public sealed class HandBack : MissionInput
     {

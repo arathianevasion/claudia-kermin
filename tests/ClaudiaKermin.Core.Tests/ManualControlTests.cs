@@ -233,6 +233,8 @@ namespace ClaudiaKermin.Core.Tests
             }));
 
             Assert.Equal(allowed, mission.View.ManualControlAllowed);
+            // Flight controls (attitude, translation, throttle) are locked only when nobody could really fly it.
+            Assert.Equal(!allowed, (mission.View.Locks & ControlLocks.Attitude) != 0);
             Assert.Equal(allowed, mission.View.QuickReplies.Contains(QuickReply.ManualControl));
             mission.Send(new TakeManualControl());
             mission.Send(new ManualInputHeld(5));

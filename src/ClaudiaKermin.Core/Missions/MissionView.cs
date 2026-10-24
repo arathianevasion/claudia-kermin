@@ -50,6 +50,8 @@ namespace ClaudiaKermin.Core.Missions
         Brakes = 32,
         /// <summary>The time-warp keys: locked while Running only.</summary>
         Warp = 64,
+        /// <summary>Attitude, translation and throttle input: locked only when Manual Control isn't allowed (no link, no other crew).</summary>
+        Attitude = 128,
         /// <summary>Everything Claudia's hold on the craft locks outside Running.</summary>
         Craft = Staging | ActionGroups | Sas | Rcs | Gear | Brakes,
     }

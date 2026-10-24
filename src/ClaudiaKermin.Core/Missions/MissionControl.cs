@@ -313,7 +313,7 @@ namespace ClaudiaKermin.Core.Missions
             var mission = _mission;
             if (mission == null) return;
             // A plan restored from a save was never offered against a snapshot: the first one after the load is its baseline.
-            if (mission.AwaitingApproval && mission.PlanBaseline == null && !mission.InFlight) mission.PlanBaseline = snapshot;
+            if (mission.AwaitingApproval && mission.PlanBaseline == null && !mission.InFlight && _scene == GameScene.Flight) mission.PlanBaseline = snapshot;
             if (mission.Stage == MissionStage.ManualControl && !snapshot.HasLink && !snapshot.HasOtherCrew && _scene == GameScene.Flight) LinkLostDuringManual();
         }
 

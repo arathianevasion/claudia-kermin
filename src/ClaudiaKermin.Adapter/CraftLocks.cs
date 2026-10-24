@@ -44,6 +44,9 @@ namespace ClaudiaKermin.Adapter
             if ((locks & ControlLocks.Gear) != 0) types |= ControlTypes.GROUP_GEARS;
             if ((locks & ControlLocks.Brakes) != 0) types |= ControlTypes.GROUP_BRAKES;
             if ((locks & ControlLocks.Warp) != 0) types |= ControlTypes.TIMEWARP;
+            if ((locks & ControlLocks.Attitude) != 0)
+                types |= ControlTypes.PITCH | ControlTypes.YAW | ControlTypes.ROLL | ControlTypes.THROTTLE | ControlTypes.LINEAR
+                    | ControlTypes.WHEEL_STEER | ControlTypes.WHEEL_THROTTLE;
             return types;
         }
     }

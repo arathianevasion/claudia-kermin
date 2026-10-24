@@ -31,6 +31,9 @@ namespace ClaudiaKermin.Core.Missions
             public double RefusedAt = double.NegativeInfinity;
         }
 
+        /// <summary>The "Manual Control isn't available" notice is repeated at most this often, in UT seconds, while keys stay held.</summary>
+        private const double RefusalNoticeSeconds = 30;
+
         /// <summary>A link to Kerbin (CommNet off counts) or another non-Tourist crew member aboard: someone could really fly the craft.</summary>
         private bool ManualAllowed
         {
@@ -56,7 +59,10 @@ namespace ClaudiaKermin.Core.Missions
         {
             var mission = _mission;
             if (MissionOver || _scene != GameScene.Flight || mission.Stage == MissionStage.ManualControl) return ControlLocks.None;
-            return IsRunning(mission) ? ControlLocks.Craft | ControlLocks.Warp : ControlLocks.Craft;
+            var locks = IsRunning(mission) ? ControlLocks.Craft | ControlLocks.Warp : ControlLocks.Craft;
+            // With no link and no other crew nobody could really fly it: the flight controls stay locked too.
+            if (_snapshot != null && !ManualAllowed) locks |= ControlLocks.Attitude;
+            return locks;
         }
 
         // ---- Taking the craft ----
@@ -73,7 +79,7 @@ namespace ClaudiaKermin.Core.Missions
             if (MissionOver || mission.Stage == MissionStage.ManualControl || !CanTakeManual) return;
             if (!ManualAllowed)
             {
-                if (_ut - mission.RefusedAt >= 30)
+                if (_ut - mission.RefusedAt >= RefusalNoticeSeconds)
                 {
                     mission.RefusedAt = _ut;
                     Note(LogKind.Notice, "Manual Control isn't available: there is no link to Kerbin and no other crew aboard, so the flight controls stay locked.");
@@ -131,7 +137,7 @@ namespace ClaudiaKermin.Core.Missions
             Begin(HandBackTurn(mission));
         }
 
-        /// <summary>The short Debrief of a manual stretch: judged for a planned stretch, a plain account for a takeover.</summary>
+        /// <summary>The short Debrief of a manual stretch: judged for a planned stretch, a plain account for Manual Control nobody planned.</summary>
         private Turn HandBackTurn(Mission mission)
         {
             var plan = mission.PendingSequence ?? new SequencePlan { Name = "(unknown)" };
