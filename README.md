@@ -62,6 +62,28 @@ The key is stored as **plain text** in `~/Library/Application Support/ClaudiaKer
 - Claudia doesn't go on EVA in v1. When a goal needs EVA science, she asks you to do it by hand.
 - **Before uninstalling**, press **Prepare to uninstall** in Claudia's settings in every save that has her. Removing the mod without it is likely to break those saves.
 
+## Building
+
+You need the .NET 10 SDK. The adapter and kOS addon compile against your own KSP 1.12.5 and kOS 1.6 install; no KSP, Unity or kOS assemblies are in this repo. `KSPRoot` points at the install and defaults to `~/KSP_spike` (a macOS install with `KSP.app` inside). You can also set `KSPManagedDir` or `KOSPluginsDir` directly.
+
+| What | Command |
+| --- | --- |
+| Build everything | `dotnet build ClaudiaKermin.sln -p:KSPRoot=/path/to/KSP` |
+| Core tests (no KSP needed) | `dotnet test tests/ClaudiaKermin.Core.Tests` |
+| Kerboscript compile check (needs only kOS.Safe) | `dotnet run --project tools/ClaudiaKermin.KsCompile -p:KSPRoot=/path/to/KSP -- kerboscript` |
+
+A failing test or a kerboscript compile error exits non-zero. A build stages the mod in `dist/GameData/ClaudiaKermin/`. To install it, copy that folder into your KSP `GameData` folder, next to kOS and Harmony. kOS and Harmony are dependencies you install yourself; they are never bundled.
+
+The layout follows [ADR 0001](docs/adr/0001-single-in-process-ksp-mod.md):
+
+- `src/ClaudiaKermin.Core`: the Unity-free core. It never references Unity or KSP.
+- `src/ClaudiaKermin.Adapter`: the thin KSP adapter (`ClaudiaKermin.dll`).
+- `src/ClaudiaKermin.KOS`: the kOS addon (`net48`, like kOS 1.6.0.1).
+- `tests/ClaudiaKermin.Core.Tests`: the core tests.
+- `tools/ClaudiaKermin.KsCompile`: compiles the `.ks` files under `kerboscript/` with kOS.Safe outside KSP.
+
+CI (`.github/workflows/ci.yml`) runs on every push. It runs the core tests and the kerboscript compile check, taking kOS.Safe from the public kOS release.
+
 ## Project docs
 
 - [GLOSSARY.md](GLOSSARY.md): the domain language (Mission, Craft Check, Maneuver Sequence, Debrief and more).
