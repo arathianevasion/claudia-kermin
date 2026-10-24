@@ -68,6 +68,14 @@ namespace ClaudiaKermin.Core.Missions
     {
     }
 
+    /// <summary>
+    /// End Mission, after the player confirmed: cancels any request in flight, aborts a running script, marks
+    /// the Mission ended in its folder (folder and transcript are kept) and frees the start form.
+    /// </summary>
+    public sealed class EndMission : MissionInput
+    {
+    }
+
     /// <summary>The debug capture button: writes the latest Game Snapshot to the save's <c>ClaudiaKermin/snapshots</c> folder.</summary>
     public sealed class CaptureSnapshot : MissionInput
     {
