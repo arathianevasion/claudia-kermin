@@ -49,8 +49,16 @@ The ordered list of Maneuver Sequences Claudia intends to fly to reach a Mission
 _Avoid_: flight plan, roadmap
 
 **Sequence Plan**:
-Claudia's proposal for the next Maneuver Sequence: its intent, Building Blocks and settings, target outcome with tolerances, expected delta-v and duration, abort conditions and risks.
+Claudia's proposal for the next Maneuver Sequence: its intent, Building Blocks and settings, target outcome with tolerances, expected delta-v and duration, abort conditions, Telemetry Checks and risks.
 _Avoid_: maneuver plan, proposal, step plan
+
+**Telemetry Check**:
+A quantity the mod can measure during a Maneuver Sequence (e.g. delta-v used, apoapsis, electric charge) with a threshold, set in the Sequence Plan or by default; while Running, the mod checks it, and crossing it raises an Alert. A crossed Telemetry Check rules out a Nominal Debrief.
+_Avoid_: watch limit, alarm, tripwire
+
+**Alert**:
+The mod's message to Claudia that a Telemetry Check was crossed while Running; she answers by letting the sequence carry on or recommending the player Abort.
+_Avoid_: alarm (the stock Alarm Clock's word), warning (a Craft Check finding)
 
 **Debrief**:
 Claudia's chat-based evaluation after a Maneuver Sequence: what happened versus the plan, progress toward the Mission Goal, and the proposed next Maneuver Sequence with its reasoning.
@@ -77,6 +85,10 @@ _Avoid_: flight, run, job
 **Spending Cap**:
 The most a Mission may spend on Claudia's API calls, set by the player when the Mission starts and raisable later.
 _Avoid_: budget (which means delta-v), limit, quota
+
+**Running**:
+The state of a Mission while a Maneuver Sequence's script executes; it ends at the Debrief. A Mission can be Running during a Blackout; taking Manual Control ends the run.
+_Avoid_: executing, active, in progress
 
 **Paused**:
 The state of a Mission that has stopped making progress, e.g. at its Spending Cap or on an API error, and can be resumed by the player.
