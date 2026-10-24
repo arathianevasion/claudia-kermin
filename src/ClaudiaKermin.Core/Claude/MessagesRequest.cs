@@ -91,6 +91,8 @@ namespace ClaudiaKermin.Core.Claude
         /// <summary>The <c>system</c> array exactly as requests send it.</summary>
         internal static void WriteSystem(JsonWriter json, IList<string> layers)
         {
+            // The API allows four breakpoints; the automatic tail takes one.
+            if (layers.Count > 3) throw new System.ArgumentException("at most three system layers can be cached");
             json.BeginArray();
             foreach (var layer in layers)
             {

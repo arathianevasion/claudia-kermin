@@ -65,7 +65,7 @@ namespace ClaudiaKermin.Core.Missions
         public void Send(MissionInput input)
         {
             if (input is GameSnapshot) Snapshot((GameSnapshot)input);
-            else if (input is SaveLoaded) _saveDirectory = ((SaveLoaded)input).SaveDirectory;
+            else if (input is SaveLoaded) Loaded(((SaveLoaded)input).SaveDirectory);
             else if (input is SceneChanged) _scene = ((SceneChanged)input).Scene;
             else if (input is UtAdvanced) _ut = ((UtAdvanced)input).Ut;
             else if (input is StartMission) Start((StartMission)input);
@@ -143,9 +143,14 @@ namespace ClaudiaKermin.Core.Missions
             }
         }
 
+        private bool MissionOver
+        {
+            get { return _mission == null || _mission.Stage == MissionStage.Succeeded || _mission.Stage == MissionStage.Ended; }
+        }
+
         private void Start(StartMission start)
         {
-            if (_mission != null && _mission.Stage != MissionStage.Succeeded) return;
+            if (!MissionOver) return;
             var goal = (start.Goal ?? "").Trim();
             if (goal.Length == 0 || start.SpendingCap <= 0 || !_config.Models.Contains(start.Model) || _saveDirectory == null) return;
 
@@ -184,6 +189,20 @@ namespace ClaudiaKermin.Core.Missions
                     + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.PlanNotice,
             });
+        }
+
+        /// <summary>
+        /// A Mission belongs to its save. Until Missions persist across saves (a later ticket), loading a
+        /// different save drops the Mission in memory and cancels its request; its folder stays in the old save.
+        /// </summary>
+        private void Loaded(string saveDirectory)
+        {
+            if (saveDirectory == _saveDirectory) return;
+            _saveDirectory = saveDirectory;
+            _snapshot = null;
+            if (_mission == null) return;
+            if (_mission.InFlight) _mission.Pending.Cancel.Cancel();
+            _mission = null;
         }
 
         private void Snapshot(GameSnapshot snapshot)
@@ -382,7 +401,7 @@ namespace ClaudiaKermin.Core.Missions
 
         private void Streamed(Mission mission, Turn turn, StreamUpdate update)
         {
-            if (mission.Pending != turn || !mission.InFlight) return;
+            if (mission != _mission || mission.Pending != turn || !mission.InFlight) return;
             var activity = mission.Activity;
             if (update.Kind == StreamUpdateKind.Restarted) activity = "thinking";
             else if (update.Kind == StreamUpdateKind.TextDelta) activity = "writing";
@@ -397,6 +416,8 @@ namespace ClaudiaKermin.Core.Missions
             mission.InFlight = false;
             mission.Activity = "";
             turn.Cancel.Dispose();
+            // The Mission was dropped (another save loaded) while this request ran.
+            if (mission != _mission) return;
             try
             {
                 Answered(mission, turn, result);
@@ -552,9 +573,11 @@ namespace ClaudiaKermin.Core.Missions
                 Note(LogKind.Notice, "Mission Goal met: the Mission is over.");
                 return;
             }
-            if (reply.SequencePlan != null && reply.SequencePlan.Script.Trim().Length > 0)
+            if (debrief.Outcome == "Failed")
             {
-                OfferSequencePlan(mission, reply.SequencePlan);
+                // A reduced goal for Approval is a later ticket; for now a Failed Debrief ends the Mission.
+                mission.Stage = MissionStage.Ended;
+                Note(LogKind.Notice, "The Mission Goal can't be reached as stated: the Mission has ended.");
                 return;
             }
             mission.Stage = MissionStage.Sequencing;
@@ -597,9 +620,8 @@ namespace ClaudiaKermin.Core.Missions
             {
                 MissionFolder.WriteTranscript(mission.Folder, mission.Id, mission.Model, mission.System, mission.Conversation);
             }
-            catch (Exception e)
+            catch (Exception e) when (IsFileError(e))
             {
-                if (!(e is IOException) && !(e is UnauthorizedAccessException)) throw;
                 Note(LogKind.Notice, "Couldn't write the Mission transcript: " + e.Message);
             }
         }
@@ -612,11 +634,15 @@ namespace ClaudiaKermin.Core.Missions
                 var path = MissionFolder.WriteSnapshot(_saveDirectory, _snapshot);
                 if (_mission != null) Note(LogKind.Notice, "Game Snapshot saved to " + path);
             }
-            catch (Exception e)
+            catch (Exception e) when (IsFileError(e))
             {
-                if (!(e is IOException) && !(e is UnauthorizedAccessException)) throw;
                 if (_mission != null) Note(LogKind.Notice, "Couldn't save the Game Snapshot: " + e.Message);
             }
+        }
+
+        private static bool IsFileError(Exception e)
+        {
+            return e is IOException || e is UnauthorizedAccessException;
         }
 
         private void NeedsPlayer(string text)
@@ -656,7 +682,7 @@ namespace ClaudiaKermin.Core.Missions
             view.StartForm.Models = _config.Models.ToList();
             view.StartForm.DefaultModel = _config.DefaultModel;
             view.StartForm.DefaultSpendingCap = _config.DefaultSpendingCap;
-            view.StartForm.CanStart = _saveDirectory != null && (mission == null || mission.Stage == MissionStage.Succeeded);
+            view.StartForm.CanStart = _saveDirectory != null && MissionOver;
 
             if (mission != null)
             {
@@ -671,8 +697,8 @@ namespace ClaudiaKermin.Core.Missions
                 view.PauseReason = mission.PauseReason;
                 view.ConfirmPrompt = mission.ConfirmPrompt;
                 view.Log = mission.Log.ToList();
-                if (mission.Plan != null) view.PlanSteps = mission.Plan.Sequences.Select(s => s.Name).ToList();
-                view.CurrentStep = Math.Min(mission.SequencesProposed, view.PlanSteps.Count) - 1;
+                if (mission.Plan != null) view.PlanSequences = mission.Plan.Sequences.Select(s => s.Name).ToList();
+                view.CurrentSequence = Math.Min(mission.SequencesProposed, view.PlanSequences.Count) - 1;
                 if (mission.Stage == MissionStage.Running && mission.PendingSequence != null)
                     view.RunStatus = "Running: " + mission.PendingSequence.Name;
                 view.CanType = !mission.InFlight && mission.Stage != MissionStage.Paused && mission.Stage != MissionStage.WaitingForFlight;

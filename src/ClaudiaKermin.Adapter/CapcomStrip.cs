@@ -68,12 +68,12 @@ namespace ClaudiaKermin.Adapter
 
         private static string Stepper(MissionView view)
         {
-            if (view.PlanSteps.Count == 0) return "Mission Plan: not yet";
+            if (view.PlanSequences.Count == 0) return "Mission Plan: not yet";
             var text = new StringBuilder("Plan: ");
-            for (var i = 0; i < view.PlanSteps.Count; i++)
+            for (var i = 0; i < view.PlanSequences.Count; i++)
             {
                 if (i > 0) text.Append("  >  ");
-                text.Append(i == view.CurrentStep ? "[" + view.PlanSteps[i] + "]" : view.PlanSteps[i]);
+                text.Append(i == view.CurrentSequence ? "[" + view.PlanSequences[i] + "]" : view.PlanSequences[i]);
             }
             return text.ToString();
         }

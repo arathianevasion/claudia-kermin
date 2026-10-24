@@ -129,7 +129,7 @@ namespace ClaudiaKermin.Core.Tests
             var planCard = mission.View.Log.Last(e => e.Kind == LogKind.MissionPlan);
             Assert.Equal("The goal only needs the kOS link proven; nothing has to fly.", planCard.Why);
             Assert.Contains("Link check", planCard.Text);
-            Assert.Equal(new[] { "Link check" }, mission.View.PlanSteps);
+            Assert.Equal(new[] { "Link check" }, mission.View.PlanSequences);
             Assert.Equal("Mission Plan: one Maneuver Sequence, no delta-v. Approve to go.", mission.View.LatestLine);
             Assert.Equal(new[] { QuickReply.Approve, QuickReply.ChangeSomething, QuickReply.AskQuestion }, mission.View.QuickReplies);
             Assert.Empty(Started(mission));
@@ -287,6 +287,44 @@ namespace ClaudiaKermin.Core.Tests
             var start = Assert.Single(Started(mission));
             Assert.Equal(3102u, start.ProcessorPartId);
             Assert.Equal(MissionStage.Running, mission.View.Stage);
+        }
+
+        [Fact]
+        public void AFailedDebriefEndsTheMissionAndAsksForNoFurtherSequence()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                ScriptedResponse.Fixture("mission-debrief-failed.sse"));
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+            mission.Send(new Approve());
+            Assert.Single(Started(mission));
+
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Interrupted, null, "", "the kOS processor was lost", false)));
+            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
+            Assert.Contains("Interrupted (the kOS processor was lost)", Text(Messages(transport.Requests[2]).Where(m => m.GetProperty("role").GetString() == "user").Last()));
+            Assert.Equal("Failed", mission.View.Log.Last(e => e.Kind == LogKind.Debrief).Outcome);
+            Assert.Equal(3, transport.Requests.Count);
+            Assert.True(mission.View.StartForm.CanStart);
+        }
+
+        [Fact]
+        public void LoadingAnotherSaveDropsTheMissionUntilMissionsPersist()
+        {
+            var mission = Control(new StreamingFakeTransport());
+            mission.Send(new SceneChanged(GameScene.Editor));
+            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            Assert.Equal(MissionStage.WaitingForFlight, mission.View.Stage);
+
+            mission.Send(new SaveLoaded(Path.Combine(_save.Path, "other")));
+            Assert.Equal(MissionStage.None, mission.View.Stage);
+            Assert.True(mission.View.StartForm.CanStart);
         }
 
         [Fact]
