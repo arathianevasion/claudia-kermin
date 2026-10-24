@@ -61,6 +61,7 @@ The key is stored as **plain text** in `~/Library/Application Support/ClaudiaKer
 - Stock contracts, EVA welding and the construction combine bonus count Claudia as a Pilot, Engineer and Scientist (Harmony patches on `FinePrint.Utilities.VesselUtilities`). ModuleManager patches in `GameData/ClaudiaKermin/Compatibility` cover Kerbalism and Community Trait Icons.
 - These mods check crew roles by name and **do not** count Claudia as a Pilot, Engineer or Scientist: KER, USI, Near Future Electrical, SystemHeat, SSPX, StationScience, WildBlue and Contract Configurator contract packs.
 - Claudia doesn't go on EVA in v1. When a goal needs EVA science, she asks you to do it by hand.
+- In this development build, Missions are a first pass: the Spending Cap is shown but not yet enforced, scripts are not yet Script-Checked (read a Sequence Plan's script with **Show script** before you approve it), there is no Craft Check, and a Mission is not kept across a save reload or a KSP restart.
 - **Before uninstalling**, press **Prepare to uninstall** in Claudia's settings in every save that has her. Removing the mod without it is likely to break those saves.
 
 ## Building
@@ -79,6 +80,7 @@ The layout follows [ADR 0001](docs/adr/0001-single-in-process-ksp-mod.md):
 
 - `src/ClaudiaKermin.Core`: the Unity-free core. It never references Unity or KSP.
 - `src/ClaudiaKermin.Adapter`: the thin KSP adapter (`ClaudiaKermin.dll`). In Flight and the VAB/SPH, the blue toolbar button opens a basic chat with Claudia (no Mission needed); her replies stream in and keep coming across scene changes. With `debug_tools = true`, the chat window can dump raw stream events to `stream-dumps/` in the config folder.
+- Missions: the green toolbar button opens the Mission window. Its start form takes the Mission Goal, Spending Cap and model (from `models` and `default_spending_cap` in the player config); in Flight a Capcom strip under the altimeter follows the Mission. All Mission logic sits behind one seam in the core (`ClaudiaKermin.Core.Missions.MissionControl`), which the adapter's `MissionDriver` feeds and obeys. Each Mission's transcript is rewritten atomically to `saves/<save>/ClaudiaKermin/missions/<id>/transcript.json` after every response; with `debug_tools = true`, raw stream events go to that folder's `stream-dumps/`, and a button saves Game Snapshots to `saves/<save>/ClaudiaKermin/snapshots/`.
 - `tests/ClaudiaKermin.Core.Tests/Fixtures/streams`: hand-written, byte-exact Claude streams that the client tests replay through the real parser.
 - `GameData/ClaudiaKermin`: static mod files (the Super Intelligence trait config and icon), copied into the staged mod on build. `tools/make-trait-icon.cs` regenerates the icon.
 - `src/ClaudiaKermin.KOS`: the kOS addon (`net48`, like kOS 1.6.0.1): `ADDONS:CLAUDIA` and the kOS bridge that runs scripts on a processor. With `debug_tools = true` in the player config, a Flight window runs the test scripts in `kerboscript/debug/` through it.

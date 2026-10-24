@@ -93,6 +93,12 @@ namespace ClaudiaKermin.Core.Chat
         /// <summary>Raw stream events go here when set; only the debug_tools option sets it.</summary>
         public IRawStreamDump RawDump;
 
+        /// <summary>The model for chat outside a Mission; the Loader sets the player config's default.</summary>
+        public string Model = DefaultModel;
+
+        /// <summary>From the player config.</summary>
+        public int CompactionTriggerTokens = 150000;
+
         /// <summary>Sends the player's message. False when it was empty, a reply is in progress or there is no key.</summary>
         public bool Send(string text)
         {
@@ -129,7 +135,7 @@ namespace ClaudiaKermin.Core.Chat
 
         private void Start(string text)
         {
-            var request = new MessagesRequest { Model = DefaultModel, MaxTokens = MaxTokens, Effort = "low" };
+            var request = new MessagesRequest { Model = Model, MaxTokens = MaxTokens, Effort = "low", CompactionTriggerTokens = CompactionTriggerTokens };
             request.System.Add(SystemPrompt);
             request.Messages.AddRange(_conversation);
             request.Messages.Add(Message.UserText(text));

@@ -11,5 +11,10 @@ transport. None came from a live API call, and none holds a key.
 - `refusal.sse`, `max-tokens-tool.sse`, `context-window.sse`: stop reasons.
 - `overloaded-error.sse`: an `error` event before any content.
 - `partial-text.sse`, `start-only.sse`: streams cut short; the tests add the stall or the break.
+- `mission-*.sse`: one Mission's replies in the Mission reply schema (structured output as text deltas):
+  the Mission Plan, the Sequence Plan with its script, the Debrief, an ambiguous reply and an answer.
+
+`../snapshots/on-pad.json` is a hand-written Game Snapshot in the format the debug capture button
+writes; replace or add captures from real play as they are taken.
 
 `.gitattributes` keeps git from changing their bytes.

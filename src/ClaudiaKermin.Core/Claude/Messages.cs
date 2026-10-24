@@ -115,6 +115,11 @@ namespace ClaudiaKermin.Core.Claude
     {
         User,
         Assistant,
+        /// <summary>
+        /// A mid-conversation system message: a mod notice (text only; must follow a user message and be
+        /// last or followed by an assistant turn), or an effort change with no text, which may sit anywhere.
+        /// </summary>
+        System,
     }
 
     public sealed class Message
@@ -122,11 +127,62 @@ namespace ClaudiaKermin.Core.Claude
         public Role Role;
         public readonly List<ContentBlock> Content = new List<ContentBlock>();
 
+        /// <summary>
+        /// For a <see cref="Role.System"/> message with no content: the effort from the next user turn on
+        /// (low, medium, high, xhigh or max). Null otherwise.
+        /// </summary>
+        public string Effort;
+
         public static Message UserText(string text)
         {
             var message = new Message { Role = Role.User };
             message.Content.Add(new TextBlock { Text = text });
             return message;
+        }
+
+        /// <summary>A mod notice to Claude, with system-prompt authority, appended without touching the cached prefix.</summary>
+        public static Message SystemText(string text)
+        {
+            var message = new Message { Role = Role.System };
+            message.Content.Add(new TextBlock { Text = text });
+            return message;
+        }
+
+        /// <summary>Changes effort from the next user turn on, without invalidating the messages cache.</summary>
+        public static Message SystemEffort(string effort)
+        {
+            return new Message { Role = Role.System, Effort = effort };
+        }
+
+        internal void Write(JsonWriter json, IEnumerable<ContentBlock> blocks)
+        {
+            json.BeginObject();
+            if (Role == Role.System)
+            {
+                json.Field("role", "system");
+                if (Effort != null)
+                {
+                    json.Name("content").BeginArray().EndArray();
+                    json.Name("output_config").BeginObject().Field("effort", Effort).EndObject();
+                }
+                else
+                {
+                    var text = new System.Text.StringBuilder();
+                    foreach (var block in blocks)
+                    {
+                        var t = block as TextBlock;
+                        if (t != null) text.Append(t.Text);
+                    }
+                    json.Field("content", text.ToString());
+                }
+                json.EndObject();
+                return;
+            }
+            json.Field("role", Role == Role.User ? "user" : "assistant");
+            json.Name("content").BeginArray();
+            foreach (var block in blocks)
+                block.Write(json);
+            json.EndArray().EndObject();
         }
     }
 
