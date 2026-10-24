@@ -9,7 +9,9 @@ namespace ClaudiaKermin.KOS
 {
     /// <summary>
     /// With <c>debug_tools = true</c>: a Flight window that runs a test script on the active vessel's
-    /// processor (nearest the root) through the kOS bridge and shows its report or error.
+    /// processor (nearest the root) through the kOS bridge and shows its report or error. A developer
+    /// tool: the player starts each fixed test script by hand and Claude is never involved, so it sits
+    /// outside the Approval rule of ADR 0002.
     /// </summary>
     [KSPAddon(KSPAddon.Startup.Flight, false)]
     public class DebugRunWindow : MonoBehaviour
@@ -73,7 +75,7 @@ namespace ClaudiaKermin.KOS
 
         private void Show(RunOutcome outcome)
         {
-            _status = "Ended: " + outcome.Kind + (outcome.Reason.Length > 0 ? " (" + outcome.Reason + ")" : "");
+            _status = "Ended: " + outcome.Summary;
             _result = outcome.Kind == RunOutcomeKind.Finished
                 ? "Report:\n" + KosValues.Format(outcome.Report)
                 : "Terminal tail:\n" + (outcome.ErrorText.Length > 0 ? outcome.ErrorText : "(nothing printed)");

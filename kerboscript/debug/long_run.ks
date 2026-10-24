@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Andrew Watson
 // debug_tools test: runs for a minute with throttle and steering locked, so Abort can be tried on it.
 print "claudia test: long run, press Abort".
 lock steering to ship:facing.
