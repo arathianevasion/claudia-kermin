@@ -52,6 +52,10 @@ namespace ClaudiaKermin.Core.Missions
         RetryWithNote,
         /// <summary>After "Couldn't produce a safe script": ask for a different Sequence Plan.</summary>
         Replan,
+        /// <summary>A Sequence Plan has a Due Time still ahead: warp to it on rails.</summary>
+        WarpToDueTime,
+        /// <summary>The Due Time is here and the player is not in the Mission's vessel: switch to it.</summary>
+        GoToVessel,
     }
 
     public enum LogKind
@@ -176,6 +180,22 @@ namespace ClaudiaKermin.Core.Missions
         public decimal DefaultSpendingCap;
         /// <summary>Estimated cost of a whole Mission (a Mun landing and return) per model in <see cref="Models"/>, USD.</summary>
         public IDictionary<string, decimal> Estimates = new Dictionary<string, decimal>();
+        /// <summary>The Mission Settings the form starts with (from the player config).</summary>
+        public MissionSettingsValues DefaultSettings = new MissionSettingsValues();
+    }
+
+    /// <summary>The Due Time of the Sequence Plan awaiting Approval, for the board and the Capcom strip.</summary>
+    public sealed class DueTimeView
+    {
+        public bool HasDueTime;
+        public double Ut;
+        /// <summary>The Due Time as the player reads it, e.g. "Y1 D12 03:20:00".</summary>
+        public string Text = "";
+        /// <summary>Seconds still to go; 0 once reached.</summary>
+        public double SecondsLeft;
+        public bool Reached;
+        /// <summary>The name of the Mission's vessel, for the Go to <i>vessel</i> button; "" when unknown.</summary>
+        public string VesselName = "";
     }
 
     /// <summary>
@@ -234,6 +254,12 @@ namespace ClaudiaKermin.Core.Missions
         public bool CanEndMission;
         /// <summary>Leaving Flight now would cut off a running sequence, so the adapter asks the player first.</summary>
         public bool LeavingFlightNeedsConfirmation;
+
+        /// <summary>The Mission Settings in force.</summary>
+        public MissionSettingsValues Settings = new MissionSettingsValues();
+        /// <summary>The Mission Settings may be edited now (a plan awaits Approval, or Claudia has not planned yet).</summary>
+        public bool CanEditSettings;
+        public DueTimeView DueTime = new DueTimeView();
 
         public IList<LogEntry> Log = new List<LogEntry>();
     }

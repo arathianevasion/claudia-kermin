@@ -51,6 +51,9 @@ namespace ClaudiaKermin.Adapter
         private bool _confirmingEnd;
         private string _cap;
         private int _modelIndex;
+        // Mission Settings in the start form and in the edit box; null until first drawn (then prefilled from the view).
+        private MissionSettingsValues _settings;
+        private bool _editingSettings;
         // Raise cap asked for a new Spending Cap and awaits the amount.
         private bool _raising;
         private string _raiseTo = "";
@@ -113,6 +116,8 @@ namespace ClaudiaKermin.Adapter
                     break;
                 case QuickReply.Resume: _send(new Resume()); break;
                 case QuickReply.Replan: _send(new Replan()); break;
+                case QuickReply.WarpToDueTime: _send(new WarpToDueTime()); break;
+                case QuickReply.GoToVessel: _send(new GoToVessel()); break;
                 case QuickReply.RetryWithNote:
                     _typingFor = TypingFor.Note;
                     Visible = true;
@@ -134,6 +139,13 @@ namespace ClaudiaKermin.Adapter
             _checkCollapsed = true;
         }
 
+        /// <summary>The label with the view's names in it: Go to <i>vessel</i>.</summary>
+        public static string Label(QuickReply reply, MissionView view)
+        {
+            if (reply == QuickReply.GoToVessel && view.DueTime.VesselName.Length > 0) return "Go to " + view.DueTime.VesselName;
+            return Label(reply);
+        }
+
         public static string Label(QuickReply reply)
         {
             switch (reply)
@@ -148,6 +160,8 @@ namespace ClaudiaKermin.Adapter
                 case QuickReply.Resume: return "Resume";
                 case QuickReply.RetryWithNote: return "Retry with a note";
                 case QuickReply.Replan: return "Re-plan";
+                case QuickReply.WarpToDueTime: return "Warp to Due Time";
+                case QuickReply.GoToVessel: return "Go to vessel";
                 default: return "Retry";
             }
         }
@@ -272,6 +286,9 @@ namespace ClaudiaKermin.Adapter
             _modelIndex = Mathf.Clamp(_modelIndex, 0, Math.Max(0, names.Length - 1));
             _modelIndex = GUILayout.SelectionGrid(_modelIndex, names, 1);
 
+            if (_settings == null) _settings = form.DefaultSettings.Copy();
+            DrawSettingsControls(_settings);
+
             decimal cap;
             var capOk = decimal.TryParse(_cap, NumberStyles.Number, CultureInfo.InvariantCulture, out cap) && cap > 0;
             // Start Mission runs the Craft Check first; it is disabled on a Blocker and until every Warning is acknowledged.
@@ -279,10 +296,56 @@ namespace ClaudiaKermin.Adapter
             if (GUILayout.Button("Start Mission"))
             {
                 // The goal stays until the Mission has actually started: the Craft Check may still hold it back.
-                _send(new StartMission(_goal, cap, form.Models[_modelIndex]));
+                _send(new StartMission(_goal, cap, form.Models[_modelIndex], _settings.Copy()));
             }
             GUI.enabled = true;
             if (!capOk) GUILayout.Label("The Spending Cap must be a positive number of dollars.", _wrap);
+        }
+
+        /// <summary>The Mission Settings: Daylight landing and Time versus delta-v.</summary>
+        private void DrawSettingsControls(MissionSettingsValues settings)
+        {
+            GUILayout.Label("Mission Settings:", _bold);
+            settings.DaylightLanding = GUILayout.Toggle(settings.DaylightLanding, "Daylight landing");
+            GUILayout.Label("Time versus delta-v:");
+            var choices = new[]
+            {
+                MissionSettingsValues.Label(TimeVersusDeltaV.Fastest),
+                MissionSettingsValues.Label(TimeVersusDeltaV.Balanced),
+                MissionSettingsValues.Label(TimeVersusDeltaV.MostEfficient),
+            };
+            settings.TimeVersusDeltaV = (TimeVersusDeltaV)GUILayout.SelectionGrid((int)settings.TimeVersusDeltaV, choices, 1);
+        }
+
+        /// <summary>The Mission's settings on the board; while a plan awaits Approval they can be edited, which asks Claudia for a revised Mission Plan.</summary>
+        private void DrawSettings()
+        {
+            GUILayout.Label(View.Settings.Summary(), _wrap);
+            if (!View.CanEditSettings)
+            {
+                _editingSettings = false;
+                return;
+            }
+            if (!_editingSettings)
+            {
+                if (GUILayout.Button("Edit Mission Settings", GUILayout.ExpandWidth(false)))
+                {
+                    _settings = View.Settings.Copy();
+                    _editingSettings = true;
+                }
+                return;
+            }
+            DrawSettingsControls(_settings);
+            GUILayout.BeginHorizontal();
+            GUI.enabled = !_settings.SameAs(View.Settings);
+            if (GUILayout.Button("Apply (Claudia revises the Mission Plan)", GUILayout.ExpandWidth(false)))
+            {
+                _send(new EditSettings(_settings.Copy()));
+                _editingSettings = false;
+            }
+            GUI.enabled = true;
+            if (GUILayout.Button("Cancel", GUILayout.ExpandWidth(false))) _editingSettings = false;
+            GUILayout.EndHorizontal();
         }
 
         /// <summary>The Craft Check, pinned at the bottom of the Mission board.</summary>
@@ -414,6 +477,7 @@ namespace ClaudiaKermin.Adapter
         {
             GUILayout.Label("Mission Goal: " + View.Goal, _wrap);
             GUILayout.Label("Model: " + View.Model + "   Spent: " + SpendText(View) + "   " + StageText(View), _wrap);
+            DrawSettings();
         }
 
         /// <summary>The log, the quick replies, the reply box and End Mission.</summary>
@@ -426,7 +490,7 @@ namespace ClaudiaKermin.Adapter
             {
                 GUILayout.BeginHorizontal();
                 foreach (var reply in View.QuickReplies)
-                    if (GUILayout.Button(Label(reply))) QuickReplied(reply);
+                    if (GUILayout.Button(Label(reply, View))) QuickReplied(reply);
                 GUILayout.EndHorizontal();
             }
             DrawRaiseCap();
@@ -532,7 +596,10 @@ namespace ClaudiaKermin.Adapter
                 case MissionStage.Planning: return "Planning";
                 case MissionStage.AwaitingPlanApproval: return "Mission Plan awaiting Approval";
                 case MissionStage.Sequencing: return "Planning the next sequence";
-                case MissionStage.AwaitingSequenceApproval: return "Sequence Plan awaiting Approval";
+                case MissionStage.AwaitingSequenceApproval:
+                    if (!view.DueTime.HasDueTime) return "Sequence Plan awaiting Approval";
+                    return "Sequence Plan awaiting Approval; Due Time " + view.DueTime.Text
+                        + (view.DueTime.Reached ? " (reached)" : " (in " + MissionClock.Span(view.DueTime.SecondsLeft) + ")");
                 case MissionStage.Running: return "Running";
                 case MissionStage.Debriefing: return "Debriefing";
                 case MissionStage.Succeeded: return "Mission Goal met";

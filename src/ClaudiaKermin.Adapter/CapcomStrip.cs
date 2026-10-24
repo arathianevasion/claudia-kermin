@@ -91,7 +91,7 @@ namespace ClaudiaKermin.Adapter
 
             GUILayout.BeginHorizontal();
             foreach (var reply in View.QuickReplies)
-                if (GUILayout.Button(MissionWindow.Label(reply), GUILayout.ExpandWidth(false))) _window.QuickReplied(reply);
+                if (GUILayout.Button(MissionWindow.Label(reply, View), GUILayout.ExpandWidth(false))) _window.QuickReplied(reply);
             GUILayout.FlexibleSpace();
             if (GUILayout.Button(DrawerOpen ? "Hide log" : "Show log", GUILayout.ExpandWidth(false))) DrawerOpen = !DrawerOpen;
             GUILayout.EndHorizontal();

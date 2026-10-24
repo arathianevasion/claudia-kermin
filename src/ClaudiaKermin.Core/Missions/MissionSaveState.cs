@@ -39,6 +39,11 @@ namespace ClaudiaKermin.Core.Missions
         public readonly List<string> UnsafeProblems = new List<string>();
         public string LatestLine = "";
         public string PauseReason = "";
+        /// <summary>The Mission's vessel, for the Go to button at a Due Time.</summary>
+        public string VesselId = "";
+        public string VesselName = "";
+        /// <summary>The Due Time of the Sequence Plan in hand has been reached and announced.</summary>
+        public bool DueNotified;
         public MissionPlan MissionPlan;
         /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
         public SequencePlan SequencePlan;
@@ -68,6 +73,9 @@ namespace ClaudiaKermin.Core.Missions
                 { "sequenceCounted", SequenceCounted ? "true" : "false" },
                 { "latestLine", LatestLine },
                 { "pauseReason", PauseReason },
+                { "vesselId", VesselId },
+                { "vesselName", VesselName },
+                { "dueNotified", DueNotified ? "true" : "false" },
             };
             foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
             for (var i = 0; i < UnsafeProblems.Count; i++) values[UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture)] = UnsafeProblems[i];
@@ -96,6 +104,9 @@ namespace ClaudiaKermin.Core.Missions
                 StageBeforePause = ParseStage(Get(values, "stageBeforePause")),
                 LatestLine = Get(values, "latestLine"),
                 PauseReason = Get(values, "pauseReason"),
+                VesselId = Get(values, "vesselId"),
+                VesselName = Get(values, "vesselName"),
+                DueNotified = Get(values, "dueNotified") == "true",
             };
             decimal cap;
             if (decimal.TryParse(Get(values, "spendingCap"), NumberStyles.Number, CultureInfo.InvariantCulture, out cap)) state.SpendingCap = cap;
@@ -187,8 +198,9 @@ namespace ClaudiaKermin.Core.Missions
             {
                 json.BeginObject().Field("why", mission.Why).Name("sequences").BeginArray();
                 foreach (var s in mission.Sequences)
-                    json.BeginObject().Field("name", s.Name).Field("intent", s.Intent).Field("delta_v", s.DeltaV).Field("timing", s.Timing).EndObject();
-                json.EndArray().Field("total_delta_v", mission.TotalDeltaV).Field("expected_duration", mission.ExpectedDuration).EndObject();
+                    json.BeginObject().Field("name", s.Name).Field("intent", s.Intent).Field("delta_v", s.DeltaV).Field("timing", s.Timing).Field("due_time_ut", s.DueTimeUt).EndObject();
+                json.EndArray().Field("total_delta_v", mission.TotalDeltaV).Field("expected_duration", mission.ExpectedDuration)
+                    .Field("mission_time_s", mission.MissionTimeSeconds).EndObject();
             }
             json.Name("sequence_plan");
             if (sequence == null) json.Null();
@@ -200,7 +212,8 @@ namespace ClaudiaKermin.Core.Missions
                 Strings(json, "abort_conditions", sequence.AbortConditions);
                 Strings(json, "risks", sequence.Risks);
                 json.Field("custom_script", sequence.CustomScript).Field("custom_script_reason", sequence.CustomScriptReason)
-                    .Field("script", sequence.Script).EndObject();
+                    .Field("script", sequence.Script).Field("due_time_ut", sequence.DueTimeUt)
+                    .Field("window_closes_ut", sequence.WindowClosesUt).Field("late_window_dv", sequence.LateWindowDeltaV).EndObject();
             }
             return json.EndObject().ToString();
         }

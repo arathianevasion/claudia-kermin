@@ -60,6 +60,9 @@ namespace ClaudiaKermin.Core.Missions
                 SequenceCounted = mission.SequenceCounted,
                 LatestLine = mission.LatestLine,
                 PauseReason = mission.PauseReason,
+                VesselId = mission.VesselId,
+                VesselName = mission.VesselName,
+                DueNotified = mission.DueNotified,
                 MissionPlan = mission.Plan,
                 SequencePlan = mission.PendingSequence,
             };
@@ -315,6 +318,8 @@ namespace ClaudiaKermin.Core.Missions
                 SequenceCounted = state.SequenceCounted,
                 UnsafeProblems = state.UnsafeProblems.ToList(),
                 LatestLine = state.LatestLine,
+                VesselId = state.VesselId,
+                VesselName = state.VesselName,
             };
             foreach (var setting in state.Settings) mission.Settings[setting.Key] = setting.Value;
 
@@ -331,6 +336,8 @@ namespace ClaudiaKermin.Core.Missions
             {
                 mission.System.Add(MissionPrompts.BaseLayer);
                 mission.System.Add(MissionPrompts.MissionLayer(state.Id));
+                mission.System.Add(MissionPrompts.TimingLayer(MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config)),
+                    _config.WaitCapOrbits, _config.WaitCapGroundSeconds));
             }
             if (_config.DebugTools) mission.Dump = new FileStreamDump(Path.Combine(mission.Folder, "stream-dumps"));
 
@@ -469,7 +476,8 @@ namespace ClaudiaKermin.Core.Missions
         {
             switch (purpose)
             {
-                case Purpose.MissionPlan: return MissionStage.Planning;
+                case Purpose.MissionPlan:
+                case Purpose.Settings: return MissionStage.Planning;
                 case Purpose.SequencePlan: return MissionStage.Sequencing;
                 case Purpose.Debrief: return MissionStage.Debriefing;
                 default: return MissionStage.None;
@@ -489,6 +497,7 @@ namespace ClaudiaKermin.Core.Missions
             {
                 mission.Stage = MissionStage.AwaitingSequenceApproval;
                 OfferSequencePlan(mission, mission.PendingSequence);
+                mission.DueNotified = state.DueNotified;
             }
             else if (stage == MissionStage.UnsafeScript) UnsafeScriptCard(mission, null);
             mission.SequencesProposed = state.SequencesProposed;

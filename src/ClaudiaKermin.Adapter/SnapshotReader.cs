@@ -29,6 +29,7 @@ namespace ClaudiaKermin.Adapter
                 Body = vessel.mainBody != null ? vessel.mainBody.bodyName : "",
             };
             snapshot.Craft.Name = vessel.vesselName ?? "";
+            snapshot.Craft.VesselId = vessel.id.ToString("N");
             snapshot.Craft.MassTonnes = vessel.GetTotalMass();
             snapshot.Craft.Stage = vessel.currentStage;
             ReadParts(snapshot, vessel.parts, vessel.VesselDeltaV);

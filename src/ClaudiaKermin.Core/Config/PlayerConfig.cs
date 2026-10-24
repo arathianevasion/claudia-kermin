@@ -44,6 +44,15 @@ namespace ClaudiaKermin.Core.Config
         /// <summary>The longest wait a Building Block sits through on the ground (or with no closed orbit), in seconds.</summary>
         public double WaitCapGroundSeconds = 10800;
 
+        /// <summary>Prefilled in the Mission start form: prefer to land in daylight.</summary>
+        public bool DefaultDaylightLanding = true;
+
+        /// <summary>Prefilled in the Mission start form: how Claudia trades time against delta-v.</summary>
+        public Missions.TimeVersusDeltaV DefaultTimeVersusDeltaV = Missions.TimeVersusDeltaV.Balanced;
+
+        /// <summary>How much more delta-v a late Approval may cost (the next window against the planned one) before Claudia re-plans, in percent.</summary>
+        public int LateApprovalToleranceDvPercent = 10;
+
         public string DefaultModel
         {
             get { return Models[0]; }
@@ -70,7 +79,12 @@ namespace ClaudiaKermin.Core.Config
             + "price.claude-fable-5-1 = 10, 50\n"
             + "# Longest wait inside a Maneuver Sequence: orbits in orbit, seconds on the ground. Longer waits become a Due Time.\n"
             + "wait_cap_orbits = 1\n"
-            + "wait_cap_ground_s = 10800\n";
+            + "wait_cap_ground_s = 10800\n"
+            + "# Mission Settings prefilled in the start form: daylight landing (true/false) and time versus delta-v (Fastest, Balanced, MostEfficient).\n"
+            + "daylight_landing = true\n"
+            + "time_vs_dv = Balanced\n"
+            + "# How much more delta-v, in percent, a late Approval may cost before Claudia re-plans instead of taking the next window.\n"
+            + "late_approval_dv_tolerance = 10\n";
 
         /// <summary>Loads the file, writing it with defaults first if it does not exist.</summary>
         public static PlayerConfig LoadOrCreate(string directory)
@@ -135,6 +149,18 @@ namespace ClaudiaKermin.Core.Config
                         double ground;
                         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out ground) && ground > 0)
                             config.WaitCapGroundSeconds = ground;
+                        break;
+                    case "daylight_landing":
+                        config.DefaultDaylightLanding = !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
+                        break;
+                    case "time_vs_dv":
+                        Missions.TimeVersusDeltaV priority;
+                        if (Enum.TryParse(value, true, out priority)) config.DefaultTimeVersusDeltaV = priority;
+                        break;
+                    case "late_approval_dv_tolerance":
+                        int tolerance;
+                        if (int.TryParse(value.TrimEnd('%'), NumberStyles.Integer, CultureInfo.InvariantCulture, out tolerance) && tolerance >= 0 && tolerance <= 200)
+                            config.LateApprovalToleranceDvPercent = tolerance;
                         break;
                 }
             }

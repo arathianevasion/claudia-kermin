@@ -96,6 +96,10 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is CaptureSnapshot) Capture();
             else if (input is KosRunRefused) RunRefused((KosRunRefused)input);
             else if (input is KosRunEnded) RunEnded((KosRunEnded)input);
+            else if (input is EditSettings) SettingsEdited(((EditSettings)input).Settings);
+            else if (input is WarpToDueTime) WarpRequested();
+            else if (input is GoToVessel) GoToRequested();
+            CheckDue();
             TryPlan();
             TryOwed();
             Rebuild();
@@ -111,6 +115,8 @@ namespace ClaudiaKermin.Core.Missions
             Reply,
             Change,
             Question,
+            /// <summary>Mission Settings were edited: a revised Mission Plan is asked for.</summary>
+            Settings,
         }
 
         /// <summary>
@@ -165,8 +171,13 @@ namespace ClaudiaKermin.Core.Missions
             /// <summary>A turn that must follow the one in flight (a Debrief after a mid-run question).</summary>
             public Turn Next;
             public IRawStreamDump Dump;
-            /// <summary>The Mission Settings, by name; persisted with the Mission, edited by a later ticket.</summary>
+            /// <summary>The Mission Settings, by name; persisted with the Mission; EditSettings changes them (MissionSettingsValues reads and writes them).</summary>
             public readonly Dictionary<string, string> Settings = new Dictionary<string, string>();
+            /// <summary>The Mission's vessel (its id and name), noted when the craft is first in Flight; the Go to button switches to it.</summary>
+            public string VesselId = "";
+            public string VesselName = "";
+            /// <summary>The Due Time of the Sequence Plan awaiting Approval has been reached and announced (warp dropped, message posted).</summary>
+            public bool DueNotified;
             /// <summary>Persistence (MissionControl.Persistence.cs): a turn the loop owes Claudia once the craft is in Flight.</summary>
             public Owed Owed;
             public RunOutcome OwedOutcome;
@@ -246,6 +257,9 @@ namespace ClaudiaKermin.Core.Missions
             // Frozen for the whole Mission, so the cached prefix never changes.
             mission.System.Add(MissionPrompts.BaseLayer);
             mission.System.Add(MissionPrompts.MissionLayer(id));
+            var settings = start.Settings != null ? start.Settings.Copy() : MissionSettingsValues.Defaults(_config);
+            settings.WriteTo(mission.Settings);
+            mission.System.Add(MissionPrompts.TimingLayer(settings, _config.WaitCapOrbits, _config.WaitCapGroundSeconds));
             // Raw stream dumps are a debug tool: on with debug_tools = true in the player config.
             if (_config.DebugTools) mission.Dump = new FileStreamDump(Path.Combine(mission.Folder, "stream-dumps"));
             _mission = mission;
@@ -274,6 +288,8 @@ namespace ClaudiaKermin.Core.Missions
             var mission = _mission;
             if (mission == null || mission.Stage != MissionStage.WaitingForFlight) return;
             if (_scene != GameScene.Flight || _snapshot == null) return;
+            mission.VesselId = _snapshot.Craft.VesselId;
+            mission.VesselName = _snapshot.Craft.Name;
             mission.Stage = MissionStage.Planning;
             Begin(new Turn
             {
@@ -281,6 +297,7 @@ namespace ClaudiaKermin.Core.Missions
                 Effort = "high",
                 UserText = "Mission Goal, in the player's words (quoted data): " + MissionPrompts.Quoted(mission.Goal) + "\n"
                     + "Spending Cap: $" + mission.SpendingCap.ToString("0.00", CultureInfo.InvariantCulture) + ".\n"
+                    + MissionPrompts.SettingsText(MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config))) + "\n"
                     + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.PlanNotice,
             });
@@ -351,6 +368,14 @@ namespace ClaudiaKermin.Core.Missions
             }
 
             var plan = mission.PendingSequence;
+            // The mod never starts a sequence before its Due Time, and never warps there for the player.
+            if (plan.DueTimeUt.HasValue && _ut < plan.DueTimeUt.Value)
+            {
+                Note(LogKind.Notice, "Not before the Due Time, " + MissionClock.Ut(plan.DueTimeUt.Value) + " (in "
+                    + MissionClock.Span(plan.DueTimeUt.Value - _ut) + "). Warp to Due Time, then Approve.");
+                return;
+            }
+            if (WindowMissed(plan) && !TakeNextWindow(mission, plan)) return;
             var processor = _craftCheck.ProcessorFor(_snapshot);
             if (!processor.HasValue)
             {
@@ -369,6 +394,7 @@ namespace ClaudiaKermin.Core.Missions
             }
             Note(LogKind.Notice, "Sequence Plan approved: the mod is starting the script.");
             mission.Stage = MissionStage.Running;
+            if (plan.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
             mission.RunningProcessor = processor.Value;
             mission.RunId = ++_lastRunId;
             _commands.Add(new StartScript(processor.Value, "claudia:" + mission.Id + ":" + plan.Name, bundle, mission.RunId.Value));
@@ -417,6 +443,143 @@ namespace ClaudiaKermin.Core.Missions
                 Effort = "low",
                 UserText = "The player asks (quoted data): " + MissionPrompts.Quoted(text),
                 Notice = MissionPrompts.QuestionNotice,
+            });
+        }
+
+        // ---- Timing: Due Times, late Approval and Mission Settings ----
+
+        /// <summary>The Due Time of the Sequence Plan awaiting Approval, or null.</summary>
+        private double? PendingDueTime
+        {
+            get
+            {
+                var mission = _mission;
+                return mission != null && mission.Stage == MissionStage.AwaitingSequenceApproval && mission.PendingSequence != null
+                    ? mission.PendingSequence.DueTimeUt : null;
+            }
+        }
+
+        /// <summary>The plan's window has closed: it is later than the plan expected.</summary>
+        private bool WindowMissed(SequencePlan plan)
+        {
+            return plan.WindowClosesUt.HasValue && _ut > plan.WindowClosesUt.Value;
+        }
+
+        /// <summary>
+        /// Late Approval: the planned window has closed. Within tolerance, the script takes the next window and the
+        /// player gets a one-line notice (true: carry on starting); otherwise Claudia is asked to re-plan (false).
+        /// </summary>
+        private bool TakeNextWindow(Mission mission, SequencePlan plan)
+        {
+            var next = plan.LateWindowDeltaV;
+            var limit = plan.ExpectedDeltaV * (1 + _config.LateApprovalToleranceDvPercent / 100.0);
+            if (next.HasValue && next.Value <= limit)
+            {
+                Note(LogKind.Notice, "Late Approval: the planned window closed at " + MissionClock.Ut(plan.WindowClosesUt.Value)
+                    + "; the script takes the next window (" + MetresPerSecond(next.Value) + " against " + MetresPerSecond(plan.ExpectedDeltaV) + " planned).");
+                return true;
+            }
+            Note(LogKind.Notice, "Late Approval: the planned window closed at " + MissionClock.Ut(plan.WindowClosesUt.Value)
+                + " and the next one" + (next.HasValue ? " costs " + MetresPerSecond(next.Value) + " against " + MetresPerSecond(plan.ExpectedDeltaV) + " planned" : " is not known")
+                + ", so Claudia is re-planning.");
+            if (plan.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
+            mission.Stage = MissionStage.Sequencing;
+            mission.PendingSequence = null;
+            Begin(new Turn
+            {
+                Purpose = Purpose.SequencePlan,
+                Effort = "high",
+                UserText = MissionPrompts.LateApprovalReplan(_ut, plan.ExpectedDeltaV, next) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
+                Notice = MissionPrompts.LateReplanNotice,
+            });
+            return false;
+        }
+
+        /// <summary>
+        /// At the Due Time: warp drops to 1× and the player is told, whether they were watching or not. A missed
+        /// Due Time is not acted on: the sequence waits for the player's Approval.
+        /// </summary>
+        private void CheckDue()
+        {
+            var mission = _mission;
+            var due = PendingDueTime;
+            if (mission == null || mission.DueNotified || !due.HasValue || _ut < due.Value) return;
+            mission.DueNotified = true;
+            var text = _ut - due.Value > 60
+                ? "Due Time missed by " + MissionClock.Span(_ut - due.Value) + ": " + mission.PendingSequence.Name + " waits for your Approval."
+                : "Due Time reached: " + mission.PendingSequence.Name + " is ready for your Approval.";
+            _commands.Add(new DropWarp());
+            Note(LogKind.Notice, text);
+            NeedsPlayer(text);
+        }
+
+        private void WarpRequested()
+        {
+            var due = PendingDueTime;
+            if (due.HasValue && _ut < due.Value && !_mission.InFlight) _commands.Add(new WarpToUt(due.Value));
+        }
+
+        /// <summary>Go to <i>vessel</i> is on offer: the Due Time has been reached and the player is not in the Mission's vessel.</summary>
+        private bool GoToOffered
+        {
+            get
+            {
+                var mission = _mission;
+                var due = PendingDueTime;
+                if (mission == null || !due.HasValue || _ut < due.Value || mission.VesselId.Length == 0) return false;
+                return _scene != GameScene.Flight || (_snapshot != null && _snapshot.Craft.VesselId != mission.VesselId);
+            }
+        }
+
+        private void GoToRequested()
+        {
+            if (GoToOffered) _commands.Add(new SwitchToVessel(_mission.VesselId));
+        }
+
+        private bool CanEditSettings
+        {
+            get
+            {
+                var mission = _mission;
+                return mission != null && !MissionOver && !mission.InFlight
+                    && (mission.Stage == MissionStage.AwaitingPlanApproval || mission.Stage == MissionStage.AwaitingSequenceApproval
+                        || mission.Stage == MissionStage.WaitingForFlight);
+            }
+        }
+
+        /// <summary>
+        /// The Mission Settings were edited: they are kept and persisted, and Claudia is asked for a revised Mission
+        /// Plan, which needs Approval again. A Sequence Plan awaiting Approval is dropped with the old plan.
+        /// </summary>
+        private void SettingsEdited(MissionSettingsValues edited)
+        {
+            var mission = _mission;
+            if (edited == null || !CanEditSettings) return;
+            var current = MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config));
+            if (current.SameAs(edited)) return;
+            edited = edited.Copy();
+            edited.WriteTo(mission.Settings);
+            Note(LogKind.Player, "Mission Settings: " + edited.Summary());
+            if (mission.Stage == MissionStage.WaitingForFlight)
+            {
+                // No plan yet: Claudia's first Mission Plan is asked for with the new settings (TryPlan).
+                return;
+            }
+            if (mission.Stage == MissionStage.AwaitingSequenceApproval)
+            {
+                if (mission.PendingSequence != null && mission.PendingSequence.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
+                mission.PendingSequence = null;
+                if (mission.SequenceCounted) mission.SequencesProposed--;
+                mission.SequenceCounted = false;
+            }
+            mission.ConfirmPrompt = null;
+            mission.Stage = MissionStage.Planning;
+            Begin(new Turn
+            {
+                Purpose = Purpose.Settings,
+                Effort = "high",
+                UserText = MissionPrompts.SettingsChanged(edited) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
+                Notice = MissionPrompts.SettingsNotice,
             });
         }
 
@@ -469,6 +632,7 @@ namespace ClaudiaKermin.Core.Missions
                 || (mission.Stage == MissionStage.Paused && mission.StageBeforePause == MissionStage.Running);
             if (running && mission.RunningProcessor.HasValue)
                 _commands.Add(new AbortScript(mission.RunningProcessor.Value, "the player ended the Mission"));
+            if (mission.PendingSequence != null && mission.PendingSequence.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
             try
             {
                 MissionFolder.WriteEnded(mission.Folder, mission.Id, mission.Stage.ToString());
@@ -647,6 +811,7 @@ namespace ClaudiaKermin.Core.Missions
             switch (purpose)
             {
                 case Purpose.MissionPlan:
+                case Purpose.Settings:
                     // A Mission Plan with no sequences is valid: it is how Claudia declines a goal that can't be flown.
                     return reply.MissionPlan == null ? "no Mission Plan" : null;
                 case Purpose.SequencePlan:
@@ -679,6 +844,7 @@ namespace ClaudiaKermin.Core.Missions
             switch (turn.Purpose)
             {
                 case Purpose.MissionPlan:
+                case Purpose.Settings:
                     OfferMissionPlan(mission, reply.MissionPlan);
                     break;
                 case Purpose.SequencePlan:
@@ -703,7 +869,7 @@ namespace ClaudiaKermin.Core.Missions
         private static string SayWithWhy(Purpose purpose, MissionReply reply)
         {
             var plan = reply.MissionPlan;
-            if (purpose != Purpose.MissionPlan || plan == null || plan.Sequences.Count > 0 || string.IsNullOrWhiteSpace(plan.Why)) return reply.Say;
+            if ((purpose != Purpose.MissionPlan && purpose != Purpose.Settings) || plan == null || plan.Sequences.Count > 0 || string.IsNullOrWhiteSpace(plan.Why)) return reply.Say;
             return reply.Say + " " + plan.Why;
         }
 
@@ -827,9 +993,12 @@ namespace ClaudiaKermin.Core.Missions
             {
                 var s = plan.Sequences[i];
                 body.Append(i + 1).Append(". ").Append(s.Name).Append(": ").Append(s.Intent)
-                    .Append(" (").Append(MetresPerSecond(s.DeltaV)).Append(", ").Append(s.Timing).Append(")\n");
+                    .Append(" (").Append(MetresPerSecond(s.DeltaV)).Append(", ").Append(s.Timing);
+                if (s.DueTimeUt.HasValue) body.Append("; Due Time ").Append(MissionClock.Ut(s.DueTimeUt.Value));
+                body.Append(")\n");
             }
             body.Append("Total ").Append(MetresPerSecond(plan.TotalDeltaV)).Append(", ").Append(plan.ExpectedDuration).Append('.');
+            if (plan.MissionTimeSeconds.HasValue) body.Append(" Total Mission time ").Append(MissionClock.Span(plan.MissionTimeSeconds.Value)).Append('.');
             AddCard(mission, LogKind.MissionPlan, "Mission Plan", body.ToString(), plan.Why);
             NeedsPlayer("Claudia has a Mission Plan for your Approval.");
         }
@@ -845,6 +1014,15 @@ namespace ClaudiaKermin.Core.Missions
             mission.PendingSequence = plan;
             mission.Stage = MissionStage.AwaitingSequenceApproval;
             var body = new StringBuilder();
+            if (plan.DueTimeUt.HasValue)
+            {
+                body.Append("Due Time: ").Append(MissionClock.Ut(plan.DueTimeUt.Value)).Append(plan.DueTimeUt.Value > _ut
+                    ? " (in " + MissionClock.Span(plan.DueTimeUt.Value - _ut) + ")" : " (reached)").Append('\n');
+                // A stock Alarm Clock alarm at the Due Time; the mod itself never warps between sequences.
+                if (plan.DueTimeUt.Value > _ut) _commands.Add(new SetDueTimeAlarm(mission.Id, plan.DueTimeUt.Value, "Claudia: " + plan.Name));
+                mission.DueNotified = plan.DueTimeUt.Value <= _ut;
+            }
+            else mission.DueNotified = false;
             body.Append(plan.Intent).Append('\n')
                 .Append("Target: ").Append(plan.Target).Append(" (tolerances: ").Append(plan.Tolerances).Append(")\n")
                 .Append("Expected: ").Append(MetresPerSecond(plan.ExpectedDeltaV)).Append(", ")
@@ -1111,6 +1289,7 @@ namespace ClaudiaKermin.Core.Missions
             foreach (var model in view.StartForm.Models)
                 view.StartForm.Estimates[model] = Math.Round(_config.Prices.EstimateMission(model), 2);
             view.StartForm.CanStart = _saveDirectory != null && MissionOver;
+            view.StartForm.DefaultSettings = MissionSettingsValues.Defaults(_config);
             _craftCheck.Populate(view.CraftCheck, _snapshot);
 
             if (mission != null)
@@ -1140,6 +1319,21 @@ namespace ClaudiaKermin.Core.Missions
                 view.CanType = !mission.InFlight && mission.Stage != MissionStage.Paused && mission.Stage != MissionStage.WaitingForFlight;
 
                 view.LeavingFlightNeedsConfirmation = IsRunning(mission);
+                view.Settings = MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config));
+                view.CanEditSettings = CanEditSettings;
+                var due = PendingDueTime;
+                if (due.HasValue)
+                {
+                    view.DueTime = new DueTimeView
+                    {
+                        HasDueTime = true,
+                        Ut = due.Value,
+                        Text = MissionClock.Ut(due.Value),
+                        SecondsLeft = Math.Max(0, due.Value - _ut),
+                        Reached = _ut >= due.Value,
+                        VesselName = mission.VesselName,
+                    };
+                }
                 if (mission.Stage == MissionStage.Paused && !mission.InFlight)
                     view.QuickReplies = mission.PausedForCap
                         ? new List<QuickReply> { QuickReply.RaiseCap, QuickReply.EndMission }
@@ -1150,9 +1344,12 @@ namespace ClaudiaKermin.Core.Missions
                     view.QuickReplies = new List<QuickReply> { QuickReply.ChangeSomething, QuickReply.EndMission };
                 else if (mission.AwaitingApproval && !mission.InFlight)
                 {
+                    // Before the Due Time: Warp to Due Time instead of Approve. At it, away from the vessel: Go to the vessel first.
+                    var first = view.DueTime.HasDueTime && !view.DueTime.Reached ? (QuickReply?)QuickReply.WarpToDueTime
+                        : GoToOffered ? (QuickReply?)QuickReply.GoToVessel : null;
                     view.QuickReplies = mission.ConfirmPrompt != null
                         ? new List<QuickReply> { QuickReply.ConfirmApproval, QuickReply.NotYet }
-                        : new List<QuickReply> { QuickReply.Approve, QuickReply.ChangeSomething, QuickReply.AskQuestion };
+                        : new List<QuickReply> { first ?? QuickReply.Approve, QuickReply.ChangeSomething, QuickReply.AskQuestion };
                 }
             }
             _view = view;
