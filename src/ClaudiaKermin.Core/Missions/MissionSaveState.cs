@@ -43,6 +43,13 @@ namespace ClaudiaKermin.Core.Missions
 
         public IDictionary<string, string> ToValues()
         {
+            var values = new Dictionary<string, string>();
+            foreach (var pair in RawValues()) values[pair.Key] = Escape(pair.Value);
+            return values;
+        }
+
+        private IDictionary<string, string> RawValues()
+        {
             var values = new Dictionary<string, string>
             {
                 { "id", Id },
@@ -62,7 +69,15 @@ namespace ClaudiaKermin.Core.Missions
         }
 
         /// <summary>The state in <paramref name="values"/>, or null when it holds no Mission id.</summary>
-        public static MissionSaveState FromValues(IDictionary<string, string> values)
+        public static MissionSaveState FromValues(IDictionary<string, string> escaped)
+        {
+            if (escaped == null) return null;
+            var values = new Dictionary<string, string>();
+            foreach (var pair in escaped) values[pair.Key] = Unescape(pair.Value);
+            return FromRawValues(values);
+        }
+
+        private static MissionSaveState FromRawValues(IDictionary<string, string> values)
         {
             if (values == null || !values.ContainsKey("id") || string.IsNullOrEmpty(values["id"])) return null;
             var state = new MissionSaveState
@@ -94,6 +109,49 @@ namespace ClaudiaKermin.Core.Missions
                 }
             }
             return state;
+        }
+
+        private static string Escape(string text)
+        {
+            var escaped = new System.Text.StringBuilder();
+            foreach (var c in text ?? "")
+            {
+                switch (c)
+                {
+                    case '\\': escaped.Append("\\\\"); break;
+                    case '\n': escaped.Append("\\n"); break;
+                    case '\r': escaped.Append("\\r"); break;
+                    case '/': escaped.Append("\\s"); break;
+                    case '{': escaped.Append("\\o"); break;
+                    case '}': escaped.Append("\\c"); break;
+                    default: escaped.Append(c); break;
+                }
+            }
+            return escaped.ToString();
+        }
+
+        private static string Unescape(string text)
+        {
+            var plain = new System.Text.StringBuilder();
+            for (var i = 0; i < (text ?? "").Length; i++)
+            {
+                if (text[i] != '\\' || i + 1 == text.Length)
+                {
+                    plain.Append(text[i]);
+                    continue;
+                }
+                i++;
+                switch (text[i])
+                {
+                    case 'n': plain.Append('\n'); break;
+                    case 'r': plain.Append('\r'); break;
+                    case 's': plain.Append('/'); break;
+                    case 'o': plain.Append('{'); break;
+                    case 'c': plain.Append('}'); break;
+                    default: plain.Append(text[i]); break;
+                }
+            }
+            return plain.ToString();
         }
 
         private static string Get(IDictionary<string, string> values, string key)

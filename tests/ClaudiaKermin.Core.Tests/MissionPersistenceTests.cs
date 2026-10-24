@@ -178,6 +178,23 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void TheSaveValuesAreSingleLinesThatSurviveAConfigNodeWhateverThePlayerTyped()
+        {
+            var state = new MissionSaveState
+            {
+                Id = "m1",
+                Goal = "Land on the Mun.\r\nThen // come {home}\\ safely",
+                SequencePlan = new SequencePlan { Name = "Burn", Script = "// go\nprint \"{x}\".\n" },
+            };
+            var values = state.ToValues();
+            foreach (var value in values.Values)
+                Assert.True(value.IndexOfAny(new[] { '\n', '\r', '{', '}', '/' }) < 0, value);
+            var again = MissionSaveState.FromValues(values);
+            Assert.Equal(state.Goal, again.Goal);
+            Assert.Equal(state.SequencePlan.Script, again.SequencePlan.Script);
+        }
+
+        [Fact]
         public void ThereIsNothingToSaveWithoutAMission()
         {
             Assert.Empty(Saved(Control(new StreamingFakeTransport())));

@@ -96,6 +96,7 @@ namespace ClaudiaKermin.Adapter
                 case QuickReply.ConfirmApproval: _send(new ConfirmApproval(true)); break;
                 case QuickReply.NotYet: _send(new ConfirmApproval(false)); break;
                 case QuickReply.Retry: _send(new Retry()); break;
+                case QuickReply.Resume: _send(new Resume()); break;
                 case QuickReply.ChangeSomething:
                     _typingFor = TypingFor.Change;
                     Visible = true;
@@ -116,6 +117,7 @@ namespace ClaudiaKermin.Adapter
                 case QuickReply.AskQuestion: return "Ask a question";
                 case QuickReply.ConfirmApproval: return "Yes, approve";
                 case QuickReply.NotYet: return "Not yet";
+                case QuickReply.Resume: return "Resume";
                 default: return "Retry";
             }
         }
