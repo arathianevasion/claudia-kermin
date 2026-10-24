@@ -454,6 +454,9 @@ namespace ClaudiaKermin.Core.Tests
             var saved = Saved(mission);
 
             mission.Send(new MissionsRestored(_save.Path, saved));
+            // The reloaded craft has not been seen yet: nothing is asked until a fresh Game Snapshot arrives.
+            Assert.Equal(2, transport.Requests.Count);
+            mission.Send(OnPad());
             DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
             Assert.Contains("Interrupted", Messages(transport.Requests[2]).Where(m => m.GetProperty("role").GetString() == "user").Select(Text).Last());
             Assert.Empty(Started(mission));

@@ -230,6 +230,8 @@ namespace ClaudiaKermin.Core.Missions
             Loaded(restored.SaveDirectory);
             if (_saveDirectory == null) return;
             var existing = _mission;
+            // The craft was reloaded: the last Game Snapshot is the old craft's. Facts wait for a fresh one.
+            _snapshot = null;
 
             var restore = Choose(restored.States, existing);
             if (restore == null)

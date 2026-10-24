@@ -23,7 +23,7 @@ namespace ClaudiaKermin.Core.Missions
     ///
     /// Later tickets plug in here: the Spending Cap pre-send check (<see cref="MaySend"/>), the Script Check
     /// before a Sequence Plan is offered (<see cref="OfferSequencePlan"/>), the Craft Check before planning,
-    /// and persistence of the loop state across saves (the transcript is already written).
+    /// and persistence of the loop state across saves lives in MissionControl.Persistence.cs.
     /// </summary>
     public sealed partial class MissionControl
     {
