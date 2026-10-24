@@ -23,7 +23,7 @@ namespace ClaudiaKermin.Core.Claude
     {
         public string Model;
         public int MaxTokens;
-        /// <summary>System prompt text blocks, in order; the last is the cache breakpoint.</summary>
+        /// <summary>System prompt text blocks (layers), in order; each is a cache breakpoint, so use at most three.</summary>
         public readonly List<string> System = new List<string>();
         public readonly List<Message> Messages = new List<Message>();
         public readonly List<ToolDefinition> Tools = new List<ToolDefinition>();
@@ -49,18 +49,8 @@ namespace ClaudiaKermin.Core.Claude
 
             if (System.Count > 0)
             {
-                json.Name("system").BeginArray();
-                for (var i = 0; i < System.Count; i++)
-                {
-                    json.BeginObject().Field("type", "text").Field("text", System[i]);
-                    if (i == System.Count - 1)
-                    {
-                        json.Name("cache_control");
-                        CacheControl(json);
-                    }
-                    json.EndObject();
-                }
-                json.EndArray();
+                json.Name("system");
+                WriteSystem(json, System);
             }
 
             if (Tools.Count > 0)
@@ -92,16 +82,24 @@ namespace ClaudiaKermin.Core.Claude
 
             json.Name("messages").BeginArray();
             foreach (var message in Messages)
-            {
-                json.BeginObject().Field("role", message.Role == Role.User ? "user" : "assistant");
-                json.Name("content").BeginArray();
-                foreach (var block in Echoed(message))
-                    block.Write(json);
-                json.EndArray().EndObject();
-            }
+                message.Write(json, Echoed(message));
             json.EndArray();
 
             return json.EndObject().ToString();
+        }
+
+        /// <summary>The <c>system</c> array exactly as requests send it.</summary>
+        internal static void WriteSystem(JsonWriter json, IList<string> layers)
+        {
+            json.BeginArray();
+            foreach (var layer in layers)
+            {
+                // Each layer is its own breakpoint (at most three, plus the automatic tail: four in all).
+                json.BeginObject().Field("type", "text").Field("text", layer).Name("cache_control");
+                CacheControl(json);
+                json.EndObject();
+            }
+            json.EndArray();
         }
 
         private static void CacheControl(JsonWriter json)
