@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Andrew Watson
 
 using System.IO;
+using ClaudiaKermin.Core.Config;
 using ClaudiaKermin.Core.Kos;
 using UnityEngine;
 
@@ -26,7 +27,21 @@ namespace ClaudiaKermin.KOS
 
         private void Awake()
         {
-            if (!DebugToolsFlag.Read()) Destroy(this);
+            if (!DebugToolsOn()) Destroy(this);
+        }
+
+        // Decided once per Flight scene. Any failure reading the player config counts as off.
+        private static bool DebugToolsOn()
+        {
+            try
+            {
+                return PlayerConfig.LoadOrCreate(ConfigDirectory.ResolveCurrent()).DebugTools;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("Claudia Kermin: could not read the player config; kOS bridge test window stays off: " + e.Message);
+                return false;
+            }
         }
 
         private void OnGUI()
