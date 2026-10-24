@@ -1100,6 +1100,7 @@ namespace ClaudiaKermin.Core.Missions
             var view = new MissionView
             {
                 Version = _view.Version + 1,
+                Ut = _ut,
                 CanCaptureSnapshot = _snapshot != null && _saveDirectory != null,
                 CanEndMission = !MissionOver,
             };

@@ -276,6 +276,14 @@ namespace ClaudiaKermin.Core.Missions
             }).ToList();
             view.Stale = _state == CraftCheckState.Done && snapshot != null && _craftKey != CraftKey(snapshot);
 
+            view.MarginPercent = _config.CraftCheckMarginPercent;
+            if (snapshot != null)
+            {
+                view.CraftName = snapshot.Craft.Name;
+                if (snapshot.DeltaVSimulator && snapshot.Stages.Count > 0) view.CraftDeltaV = snapshot.Stages.Sum(s => s.DeltaVVac);
+            }
+            view.DeltaVShort = _state == CraftCheckState.Done && !view.Stale && _findings.Any(f => f.Code == "delta_v_short");
+
             var chosen = ProcessorFor(snapshot);
             view.ChosenProcessor = chosen;
             if (snapshot != null)

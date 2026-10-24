@@ -154,6 +154,15 @@ namespace ClaudiaKermin.Core.Missions
         /// no Blocker and every Warning acknowledged. With no current result, pressing it runs the Craft Check.
         /// </summary>
         public bool StartAllowed;
+
+        /// <summary>The craft on the pad or the VAB/SPH floor, for the Mission board; "" when there is none.</summary>
+        public string CraftName = "";
+        /// <summary>The craft's total vacuum delta-v from the stock simulator, m/s; null when there is no craft or the simulator is off.</summary>
+        public double? CraftDeltaV;
+        /// <summary>The delta-v margin the Craft Check wants over the Delta-v Map, in percent.</summary>
+        public int MarginPercent;
+        /// <summary>The current Craft Check found the craft short of delta-v for the Mission Goal (the margin included).</summary>
+        public bool DeltaVShort;
     }
 
     /// <summary>What the Mission start form offers.</summary>
@@ -174,6 +183,8 @@ namespace ClaudiaKermin.Core.Missions
     public sealed class MissionView
     {
         public int Version;
+        /// <summary>The universal time the adapter last reported, seconds; for times shown "in 2d 3h 10m".</summary>
+        public double Ut;
         public MissionStage Stage;
         public StartFormView StartForm = new StartFormView();
         /// <summary>The Craft Check, pinned at the bottom of the Mission board.</summary>
