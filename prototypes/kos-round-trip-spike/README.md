@@ -48,3 +48,15 @@ Leave the boot file set to None.
 | 8 | In a low Kerbin orbit with the antenna extended (home connection), run **rsvp_mun** with C. | RSVP v9 on kOS 1.6.0.1 |
 
 When you're done, quit KSP and tell Claude. It reads the results from `KSP.log`.
+
+## Second pass: gaps from the first run
+
+Use the same craft. Each processor row now shows `cpu=idle`, `busy` or `not booted`. Splits, decouples and staging dump the addon list automatically. Don't pause the game while a run is in progress, because pausing stops kOS.
+
+| # | Do this | It answers |
+|---|---------|------------|
+| 1 | On the pad, on either processor (boot file None), run **ok** with **A: keystrokes**. | Start method A |
+| 2 | On the *other* processor, click **Install boot listener + reboot**. Run **runtime_error** with **B**, then run **ok** with **B**. | Whether the listener survives a script error |
+| 3 | Put the craft in Kerbin orbit (cheat). On the processor *without* the listener, run **long_run** with **C**. While it runs: stage (if there's a decoupler), then undock the ports. Wait about 5 s after each, then press **Abort** on that processor. | Which vessel each addon lands on after a split, and aborting mid-run |
+| 4 | Retract the antenna (no home connection). Switch to **archive 0:/** delivery and run **ok** with **C**. Then extend the antenna and switch back to local disk delivery. | Delivery to `0:/` with no connection |
+| 5 | In low Kerbin orbit with the antenna extended, run **rsvp_mun** with **C**, and wait until `last=` shows an outcome (it may take a minute or two). | RSVP running to the end |

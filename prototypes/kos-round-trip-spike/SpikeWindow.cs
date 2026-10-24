@@ -31,6 +31,9 @@ namespace ClaudiaSpike
             GameEvents.onVesselSOIChanged.Add(OnSoi);
             GameEvents.onGameSceneLoadRequested.Add(OnSceneRequest);
             GameEvents.onVesselChange.Add(OnVesselChange);
+            GameEvents.onPartDeCouple.Add(OnDecouple);
+            GameEvents.onStageActivate.Add(OnStageActivate);
+            GameEvents.onVesselCreate.Add(OnVesselCreate);
         }
 
         private void OnDestroy()
@@ -41,6 +44,9 @@ namespace ClaudiaSpike
             GameEvents.onVesselSOIChanged.Remove(OnSoi);
             GameEvents.onGameSceneLoadRequested.Remove(OnSceneRequest);
             GameEvents.onVesselChange.Remove(OnVesselChange);
+            GameEvents.onPartDeCouple.Remove(OnDecouple);
+            GameEvents.onStageActivate.Remove(OnStageActivate);
+            GameEvents.onVesselCreate.Remove(OnVesselCreate);
         }
 
         private void OnCouple(GameEvents.FromToAction<Part, Part> a) { SpikeLog.Log("EVENT dock/couple " + a.from.vessel.vesselName + " -> " + a.to.vessel.vesselName); Later(DumpAddons); }
@@ -49,6 +55,9 @@ namespace ClaudiaSpike
         private void OnSoi(GameEvents.HostedFromToAction<Vessel, CelestialBody> a) { SpikeLog.Log("EVENT SOI change " + a.host.vesselName + ": " + a.from.bodyName + " -> " + a.to.bodyName + " warp=" + TimeWarp.CurrentRate); }
         private void OnSceneRequest(GameScenes s) { SpikeLog.Log("EVENT scene change requested -> " + s); }
         private void OnVesselChange(Vessel v) { SpikeLog.Log("EVENT active vessel -> " + v.vesselName); }
+        private void OnDecouple(Part p) { SpikeLog.Log("EVENT decouple part=" + p.flightID + " (" + p.partInfo.title + ")"); Later(DumpAddons); }
+        private void OnStageActivate(int stage) { SpikeLog.Log("EVENT stage activated " + stage); Later(DumpAddons); }
+        private void OnVesselCreate(Vessel v) { SpikeLog.Log("EVENT vessel created " + v.vesselName); Later(DumpAddons); }
 
         // Run a few frames later so vessel references have settled after dock/undock.
         private void Later(Action a) { StartCoroutine(Delay(a)); }
@@ -61,6 +70,16 @@ namespace ClaudiaSpike
         }
 
         // CPU work happens in FixedUpdate, the same phase kOS runs in.
+        private void Update()
+        {
+            var due = ClaudiaAddon.PendingTails.Where(t => t.Key <= Time.realtimeSinceStartup).ToList();
+            foreach (var t in due)
+            {
+                ClaudiaAddon.PendingTails.Remove(t);
+                SpikeLog.Log(string.Format("addon#{0} terminal tail 0.5 s after run '{1}' ended:\n{2}", t.Value.InstanceId, t.Value.RunLabel, t.Value.ScreenTail(15)));
+            }
+        }
+
         private void FixedUpdate()
         {
             while (pending.Count > 0)
@@ -90,15 +109,14 @@ namespace ClaudiaSpike
             foreach (var a in ClaudiaAddon.All.ToList())
             {
                 GUILayout.BeginVertical(GUI.skin.box);
-                GUILayout.Label(string.Format("addon#{0} {1}  idle={2}  last={3}", a.InstanceId, a.Describe(),
-                    a.IsStale ? "-" : a.Shared.Interpreter.IsWaitingForCommand().ToString(), a.LastOutcome));
+                GUILayout.Label(string.Format("addon#{0} {1}  cpu={2}  last={3}", a.InstanceId, a.Describe(), a.IdleState(), a.LastOutcome));
                 if (!a.IsStale)
                 {
                     GUILayout.BeginHorizontal();
                     if (GUILayout.Button("A: keystrokes")) Queue(() => StartByKeys(a, test));
                     if (GUILayout.Button("B: message")) Queue(() => StartByMessage(a, test));
                     if (GUILayout.Button("C: direct")) Queue(() => StartDirect(a, test));
-                    if (GUILayout.Button("Abort")) Queue(() => { SpikeLog.Log("addon#" + a.InstanceId + " ABORT via Cpu.BreakExecution(true)"); a.Shared.Cpu.BreakExecution(true); });
+                    if (GUILayout.Button("Abort")) Queue(() => { SpikeLog.Log("addon#" + a.InstanceId + " ABORT via Cpu.BreakExecution(true), cpu=" + a.IdleState() + " run active=" + a.RunActive); a.Shared.Cpu.BreakExecution(true); });
                     if (GUILayout.Button("Install boot listener + reboot")) Queue(() => StartCoroutine(InstallBoot(a)));
                     GUILayout.EndHorizontal();
                 }
@@ -157,7 +175,7 @@ namespace ClaudiaSpike
         private void StartDirect(ClaudiaAddon a, string test)
         {
             var shared = a.Shared;
-            if (!shared.Interpreter.IsWaitingForCommand()) { SpikeLog.Log("addon#" + a.InstanceId + " C:direct refused: CPU busy"); return; }
+            if (a.IdleState() != "idle") { SpikeLog.Log("addon#" + a.InstanceId + " C:direct refused: CPU " + a.IdleState()); return; }
             string path = Deliver(a, test);
             a.BeginRun(test + " via C:direct " + path);
             string command = "run \"" + path + "\".";

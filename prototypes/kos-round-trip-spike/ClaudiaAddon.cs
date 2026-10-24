@@ -97,10 +97,22 @@ namespace ClaudiaSpike
             return false;
         }
 
+        // Read by SpikeWindow: terminal tails to capture a moment after a run ends.
+        public static readonly List<KeyValuePair<float, ClaudiaAddon>> PendingTails = new List<KeyValuePair<float, ClaudiaAddon>>();
+
         private void Finish(string outcome)
         {
             LastOutcome = outcome;
-            SpikeLog.Log(string.Format("addon#{0} END run='{1}' outcome={2}\n  --- terminal tail ---\n{3}", InstanceId, RunLabel, outcome, ScreenTail(15)));
+            SpikeLog.Log(string.Format("addon#{0} END run='{1}' outcome={2}\n  --- terminal tail at pop ---\n{3}", InstanceId, RunLabel, outcome, ScreenTail(15)));
+            PendingTails.Add(new KeyValuePair<float, ClaudiaAddon>(Time.realtimeSinceStartup + 0.5f, this));
+        }
+
+        // kOS throws from IsWaitingForCommand() until the processor's first Update().
+        public string IdleState()
+        {
+            if (IsStale) return "-";
+            try { return shared.Interpreter.IsWaitingForCommand() ? "idle" : "busy"; }
+            catch (System.ArgumentOutOfRangeException) { return "not booted"; }
         }
 
         public string ScreenTail(int n)
