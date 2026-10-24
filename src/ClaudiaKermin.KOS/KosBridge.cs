@@ -51,7 +51,7 @@ namespace ClaudiaKermin.KOS
         /// Exactly one of <paramref name="onRefused"/> (with the reason) or <paramref name="onOutcome"/>
         /// is called later, on the main thread.
         /// </summary>
-        public void Start(uint partId, string label, string source, Action<RunOutcome> onOutcome, Action<string> onRefused)
+        public void BeginRun(uint partId, string label, string source, Action<RunOutcome> onOutcome, Action<string> onRefused)
         {
             _pending.Add(new PendingStart(partId, label, source, onOutcome, onRefused, Time.realtimeSinceStartup));
         }

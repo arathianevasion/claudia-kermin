@@ -67,7 +67,7 @@ namespace ClaudiaKermin.KOS
             _partId = partId;
             _status = "Starting '" + test + "'...";
             _result = "";
-            bridge.Start(partId, "claudia-debug:" + test, LoadScript(test), Show, reason =>
+            bridge.BeginRun(partId, "claudia-debug:" + test, LoadScript(test), Show, reason =>
             {
                 _status = "Refused: " + reason;
             });
