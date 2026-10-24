@@ -40,6 +40,8 @@ namespace ClaudiaKermin.Core.Missions
         public List<string> Risks = new List<string>();
         /// <summary>The Mission Script (kerboscript). The mod runs it only after Approval.</summary>
         public string Script = "";
+        /// <summary>The script is a Custom Script: written from scratch instead of from Building Blocks.</summary>
+        public bool CustomScript;
     }
 
     public sealed class Debrief
@@ -105,7 +107,7 @@ namespace ClaudiaKermin.Core.Missions
             + "\"total_delta_v\":{\"type\":\"number\",\"description\":\"m/s\"},"
             + "\"expected_duration\":{\"type\":\"string\"}}},{\"type\":\"null\"}]},"
             + "\"sequence_plan\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"name\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"risks\",\"script\"],"
+            + "\"required\":[\"name\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"risks\",\"custom_script\",\"script\"],"
             + "\"properties\":{"
             + "\"name\":{\"type\":\"string\"},\"intent\":{\"type\":\"string\"},"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
@@ -114,6 +116,7 @@ namespace ClaudiaKermin.Core.Missions
             + "\"expected_duration_s\":{\"type\":\"number\"},"
             + "\"abort_conditions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},"
             + "\"risks\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},"
+            + "\"custom_script\":{\"type\":\"boolean\",\"description\":\"True when the script is written from scratch instead of from Building Blocks.\"},"
             + "\"script\":{\"type\":\"string\",\"description\":\"The complete Mission Script in kerboscript.\"}}},{\"type\":\"null\"}]},"
             + "\"debrief\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
             + "\"required\":[\"outcome\",\"why\",\"what_happened\",\"goal_reached\",\"next\"],\"properties\":{"
@@ -184,6 +187,7 @@ namespace ClaudiaKermin.Core.Missions
                     AbortConditions = Strings(sequence["abort_conditions"]),
                     Risks = Strings(sequence["risks"]),
                     Script = JsonNode.Str(sequence["script"]) ?? "",
+                    CustomScript = JsonNode.Bool(sequence["custom_script"]) ?? false,
                 };
             }
 

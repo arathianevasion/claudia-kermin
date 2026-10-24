@@ -25,6 +25,8 @@ namespace ClaudiaKermin.Adapter
             Reply,
             Change,
             Question,
+            /// <summary>The note for Retry with a note, after "Couldn't produce a safe script".</summary>
+            Note,
         }
 
         private readonly Action<MissionInput> _send;
@@ -96,6 +98,11 @@ namespace ClaudiaKermin.Adapter
                 case QuickReply.ConfirmApproval: _send(new ConfirmApproval(true)); break;
                 case QuickReply.NotYet: _send(new ConfirmApproval(false)); break;
                 case QuickReply.Retry: _send(new Retry()); break;
+                case QuickReply.Replan: _send(new Replan()); break;
+                case QuickReply.RetryWithNote:
+                    _typingFor = TypingFor.Note;
+                    Visible = true;
+                    break;
                 case QuickReply.ChangeSomething:
                     _typingFor = TypingFor.Change;
                     Visible = true;
@@ -116,6 +123,8 @@ namespace ClaudiaKermin.Adapter
                 case QuickReply.AskQuestion: return "Ask a question";
                 case QuickReply.ConfirmApproval: return "Yes, approve";
                 case QuickReply.NotYet: return "Not yet";
+                case QuickReply.RetryWithNote: return "Retry with a note";
+                case QuickReply.Replan: return "Re-plan";
                 default: return "Retry";
             }
         }
@@ -235,8 +244,10 @@ namespace ClaudiaKermin.Adapter
         {
             if (!View.CanType) return;
             var awaiting = View.Stage == MissionStage.AwaitingPlanApproval || View.Stage == MissionStage.AwaitingSequenceApproval;
-            if (!awaiting && _typingFor != TypingFor.Question) _typingFor = TypingFor.Reply;
+            var unsafeScript = View.Stage == MissionStage.UnsafeScript;
+            if (!awaiting && _typingFor != TypingFor.Question && !(unsafeScript && _typingFor == TypingFor.Note)) _typingFor = TypingFor.Reply;
             GUILayout.Label(_typingFor == TypingFor.Change ? "What should change?"
+                : _typingFor == TypingFor.Note ? "Note for Claudia's retry:"
                 : _typingFor == TypingFor.Question || !awaiting ? "Ask Claudia:" : "Reply to Claudia:");
 
             var enter = Event.current.type == EventType.KeyDown
@@ -249,6 +260,7 @@ namespace ClaudiaKermin.Adapter
             if (GUILayout.Button("Send") || (enter && GUI.enabled))
             {
                 if (_typingFor == TypingFor.Change) _send(new ChangeSomething(_typed));
+                else if (_typingFor == TypingFor.Note) _send(new RetryWithNote(_typed));
                 else if (_typingFor == TypingFor.Question || !awaiting) _send(new AskQuestion(_typed));
                 else _send(new Reply(_typed));
                 _typed = "";
@@ -275,7 +287,10 @@ namespace ClaudiaKermin.Adapter
             }
 
             GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.BeginHorizontal();
             GUILayout.Label(entry.Kind == LogKind.SequencePlan ? "Sequence Plan: " + entry.Title : entry.Title, _bold);
+            if (entry.CustomScript) GUILayout.Label("[Custom Script]", _bold, GUILayout.ExpandWidth(false));
+            GUILayout.EndHorizontal();
             GUILayout.Label(entry.Text, _wrap);
             GUILayout.BeginHorizontal();
             if (entry.Why.Length > 0 && GUILayout.Button(_showWhy.Contains(entry) ? "Hide why" : "Why", GUILayout.ExpandWidth(false)))
@@ -307,6 +322,7 @@ namespace ClaudiaKermin.Adapter
                 case MissionStage.Succeeded: return "Mission Goal met";
                 case MissionStage.Ended: return "Mission ended (Failed Debrief)";
                 case MissionStage.Paused: return "Paused: " + view.PauseReason;
+                case MissionStage.UnsafeScript: return "Couldn't produce a safe script";
                 default: return "";
             }
         }

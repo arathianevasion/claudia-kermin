@@ -61,7 +61,8 @@ The key is stored as **plain text** in `~/Library/Application Support/ClaudiaKer
 - Stock contracts, EVA welding and the construction combine bonus count Claudia as a Pilot, Engineer and Scientist (Harmony patches on `FinePrint.Utilities.VesselUtilities`). ModuleManager patches in `GameData/ClaudiaKermin/Compatibility` cover Kerbalism and Community Trait Icons.
 - These mods check crew roles by name and **do not** count Claudia as a Pilot, Engineer or Scientist: KER, USI, Near Future Electrical, SystemHeat, SSPX, StationScience, WildBlue and Contract Configurator contract packs.
 - Claudia doesn't go on EVA in v1. When a goal needs EVA science, she asks you to do it by hand.
-- In this development build, Missions are a first pass: the Spending Cap is shown but not yet enforced, scripts are not yet Script-Checked (read a Sequence Plan's script with **Show script** before you approve it), there is no Craft Check, and a Mission is not kept across a save reload or a KSP restart.
+- In this development build, Missions are a first pass: the Spending Cap is shown but not yet enforced, the runtime guards are not in yet (scripts are Script-Checked, but still read a Sequence Plan's script with **Show script** before you approve it), there is no Craft Check, and a Mission is not kept across a save reload or a KSP restart.
+- If a script fails the Script Check, Claudia rewrites it once automatically; that rewrite is a billed request. If the rewrite fails too, the plan shows **Couldn't produce a safe script** with **Retry**, **Retry with a note** or **Re-plan**.
 - **Before uninstalling**, press **Prepare to uninstall** in Claudia's settings in every save that has her. Removing the mod without it is likely to break those saves.
 
 ## Building
@@ -72,9 +73,10 @@ You need the .NET 10 SDK. The adapter and kOS addon compile against your own KSP
 | --- | --- |
 | Build everything | `dotnet build ClaudiaKermin.sln -p:KSPRoot=/path/to/KSP` |
 | Core tests (no KSP needed) | `dotnet test tests/ClaudiaKermin.Core.Tests` |
-| Kerboscript compile check (needs only kOS.Safe) | `dotnet run --project tools/ClaudiaKermin.KsCompile -p:KSPRoot=/path/to/KSP -- kerboscript` |
+| Script Check tests (need only kOS.Safe) | `dotnet test tests/ClaudiaKermin.ScriptCheck.Tests -p:KSPRoot=/path/to/KSP` |
+| Script Check the shipped kerboscript (needs only kOS.Safe) | `dotnet run --project tools/ClaudiaKermin.KsCompile -p:KSPRoot=/path/to/KSP -- kerboscript` |
 
-A failing test or a kerboscript compile error exits non-zero. A build stages the mod in `dist/GameData/ClaudiaKermin/`. To install it, copy that folder into your KSP `GameData` folder, next to kOS and HarmonyKSP. kOS and HarmonyKSP are dependencies you install yourself; they are never bundled.
+A failing test, or a script that doesn't compile or uses something forbidden, exits non-zero. A build stages the mod in `dist/GameData/ClaudiaKermin/`. To install it, copy that folder into your KSP `GameData` folder, next to kOS and HarmonyKSP. kOS and HarmonyKSP are dependencies you install yourself; they are never bundled.
 
 The layout follows [ADR 0001](docs/adr/0001-single-in-process-ksp-mod.md):
 
@@ -84,10 +86,11 @@ The layout follows [ADR 0001](docs/adr/0001-single-in-process-ksp-mod.md):
 - `tests/ClaudiaKermin.Core.Tests/Fixtures/streams`: hand-written, byte-exact Claude streams that the client tests replay through the real parser.
 - `GameData/ClaudiaKermin`: static mod files (the Super Intelligence trait config and icon), copied into the staged mod on build. `tools/make-trait-icon.cs` regenerates the icon.
 - `src/ClaudiaKermin.KOS`: the kOS addon (`net48`, like kOS 1.6.0.1): `ADDONS:CLAUDIA` and the kOS bridge that runs scripts on a processor. With `debug_tools = true` in the player config, a Flight window runs the test scripts in `kerboscript/debug/` through it.
-- `tests/ClaudiaKermin.Core.Tests`: the core tests.
-- `tools/ClaudiaKermin.KsCompile`: compiles the `.ks` files under `kerboscript/` with kOS.Safe outside KSP.
+- `src/ClaudiaKermin.ScriptCheck`: the Script Check ([ADR 0003](docs/adr/0003-script-check-and-runtime-gates.md)). It compiles a script with kOS.Safe and reads its opcodes against the forbidden list. It is Unity-free (`net48`) and references kOS.Safe compile-only; kOS.Safe is never shipped. The core sees it only through `ClaudiaKermin.Core.Kos.IScriptCheck`, and the adapter passes it in.
+- `tests/ClaudiaKermin.Core.Tests`: the core tests. `tests/ClaudiaKermin.ScriptCheck.Tests`: the real Script Check, with a test for each forbidden and allowed item.
+- `tools/ClaudiaKermin.KsCompile`: the Script Check from the command line. It runs over the `.ks` files under `kerboscript/` with the same code the mod uses.
 
-CI (`.github/workflows/ci.yml`) runs on every push. It runs the core tests and the kerboscript compile check, taking kOS.Safe from the public kOS release.
+CI (`.github/workflows/ci.yml`) runs on every push. It runs the core tests, then takes kOS.Safe from the public kOS release to run the Script Check tests and to Script Check every shipped script.
 
 ## Project docs
 

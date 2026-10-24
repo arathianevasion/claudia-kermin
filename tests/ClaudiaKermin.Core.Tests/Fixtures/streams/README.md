@@ -13,6 +13,8 @@ transport. None came from a live API call, and none holds a key.
 - `partial-text.sse`, `start-only.sse`: streams cut short; the tests add the stall or the break.
 - `mission-*.sse`: one Mission's replies in the Mission reply schema (structured output as text deltas):
   the Mission Plan, the Sequence Plan with its script, the Debrief, an ambiguous reply and an answer.
+  `mission-sequence-plan-unsafe.sse` is a Custom Script that quicksaves, so it fails the Script Check;
+  `mission-sequence-plan-rewritten.sse` is its rewrite, which passes.
 
 `../snapshots/on-pad.json` is a hand-written Game Snapshot in the format the debug capture button
 writes; replace or add captures from real play as they are taken.

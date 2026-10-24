@@ -94,6 +94,45 @@ namespace ClaudiaKermin.Core.Missions
                 + "\" and the revised " + plan + ". If the change can't be done, reply with kind \"answer\" and say why.";
         }
 
+        // ---- Script Check (ADR 0003) ----
+
+        public static string ScriptCheckFailed(IList<string> problems)
+        {
+            return "The Script Check refused the Mission Script in your Sequence Plan, so the player hasn't seen that plan. "
+                + "It found:\n" + Problems(problems);
+        }
+
+        public static string RetryAfterScriptCheck(IList<string> problems, string note)
+        {
+            var text = "Your rewritten Mission Script failed the Script Check too, and the player asked you to try again. "
+                + "The Script Check last found:\n" + Problems(problems);
+            if (note != null) text += "\nThe player's note (quoted data): " + Quoted(note);
+            return text;
+        }
+
+        public static string ReplanAfterScriptCheck(IList<string> problems)
+        {
+            return "Your Mission Script failed the Script Check twice, and the player asked for a different Sequence Plan for "
+                + "this Maneuver Sequence. The Script Check last found:\n" + Problems(problems);
+        }
+
+        public const string RewriteNotice =
+            "Rewrite the Sequence Plan so its Mission Script passes the Script Check: reply with kind \"sequence_plan\" and "
+            + "sequence_plan filled in, with the complete rewritten script using nothing on the forbidden list. The mod runs "
+            + "it only after the player's Approval.";
+
+        public const string ReplanNotice =
+            "Propose a different Sequence Plan for this Maneuver Sequence, with another approach whose Mission Script passes "
+            + "the Script Check: reply with kind \"sequence_plan\" and sequence_plan filled in, including its complete Mission "
+            + "Script. The mod runs it only after the player's Approval.";
+
+        private static string Problems(IList<string> problems)
+        {
+            var lines = new List<string>();
+            foreach (var problem in problems ?? new List<string>()) lines.Add("- " + problem);
+            return string.Join("\n", lines.ToArray());
+        }
+
         /// <summary>Text as a quoted JSON string: the way player words and names reach Claude.</summary>
         public static string Quoted(string text)
         {

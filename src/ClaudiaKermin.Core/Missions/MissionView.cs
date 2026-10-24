@@ -28,6 +28,8 @@ namespace ClaudiaKermin.Core.Missions
         Ended,
         /// <summary>Stopped on an error; Retry resumes.</summary>
         Paused,
+        /// <summary>"Couldn't produce a safe script": the Sequence Plan's script failed the Script Check twice. Retry, Retry with a note or Re-plan.</summary>
+        UnsafeScript,
     }
 
     public enum QuickReply
@@ -40,6 +42,10 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>"Not yet" after a typed reply.</summary>
         NotYet,
         Retry,
+        /// <summary>After "Couldn't produce a safe script": the reply box sends a note with the retry.</summary>
+        RetryWithNote,
+        /// <summary>After "Couldn't produce a safe script": ask for a different Sequence Plan.</summary>
+        Replan,
     }
 
     public enum LogKind
@@ -65,6 +71,8 @@ namespace ClaudiaKermin.Core.Missions
         public string Why = "";
         /// <summary>A Sequence Plan's Mission Script, for "Show script"; "" otherwise.</summary>
         public string Script = "";
+        /// <summary>A Sequence Plan whose script is a Custom Script (written from scratch, not from Building Blocks): show the badge.</summary>
+        public bool CustomScript;
         /// <summary>A Debrief's outcome (Nominal, Off-Nominal, Failed); "" otherwise.</summary>
         public string Outcome = "";
         /// <summary>The model that answered, when a fallback model served the reply; "" otherwise.</summary>

@@ -21,5 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../ClaudiaKermin.Core/ClaudiaKermin.Core.csproj" />
+    <!-- The real Script Check; it ships, kOS.Safe behind it doesn't (kOS loads it). -->
+    <ProjectReference Include="../ClaudiaKermin.ScriptCheck/ClaudiaKermin.ScriptCheck.csproj" />
   </ItemGroup>
 </Project>

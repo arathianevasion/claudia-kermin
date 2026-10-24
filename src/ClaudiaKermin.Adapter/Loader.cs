@@ -6,6 +6,7 @@ using ClaudiaKermin.Core;
 using ClaudiaKermin.Core.Chat;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Config;
+using ClaudiaKermin.ScriptCheck;
 using KSP.UI.Screens;
 using MissionControl = ClaudiaKermin.Core.Missions.MissionControl;
 using UnityEngine;
@@ -60,7 +61,8 @@ namespace ClaudiaKermin.Adapter
             _chatWindow = new ChatWindow(chat, dumpFolder);
 
             // Missions dump raw streams into their own Mission folder when debug_tools is on.
-            var missions = new MissionControl(client, _background, config, () => store.Load() != null);
+            // The real Script Check (ADR 0003) reads kOS.Safe, which kOS loads; without kOS it fails every script.
+            var missions = new MissionControl(client, _background, config, () => store.Load() != null, new KosScriptCheck());
             _missions = new MissionDriver(missions, config.DebugTools);
 
             GameEvents.onGUIApplicationLauncherReady.Add(AddButtons);
