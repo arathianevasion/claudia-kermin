@@ -400,6 +400,120 @@ namespace ClaudiaKermin.Core.Tests
             Assert.True(mission.View.StartForm.CanStart);
         }
 
+        private void AssertEndedAndFree(MissionControl mission, string folder)
+        {
+            Assert.Equal(MissionStage.None, mission.View.Stage);
+            Assert.False(mission.View.CanEndMission);
+            Assert.True(mission.View.StartForm.CanStart);
+            var marker = Path.Combine(folder, "ended.json");
+            Assert.True(File.Exists(marker));
+            using (var doc = JsonDocument.Parse(File.ReadAllText(marker)))
+                Assert.Equal("player", doc.RootElement.GetProperty("ended_by").GetString());
+        }
+
+        [Fact]
+        public void EndingAMissionWhileWaitingForFlightLeavesNoMissionAndANewOneCanStart()
+        {
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse"));
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Editor));
+            Assert.False(mission.View.CanEndMission);
+            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            Assert.True(mission.View.CanEndMission);
+            var folder = MissionFolder(mission);
+
+            mission.Send(new EndMission());
+            AssertEndedAndFree(mission, folder);
+            Assert.Empty(mission.TakeCommands().OfType<AbortScript>());
+
+            // Flight with a snapshot does not plan the ended Mission.
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            Assert.Empty(transport.Requests);
+
+            mission.Send(new StartMission("Another goal.", 5m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            Assert.Equal("Another goal.", mission.View.Goal);
+        }
+
+        [Fact]
+        public void EndingAMissionWhileARequestIsInFlightIgnoresTheLateReply()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse", 64),
+                ScriptedResponse.Fixture("mission-plan.sse"));
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            Assert.True(mission.View.Busy);
+            var folder = MissionFolder(mission);
+
+            mission.Send(new EndMission());
+            AssertEndedAndFree(mission, folder);
+
+            mission.Send(new StartMission("Another goal.", 5m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            // Only the new Mission's reply is in its log; the late reply of the ended one never landed.
+            Assert.Equal(1, mission.View.Log.Count(e => e.Kind == LogKind.MissionPlan));
+            Assert.Equal("Another goal.", mission.View.Goal);
+            Assert.False(File.Exists(Path.Combine(folder, "transcript.json")));
+        }
+
+        [Fact]
+        public void EndingARunningMissionIssuesAnAbortAndKeepsTheFolderAndTranscript()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+            mission.Send(new Approve());
+            var start = Started(mission).Single();
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+            var folder = MissionFolder(mission);
+
+            mission.Send(new EndMission());
+            var abort = mission.TakeCommands().OfType<AbortScript>().Single();
+            Assert.Equal(start.ProcessorPartId, abort.ProcessorPartId);
+            AssertEndedAndFree(mission, folder);
+            Assert.True(File.Exists(Path.Combine(folder, "transcript.json")));
+
+            // The aborted script's late end report is not a Debrief of anything.
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Interrupted, null, "", "aborted", true)));
+            Assert.Equal(MissionStage.None, mission.View.Stage);
+            Assert.Equal(2, transport.Requests.Count);
+        }
+
+        [Fact]
+        public void EndingAFinishedMissionDoesNothing()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                ScriptedResponse.Fixture("mission-debrief-failed.sse"));
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+            mission.Send(new Approve());
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Interrupted, null, "", "lost", false)));
+            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
+            Assert.False(mission.View.CanEndMission);
+            mission.TakeCommands();
+            mission.Send(new EndMission());
+            Assert.Equal(MissionStage.Ended, mission.View.Stage);
+            Assert.False(File.Exists(Path.Combine(MissionFolder(mission), "ended.json")));
+        }
+
         [Fact]
         public void LoadingAnotherSaveDropsTheMissionUntilMissionsPersist()
         {
