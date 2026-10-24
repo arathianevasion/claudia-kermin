@@ -237,13 +237,14 @@ namespace ClaudiaKermin.Adapter
                 || (check.State == CraftCheckState.Done && form.CanStart && !check.StartAllowed);
             if (HighLogic.LoadedSceneIsFlight)
             {
-                if (needsPlayer) _checkCollapsed = false;
+                // Forced open without touching the player's choice, which comes back once the check no longer needs them.
+                var collapsed = _checkCollapsed && !needsPlayer;
                 GUILayout.BeginHorizontal();
-                GUILayout.Label(_checkCollapsed ? CollapsedHeading(check) : "Craft Check", _bold);
-                if (!needsPlayer && GUILayout.Button(_checkCollapsed ? "Expand" : "Collapse", GUILayout.ExpandWidth(false)))
+                GUILayout.Label(collapsed ? CollapsedHeading(check) : "Craft Check", _bold);
+                if (!needsPlayer && GUILayout.Button(collapsed ? "Expand" : "Collapse", GUILayout.ExpandWidth(false)))
                     _checkCollapsed = !_checkCollapsed;
                 GUILayout.EndHorizontal();
-                if (_checkCollapsed) return;
+                if (collapsed) return;
             }
             else
             {
@@ -292,12 +293,11 @@ namespace ClaudiaKermin.Adapter
         /// <summary>The one line shown while collapsed, e.g. "Craft Check: Pass with Warnings (2)".</summary>
         private static string CollapsedHeading(CraftCheckView check)
         {
-            if (check.State != CraftCheckState.Done) return "Craft Check: not checked yet";
-            var warnings = 0;
-            foreach (var finding in check.Findings)
-                if (finding.Severity == CraftFindingSeverity.Warning) warnings++;
+            if (check.State == CraftCheckState.None) return "Craft Check: not checked yet";
+            if (check.State != CraftCheckState.Done) return "Craft Check";
             return "Craft Check: " + VerdictText(check)
-                + (check.Verdict == CraftVerdict.PassWithWarnings ? " (" + warnings.ToString(CultureInfo.InvariantCulture) + ")" : "");
+                + (check.Verdict == CraftVerdict.Pass ? "" : " (" + check.Findings.Count.ToString(CultureInfo.InvariantCulture) + ")")
+                + (check.Stale ? " - the craft changed since" : "");
         }
 
         private void DrawProcessorChoice(CraftCheckView check)
