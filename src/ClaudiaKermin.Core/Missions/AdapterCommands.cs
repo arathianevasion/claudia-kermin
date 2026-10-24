@@ -10,7 +10,7 @@ namespace ClaudiaKermin.Core.Missions
 
     /// <summary>
     /// Compile <see cref="Source"/> in memory and start it on the kOS processor in part
-    /// <see cref="ProcessorPartId"/> (a <c>persistentId</c>). Only ever issued after an unambiguous Approval
+    /// <see cref="ProcessorPartId"/> (a <c>persistentId</c>). Only ever issued after an Approval button press
     /// (ADR 0002). The adapter answers with <see cref="KosRunRefused"/> or, when the run ends, <see cref="KosRunEnded"/>.
     /// </summary>
     public sealed class StartScript : AdapterCommand
