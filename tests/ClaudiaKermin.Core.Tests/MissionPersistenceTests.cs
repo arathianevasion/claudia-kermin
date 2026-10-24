@@ -394,6 +394,18 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ATornLastLineInTheCostLogFallsBackToTheLineBeforeIt()
+        {
+            var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-priced.sse")));
+            ToMissionPlan(mission);
+            File.AppendAllText(Path.Combine(MissionFolder(mission), "cost-log.jsonl"), "{\"event\":\"pend");
+
+            var later = Control(new StreamingFakeTransport());
+            later.Send(new MissionsRestored(_save.Path, new List<MissionSaveState>()));
+            Assert.Equal(0.54m, later.View.Spent);
+        }
+
+        [Fact]
         public void ALoadDuringARequestRestoresTheSavedStateWithTheSpendIncludingThatRequest()
         {
             var plan = ScriptedResponse.Fixture("mission-plan-priced.sse");
