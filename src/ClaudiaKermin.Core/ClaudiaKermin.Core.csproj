@@ -10,4 +10,9 @@
     <RootNamespace>ClaudiaKermin.Core</RootNamespace>
     <ShipsInGameData>true</ShipsInGameData>
   </PropertyGroup>
+
+  <!-- The Core Library ships inside the core, so bundling a Mission Script reads no files. -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(RepoRoot)kerboscript/library/*.ks" LogicalName="ClaudiaKermin.Core.library.%(Filename).ks" />
+  </ItemGroup>
 </Project>
