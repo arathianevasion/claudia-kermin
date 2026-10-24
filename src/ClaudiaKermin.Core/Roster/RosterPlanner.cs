@@ -34,31 +34,25 @@ namespace ClaudiaKermin.Core.Roster
                 if (!ClashesWithClaudia(kerbal.Name)) continue;
                 if (kerbal.Kind == KerbalKind.Applicant)
                     actions.Add(new RosterAction(RosterActionType.ReplaceApplicant, kerbal.Id, kerbal.Name));
-                else if (hiredClash == null)
+                else if (kerbal.Kind == KerbalKind.Crew && hiredClash == null)
                     hiredClash = kerbal;
             }
 
+            // A clash only decides whether she may be added; one already on the roster is still looked after.
+            var mayAdd = hiredClash == null;
             if (hiredClash == null)
             {
                 state.RenameDeclined = false;
             }
-            else if (!state.RenameDeclined)
+            else if (!state.RenameDeclined && !state.PromptPending)
             {
-                if (!state.PromptPending)
-                {
-                    state.PromptPending = true;
-                    actions.Add(new RosterAction(RosterActionType.PromptRename, hiredClash.Id, hiredClash.Name));
-                }
-                return actions;
-            }
-            else
-            {
-                return actions;
+                state.PromptPending = true;
+                actions.Add(new RosterAction(RosterActionType.PromptRename, hiredClash.Id, hiredClash.Name));
             }
 
             if (claudia == null)
             {
-                actions.Add(new RosterAction(RosterActionType.AddClaudia));
+                if (mayAdd) actions.Add(new RosterAction(RosterActionType.AddClaudia));
                 return actions;
             }
 

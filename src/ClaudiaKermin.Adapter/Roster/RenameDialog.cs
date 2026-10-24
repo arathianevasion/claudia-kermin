@@ -10,7 +10,7 @@ namespace ClaudiaKermin.Adapter.Roster
     /// <summary>The one-time dialog for a hired Kerbal whose name clashes with Claudia's.</summary>
     public static class RenameDialog
     {
-        /// <param name="answered">Called once with true if the player declined (or gave a name that still clashes).</param>
+        /// <param name="answered">Called once with true if the player declined.</param>
         public static void Show(ProtoCrewMember kerbal, Action<bool> answered)
         {
             var newName = kerbal.name;
@@ -28,9 +28,10 @@ namespace ClaudiaKermin.Adapter.Roster
                     new DialogGUIHorizontalLayout(
                         new DialogGUIButton("Rename", () =>
                         {
+                            // A blank or still-clashing name isn't a decline: the clash remains, so she asks again.
                             var valid = !string.IsNullOrEmpty(newName.Trim()) && !RosterPlanner.ClashesWithClaudia(newName);
                             if (valid) kerbal.ChangeName(newName.Trim());
-                            answered(!valid);
+                            answered(false);
                         }, true),
                         new DialogGUIButton("Decline", () => answered(true), true)),
                 });
