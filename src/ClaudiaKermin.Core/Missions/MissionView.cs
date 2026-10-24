@@ -120,6 +120,8 @@ namespace ClaudiaKermin.Core.Missions
         public bool CanType;
         /// <summary>A Game Snapshot is available to capture.</summary>
         public bool CanCaptureSnapshot;
+        /// <summary>A Mission exists that is not over, so End Mission is offered.</summary>
+        public bool CanEndMission;
 
         public IList<LogEntry> Log = new List<LogEntry>();
     }

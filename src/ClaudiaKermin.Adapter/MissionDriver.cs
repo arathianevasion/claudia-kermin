@@ -95,6 +95,14 @@ namespace ClaudiaKermin.Adapter
                     StartScript(start);
                     continue;
                 }
+                var abort = command as AbortScript;
+                if (abort != null)
+                {
+                    // The existing abort path: stops the program and makes the craft safe.
+                    var runner = ScriptRunner.Current;
+                    if (runner != null) runner.Abort(abort.ProcessorPartId, abort.Reason);
+                    continue;
+                }
                 var message = command as PostScreenMessage;
                 if (message != null && !Window.Visible)
                     ScreenMessages.PostScreenMessage(message.Text, 6f, ScreenMessageStyle.UPPER_CENTER);

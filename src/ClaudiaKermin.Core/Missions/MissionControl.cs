@@ -69,6 +69,7 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is SceneChanged) _scene = ((SceneChanged)input).Scene;
             else if (input is UtAdvanced) _ut = ((UtAdvanced)input).Ut;
             else if (input is StartMission) Start((StartMission)input);
+            else if (input is EndMission) EndRequested();
             else if (input is Approve) Approved();
             else if (input is ConfirmApproval) Confirmed(((ConfirmApproval)input).Yes);
             else if (input is Reply) Replied(((Reply)input).Text);
@@ -122,6 +123,8 @@ namespace ClaudiaKermin.Core.Missions
             public string Effort;
             public MissionStage Stage;
             public MissionStage StageBeforePause;
+            /// <summary>The processor the running script was started on.</summary>
+            public uint? RunningProcessor;
             public MissionPlan Plan;
             public SequencePlan PendingSequence;
             public int SequencesProposed;
@@ -260,6 +263,7 @@ namespace ClaudiaKermin.Core.Missions
             }
             Note(LogKind.Notice, "Sequence Plan approved: the mod is starting the script.");
             mission.Stage = MissionStage.Running;
+            mission.RunningProcessor = processor.Value;
             _commands.Add(new StartScript(processor.Value, "claudia:" + mission.Id + ":" + plan.Name, plan.Script));
         }
 
@@ -338,6 +342,32 @@ namespace ClaudiaKermin.Core.Missions
             else mission.Stage = MissionStage.Debriefing;
             if (mission.Pending != null) mission.Next = turn;
             else Begin(turn);
+        }
+
+        // ---- End Mission ----
+
+        /// <summary>
+        /// A player action (the adapter has already asked for confirmation). The Mission is dropped, so a late
+        /// reply or script report is ignored; a running script is aborted through the adapter.
+        /// </summary>
+        private void EndRequested()
+        {
+            var mission = _mission;
+            if (MissionOver) return;
+            if (mission.InFlight) mission.Pending.Cancel.Cancel();
+            var running = mission.Stage == MissionStage.Running
+                || (mission.Stage == MissionStage.Paused && mission.StageBeforePause == MissionStage.Running);
+            if (running && mission.RunningProcessor.HasValue)
+                _commands.Add(new AbortScript(mission.RunningProcessor.Value, "the player ended the Mission"));
+            try
+            {
+                MissionFolder.WriteEnded(mission.Folder, mission.Id, mission.Stage.ToString());
+            }
+            catch (Exception e) when (IsFileError(e))
+            {
+                // The Mission still ends; the folder just lacks the marker.
+            }
+            _mission = null;
         }
 
         // ---- Requests ----
@@ -678,6 +708,7 @@ namespace ClaudiaKermin.Core.Missions
             {
                 Version = _view.Version + 1,
                 CanCaptureSnapshot = _snapshot != null && _saveDirectory != null,
+                CanEndMission = !MissionOver,
             };
             view.StartForm.Models = _config.Models.ToList();
             view.StartForm.DefaultModel = _config.DefaultModel;
