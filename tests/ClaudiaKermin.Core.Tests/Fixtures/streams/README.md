@@ -16,6 +16,9 @@ transport. None came from a live API call, and none holds a key.
   `mission-sequence-plan-unsafe.sse` is a Custom Script that quicksaves, so it fails the Script Check;
   `mission-sequence-plan-rewritten.sse` is its rewrite, which passes.
 
+- `mission-plan-compacted.sse`: the Mission Plan reply to a long transcript (180000 tokens in): a compaction block
+  with a summary holding quotes, a newline and non-ASCII text, then the plan, and a compaction iteration in `usage`.
+
 - `craft-check-*.sse`: Craft Check replies (a summary and findings by code): pass, two Warnings, a Blocker with a Warning,
   and a finding outside the fixed lists.
 

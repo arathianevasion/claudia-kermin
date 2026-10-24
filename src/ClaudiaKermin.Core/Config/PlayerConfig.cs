@@ -58,7 +58,7 @@ namespace ClaudiaKermin.Core.Config
             + "default_spending_cap = 10\n"
             + "# Delta-v margin, in percent, the Craft Check wants over the Delta-v Map.\n"
             + "craft_check_margin = 15\n"
-            + "# Input tokens at which the conversation is compacted server-side.\n"
+            + "# Input tokens at which the conversation is compacted server-side (at least 50000).\n"
             + "compaction_trigger = 150000\n"
             + "# Price table, USD per million tokens (input, output). A model not listed is charged at the highest price here.\n"
             + "# Add a model you want to try at your own risk: price.<model> = input, output\n"
