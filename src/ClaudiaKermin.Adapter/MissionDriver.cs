@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Andrew Watson
 
+using System.Collections.Generic;
 using System.IO;
 using ClaudiaKermin.Core.Missions;
 using UnityEngine;
@@ -19,14 +20,31 @@ namespace ClaudiaKermin.Adapter
 
         private readonly MissionControl _mission;
         private string _saveFolder;
+        private Game _game;
         private GameScene? _scene;
         private float _nextSnapshot;
 
         public readonly MissionWindow Window;
         public readonly CapcomStrip Strip;
 
+        /// <summary>The driver of this game session, for the scenario module and the leave-Flight guard.</summary>
+        public static MissionDriver Current { get; private set; }
+
+        /// <summary>A sequence is Running, so leaving Flight needs the player's say-so first.</summary>
+        public bool LeavingFlightNeedsConfirmation
+        {
+            get { return _mission.View.LeavingFlightNeedsConfirmation; }
+        }
+
+        /// <summary>The Mission's save-state for the scenario module to write.</summary>
+        public IList<MissionSaveState> ExportStates()
+        {
+            return _mission.ExportStates();
+        }
+
         public MissionDriver(MissionControl mission, bool debugTools)
         {
+            Current = this;
             _mission = mission;
             Window = new MissionWindow(Send, debugTools);
             Strip = new CapcomStrip(Window);
@@ -41,10 +59,18 @@ namespace ClaudiaKermin.Adapter
         /// <summary>Call each frame, after the background queue has drained.</summary>
         public void Update()
         {
-            if (HighLogic.CurrentGame != null && HighLogic.SaveFolder != _saveFolder)
+            // A new Game object means a save was loaded: continue, quickload, revert or another save. A scene
+            // change keeps the same Game, so it never counts. The core puts the Missions in step with the save.
+            if (HighLogic.CurrentGame != null && !ReferenceEquals(HighLogic.CurrentGame, _game))
+            {
+                _game = HighLogic.CurrentGame;
+                _saveFolder = HighLogic.SaveFolder;
+                Send(new MissionsRestored(SaveDirectory(), Saved(_game)));
+            }
+            else if (HighLogic.CurrentGame != null && HighLogic.SaveFolder != _saveFolder)
             {
                 _saveFolder = HighLogic.SaveFolder;
-                Send(new SaveLoaded(Path.Combine(Path.Combine(KSPUtil.ApplicationRootPath, "saves"), _saveFolder)));
+                Send(new SaveLoaded(SaveDirectory()));
             }
 
             var scene = Scene();
@@ -72,6 +98,20 @@ namespace ClaudiaKermin.Adapter
             if (HighLogic.LoadedScene == GameScenes.FLIGHT) Strip.OnGUI();
             else Strip.Unlock();
             Carry();
+        }
+
+        private static string SaveDirectory()
+        {
+            return Path.Combine(Path.Combine(KSPUtil.ApplicationRootPath, "saves"), HighLogic.SaveFolder);
+        }
+
+        /// <summary>The Mission snapshots the loaded game's save file holds.</summary>
+        private static List<MissionSaveState> Saved(Game game)
+        {
+            var states = new List<MissionSaveState>();
+            foreach (var module in game.scenarios)
+                if (module.moduleName == typeof(MissionScenario).Name) states.AddRange(MissionScenario.Read(module.GetData()));
+            return states;
         }
 
         private static GameScene Scene()

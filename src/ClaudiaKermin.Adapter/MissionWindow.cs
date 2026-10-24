@@ -107,6 +107,7 @@ namespace ClaudiaKermin.Adapter
                     _confirmingEnd = true;
                     Visible = true;
                     break;
+                case QuickReply.Resume: _send(new Resume()); break;
                 case QuickReply.ChangeSomething:
                     _typingFor = TypingFor.Change;
                     Visible = true;
@@ -129,6 +130,7 @@ namespace ClaudiaKermin.Adapter
                 case QuickReply.NotYet: return "Not yet";
                 case QuickReply.RaiseCap: return "Raise cap";
                 case QuickReply.EndMission: return "End Mission";
+                case QuickReply.Resume: return "Resume";
                 default: return "Retry";
             }
         }

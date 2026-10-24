@@ -44,6 +44,8 @@ namespace ClaudiaKermin.Core.Missions
         RaiseCap,
         /// <summary>Paused at the Spending Cap: End Mission (the adapter asks for confirmation).</summary>
         EndMission,
+        /// <summary>Resume a Mission the loaded save has no snapshot for.</summary>
+        Resume,
     }
 
     public enum LogKind
@@ -136,6 +138,8 @@ namespace ClaudiaKermin.Core.Missions
         public bool CanCaptureSnapshot;
         /// <summary>A Mission exists that is not over, so End Mission is offered.</summary>
         public bool CanEndMission;
+        /// <summary>Leaving Flight now would cut off a running sequence, so the adapter asks the player first.</summary>
+        public bool LeavingFlightNeedsConfirmation;
 
         public IList<LogEntry> Log = new List<LogEntry>();
     }

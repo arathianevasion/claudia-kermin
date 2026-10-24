@@ -1,0 +1,227 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Andrew Watson
+
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using ClaudiaKermin.Core.Claude;
+
+namespace ClaudiaKermin.Core.Missions
+{
+    /// <summary>
+    /// What a save file remembers of one Mission, as plain data: <see cref="MissionControl.ExportStates"/>
+    /// makes it and <see cref="MissionsRestored"/> hands it back. The adapter's ScenarioModule only turns it
+    /// into flat string values (<see cref="ToValues"/>) for a ConfigNode and back (<see cref="FromValues"/>).
+    /// Everything else a Mission has (the transcript, plans, Debriefs, scripts, the cost and event log) lives
+    /// in the Mission folder, which saves never rewind.
+    /// </summary>
+    public sealed class MissionSaveState
+    {
+        public string Id = "";
+        public string Goal = "";
+        public string Model = "";
+        public MissionStage Stage;
+        /// <summary>Where a Paused Mission resumes to.</summary>
+        public MissionStage StageBeforePause;
+        /// <summary>The Spending Cap in USD. Persisted here; enforcing it is the cost ticket's.</summary>
+        public decimal SpendingCap;
+        /// <summary>The Mission Settings, by name. Opaque to persistence.</summary>
+        public readonly Dictionary<string, string> Settings = new Dictionary<string, string>();
+        /// <summary>
+        /// How many messages the committed conversation held when this was saved. The transcript in the
+        /// Mission folder may hold more (turns past a loaded save are kept, never rewound).
+        /// </summary>
+        public int TranscriptMarker;
+        public int SequencesProposed;
+        public string LatestLine = "";
+        public string PauseReason = "";
+        public MissionPlan MissionPlan;
+        /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
+        public SequencePlan SequencePlan;
+
+        private const string SettingPrefix = "setting.";
+
+        public IDictionary<string, string> ToValues()
+        {
+            var values = new Dictionary<string, string>();
+            foreach (var pair in RawValues()) values[pair.Key] = Escape(pair.Value);
+            return values;
+        }
+
+        private IDictionary<string, string> RawValues()
+        {
+            var values = new Dictionary<string, string>
+            {
+                { "id", Id },
+                { "goal", Goal },
+                { "model", Model },
+                { "stage", Stage.ToString() },
+                { "stageBeforePause", StageBeforePause.ToString() },
+                { "spendingCap", SpendingCap.ToString(CultureInfo.InvariantCulture) },
+                { "transcriptMarker", TranscriptMarker.ToString(CultureInfo.InvariantCulture) },
+                { "sequencesProposed", SequencesProposed.ToString(CultureInfo.InvariantCulture) },
+                { "latestLine", LatestLine },
+                { "pauseReason", PauseReason },
+            };
+            foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
+            if (MissionPlan != null || SequencePlan != null) values["plans"] = WritePlans(MissionPlan, SequencePlan);
+            return values;
+        }
+
+        /// <summary>The state in <paramref name="values"/>, or null when it holds no Mission id.</summary>
+        public static MissionSaveState FromValues(IDictionary<string, string> escaped)
+        {
+            if (escaped == null) return null;
+            var values = new Dictionary<string, string>();
+            foreach (var pair in escaped) values[pair.Key] = Unescape(pair.Value);
+            return FromRawValues(values);
+        }
+
+        private static MissionSaveState FromRawValues(IDictionary<string, string> values)
+        {
+            if (values == null || !values.ContainsKey("id") || string.IsNullOrEmpty(values["id"])) return null;
+            var state = new MissionSaveState
+            {
+                Id = values["id"],
+                Goal = Get(values, "goal"),
+                Model = Get(values, "model"),
+                Stage = ParseStage(Get(values, "stage")),
+                StageBeforePause = ParseStage(Get(values, "stageBeforePause")),
+                LatestLine = Get(values, "latestLine"),
+                PauseReason = Get(values, "pauseReason"),
+            };
+            decimal cap;
+            if (decimal.TryParse(Get(values, "spendingCap"), NumberStyles.Number, CultureInfo.InvariantCulture, out cap)) state.SpendingCap = cap;
+            int number;
+            if (int.TryParse(Get(values, "transcriptMarker"), NumberStyles.Integer, CultureInfo.InvariantCulture, out number)) state.TranscriptMarker = number;
+            if (int.TryParse(Get(values, "sequencesProposed"), NumberStyles.Integer, CultureInfo.InvariantCulture, out number)) state.SequencesProposed = number;
+            foreach (var pair in values)
+                if (pair.Key.StartsWith(SettingPrefix, StringComparison.Ordinal)) state.Settings[pair.Key.Substring(SettingPrefix.Length)] = pair.Value;
+            string plans;
+            if (values.TryGetValue("plans", out plans))
+            {
+                // The plans are stored in the shape of a Mission reply, so the reply parser reads them back.
+                var reply = MissionReply.Parse(plans);
+                if (reply != null)
+                {
+                    state.MissionPlan = reply.MissionPlan;
+                    state.SequencePlan = reply.SequencePlan;
+                }
+            }
+            return state;
+        }
+
+        private static string Escape(string text)
+        {
+            var escaped = new System.Text.StringBuilder();
+            foreach (var c in text ?? "")
+            {
+                switch (c)
+                {
+                    case '\\': escaped.Append("\\\\"); break;
+                    case '\n': escaped.Append("\\n"); break;
+                    case '\r': escaped.Append("\\r"); break;
+                    case '/': escaped.Append("\\s"); break;
+                    case '{': escaped.Append("\\o"); break;
+                    case '}': escaped.Append("\\c"); break;
+                    default: escaped.Append(c); break;
+                }
+            }
+            return escaped.ToString();
+        }
+
+        private static string Unescape(string text)
+        {
+            var plain = new System.Text.StringBuilder();
+            for (var i = 0; i < (text ?? "").Length; i++)
+            {
+                if (text[i] != '\\' || i + 1 == text.Length)
+                {
+                    plain.Append(text[i]);
+                    continue;
+                }
+                i++;
+                switch (text[i])
+                {
+                    case 'n': plain.Append('\n'); break;
+                    case 'r': plain.Append('\r'); break;
+                    case 's': plain.Append('/'); break;
+                    case 'o': plain.Append('{'); break;
+                    case 'c': plain.Append('}'); break;
+                    default: plain.Append(text[i]); break;
+                }
+            }
+            return plain.ToString();
+        }
+
+        private static string Get(IDictionary<string, string> values, string key)
+        {
+            string value;
+            return values.TryGetValue(key, out value) && value != null ? value : "";
+        }
+
+        private static MissionStage ParseStage(string name)
+        {
+            MissionStage stage;
+            return Enum.TryParse(name, out stage) ? stage : MissionStage.None;
+        }
+
+        /// <summary>The plans as JSON in the structured-output shape of <see cref="MissionReply"/>.</summary>
+        private static string WritePlans(MissionPlan mission, SequencePlan sequence)
+        {
+            var json = new JsonWriter().BeginObject();
+            json.Name("mission_plan");
+            if (mission == null) json.Null();
+            else
+            {
+                json.BeginObject().Field("why", mission.Why).Name("sequences").BeginArray();
+                foreach (var s in mission.Sequences)
+                    json.BeginObject().Field("name", s.Name).Field("intent", s.Intent).Field("delta_v", s.DeltaV).Field("timing", s.Timing).EndObject();
+                json.EndArray().Field("total_delta_v", mission.TotalDeltaV).Field("expected_duration", mission.ExpectedDuration).EndObject();
+            }
+            json.Name("sequence_plan");
+            if (sequence == null) json.Null();
+            else
+            {
+                json.BeginObject().Field("name", sequence.Name).Field("intent", sequence.Intent).Field("why", sequence.Why)
+                    .Field("target", sequence.Target).Field("tolerances", sequence.Tolerances)
+                    .Field("expected_delta_v", sequence.ExpectedDeltaV).Field("expected_duration_s", sequence.ExpectedDurationSeconds);
+                Strings(json, "abort_conditions", sequence.AbortConditions);
+                Strings(json, "risks", sequence.Risks);
+                json.Field("script", sequence.Script).EndObject();
+            }
+            return json.EndObject().ToString();
+        }
+
+        private static void Strings(JsonWriter json, string name, IEnumerable<string> items)
+        {
+            json.Name(name).BeginArray();
+            foreach (var item in items) json.String(item);
+            json.EndArray();
+        }
+    }
+
+    /// <summary>
+    /// A save was loaded (or reverted to, or quickloaded) in the game: these are the Mission snapshots it
+    /// holds, possibly none. Hand over what the save file had, even when it is the save already in play.
+    /// </summary>
+    public sealed class MissionsRestored : MissionInput
+    {
+        public readonly string SaveDirectory;
+        public readonly IList<MissionSaveState> States;
+
+        public MissionsRestored(string saveDirectory, IList<MissionSaveState> states)
+        {
+            SaveDirectory = saveDirectory;
+            States = states ?? new List<MissionSaveState>();
+        }
+    }
+
+    /// <summary>
+    /// Resume: a Paused Mission carries on (a Mission folder the loaded save has no snapshot for is offered
+    /// this, or End Mission). A fresh Craft Check will run here once it exists.
+    /// </summary>
+    public sealed class Resume : MissionInput
+    {
+    }
+}
