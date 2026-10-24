@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Kos;
+using ClaudiaKermin.Core.Roster;
 
 namespace ClaudiaKermin.Core.Missions
 {
@@ -87,6 +88,39 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>Per-stage figures from the stock simulator.</summary>
         public List<SnapshotStage> Stages = new List<SnapshotStage>();
         public List<SnapshotCrewMember> Crew = new List<SnapshotCrewMember>();
+
+        // ---- Aboard and remote facts (spec stories 41 to 44) ----
+
+        /// <summary>Claudia's standing on the roster: Available, Assigned, Missing or Dead; "" when the adapter didn't read it.</summary>
+        public string ClaudiaStanding = "";
+        /// <summary>CommNet is on in the save. Off counts as linked.</summary>
+        public bool CommNetEnabled = true;
+        /// <summary>The craft has a CommNet link to Kerbin. Read as true when CommNet is off.</summary>
+        public bool HasLink = true;
+
+        /// <summary>The craft has a link to Kerbin, or the save has no CommNet to lose one.</summary>
+        public bool Linked
+        {
+            get { return !CommNetEnabled || HasLink; }
+        }
+
+        /// <summary>Claudia is among the crew aboard (in the editor, in the ship's crew manifest).</summary>
+        public bool ClaudiaAboard
+        {
+            get { return Crew.Any(c => c.Name == ClaudiaIdentity.Name); }
+        }
+
+        /// <summary>Crew seats not taken by anyone aboard.</summary>
+        public int FreeSeats
+        {
+            get { return System.Math.Max(0, Craft.Seats - Crew.Count); }
+        }
+
+        /// <summary>The crew aboard other than Claudia: they ride as passengers while she flies.</summary>
+        public int Passengers
+        {
+            get { return Crew.Count(c => c.Name != ClaudiaIdentity.Name); }
+        }
         public List<SnapshotExperiment> Experiments = new List<SnapshotExperiment>();
         /// <summary>The game's bodies, for the Delta-v Map and thrust over weight.</summary>
         public List<SnapshotBody> Bodies = new List<SnapshotBody>();
@@ -117,7 +151,10 @@ namespace ClaudiaKermin.Core.Missions
                 .Field("situation", Situation)
                 .Field("body", Body)
                 .Field("mode", GameMode)
-                .Field("dv_sim", DeltaVSimulator);
+                .Field("dv_sim", DeltaVSimulator)
+                .Field("claudia_standing", ClaudiaStanding)
+                .Field("commnet", CommNetEnabled)
+                .Field("link", HasLink);
             json.Name("craft").BeginObject()
                 .Field("name", Craft.Name)
                 .Field("mass_t", Craft.MassTonnes)
@@ -202,6 +239,9 @@ namespace ClaudiaKermin.Core.Missions
                 Body = JsonNode.Str(root["body"]) ?? "",
                 GameMode = JsonNode.Str(root["mode"]) ?? "",
                 DeltaVSimulator = JsonNode.Bool(root["dv_sim"]) ?? false,
+                ClaudiaStanding = JsonNode.Str(root["claudia_standing"]) ?? "",
+                CommNetEnabled = JsonNode.Bool(root["commnet"]) ?? true,
+                HasLink = JsonNode.Bool(root["link"]) ?? true,
             };
             var craft = root["craft"];
             if (craft != null)

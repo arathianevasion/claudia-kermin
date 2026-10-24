@@ -54,6 +54,8 @@ namespace ClaudiaKermin.Core.Missions
         public string WhatHappened = "";
         public bool GoalReached;
         public string Next = "";
+        /// <summary>Science only a Kerbal on EVA can do, for the player to do by hand before the Mission carries on; "" if none is needed.</summary>
+        public string EvaScience = "";
     }
 
     /// <summary>How Claude classified a reply the player typed while a plan awaited Approval.</summary>
@@ -122,12 +124,13 @@ namespace ClaudiaKermin.Core.Missions
             + "\"custom_script_reason\":{\"type\":\"string\",\"description\":\"For a Custom Script, one short sentence on why no Building Block fits; otherwise empty.\"},"
             + "\"script\":{\"type\":\"string\",\"description\":\"The complete Mission Script in kerboscript.\"}}},{\"type\":\"null\"}]},"
             + "\"debrief\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"outcome\",\"why\",\"what_happened\",\"goal_reached\",\"next\"],\"properties\":{"
+            + "\"required\":[\"outcome\",\"why\",\"what_happened\",\"goal_reached\",\"next\",\"eva_science\"],\"properties\":{"
             + "\"outcome\":{\"type\":\"string\",\"enum\":[\"Nominal\",\"Off-Nominal\",\"Failed\"]},"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
             + "\"what_happened\":{\"type\":\"string\"},"
             + "\"goal_reached\":{\"type\":\"boolean\"},"
-            + "\"next\":{\"type\":\"string\"}}},{\"type\":\"null\"}]}"
+            + "\"next\":{\"type\":\"string\"},"
+            + "\"eva_science\":{\"type\":\"string\",\"description\":\"Science only a Kerbal on EVA can do next, as an instruction to the player; empty if none is needed.\"}}},{\"type\":\"null\"}]}"
             + "}}";
 
         /// <summary>The reply in a message's text, or null when it isn't a reply in this schema.</summary>
@@ -205,6 +208,7 @@ namespace ClaudiaKermin.Core.Missions
                     WhatHappened = JsonNode.Str(debrief["what_happened"]) ?? "",
                     GoalReached = JsonNode.Bool(debrief["goal_reached"]) ?? false,
                     Next = JsonNode.Str(debrief["next"]) ?? "",
+                    EvaScience = (JsonNode.Str(debrief["eva_science"]) ?? "").Trim(),
                 };
             }
             return reply;

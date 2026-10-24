@@ -60,6 +60,8 @@ namespace ClaudiaKermin.Core.Missions
                 SequenceCounted = mission.SequenceCounted,
                 LatestLine = mission.LatestLine,
                 PauseReason = mission.PauseReason,
+                Remote = mission.Remote,
+                EvaScience = mission.EvaScience,
                 MissionPlan = mission.Plan,
                 SequencePlan = mission.PendingSequence,
             };
@@ -267,7 +269,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             MissionSaveState state = null;
             if (existing != null) state = states.FirstOrDefault(s => s.Id == existing.Id);
-            if (state == null) state = states.FirstOrDefault(s => s.Stage != MissionStage.Succeeded && s.Stage != MissionStage.Ended);
+            if (state == null) state = states.FirstOrDefault(s => s.Stage != MissionStage.Succeeded && s.Stage != MissionStage.Ended && s.Stage != MissionStage.Lost);
             if (state == null) state = states.FirstOrDefault();
             return state == null ? null : new Restore { State = state };
         }
@@ -315,6 +317,8 @@ namespace ClaudiaKermin.Core.Missions
                 SequenceCounted = state.SequenceCounted,
                 UnsafeProblems = state.UnsafeProblems.ToList(),
                 LatestLine = state.LatestLine,
+                Remote = state.Remote,
+                EvaScience = state.EvaScience ?? "",
             };
             foreach (var setting in state.Settings) mission.Settings[setting.Key] = setting.Value;
 
@@ -491,6 +495,7 @@ namespace ClaudiaKermin.Core.Missions
                 OfferSequencePlan(mission, mission.PendingSequence);
             }
             else if (stage == MissionStage.UnsafeScript) UnsafeScriptCard(mission, null);
+            else if (stage == MissionStage.Lost) LostDebrief(mission, "");
             mission.SequencesProposed = state.SequencesProposed;
             mission.LatestLine = state.LatestLine;
         }
@@ -523,6 +528,7 @@ namespace ClaudiaKermin.Core.Missions
                 case MissionStage.UnsafeScript: return "Claudia couldn't produce a safe script";
                 case MissionStage.Succeeded: return "the Mission Goal met";
                 case MissionStage.Ended: return "ended";
+                case MissionStage.Lost: return "Lost (Claudia was killed aboard)";
                 default: return "planning";
             }
         }

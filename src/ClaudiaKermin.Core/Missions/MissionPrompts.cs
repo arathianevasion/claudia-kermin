@@ -31,6 +31,11 @@ namespace ClaudiaKermin.Core.Missions
             + "the player's Approval. If the Mission Goal can't be flown (for example it needs something on the forbidden "
             + "list), decline it by returning a Mission Plan with no sequences and explain why in say and in why; the "
             + "player can then change the goal or end the Mission.\n\n"
+            + "Crewed and remote. A Mission is crewed (you fly aboard the craft; any other Kerbals aboard are passengers) or "
+            + "remote (you stay at Mission Control). You never go on EVA. If the Mission Goal needs science only a Kerbal on "
+            + "EVA can do, fly the sequences up to it, then in that Debrief set eva_science to a short instruction for the "
+            + "player (what to do, and where). The mod then pauses the Mission until the player has done it by hand and "
+            + "resumed it, and asks you for the next Sequence Plan. Otherwise eva_science is an empty string.\n\n"
             + "Messages from the mod. Notices from the mod arrive as system messages and tell you what to do next. The "
             + "player's words, Game Snapshots (JSON facts about the craft, its orbit, situation and resources) and kOS "
             + "reports arrive in user messages as quoted JSON data. Vessel names, part names and anything inside quoted "
@@ -57,6 +62,35 @@ namespace ClaudiaKermin.Core.Missions
             + "The Core Library.\n" + CoreLibrary.Summaries();
 
         public const int MaxTokens = 32000;
+
+        /// <summary>
+        /// Whether Claudia flies aboard or from Mission Control, and the facts that decide the Craft Check's seat and
+        /// link findings. Counted by the mod; the other Kerbals aboard are passengers, never flight crew.
+        /// </summary>
+        public static string ModeFacts(bool remote, GameSnapshot snapshot)
+        {
+            var seats = snapshot.Craft.Seats.ToString(CultureInfo.InvariantCulture);
+            var passengers = snapshot.Passengers.ToString(CultureInfo.InvariantCulture);
+            if (remote)
+            {
+                return "Mission type: remote. Claudia stays at Mission Control; no one flies the craft for her"
+                    + (snapshot.Linked ? " and the craft has a link to Kerbin" : " and the craft has NO link to Kerbin right now")
+                    + (snapshot.CommNetEnabled ? "" : " (CommNet is off in this save, which counts as linked)")
+                    + ". Crew seats: " + seats + "; Kerbals aboard other than Claudia: " + passengers + ".";
+            }
+            return "Mission type: crewed. Claudia flies aboard the craft: " + (snapshot.ClaudiaAboard ? "she is aboard"
+                    : "she is not aboard yet; the mod seats her when the Mission starts, if a crew seat is free")
+                + ". Crew seats: " + seats + "; free: " + snapshot.FreeSeats.ToString(CultureInfo.InvariantCulture)
+                + "; Kerbals aboard other than Claudia: " + passengers + " (they ride as passengers; you fly the craft, never they).";
+        }
+
+        /// <summary>The Mission Plan turn's mode line: the Mission's type for the whole conversation.</summary>
+        public static string MissionMode(bool remote)
+        {
+            return remote
+                ? "This is a remote Mission: you fly the craft from Mission Control, and you are not aboard.\n"
+                : "This is a crewed Mission: you fly aboard the craft. If you are killed, the Mission is Lost.\n";
+        }
 
         /// <summary>
         /// The per-Mission layer, frozen when the Mission starts: full docs for the Building Blocks this

@@ -46,6 +46,8 @@ namespace ClaudiaKermin.Core.Missions
         private readonly CraftCheckFlow _craftCheck;
         /// <summary>Start Mission was pressed and the Craft Check it triggered is running; a Pass lets the Mission start.</summary>
         private StartMission _pendingStart;
+        /// <summary>Why the last Start Mission was turned away before the Craft Check; "" when it wasn't.</summary>
+        private string _startRefusal = "";
 
         public MissionControl(ClaudeClient client, Background background, PlayerConfig config, Func<bool> hasKey, IScriptCheck scriptCheck)
         {
@@ -96,6 +98,7 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is CaptureSnapshot) Capture();
             else if (input is KosRunRefused) RunRefused((KosRunRefused)input);
             else if (input is KosRunEnded) RunEnded((KosRunEnded)input);
+            else if (input is ClaudiaKilled) Killed();
             TryPlan();
             TryOwed();
             Rebuild();
@@ -176,6 +179,10 @@ namespace ClaudiaKermin.Core.Missions
             public Restore DeferredRestore;
             /// <summary>No snapshot in the loaded save: Paused until the player resumes it or ends it.</summary>
             public bool AwaitingResume;
+            /// <summary>Flown remotely: Claudia stays at Mission Control. False is crewed (she flies aboard).</summary>
+            public bool Remote;
+            /// <summary>While Paused for EVA science: what the player is to do by hand; "" otherwise.</summary>
+            public string EvaScience = "";
 
             // ---- Spending (state #42 snapshots: SpendingCap, Spent, Held) ----
             /// <summary>Cost so far from real usage.</summary>
@@ -212,7 +219,7 @@ namespace ClaudiaKermin.Core.Missions
 
         private bool MissionOver
         {
-            get { return _mission == null || _mission.Stage == MissionStage.Succeeded || _mission.Stage == MissionStage.Ended; }
+            get { return _mission == null || _mission.Stage == MissionStage.Succeeded || _mission.Stage == MissionStage.Ended || _mission.Stage == MissionStage.Lost; }
         }
 
         private void Start(StartMission start)
@@ -221,11 +228,20 @@ namespace ClaudiaKermin.Core.Missions
             var goal = (start.Goal ?? "").Trim();
             if (goal.Length == 0 || start.SpendingCap <= 0 || !_config.Models.Contains(start.Model) || _saveDirectory == null) return;
 
+            // A remote Mission needs a link (or the pad); a crewed one can't have Claudia while she is Missing. No request is spent on either.
+            _startRefusal = StartRefusal(start);
+            if (_startRefusal.Length > 0)
+            {
+                _pendingStart = null;
+                NeedsPlayer(_startRefusal);
+                return;
+            }
+
             // No Mission starts on a craft that hasn't been checked for this goal, or whose check has a Blocker or an open Warning.
-            if (!_craftCheck.IsCurrent(goal, _snapshot))
+            if (!_craftCheck.IsCurrent(goal, _snapshot, start.Remote))
             {
                 _pendingStart = start;
-                _craftCheck.Run(goal, start.Model, _snapshot);
+                _craftCheck.Run(goal, start.Model, _snapshot, start.Remote);
                 if (!_craftCheck.Running) _pendingStart = null;
                 return;
             }
@@ -242,6 +258,7 @@ namespace ClaudiaKermin.Core.Missions
                 Model = start.Model,
                 Folder = MissionFolder.For(_saveDirectory, id),
                 Stage = MissionStage.WaitingForFlight,
+                Remote = start.Remote,
             };
             // Frozen for the whole Mission, so the cached prefix never changes.
             mission.System.Add(MissionPrompts.BaseLayer);
@@ -251,12 +268,36 @@ namespace ClaudiaKermin.Core.Missions
             _mission = mission;
             Note(LogKind.Player, "Mission Goal: " + goal);
             RecordStart(mission);
+            // Started from the editor with her not aboard: the mod puts her in a free seat (the Craft Check made sure there is one).
+            if (!mission.Remote && _scene == GameScene.Editor && _snapshot != null && !_snapshot.ClaudiaAboard && _snapshot.FreeSeats > 0)
+            {
+                _commands.Add(new SeatClaudia());
+                Note(LogKind.Notice, "Claudia is taking a seat aboard.");
+            }
+        }
+
+        /// <summary>Why this Start Mission can't go ahead before any Craft Check, or "".</summary>
+        private string StartRefusal(StartMission start)
+        {
+            var snapshot = _snapshot;
+            if (snapshot == null) return "";
+            if (start.Remote)
+            {
+                // The launch pad counts as a link: Claudia can start the craft from there.
+                if (!snapshot.Linked && snapshot.Situation != "PRELAUNCH")
+                    return "A remote Mission needs a CommNet link to Kerbin, or the craft on the launch pad. Restore the link, then start it.";
+                return "";
+            }
+            if (snapshot.ClaudiaStanding == "Missing" || snapshot.ClaudiaStanding == "Dead")
+                return "Claudia is " + snapshot.ClaudiaStanding + " and can't fly aboard. A remote Mission can still start; a crewed one waits until she returns.";
+            return "";
         }
 
         private void RunCraftCheck(RunCraftCheck run)
         {
             _pendingStart = null;
-            _craftCheck.Run(run.Goal, run.Model, _snapshot);
+            _startRefusal = "";
+            _craftCheck.Run(run.Goal, run.Model, _snapshot, run.Remote);
         }
 
         /// <summary>A Craft Check request ended: if Start Mission asked for it and it passed outright, the Mission starts now.</summary>
@@ -280,6 +321,8 @@ namespace ClaudiaKermin.Core.Missions
                 Purpose = Purpose.MissionPlan,
                 Effort = "high",
                 UserText = "Mission Goal, in the player's words (quoted data): " + MissionPrompts.Quoted(mission.Goal) + "\n"
+                    + MissionPrompts.MissionMode(mission.Remote)
+                    + MissionPrompts.ModeFacts(mission.Remote, _snapshot) + "\n"
                     + "Spending Cap: $" + mission.SpendingCap.ToString("0.00", CultureInfo.InvariantCulture) + ".\n"
                     + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.PlanNotice,
@@ -296,6 +339,7 @@ namespace ClaudiaKermin.Core.Missions
             _saveDirectory = saveDirectory;
             _snapshot = null;
             _pendingStart = null;
+            _startRefusal = "";
             _craftCheck.Reset();
             if (_mission == null) return;
             if (_mission.InFlight) _mission.Pending.Cancel.Cancel();
@@ -409,7 +453,7 @@ namespace ClaudiaKermin.Core.Missions
             text = (text ?? "").Trim();
             var mission = _mission;
             if (text.Length == 0 || mission == null || mission.InFlight || mission.Stage == MissionStage.Paused
-                || mission.Stage == MissionStage.WaitingForFlight) return;
+                || mission.Stage == MissionStage.WaitingForFlight || mission.Stage == MissionStage.Lost) return;
             Note(LogKind.Player, text);
             Begin(new Turn
             {
@@ -452,6 +496,70 @@ namespace ClaudiaKermin.Core.Missions
             else mission.Stage = MissionStage.Debriefing;
             if (mission.Pending != null) mission.Next = turn;
             else Begin(turn);
+        }
+
+        // ---- Lost ----
+
+        /// <summary>
+        /// Claudia was killed. A crewed Mission ends as Lost: a request in flight is cancelled (it keeps its worst-case
+        /// charge), a running script is aborted, and Mission Control closes the Mission with a final Debrief. That
+        /// Debrief is the mod's own, not a Claude request: Claudia can't write it, and nothing spends past the
+        /// Spending Cap. Late run events carry a run id the Mission no longer holds, so they are ignored. A remote
+        /// Mission never had her aboard and carries on.
+        /// </summary>
+        private void Killed()
+        {
+            var mission = _mission;
+            if (MissionOver || mission.Remote) return;
+            var doing = LostDoing(mission);
+            if (mission.InFlight) mission.Pending.Cancel.Cancel();
+            else mission.Pending = null;
+            if (IsRunning(mission) && mission.RunningProcessor.HasValue)
+                _commands.Add(new AbortScript(mission.RunningProcessor.Value, "Claudia was killed aboard"));
+            mission.RunId = null;
+            mission.RunningProcessor = null;
+            mission.Next = null;
+            mission.Owed = Owed.None;
+            mission.OwedOutcome = null;
+            mission.ConfirmPrompt = null;
+            mission.EvaScience = "";
+            mission.PauseReason = "";
+            mission.PausedForCap = false;
+            mission.Stage = MissionStage.Lost;
+            ClearUnanswered(mission);
+
+            mission.LatestLine = "Mission Control: we have lost Claudia. The Mission is Lost.";
+            Note(LogKind.Claudia, mission.LatestLine);
+            LostDebrief(mission, doing);
+            NeedsPlayer("Claudia was killed aboard. The Mission is Lost.");
+            Note(LogKind.Notice, "Claudia was killed aboard the craft: the Mission is over.");
+            RecordFinished(mission);
+        }
+
+        /// <summary>What the Mission was in the middle of when she died, for the final Debrief.</summary>
+        private static string LostDoing(Mission mission)
+        {
+            if (IsRunning(mission) && mission.PendingSequence != null) return "while \"" + mission.PendingSequence.Name + "\" was running";
+            switch (mission.Stage)
+            {
+                case MissionStage.AwaitingPlanApproval: return "while the Mission Plan waited for Approval";
+                case MissionStage.AwaitingSequenceApproval: return "while a Sequence Plan waited for Approval";
+                case MissionStage.WaitingForFlight: return "before the craft left the editor";
+                default: return "during the Mission";
+            }
+        }
+
+        /// <summary>
+        /// The final Debrief from Mission Control. Its Debrief outcome is Failed (the Mission Goal can't be reached as
+        /// stated); the Mission's outcome is Lost.
+        /// </summary>
+        private void LostDebrief(Mission mission, string doing)
+        {
+            var body = "Claudia Kermin was killed aboard the craft" + (doing.Length > 0 ? " " + doing : "") + ".\n"
+                + "Mission Goal not met: " + mission.Goal + "\n"
+                + "Spent $" + Dollars(mission.Spent) + " of the $" + Dollars(mission.SpendingCap) + " Spending Cap. The Mission is Lost.";
+            var card = AddCard(mission, LogKind.Debrief, "Final Debrief: Lost", body, "Claudia was killed aboard the craft.");
+            card.Outcome = "Failed";
         }
 
         // ---- End Mission ----
@@ -577,6 +685,13 @@ namespace ClaudiaKermin.Core.Missions
             LogCost(mission, mission.Settlement, mission.Settled, mission.Outcome);
             // The Mission was dropped (End Mission, or another save loaded) while this request ran.
             if (mission != _mission) return;
+            // Claudia was killed while this ran: it is paid for, and its reply (if one got through) is not applied.
+            if (mission.Stage == MissionStage.Lost)
+            {
+                mission.Pending = null;
+                Rebuild();
+                return;
+            }
             try
             {
                 Answered(mission, turn, result);
@@ -881,6 +996,15 @@ namespace ClaudiaKermin.Core.Missions
             }
             mission.Stage = MissionStage.Sequencing;
             mission.SequenceCounted = false;
+            if (debrief.EvaScience.Length > 0)
+            {
+                // Claudia doesn't go on EVA: the Mission waits for the player to do it by hand. The next Sequence Plan
+                // is owed (and asked for on Resume), so it survives a save, a load or a quit while the player is out.
+                mission.EvaScience = debrief.EvaScience;
+                mission.Owed = Owed.SequencePlan;
+                Pause(mission, EvaPauseReason(debrief.EvaScience));
+                return;
+            }
             Begin(new Turn
             {
                 Purpose = Purpose.SequencePlan,
@@ -888,6 +1012,11 @@ namespace ClaudiaKermin.Core.Missions
                 UserText = "Continue the Mission.\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.SequenceNotice,
             });
+        }
+
+        private static string EvaPauseReason(string eva)
+        {
+            return "Over to you: " + eva + " Claudia doesn't go on EVA, so do it by hand, get back aboard the craft, then Resume.";
         }
 
         private void Pause(Mission mission, string reason)
@@ -909,6 +1038,14 @@ namespace ClaudiaKermin.Core.Missions
             }
             if (mission == null || mission.Stage != MissionStage.Paused || mission.InFlight) return;
             CraftCheckOnResume(mission);
+            if (mission.EvaScience.Length > 0)
+            {
+                Note(LogKind.Player, "EVA science done by hand: " + mission.EvaScience);
+                mission.LoadNotice = (mission.LoadNotice != null ? mission.LoadNotice + "\n\n" : "")
+                    + "The player has done the EVA science you asked for by hand (quoted data): " + MissionPrompts.Quoted(mission.EvaScience)
+                    + ". Treat the Game Snapshot as the truth about the craft and carry on with the next Sequence Plan.";
+                mission.EvaScience = "";
+            }
             mission.Stage = mission.StageBeforePause;
             mission.PauseReason = "";
             mission.PausedForCap = false;
@@ -1052,7 +1189,16 @@ namespace ClaudiaKermin.Core.Missions
             mission.Warned = mission.Committed >= cap * 0.8m;
             Note(LogKind.Notice, "Spending Cap raised to $" + Dollars(cap) + ".");
             LogCost(mission, "cap_raised", cap, "");
-            if (mission.Stage == MissionStage.Paused && mission.PausedForCap && mission.Committed < cap) Retried();
+            if (mission.Stage == MissionStage.Paused && mission.PausedForCap && mission.Committed < cap)
+            {
+                if (mission.EvaScience.Length == 0) Retried();
+                else
+                {
+                    // The cap was only half of what held the Mission: it still waits for the player's EVA.
+                    mission.PausedForCap = false;
+                    mission.PauseReason = EvaPauseReason(mission.EvaScience);
+                }
+            }
         }
 
         private void LogCost(Mission mission, string kind, decimal amount, string outcome)
@@ -1109,6 +1255,7 @@ namespace ClaudiaKermin.Core.Missions
             foreach (var model in view.StartForm.Models)
                 view.StartForm.Estimates[model] = Math.Round(_config.Prices.EstimateMission(model), 2);
             view.StartForm.CanStart = _saveDirectory != null && MissionOver;
+            view.StartForm.Refusal = _startRefusal;
             _craftCheck.Populate(view.CraftCheck, _snapshot);
 
             if (mission != null)
@@ -1126,19 +1273,22 @@ namespace ClaudiaKermin.Core.Missions
                 view.Busy = mission.InFlight;
                 view.Activity = mission.Activity;
                 view.PauseReason = mission.PauseReason;
+                view.Remote = mission.Remote;
+                view.EvaScience = mission.EvaScience;
                 view.ConfirmPrompt = mission.ConfirmPrompt;
                 view.Log = mission.Log.ToList();
                 if (mission.Plan != null) view.PlanSequences = mission.Plan.Sequences.Select(s => s.Name).ToList();
                 view.CurrentSequence = Math.Min(mission.SequencesProposed, view.PlanSequences.Count) - 1;
                 if (mission.Stage == MissionStage.Running && mission.PendingSequence != null)
                     view.RunStatus = "Running: " + mission.PendingSequence.Name;
-                view.CanType = !mission.InFlight && mission.Stage != MissionStage.Paused && mission.Stage != MissionStage.WaitingForFlight;
+                view.CanType = !mission.InFlight && mission.Stage != MissionStage.Paused && mission.Stage != MissionStage.WaitingForFlight
+                    && mission.Stage != MissionStage.Lost;
 
                 view.LeavingFlightNeedsConfirmation = IsRunning(mission);
                 if (mission.Stage == MissionStage.Paused && !mission.InFlight)
                     view.QuickReplies = mission.PausedForCap
                         ? new List<QuickReply> { QuickReply.RaiseCap, QuickReply.EndMission }
-                        : new List<QuickReply> { mission.AwaitingResume ? QuickReply.Resume : QuickReply.Retry };
+                        : new List<QuickReply> { mission.AwaitingResume || mission.EvaScience.Length > 0 ? QuickReply.Resume : QuickReply.Retry };
                 else if (mission.Stage == MissionStage.UnsafeScript && !mission.InFlight)
                     view.QuickReplies = new List<QuickReply> { QuickReply.Retry, QuickReply.RetryWithNote, QuickReply.Replan };
                 else if (mission.Declined && !mission.InFlight)

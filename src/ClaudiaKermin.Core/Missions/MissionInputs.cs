@@ -21,12 +21,15 @@ namespace ClaudiaKermin.Core.Missions
         public readonly string Goal;
         public readonly decimal SpendingCap;
         public readonly string Model;
+        /// <summary>A remote Mission: Claudia stays at Mission Control and flies a craft with no one aboard for her. False is crewed (she flies aboard).</summary>
+        public readonly bool Remote;
 
-        public StartMission(string goal, decimal spendingCap, string model)
+        public StartMission(string goal, decimal spendingCap, string model, bool remote = false)
         {
             Goal = goal;
             SpendingCap = spendingCap;
             Model = model;
+            Remote = remote;
         }
     }
 
@@ -35,11 +38,14 @@ namespace ClaudiaKermin.Core.Missions
     {
         public readonly string Goal;
         public readonly string Model;
+        /// <summary>The check is for a remote Mission (see <see cref="StartMission.Remote"/>); false is crewed.</summary>
+        public readonly bool Remote;
 
-        public RunCraftCheck(string goal, string model)
+        public RunCraftCheck(string goal, string model, bool remote = false)
         {
             Goal = goal;
             Model = model;
+            Remote = remote;
         }
     }
 
@@ -156,6 +162,14 @@ namespace ClaudiaKermin.Core.Missions
     {
         public readonly double Ut;
         public UtAdvanced(double ut) { Ut = ut; }
+    }
+
+    /// <summary>
+    /// Claudia was killed. Only a crewed Mission cares (she was aboard the craft): it ends as Lost. A remote
+    /// Mission goes on, since she was never aboard.
+    /// </summary>
+    public sealed class ClaudiaKilled : MissionInput
+    {
     }
 
     // ---- kOS run events ----
