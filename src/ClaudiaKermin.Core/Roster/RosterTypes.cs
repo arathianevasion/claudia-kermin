@@ -10,19 +10,20 @@ namespace ClaudiaKermin.Core.Roster
 
     public enum KerbalStanding { Available, Assigned, Dead, Missing }
 
-    /// <summary>A plain copy of one Kerbal on the roster, taken by the adapter.</summary>
+    /// <summary>
+    /// A plain copy of one Kerbal on the roster, taken by the adapter. It carries no id: KSP leaves a Kerbal's
+    /// persistentID at 0 unless the Kerbal is in a part, and roster names are unique, so the name is the address.
+    /// </summary>
     public sealed class KerbalSnapshot
     {
-        public KerbalSnapshot(uint id, string name, string trait, KerbalKind kind, KerbalStanding standing)
+        public KerbalSnapshot(string name, string trait, KerbalKind kind, KerbalStanding standing)
         {
-            Id = id;
             Name = name;
             Trait = trait;
             Kind = kind;
             Standing = standing;
         }
 
-        public uint Id { get; private set; }
         public string Name { get; private set; }
         public string Trait { get; private set; }
         public KerbalKind Kind { get; private set; }
@@ -43,20 +44,22 @@ namespace ClaudiaKermin.Core.Roster
     /// <summary>One change the adapter must make to the roster.</summary>
     public sealed class RosterAction
     {
-        public RosterAction(RosterActionType type, uint kerbalId = 0, string name = null, string trait = null, double ut = 0)
+        public RosterAction(RosterActionType type, string target = null, string newName = null, string trait = null, double ut = 0)
         {
             Type = type;
-            KerbalId = kerbalId;
-            Name = name;
+            Target = target;
+            NewName = newName;
             Trait = trait;
             UT = ut;
         }
 
         public RosterActionType Type { get; private set; }
-        public uint KerbalId { get; private set; }
 
-        /// <summary>The Kerbal's current name (PromptRename, ReplaceApplicant) or the name to restore (RevertName).</summary>
-        public string Name { get; private set; }
+        /// <summary>The current roster name of the Kerbal to change; null for AddClaudia.</summary>
+        public string Target { get; private set; }
+
+        /// <summary>The name to give the target (RevertName).</summary>
+        public string NewName { get; private set; }
 
         /// <summary>The new trait (RerollTrait).</summary>
         public string Trait { get; private set; }
