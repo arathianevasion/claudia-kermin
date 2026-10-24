@@ -47,6 +47,19 @@ namespace ClaudiaKermin.Core.Missions
             ReplaceAtomically(Path.Combine(folder, TranscriptFile), json.ToString());
         }
 
+        public const string EndedFile = "ended.json";
+
+        /// <summary>Records that the player ended the Mission; the rest of the folder is left as it is.</summary>
+        public static void WriteEnded(string folder, string missionId, string stage)
+        {
+            var json = new JsonWriter().BeginObject()
+                .Field("mission_id", missionId)
+                .Field("ended_by", "player")
+                .Field("stage", stage)
+                .EndObject();
+            ReplaceAtomically(Path.Combine(folder, EndedFile), json.ToString());
+        }
+
         /// <summary>Writes a temporary file beside the target, then swaps it in.</summary>
         public static void ReplaceAtomically(string path, string text)
         {

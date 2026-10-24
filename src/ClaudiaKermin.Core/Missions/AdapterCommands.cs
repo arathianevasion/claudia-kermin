@@ -27,6 +27,22 @@ namespace ClaudiaKermin.Core.Missions
         }
     }
 
+    /// <summary>
+    /// Abort the script running on the kOS processor in part <see cref="ProcessorPartId"/>, with make-safe
+    /// (the existing abort path). Issued when the player ends a Mission that is Running.
+    /// </summary>
+    public sealed class AbortScript : AdapterCommand
+    {
+        public readonly uint ProcessorPartId;
+        public readonly string Reason;
+
+        public AbortScript(uint processorPartId, string reason)
+        {
+            ProcessorPartId = processorPartId;
+            Reason = reason;
+        }
+    }
+
     /// <summary>A short on-screen message, for when Claudia needs the player (a plan to approve, a Debrief).</summary>
     public sealed class PostScreenMessage : AdapterCommand
     {
