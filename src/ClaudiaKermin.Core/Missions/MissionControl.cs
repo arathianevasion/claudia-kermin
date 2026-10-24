@@ -689,6 +689,8 @@ namespace ClaudiaKermin.Core.Missions
             if (mission.Stage == MissionStage.Lost)
             {
                 mission.Pending = null;
+                // A save loaded while it ran still gets its state back (a quickload to before she died).
+                if (mission.DeferredRestore != null) CompleteDeferredRestore(mission);
                 Rebuild();
                 return;
             }

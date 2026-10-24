@@ -444,6 +444,28 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AQuickloadToBeforeHerDeathStillRestoresTheMissionWhileItsRequestWasInFlight()
+        {
+            var plan = ScriptedResponse.Fixture("mission-plan-priced.sse");
+            plan.PauseAt = 200;
+            var mission = Control(new StreamingFakeTransport(plan));
+            mission.Send(new SceneChanged(GameScene.Editor));
+            CraftCheckRouter.StartChecked(mission, _background, Snapshot(), new StartMission(Goal, 10m, Sonnet));
+            var before = MissionSaveState.FromValues(Assert.Single(mission.ExportStates()).ToValues());
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(Snapshot());
+            mission.Send(new ClaudiaKilled());
+            Assert.Equal(MissionStage.Lost, mission.View.Stage);
+
+            mission.Send(new MissionsRestored(_save.Path, new List<MissionSaveState> { before }));
+            plan.Gate.Set();
+            DrainUntil(mission, v => !v.Busy);
+
+            Assert.NotEqual(MissionStage.Lost, mission.View.Stage);
+            Assert.True(mission.View.CanEndMission);
+        }
+
+        [Fact]
         public void HerDeathDoesNotEndARemoteMission()
         {
             var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
