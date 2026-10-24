@@ -128,16 +128,19 @@ namespace ClaudiaKermin.Kerboscript.Tests
         // ---- Auto-staging ----
 
         [Theory]
-        [InlineData(3, 0, false, false, "none")]
-        [InlineData(3, 0, true, false, "stage")]
-        [InlineData(3, 2, true, false, "stage")]
-        [InlineData(2, 2, true, false, "out_of_fuel")]
-        [InlineData(1, 2, true, false, "out_of_fuel")]
-        [InlineData(0, 0, true, false, "out_of_fuel")]
-        [InlineData(3, 0, true, true, "blocked")]
-        public void Staging_happens_on_flameout_down_to_the_limit_and_never_into_chutes(int stage, int limit, bool needs, bool unsafeNext, string expected)
+        [InlineData(3, 0, false, true, false, "none")]
+        [InlineData(3, 0, true, false, false, "stage")]
+        [InlineData(3, 0, true, true, false, "stage")]
+        [InlineData(3, 2, true, false, false, "stage")]
+        [InlineData(2, 2, true, false, false, "out_of_fuel")]
+        [InlineData(1, 2, true, false, false, "out_of_fuel")]
+        [InlineData(0, 0, true, false, false, "out_of_fuel")]
+        [InlineData(2, 2, true, true, false, "none")]
+        [InlineData(3, 0, true, false, true, "blocked")]
+        [InlineData(3, 0, true, true, true, "none")]
+        public void Staging_happens_on_flameout_down_to_the_limit_and_never_into_chutes(int stage, int limit, bool needs, bool hasThrust, bool unsafeNext, string expected)
         {
-            Assert.Equal(expected, One("claudia_stage_action(" + stage + ", " + limit + ", " + Bool(needs) + ", " + Bool(unsafeNext) + ")"));
+            Assert.Equal(expected, One("claudia_stage_action(" + stage + ", " + limit + ", " + Bool(needs) + ", " + Bool(hasThrust) + ", " + Bool(unsafeNext) + ")"));
         }
 
         private static string Bool(bool value)
@@ -203,6 +206,16 @@ namespace ClaudiaKermin.Kerboscript.Tests
             var printed = Run("local t is exec_node_timing(500, 10, 100, 300, 600, \"half_burn\"). print round(t:burn_time, 3). print round(t:lead, 3). print round(t:start_in, 3).");
             var lead = BurnTime(250, 10, 100, 300);
             Assert.Equal(new[] { Rounded(BurnTime(500, 10, 100, 300)), Rounded(lead), Rounded(600 - lead) }, printed);
+        }
+
+        [Fact]
+        public void A_node_or_lead_string_it_does_not_know_is_refused()
+        {
+            Assert.Equal("", One("exec_node_unreadable(claudia_options(lexicon(\"lead\", 20), exec_node_defaults(), \"auto\"):opt)"));
+            Assert.Equal("lead must be 'half_burn' or seconds, not 'halfburn'",
+                One("exec_node_unreadable(claudia_options(lexicon(\"lead\", \"halfburn\"), exec_node_defaults(), \"auto\"):opt)"));
+            Assert.Equal("node must be 'next' or a maneuver node, not 'first'",
+                One("exec_node_unreadable(claudia_options(lexicon(\"node\", \"first\"), exec_node_defaults(), \"auto\"):opt)"));
         }
 
         [Fact]

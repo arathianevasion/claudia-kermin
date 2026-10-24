@@ -124,17 +124,23 @@ function claudia_make_safe {
 // ---- Auto-staging ----
 
 // What to do about staging. needs_stage: an engine flamed out or nothing gives thrust;
-// next_unsafe: the next stage holds parachutes or heat-shield separation.
-// Returns "none", "stage", "out_of_fuel" (at stage_limit) or "blocked" (next stage unsafe).
+// has_thrust: some engine still gives thrust; next_unsafe: the next stage holds parachutes or
+// heat-shield separation. Returns "none", "stage", "out_of_fuel" (at stage_limit with no thrust
+// left) or "blocked" (no thrust left and the next stage is unsafe). At the limit, engines that
+// still burn keep the block going.
 function claudia_stage_action {
-  parameter stage_number, stage_limit, needs_stage, next_unsafe.
+  parameter stage_number, stage_limit, needs_stage, has_thrust, next_unsafe.
   if not needs_stage {
     return "none".
   }
-  if stage_number <= stage_limit or stage_number <= 0 {
-    return "out_of_fuel".
-  }
-  if next_unsafe {
+  local at_limit is stage_number <= stage_limit or stage_number <= 0.
+  if at_limit or next_unsafe {
+    if has_thrust {
+      return "none".
+    }
+    if at_limit {
+      return "out_of_fuel".
+    }
     return "blocked".
   }
   return "stage".
@@ -193,7 +199,7 @@ function claudia_autostage {
   if not stage:ready {
     return "".
   }
-  local action is claudia_stage_action(stage:number, ctx:opt:stage_limit, claudia_needs_stage(), claudia_stage_unsafe(stage:number - 1)).
+  local action is claudia_stage_action(stage:number, ctx:opt:stage_limit, claudia_needs_stage(), ship:availablethrust > 0, claudia_stage_unsafe(stage:number - 1)).
   if action = "out_of_fuel" {
     return "out of fuel at stage limit " + ctx:opt:stage_limit.
   }
@@ -205,6 +211,8 @@ function claudia_autostage {
     // Let decoupled parts leave before counting what the craft should still have.
     wait 0.5.
     set ctx:parts to ship:parts:length.
+    // Thrust during the half second above isn't known, so don't count it as delta-v used.
+    set ctx:last_ut to time:seconds.
   }
   return "".
 }
@@ -354,7 +362,8 @@ function claudia_tick {
       return staging.
     }
   }
-  set ctx:last_ut to now.
+  // Auto-staging may already have moved last_ut past now.
+  set ctx:last_ut to max(now, ctx:last_ut).
   return claudia_abort_reason(ctx:opt, claudia_ec_pct(), now - ctx:start_ut, max(0, ctx:parts - ship:parts:length)).
 }
 

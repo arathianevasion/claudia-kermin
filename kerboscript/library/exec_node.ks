@@ -17,7 +17,7 @@
 //|   max_duration ["auto"]: the wait to the burn plus twice the burn time plus 300 s.
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block.
 //| Extra results: residual (m/s the node still needed when the block ended), burn_time (s the
-//| engines burned). Fails with "no maneuver node", "no thrust", a wait over the cap, "residual
+//| engines burned). Fails with "no maneuver node", "no thrust", a node or lead it can't read, a wait over the cap, "residual
 //| <x> m/s is over max_residual", out of fuel, or an abort; on failure the node is left in place.
 //| Plan the node yourself first (ADD NODE(time, radial, normal, prograde)); the node must be far
 //| enough ahead to turn and start the burn (lead plus about 30 s).
@@ -26,6 +26,22 @@
 // The block's own options and defaults (max_duration "auto" is resolved once the burn is known).
 function exec_node_defaults {
   return lexicon("node", "next", "max_residual", 0.5, "lead", "half_burn", "rcs_trim", false).
+}
+
+// "" or why a string value of node or lead isn't one the block knows.
+function exec_node_unreadable {
+  parameter opt.
+  if opt:node:istype("String") {
+    if opt:node <> "next" {
+      return "node must be 'next' or a maneuver node, not '" + opt:node + "'".
+    }
+  }
+  if opt:lead:istype("String") {
+    if opt:lead <> "half_burn" {
+      return "lead must be 'half_burn' or seconds, not '" + opt:lead + "'".
+    }
+  }
+  return "".
 }
 
 // Burn timing for a node: lexicon("burn_time", s, "lead", s, "start_in", s from now).
@@ -51,6 +67,10 @@ function exec_node {
   }
   local opt is ctx:opt.
 
+  local unreadable is exec_node_unreadable(opt).
+  if unreadable <> "" {
+    return claudia_finish(ctx, false, unreadable, extra).
+  }
   local nd is 0.
   if opt:node:istype("String") {
     if not hasnode {
@@ -74,6 +94,9 @@ function exec_node {
   }
 
   local timing is exec_node_timing(nd:deltav:mag, ship:mass, ship:availablethrust, claudia_engine_isp(), nd:eta, opt:lead).
+  if timing:burn_time < 0 {
+    return claudia_finish(ctx, false, "no thrust", extra).
+  }
   local start_ut is time:seconds + timing:start_in.
   if opt:max_duration:istype("String") {
     set opt:max_duration to max(0, timing:start_in) + 2 * timing:burn_time + 300.
@@ -83,15 +106,17 @@ function exec_node {
     return claudia_finish(ctx, false, waiting, extra).
   }
 
-  // Point at the burn; the craft turns once warp drops to 1x, 30 s before the start.
-  local steer is nd:deltav.
-  lock steering to steer.
+  // Point at the burn as it is now (raw-frame vectors drift during warp); the craft turns once warp
+  // drops to 1x, 30 s before the start.
+  lock steering to nd:deltav.
   local waited is claudia_wait_until(ctx, start_ut).
   if waited <> "" {
     claudia_make_safe().
     return claudia_finish(ctx, false, waited, extra).
   }
 
+  local steer is nd:deltav.
+  lock steering to steer.
   local tset is 0.
   lock throttle to tset.
   local initial is nd:deltav.

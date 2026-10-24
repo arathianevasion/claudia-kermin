@@ -63,7 +63,7 @@ namespace ClaudiaKermin.Core.Missions
         public static string MissionLayer(string missionId)
         {
             return "Mission " + missionId + ".\n\n"
-                + "Building Blocks for this Mission, in full. Blocks not shipped yet must be written as plain kerboscript.\n\n"
+                + "Building Blocks for this Mission, in full. Where no shipped block fits, write a Custom Script.\n\n"
                 + CoreLibrary.FullDocs();
         }
 

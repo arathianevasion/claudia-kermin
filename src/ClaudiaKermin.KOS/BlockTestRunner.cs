@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using ClaudiaKermin.Core;
+using ClaudiaKermin.Core.Config;
 using ClaudiaKermin.Core.Kos;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
@@ -193,7 +194,9 @@ namespace ClaudiaKermin.KOS
             _stage = Stage.Running;
             _deadline = Time.realtimeSinceStartup + (float)_spec.TimeoutSeconds;
             Note("running " + _spec.Block + " (timeout " + _spec.TimeoutSeconds + " s)");
-            var source = CoreLibrary.Bundle(Resource(_test, "test.ks"), 1, 10800);
+            // The default wait caps, so a test runs the same whatever the developer's player config says.
+            var caps = new PlayerConfig();
+            var source = CoreLibrary.Bundle(Resource(_test, "test.ks"), caps.WaitCapOrbits, caps.WaitCapGroundSeconds);
             bridge.BeginRun(_partId, "claudia-blocktest:" + _test, source, Judge, reason => Fail("the bridge refused: " + reason));
         }
 
