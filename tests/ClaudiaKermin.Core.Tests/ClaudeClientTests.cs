@@ -25,6 +25,11 @@ namespace ClaudiaKermin.Core.Tests
             if (Throw) throw new InvalidOperationException("boom");
             return new HttpResponseData { StatusCode = Status, Body = "{\"data\":[]}" };
         }
+
+        public IHttpStream Open(HttpRequestSpec request, System.Threading.CancellationToken cancel)
+        {
+            throw new InvalidOperationException("the key check never streams");
+        }
     }
 
     public class ClaudeClientTests

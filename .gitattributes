@@ -1,0 +1,2 @@
+# Recorded Claude streams are byte-exact: never let git rewrite their line endings.
+*.sse -text
