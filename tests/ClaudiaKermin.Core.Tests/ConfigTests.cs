@@ -123,6 +123,42 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void PlayerConfigOffersSonnetFirstThenOpusWithATenDollarCap()
+        {
+            using (var dir = new TempDir())
+            {
+                PlayerConfig.LoadOrCreate(dir.Sub);
+                var config = PlayerConfig.LoadOrCreate(dir.Sub);
+
+                Assert.Equal(new[] { "claude-sonnet-5-5", "claude-opus-5-5" }, config.Models);
+                Assert.Equal("claude-sonnet-5-5", config.DefaultModel);
+                Assert.Equal(10m, config.DefaultSpendingCap);
+                Assert.Equal(150000, config.CompactionTriggerTokens);
+            }
+        }
+
+        [Fact]
+        public void PlayerConfigReadsModelsCapAndCompactionTriggerAndIgnoresBadValues()
+        {
+            using (var dir = new TempDir())
+            {
+                Directory.CreateDirectory(dir.Sub);
+                File.WriteAllText(Path.Combine(dir.Sub, PlayerConfig.FileName),
+                    "models = claude-opus-5-5 , claude-sonnet-5-5\ndefault_spending_cap = 4.50\ncompaction_trigger = 80000\n");
+                var config = PlayerConfig.LoadOrCreate(dir.Sub);
+                Assert.Equal("claude-opus-5-5", config.DefaultModel);
+                Assert.Equal(4.5m, config.DefaultSpendingCap);
+                Assert.Equal(80000, config.CompactionTriggerTokens);
+
+                File.WriteAllText(Path.Combine(dir.Sub, PlayerConfig.FileName), "models = ,\ndefault_spending_cap = -1\ncompaction_trigger = lots\n");
+                config = PlayerConfig.LoadOrCreate(dir.Sub);
+                Assert.Equal("claude-sonnet-5-5", config.DefaultModel);
+                Assert.Equal(10m, config.DefaultSpendingCap);
+                Assert.Equal(150000, config.CompactionTriggerTokens);
+            }
+        }
+
+        [Fact]
         public void SavingChecksTheKeyAndReportsTheResult()
         {
             using (var dir = new TempDir())
