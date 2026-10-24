@@ -37,9 +37,13 @@ namespace ClaudiaKermin.Adapter
         private GUIStyle _wrap;
         private GUIStyle _bold;
         private GUIStyle _script;
+        private GUIStyle _goalStyle;
 
         // Start form.
         private string _goal = "";
+        private Vector2 _goalScroll;
+        // End Mission asked "End this Mission?" and awaits Yes / No.
+        private bool _confirmingEnd;
         private string _cap;
         private int _modelIndex;
 
@@ -124,6 +128,7 @@ namespace ClaudiaKermin.Adapter
                 _bold = new GUIStyle(_wrap) { fontStyle = FontStyle.Bold };
                 // Scripts wrap to the card instead of running off the right edge; the log scrolls them.
                 _script = new GUIStyle(GUI.skin.textArea) { wordWrap = true, richText = false };
+                _goalStyle = new GUIStyle(GUI.skin.textArea) { wordWrap = true, richText = false };
             }
             if (View.StartForm.CanStart) DrawStartForm();
             if (View.Stage != MissionStage.None) DrawMission();
@@ -143,8 +148,13 @@ namespace ClaudiaKermin.Adapter
             if (_cap == null) _cap = form.DefaultSpendingCap.ToString("0.00", CultureInfo.InvariantCulture);
             GUILayout.Label("Start a Mission", _bold);
             GUILayout.Label("Mission Goal:");
+            // About 9 lines by default; taller as the player resizes the window.
+            var goalHeight = Mathf.Max(9f * _goalStyle.lineHeight + _goalStyle.padding.vertical, _frame.Rect.height * 0.4f);
+            _goalScroll = GUILayout.BeginScrollView(_goalScroll, GUILayout.Height(goalHeight));
             GUI.SetNextControlName(InputControl);
-            _goal = GUILayout.TextArea(_goal, 1000, GUILayout.MinHeight(54));
+            _goal = GUILayout.TextArea(_goal, 4000, _goalStyle);
+            GUILayout.EndScrollView();
+            if (GUILayout.Button("Clear", GUILayout.ExpandWidth(false))) _goal = "";
             GUILayout.BeginHorizontal();
             GUILayout.Label("Spending Cap $", GUILayout.ExpandWidth(false));
             GUI.SetNextControlName(InputControl);
@@ -194,6 +204,31 @@ namespace ClaudiaKermin.Adapter
                 GUILayout.EndHorizontal();
             }
             DrawReplyBox();
+            DrawEndMission();
+        }
+
+        // The Mission Goal of a started Mission is shown read-only above; End Mission needs a confirmation.
+        private void DrawEndMission()
+        {
+            if (!View.CanEndMission)
+            {
+                _confirmingEnd = false;
+                return;
+            }
+            if (!_confirmingEnd)
+            {
+                if (GUILayout.Button("End Mission", GUILayout.ExpandWidth(false))) _confirmingEnd = true;
+                return;
+            }
+            GUILayout.Label("End this Mission? Its folder and transcript are kept.", _bold);
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Yes, end it"))
+            {
+                _confirmingEnd = false;
+                _send(new EndMission());
+            }
+            if (GUILayout.Button("No")) _confirmingEnd = false;
+            GUILayout.EndHorizontal();
         }
 
         private void DrawReplyBox()
