@@ -32,9 +32,52 @@ namespace ClaudiaKermin.Core.Tests
             _save.Dispose();
         }
 
+        /// <summary>
+        /// Sends Craft Check requests to a transport of their own that always answers Pass, so the tests of the
+        /// Mission loop see only the Mission's requests, in the order they always did.
+        /// </summary>
+        private sealed class CraftCheckRouter : IHttpTransport
+        {
+            private readonly IHttpTransport _mission;
+            private readonly StreamingFakeTransport _checks = new StreamingFakeTransport();
+
+            public CraftCheckRouter(IHttpTransport mission)
+            {
+                _mission = mission;
+                for (var i = 0; i < 20; i++) _checks.Add(ScriptedResponse.Fixture("craft-check-pass.sse", 64));
+            }
+
+            public HttpResponseData Send(HttpRequestSpec request)
+            {
+                return _mission.Send(request);
+            }
+
+            public IHttpStream Open(HttpRequestSpec request, CancellationToken cancel)
+            {
+                return request.Body.Contains("\"required\":[\"summary\",\"findings\"]") ? _checks.Open(request, cancel) : _mission.Open(request, cancel);
+            }
+        }
+
+        /// <summary>
+        /// Start Mission as the player presses it: the Craft Check runs first (it passes), and the Mission starts when
+        /// it comes back. Returns as soon as it has, before anything else is drained.
+        /// </summary>
+        private void StartChecked(MissionControl mission, StartMission start)
+        {
+            mission.Send(OnPad());
+            mission.Send(start);
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (mission.View.CraftCheck.State == CraftCheckState.Running && DateTime.UtcNow < deadline)
+            {
+                _background.Drain();
+                Thread.Sleep(2);
+            }
+            Assert.NotEqual(CraftCheckState.Running, mission.View.CraftCheck.State);
+        }
+
         private MissionControl Control(StreamingFakeTransport transport, PlayerConfig config = null)
         {
-            var client = new ClaudeClient(transport, () => "sk-ant-test", l => { });
+            var client = new ClaudeClient(new CraftCheckRouter(transport), () => "sk-ant-test", l => { });
             client.Timing.Wait = (d, c) => { };
             var mission = new MissionControl(client, _background, config ?? new PlayerConfig(), () => true);
             mission.Send(new SaveLoaded(_save.Path));
@@ -116,7 +159,7 @@ namespace ClaudiaKermin.Core.Tests
             Assert.True(mission.View.StartForm.CanStart);
             Assert.Equal(10m, mission.View.StartForm.DefaultSpendingCap);
             Assert.Equal(new[] { "claude-sonnet-5-5", "claude-opus-5-5" }, mission.View.StartForm.Models);
-            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             Assert.Equal(MissionStage.WaitingForFlight, mission.View.Stage);
             Assert.False(mission.View.StartForm.CanStart);
             Assert.Empty(transport.Requests);
@@ -198,7 +241,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport, config);
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(OnPad());
-            mission.Send(new StartMission(Goal, 25m, "claude-opus-5-5"));
+            StartChecked(mission, new StartMission(Goal, 25m, "claude-opus-5-5"));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             mission.Send(new Approve());
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
@@ -260,7 +303,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(OnPad());
-            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             mission.Send(new Approve());
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
@@ -299,7 +342,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(OnPad());
-            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             mission.Send(new Approve());
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
@@ -336,7 +379,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(OnPad());
-            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
 
             mission.Send(new Reply("looks good"));
@@ -366,7 +409,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(OnPad());
-            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             mission.Send(new Approve());
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
@@ -385,7 +428,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(OnPad());
-            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             mission.Send(new Approve());
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
@@ -418,7 +461,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Editor));
             Assert.False(mission.View.CanEndMission);
-            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             Assert.True(mission.View.CanEndMission);
             var folder = MissionFolder(mission);
 
@@ -431,7 +474,7 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(OnPad());
             Assert.Empty(transport.Requests);
 
-            mission.Send(new StartMission("Another goal.", 5m, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission("Another goal.", 5m, "claude-sonnet-5-5"));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             Assert.Equal("Another goal.", mission.View.Goal);
         }
@@ -445,14 +488,14 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(OnPad());
-            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             Assert.True(mission.View.Busy);
             var folder = MissionFolder(mission);
 
             mission.Send(new EndMission());
             AssertEndedAndFree(mission, folder);
 
-            mission.Send(new StartMission("Another goal.", 5m, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission("Another goal.", 5m, "claude-sonnet-5-5"));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             // Only the new Mission's reply is in its log; the late reply of the ended one never landed.
             Assert.Equal(1, mission.View.Log.Count(e => e.Kind == LogKind.MissionPlan));
@@ -469,7 +512,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(OnPad());
-            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             mission.Send(new Approve());
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
@@ -500,7 +543,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(OnPad());
-            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             mission.Send(new Approve());
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
@@ -519,7 +562,7 @@ namespace ClaudiaKermin.Core.Tests
         {
             var mission = Control(new StreamingFakeTransport());
             mission.Send(new SceneChanged(GameScene.Editor));
-            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             Assert.Equal(MissionStage.WaitingForFlight, mission.View.Stage);
 
             mission.Send(new SaveLoaded(Path.Combine(_save.Path, "other")));
@@ -536,7 +579,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(OnPad());
-            mission.Send(new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            StartChecked(mission, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             DrainUntil(mission, v => v.Stage == MissionStage.Paused);
             Assert.Equal(new[] { QuickReply.Retry }, mission.View.QuickReplies);
             Assert.False(File.Exists(Path.Combine(MissionFolder(mission), "transcript.json")));

@@ -38,6 +38,9 @@ namespace ClaudiaKermin.Core.Missions
         private GameSnapshot _snapshot;
         private Mission _mission;
         private MissionView _view = new MissionView();
+        private readonly CraftCheckFlow _craftCheck;
+        /// <summary>Start Mission was pressed and the Craft Check it triggered is running; a Pass lets the Mission start.</summary>
+        private StartMission _pendingStart;
 
         public MissionControl(ClaudeClient client, Background background, PlayerConfig config, Func<bool> hasKey)
         {
@@ -45,6 +48,7 @@ namespace ClaudiaKermin.Core.Missions
             _background = background;
             _config = config;
             _hasKey = hasKey;
+            _craftCheck = new CraftCheckFlow(client, background, config, hasKey, CraftCheckCompleted);
             Rebuild();
         }
 
@@ -69,6 +73,9 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is SceneChanged) _scene = ((SceneChanged)input).Scene;
             else if (input is UtAdvanced) _ut = ((UtAdvanced)input).Ut;
             else if (input is StartMission) Start((StartMission)input);
+            else if (input is RunCraftCheck) RunCraftCheck((RunCraftCheck)input);
+            else if (input is AcknowledgeWarning) _craftCheck.Acknowledge(((AcknowledgeWarning)input).Code);
+            else if (input is ChooseProcessor) _craftCheck.Choose(((ChooseProcessor)input).PartId, _snapshot);
             else if (input is EndMission) EndRequested();
             else if (input is Approve) Approved();
             else if (input is ConfirmApproval) Confirmed(((ConfirmApproval)input).Yes);
@@ -157,6 +164,17 @@ namespace ClaudiaKermin.Core.Missions
             var goal = (start.Goal ?? "").Trim();
             if (goal.Length == 0 || start.SpendingCap <= 0 || !_config.Models.Contains(start.Model) || _saveDirectory == null) return;
 
+            // No Mission starts on a craft that hasn't been checked for this goal, or whose check has a Blocker or an open Warning.
+            if (!_craftCheck.IsCurrent(goal, _snapshot))
+            {
+                _pendingStart = start;
+                _craftCheck.Run(goal, start.Model, _snapshot);
+                if (!_craftCheck.Running) _pendingStart = null;
+                return;
+            }
+            if (!_craftCheck.Cleared) return;
+            _pendingStart = null;
+
             var id = "m" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-"
                 + Guid.NewGuid().ToString("N").Substring(0, 4);
             var mission = new Mission
@@ -175,6 +193,22 @@ namespace ClaudiaKermin.Core.Missions
             if (_config.DebugTools) mission.Dump = new FileStreamDump(Path.Combine(mission.Folder, "stream-dumps"));
             _mission = mission;
             Note(LogKind.Player, "Mission Goal: " + goal);
+        }
+
+        private void RunCraftCheck(RunCraftCheck run)
+        {
+            _pendingStart = null;
+            _craftCheck.Run(run.Goal, run.Model, _snapshot);
+        }
+
+        /// <summary>A Craft Check request ended: if Start Mission asked for it and it passed outright, the Mission starts now.</summary>
+        private void CraftCheckCompleted()
+        {
+            var start = _pendingStart;
+            _pendingStart = null;
+            if (start != null && MissionOver && _craftCheck.Passed) Start(start);
+            TryPlan();
+            Rebuild();
         }
 
         private void TryPlan()
@@ -203,6 +237,8 @@ namespace ClaudiaKermin.Core.Missions
             if (saveDirectory == _saveDirectory) return;
             _saveDirectory = saveDirectory;
             _snapshot = null;
+            _pendingStart = null;
+            _craftCheck.Reset();
             if (_mission == null) return;
             if (_mission.InFlight) _mission.Pending.Cancel.Cancel();
             _mission = null;
@@ -211,6 +247,7 @@ namespace ClaudiaKermin.Core.Missions
         private void Snapshot(GameSnapshot snapshot)
         {
             _snapshot = snapshot;
+            _craftCheck.OnSnapshot(snapshot);
             if (snapshot.Ut > _ut) _ut = snapshot.Ut;
         }
 
@@ -255,7 +292,7 @@ namespace ClaudiaKermin.Core.Missions
             }
 
             var plan = mission.PendingSequence;
-            var processor = _snapshot != null ? _snapshot.ProcessorPartId : null;
+            var processor = _craftCheck.ProcessorFor(_snapshot);
             if (!processor.HasValue)
             {
                 Note(LogKind.Notice, "Can't run the script: the craft has no kOS processor.");
@@ -714,6 +751,7 @@ namespace ClaudiaKermin.Core.Missions
             view.StartForm.DefaultModel = _config.DefaultModel;
             view.StartForm.DefaultSpendingCap = _config.DefaultSpendingCap;
             view.StartForm.CanStart = _saveDirectory != null && MissionOver;
+            _craftCheck.Populate(view.CraftCheck, _snapshot);
 
             if (mission != null)
             {
@@ -746,7 +784,7 @@ namespace ClaudiaKermin.Core.Missions
             _view = view;
         }
 
-        private static string Describe(StreamResult result)
+        internal static string Describe(StreamResult result)
         {
             switch (result.Failure)
             {

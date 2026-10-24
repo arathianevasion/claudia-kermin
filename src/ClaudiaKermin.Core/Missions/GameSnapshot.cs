@@ -20,6 +20,16 @@ namespace ClaudiaKermin.Core.Missions
         public string Title = "";
         /// <summary>The part has a kOS processor.</summary>
         public bool HasKosProcessor;
+        /// <summary>The stage the part is in (its inverse stage number): 0 is the last to go.</summary>
+        public int Stage;
+        /// <summary>What the part can do, as the adapter reads it: command, crew_seat, probe_core, parachute, landing_leg,
+        /// heat_shield, antenna, electric_generator, reaction_wheel, rcs, engine, experiment, kos_processor.</summary>
+        public List<string> Tags = new List<string>();
+        public int CrewCapacity;
+        /// <summary>An antenna's power; 0 for other parts.</summary>
+        public double AntennaPower;
+        /// <summary>The boot file set on a kOS processor; "" for none.</summary>
+        public string BootFile = "";
     }
 
     public sealed class SnapshotCraft
@@ -28,6 +38,8 @@ namespace ClaudiaKermin.Core.Missions
         public double MassTonnes;
         /// <summary>The current stage number.</summary>
         public int Stage;
+        /// <summary>Crew seats on the craft.</summary>
+        public int Seats;
         public List<SnapshotPart> Parts = new List<SnapshotPart>();
     }
 
@@ -66,34 +78,91 @@ namespace ClaudiaKermin.Core.Missions
         public SnapshotOrbit Orbit;
         public List<SnapshotResource> Resources = new List<SnapshotResource>();
 
+        // ---- Craft Check facts, computed by the adapter from the game ----
+
+        /// <summary>SANDBOX, SCIENCE_SANDBOX or CAREER.</summary>
+        public string GameMode = "";
+        /// <summary>The stock delta-v simulator is on, so <see cref="Stages"/> is real.</summary>
+        public bool DeltaVSimulator;
+        /// <summary>Per-stage figures from the stock simulator.</summary>
+        public List<SnapshotStage> Stages = new List<SnapshotStage>();
+        public List<SnapshotCrewMember> Crew = new List<SnapshotCrewMember>();
+        public List<SnapshotExperiment> Experiments = new List<SnapshotExperiment>();
+        /// <summary>The game's bodies, for the Delta-v Map and thrust over weight.</summary>
+        public List<SnapshotBody> Bodies = new List<SnapshotBody>();
+
         /// <summary>The kOS processor Claudia would use: the one nearest the root. Null if the craft has none.</summary>
         public uint? ProcessorPartId
         {
-            get
-            {
-                return ProcessorChoice.Choose(Craft.Parts.Select(p => new VesselPart(p.Id, p.ParentId, p.HasKosProcessor)).ToList(), null);
-            }
+            get { return ProcessorFor(null); }
         }
 
+        /// <summary>The player's chosen processor if it is still a processor on the craft, otherwise the one nearest the root.</summary>
+        public uint? ProcessorFor(uint? preferred)
+        {
+            return ProcessorChoice.Choose(Craft.Parts.Select(p => new VesselPart(p.Id, p.ParentId, p.HasKosProcessor)).ToList(), preferred);
+        }
+
+        /// <summary>The snapshot as JSON, with the game's bodies (the recording format).</summary>
         public string ToJson()
+        {
+            return ToJson(true);
+        }
+
+        /// <summary>The same; the bodies are left out for the turns that already carry the Delta-v Map.</summary>
+        public string ToJson(bool withBodies)
         {
             var json = new JsonWriter().BeginObject()
                 .Field("ut", Ut)
                 .Field("situation", Situation)
-                .Field("body", Body);
+                .Field("body", Body)
+                .Field("mode", GameMode)
+                .Field("dv_sim", DeltaVSimulator);
             json.Name("craft").BeginObject()
                 .Field("name", Craft.Name)
                 .Field("mass_t", Craft.MassTonnes)
-                .Field("stage", Craft.Stage);
+                .Field("stage", Craft.Stage)
+                .Field("seats", Craft.Seats);
             json.Name("parts").BeginArray();
             foreach (var part in Craft.Parts)
             {
                 json.BeginObject().Field("id", part.Id).Name("parent");
                 if (part.ParentId.HasValue) json.Number(part.ParentId.Value);
                 else json.Null();
-                json.Field("name", part.Name).Field("title", part.Title).Field("kos", part.HasKosProcessor).EndObject();
+                json.Field("name", part.Name).Field("title", part.Title).Field("kos", part.HasKosProcessor)
+                    .Field("stage", part.Stage).Field("seats", part.CrewCapacity).Field("antenna", part.AntennaPower).Field("boot", part.BootFile);
+                json.Name("tags").BeginArray();
+                foreach (var tag in part.Tags) json.String(tag);
+                json.EndArray().EndObject();
             }
             json.EndArray().EndObject();
+            json.Name("stages").BeginArray();
+            foreach (var stage in Stages)
+                json.BeginObject().Field("stage", stage.Number).Field("dv_vac", stage.DeltaVVac).Field("dv_asl", stage.DeltaVAsl)
+                    .Field("thrust_vac_kn", stage.ThrustVacKn).Field("thrust_asl_kn", stage.ThrustAslKn)
+                    .Field("start_mass_t", stage.StartMassT).Field("end_mass_t", stage.EndMassT).EndObject();
+            json.EndArray();
+            json.Name("crew").BeginArray();
+            foreach (var member in Crew) json.BeginObject().Field("name", member.Name).Field("trait", member.Trait).EndObject();
+            json.EndArray();
+            json.Name("experiments").BeginArray();
+            foreach (var experiment in Experiments)
+            {
+                json.BeginObject().Field("part", experiment.PartId).Field("id", experiment.ExperimentId).Field("title", experiment.Title)
+                    .Name("science_left");
+                if (experiment.ScienceLeft.HasValue) json.Number(experiment.ScienceLeft.Value);
+                else json.Null();
+                json.EndObject();
+            }
+            json.EndArray();
+            if (withBodies)
+            {
+                json.Name("bodies").BeginArray();
+                foreach (var body in Bodies)
+                    json.BeginObject().Field("name", body.Name).Field("parent", body.Parent).Field("gm", body.Gm).Field("radius", body.Radius)
+                        .Field("atmosphere_height", body.AtmosphereHeight).Field("sma", body.Sma).Field("inclination", body.Inclination).EndObject();
+                json.EndArray();
+            }
             json.Name("orbit");
             if (Orbit == null) json.Null();
             else
@@ -131,6 +200,8 @@ namespace ClaudiaKermin.Core.Missions
                 Ut = JsonNode.Double(root["ut"]) ?? 0,
                 Situation = JsonNode.Str(root["situation"]) ?? "",
                 Body = JsonNode.Str(root["body"]) ?? "",
+                GameMode = JsonNode.Str(root["mode"]) ?? "",
+                DeltaVSimulator = JsonNode.Bool(root["dv_sim"]) ?? false,
             };
             var craft = root["craft"];
             if (craft != null)
@@ -138,12 +209,14 @@ namespace ClaudiaKermin.Core.Missions
                 snapshot.Craft.Name = JsonNode.Str(craft["name"]) ?? "";
                 snapshot.Craft.MassTonnes = JsonNode.Double(craft["mass_t"]) ?? 0;
                 snapshot.Craft.Stage = (int)(JsonNode.Long(craft["stage"]) ?? 0);
+                snapshot.Craft.Seats = (int)(JsonNode.Long(craft["seats"]) ?? 0);
                 var parts = craft["parts"];
                 if (parts != null)
                 {
                     foreach (var part in parts.Items)
                     {
                         var parent = JsonNode.Long(part["parent"]);
+                        var tags = part["tags"];
                         snapshot.Craft.Parts.Add(new SnapshotPart
                         {
                             Id = (uint)(JsonNode.Long(part["id"]) ?? 0),
@@ -151,8 +224,67 @@ namespace ClaudiaKermin.Core.Missions
                             Name = JsonNode.Str(part["name"]) ?? "",
                             Title = JsonNode.Str(part["title"]) ?? "",
                             HasKosProcessor = JsonNode.Bool(part["kos"]) ?? false,
+                            Stage = (int)(JsonNode.Long(part["stage"]) ?? 0),
+                            CrewCapacity = (int)(JsonNode.Long(part["seats"]) ?? 0),
+                            AntennaPower = JsonNode.Double(part["antenna"]) ?? 0,
+                            BootFile = JsonNode.Str(part["boot"]) ?? "",
+                            Tags = tags == null ? new List<string>() : tags.Items.Select(JsonNode.Str).Where(t => t != null).ToList(),
                         });
                     }
+                }
+            }
+            var stages = root["stages"];
+            if (stages != null)
+            {
+                foreach (var stage in stages.Items)
+                {
+                    snapshot.Stages.Add(new SnapshotStage
+                    {
+                        Number = (int)(JsonNode.Long(stage["stage"]) ?? 0),
+                        DeltaVVac = JsonNode.Double(stage["dv_vac"]) ?? 0,
+                        DeltaVAsl = JsonNode.Double(stage["dv_asl"]) ?? 0,
+                        ThrustVacKn = JsonNode.Double(stage["thrust_vac_kn"]) ?? 0,
+                        ThrustAslKn = JsonNode.Double(stage["thrust_asl_kn"]) ?? 0,
+                        StartMassT = JsonNode.Double(stage["start_mass_t"]) ?? 0,
+                        EndMassT = JsonNode.Double(stage["end_mass_t"]) ?? 0,
+                    });
+                }
+            }
+            var crew = root["crew"];
+            if (crew != null)
+            {
+                foreach (var member in crew.Items)
+                    snapshot.Crew.Add(new SnapshotCrewMember { Name = JsonNode.Str(member["name"]) ?? "", Trait = JsonNode.Str(member["trait"]) ?? "" });
+            }
+            var experiments = root["experiments"];
+            if (experiments != null)
+            {
+                foreach (var experiment in experiments.Items)
+                {
+                    snapshot.Experiments.Add(new SnapshotExperiment
+                    {
+                        PartId = (uint)(JsonNode.Long(experiment["part"]) ?? 0),
+                        ExperimentId = JsonNode.Str(experiment["id"]) ?? "",
+                        Title = JsonNode.Str(experiment["title"]) ?? "",
+                        ScienceLeft = JsonNode.Double(experiment["science_left"]),
+                    });
+                }
+            }
+            var bodies = root["bodies"];
+            if (bodies != null)
+            {
+                foreach (var body in bodies.Items)
+                {
+                    snapshot.Bodies.Add(new SnapshotBody
+                    {
+                        Name = JsonNode.Str(body["name"]) ?? "",
+                        Parent = JsonNode.Str(body["parent"]) ?? "",
+                        Gm = JsonNode.Double(body["gm"]) ?? 0,
+                        Radius = JsonNode.Double(body["radius"]) ?? 0,
+                        AtmosphereHeight = JsonNode.Double(body["atmosphere_height"]) ?? 0,
+                        Sma = JsonNode.Double(body["sma"]) ?? 0,
+                        Inclination = JsonNode.Double(body["inclination"]) ?? 0,
+                    });
                 }
             }
             var orbit = root["orbit"];

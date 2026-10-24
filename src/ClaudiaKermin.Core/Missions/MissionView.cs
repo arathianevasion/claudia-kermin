@@ -71,6 +71,75 @@ namespace ClaudiaKermin.Core.Missions
         public string AnsweredBy = "";
     }
 
+    public enum CraftCheckState
+    {
+        /// <summary>No Craft Check has run for this craft.</summary>
+        None,
+        Running,
+        /// <summary>The stock delta-v simulator is off; the Craft Check stopped and asks the player to enable it.</summary>
+        NeedsSimulator,
+        Done,
+        /// <summary>The request failed or Claude's reply didn't fit; the Craft Check can be run again.</summary>
+        Error,
+    }
+
+    public enum CraftVerdict
+    {
+        None,
+        Pass,
+        PassWithWarnings,
+        Fail,
+    }
+
+    public enum CraftFindingSeverity
+    {
+        Blocker,
+        Warning,
+    }
+
+    /// <summary>One Blocker or Warning of a Craft Check, with the fix Claudia suggests.</summary>
+    public sealed class CraftFinding
+    {
+        public string Code = "";
+        public CraftFindingSeverity Severity;
+        /// <summary>The finding in the player's words, e.g. "No landing legs".</summary>
+        public string Title = "";
+        public string Explanation = "";
+        public string Fix = "";
+        /// <summary>Only Warnings can be acknowledged.</summary>
+        public bool Acknowledged;
+    }
+
+    /// <summary>A kOS processor on the craft that Claudia could use.</summary>
+    public sealed class ProcessorOption
+    {
+        public uint PartId;
+        public string Title = "";
+        public bool Chosen;
+        /// <summary>The boot file set on it; "" for none.</summary>
+        public string BootFile = "";
+    }
+
+    /// <summary>The Craft Check as the Mission board pins it.</summary>
+    public sealed class CraftCheckView
+    {
+        public CraftCheckState State;
+        public CraftVerdict Verdict;
+        public string Summary = "";
+        /// <summary>The simulator prompt or the error, when <see cref="State"/> is NeedsSimulator or Error.</summary>
+        public string Message = "";
+        public IList<CraftFinding> Findings = new List<CraftFinding>();
+        /// <summary>The craft, the Mission Goal or the processor changed since the result.</summary>
+        public bool Stale;
+        public IList<ProcessorOption> Processors = new List<ProcessorOption>();
+        public uint? ChosenProcessor;
+        /// <summary>
+        /// Start Mission may be pressed: there is a craft, no Craft Check is in the way, and a current result has
+        /// no Blocker and every Warning acknowledged. With no current result, pressing it runs the Craft Check.
+        /// </summary>
+        public bool StartAllowed;
+    }
+
     /// <summary>What the Mission start form offers.</summary>
     public sealed class StartFormView
     {
@@ -89,6 +158,8 @@ namespace ClaudiaKermin.Core.Missions
         public int Version;
         public MissionStage Stage;
         public StartFormView StartForm = new StartFormView();
+        /// <summary>The Craft Check, pinned at the bottom of the Mission board.</summary>
+        public CraftCheckView CraftCheck = new CraftCheckView();
 
         public string MissionId = "";
         public string Goal = "";

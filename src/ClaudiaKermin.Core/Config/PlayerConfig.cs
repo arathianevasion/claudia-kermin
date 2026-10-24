@@ -30,6 +30,9 @@ namespace ClaudiaKermin.Core.Config
         /// <summary>Input tokens at which server-side compaction runs.</summary>
         public int CompactionTriggerTokens = 150000;
 
+        /// <summary>The delta-v margin the Craft Check wants over the Delta-v Map, in percent.</summary>
+        public int CraftCheckMarginPercent = 15;
+
         public string DefaultModel
         {
             get { return Models[0]; }
@@ -42,6 +45,8 @@ namespace ClaudiaKermin.Core.Config
             + "models = claude-sonnet-5-5, claude-opus-5-5\n"
             + "# Spending Cap prefilled in the Mission start form, in USD.\n"
             + "default_spending_cap = 10\n"
+            + "# Delta-v margin, in percent, the Craft Check wants over the Delta-v Map.\n"
+            + "craft_check_margin = 15\n"
             + "# Input tokens at which the conversation is compacted server-side.\n"
             + "compaction_trigger = 150000\n";
 
@@ -77,6 +82,11 @@ namespace ClaudiaKermin.Core.Config
                         decimal cap;
                         if (decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out cap) && cap > 0)
                             config.DefaultSpendingCap = cap;
+                        break;
+                    case "craft_check_margin":
+                        int margin;
+                        if (int.TryParse(value.TrimEnd('%'), NumberStyles.Integer, CultureInfo.InvariantCulture, out margin) && margin >= 0 && margin <= 200)
+                            config.CraftCheckMarginPercent = margin;
                         break;
                     case "compaction_trigger":
                         int trigger;
