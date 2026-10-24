@@ -72,7 +72,8 @@ You need the .NET 10 SDK. The adapter and kOS addon compile against your own KSP
 | --- | --- |
 | Build everything | `dotnet build ClaudiaKermin.sln -p:KSPRoot=/path/to/KSP` |
 | Core tests (no KSP needed) | `dotnet test tests/ClaudiaKermin.Core.Tests` |
-| Kerboscript compile check (needs only kOS.Safe) | `dotnet run --project tools/ClaudiaKermin.KsCompile -p:KSPRoot=/path/to/KSP -- kerboscript` |
+| Kerboscript compile check (needs only kOS.Safe) | `dotnet run --project tools/ClaudiaKermin.KsCompile -p:KSPRoot=/path/to/KSP -- kerboscript tests/blocks` |
+| Core Library tests on kOS.Safe (no KSP needed) | `dotnet test tests/ClaudiaKermin.Kerboscript.Tests -p:KSPRoot=/path/to/KSP` |
 
 A failing test or a kerboscript compile error exits non-zero. A build stages the mod in `dist/GameData/ClaudiaKermin/`. To install it, copy that folder into your KSP `GameData` folder, next to kOS and HarmonyKSP. kOS and HarmonyKSP are dependencies you install yourself; they are never bundled.
 
@@ -83,11 +84,14 @@ The layout follows [ADR 0001](docs/adr/0001-single-in-process-ksp-mod.md):
 - Missions: the green toolbar button opens the Mission window. Its start form takes the Mission Goal, Spending Cap and model (from `models` and `default_spending_cap` in the player config); in Flight a Capcom strip under the altimeter follows the Mission. All Mission logic sits behind one seam in the core (`ClaudiaKermin.Core.Missions.MissionControl`), which the adapter's `MissionDriver` feeds and obeys. Each Mission's transcript is rewritten atomically to `saves/<save>/ClaudiaKermin/missions/<id>/transcript.json` after every response; with `debug_tools = true`, raw stream events go to that folder's `stream-dumps/`, and a button saves Game Snapshots to `saves/<save>/ClaudiaKermin/snapshots/`.
 - `tests/ClaudiaKermin.Core.Tests/Fixtures/streams`: hand-written, byte-exact Claude streams that the client tests replay through the real parser.
 - `GameData/ClaudiaKermin`: static mod files (the Super Intelligence trait config and icon), copied into the staged mod on build. `tools/make-trait-icon.cs` regenerates the icon.
-- `src/ClaudiaKermin.KOS`: the kOS addon (`net48`, like kOS 1.6.0.1): `ADDONS:CLAUDIA` and the kOS bridge that runs scripts on a processor. With `debug_tools = true` in the player config, a Flight window runs the test scripts in `kerboscript/debug/` through it.
+- `kerboscript/library`: the Core Library. `claudia_lib.ks` holds the shared helpers and, in its header, the conventions every Building Block follows; each block is one file named after it (`exec_node.ks`). The core embeds them (`CoreLibrary`), bundles them after each Mission Script into one compile unit, and puts their `//|` doc lines into Claudia's cached prompt layers.
+- `src/ClaudiaKermin.KOS`: the kOS addon (`net48`, like kOS 1.6.0.1): `ADDONS:CLAUDIA` and the kOS bridge that runs scripts on a processor. With `debug_tools = true` in the player config, a Flight window runs the test scripts in `kerboscript/debug/` through it, and a block test runner window (main menu, Space Center, Flight) runs the tests in `tests/blocks/`.
+- `tests/blocks/<test>`: debug block tests. Each has `test.cfg` (block, craft, orbit, timeout and the contract ranges to check), `test.ks` (the Mission Script to run), `scenario.sfs` (the save it starts from) and `reference.craft` (stock parts plus kOS, KSP 1.12.5). They ship inside the kOS addon DLL. **Run** in the runner window writes them to `saves/claudia_block_tests/`, loads that save, spawns the craft into orbit, runs the block unattended and logs PASS or FAIL to KSP.log and `saves/claudia_block_tests/block-tests.log`. Run them whenever a block changes.
 - `tests/ClaudiaKermin.Core.Tests`: the core tests.
-- `tools/ClaudiaKermin.KsCompile`: compiles the `.ks` files under `kerboscript/` with kOS.Safe outside KSP.
+- `tests/ClaudiaKermin.Kerboscript.Tests`: runs the Core Library's pure helpers on a kOS CPU from kOS.Safe, with no KSP, through the same bundle the mod starts.
+- `tools/ClaudiaKermin.KsCompile`: compiles `.ks` files with kOS.Safe outside KSP.
 
-CI (`.github/workflows/ci.yml`) runs on every push. It runs the core tests and the kerboscript compile check, taking kOS.Safe from the public kOS release.
+CI (`.github/workflows/ci.yml`) runs on every push. It runs the core tests, the Core Library tests and the kerboscript compile check, taking kOS.Safe from the public kOS release.
 
 ## Project docs
 
