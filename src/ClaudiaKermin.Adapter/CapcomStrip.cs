@@ -70,7 +70,7 @@ namespace ClaudiaKermin.Adapter
 
             GUILayout.BeginHorizontal();
             foreach (var reply in View.QuickReplies)
-                if (GUILayout.Button(MissionWindow.Label(reply), GUILayout.ExpandWidth(false))) _window.QuickReplied(reply);
+                if (GUILayout.Button(MissionWindow.Label(reply, View), GUILayout.ExpandWidth(false))) _window.QuickReplied(reply);
             GUILayout.FlexibleSpace();
             if (GUILayout.Button(_window.Visible ? "Hide log" : "Show log", GUILayout.ExpandWidth(false)))
                 _window.Visible = !_window.Visible;

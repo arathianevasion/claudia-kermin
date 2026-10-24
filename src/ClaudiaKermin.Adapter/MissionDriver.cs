@@ -23,6 +23,8 @@ namespace ClaudiaKermin.Adapter
         private Game _game;
         private GameScene? _scene;
         private float _nextSnapshot;
+        private const float UtSeconds = 0.5f;
+        private float _nextUt;
 
         public readonly MissionWindow Window;
         public readonly CapcomStrip Strip;
@@ -78,6 +80,13 @@ namespace ClaudiaKermin.Adapter
             {
                 _scene = scene;
                 Send(new SceneChanged(scene));
+            }
+
+            // The clock runs in every scene, so a Due Time reached at the Tracking Station or in another vessel is noticed.
+            if (HighLogic.CurrentGame != null && Planetarium.fetch != null && Time.realtimeSinceStartup >= _nextUt)
+            {
+                _nextUt = Time.realtimeSinceStartup + UtSeconds;
+                Send(new UtAdvanced(Planetarium.GetUniversalTime()));
             }
 
             var vessel = scene == GameScene.Flight ? FlightGlobals.ActiveVessel : null;
@@ -150,6 +159,11 @@ namespace ClaudiaKermin.Adapter
                     if (runner != null) runner.Abort(abort.ProcessorPartId, abort.Reason);
                     continue;
                 }
+                if (command is SetDueTimeAlarm) DueTimeActions.SetAlarm((SetDueTimeAlarm)command);
+                else if (command is ClearDueTimeAlarm) DueTimeActions.ClearAlarm(((ClearDueTimeAlarm)command).MissionId);
+                else if (command is WarpToUt) DueTimeActions.WarpTo(((WarpToUt)command).Ut);
+                else if (command is DropWarp) DueTimeActions.DropWarp();
+                else if (command is SwitchToVessel) DueTimeActions.GoToVessel(((SwitchToVessel)command).VesselId);
                 var message = command as PostScreenMessage;
                 if (message != null && !Window.Visible)
                     ScreenMessages.PostScreenMessage(message.Text, 6f, ScreenMessageStyle.UPPER_CENTER);
