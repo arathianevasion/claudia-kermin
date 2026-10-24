@@ -38,3 +38,13 @@ The spike window appears from the main menu onward. Every result also goes to `~
 | 8 | Start **B** and press **Cancel** partway through. Then do the same with **A**. | Cancelling a request |
 
 When you're done, quit KSP and tell Claude.
+
+## Windows check (TLS only)
+
+This only checks that requests work on Windows. Steps 5–8 don't need repeating there.
+
+1. Download [`dist/ClaudiaApiSpike.dll`](dist/ClaudiaApiSpike.dll) from this branch. Copy it to `<KSP folder>\GameData\ClaudiaApiSpike\Plugins\` (create the folders). On Steam the KSP folder is usually `C:\Program Files (x86)\Steam\steamapps\common\Kerbal Space Program`.
+2. Create `<KSP folder>\GameData\ClaudiaApiSpike\PluginData\api_key.txt` containing only your API key.
+3. Start KSP. At the main menu, do steps 1–4 from the checklist above, then quit.
+4. Send Claude the `[ClaudiaApiSpike]` lines from `<KSP folder>\KSP.log`, for example with `findstr ClaudiaApiSpike KSP.log` in that folder. The log never contains the key.
+5. Delete the `ClaudiaApiSpike` folder from GameData afterwards.
