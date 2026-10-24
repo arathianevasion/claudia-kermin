@@ -97,23 +97,31 @@ namespace ClaudiaKermin.Adapter
         }
 
         // The chat keeps running across the change; only the keyboard lock is released.
-        // The settings window closes: its button is rebuilt unpressed in the next scene, or absent there.
+        // The settings window closes: the buttons are removed here and rebuilt unpressed when the launcher is
+        // ready in the next scene, or not at all if that scene doesn't allow them.
         private void SceneChanging(GameScenes scene)
         {
+            RemoveButtons();
             _window.Visible = false;
             _chatWindow.Unlock();
             _chatWindow.UiHidden = false;
         }
 
+        private static bool SettingsSceneLoaded()
+        {
+            return HighLogic.LoadedScene == GameScenes.SPACECENTER || ChatSceneLoaded();
+        }
+
         private void AddButtons()
         {
-            if (_button == null)
+            RemoveButtons();
+            if (SettingsSceneLoaded())
             {
                 _button = ApplicationLauncher.Instance.AddModApplication(
                     () => _window.Visible = true, () => _window.Visible = false,
                     null, null, null, null, SettingsScenes, MakeIcon(new Color(0.85f, 0.45f, 0.2f, 1f)));
             }
-            if (_chatButton == null)
+            if (ChatSceneLoaded())
             {
                 _chatButton = ApplicationLauncher.Instance.AddModApplication(
                     () => _chatWindow.Visible = true, () => _chatWindow.Visible = false,
