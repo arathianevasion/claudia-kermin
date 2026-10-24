@@ -24,8 +24,11 @@
     <Reference Include="kOS.Safe" HintPath="$(KOSPluginsDir)/kOS.Safe.dll" Private="false" />
   </ItemGroup>
 
-  <!-- Compile-only: players get 0Harmony.dll from the community Harmony mod (HarmonyKSP). -->
+  <!--
+    Compile-only: players get 0Harmony.dll from the community Harmony mod (HarmonyKSP 2.2.1.0),
+    so the reference is pinned to the same version.
+  -->
   <ItemGroup>
-    <PackageReference Include="Lib.Harmony" Version="2.2.2" ExcludeAssets="runtime" PrivateAssets="all" />
+    <PackageReference Include="Lib.Harmony" Version="2.2.1" ExcludeAssets="runtime" PrivateAssets="all" />
   </ItemGroup>
 </Project>
