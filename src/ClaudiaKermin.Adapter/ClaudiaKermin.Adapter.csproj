@@ -10,7 +10,14 @@
     <RootNamespace>ClaudiaKermin.Adapter</RootNamespace>
     <NeedsKSP>true</NeedsKSP>
     <ShipsInGameData>true</ShipsInGameData>
+    <!-- The one project that also stages the repo's GameData/ClaudiaKermin files (trait cfg, icon). -->
+    <StagesGameDataFiles>true</StagesGameDataFiles>
   </PropertyGroup>
+
+  <!-- Compile-only, as in ClaudiaKermin.KOS: players get 0Harmony.dll from HarmonyKSP 2.2.1.0. -->
+  <ItemGroup>
+    <PackageReference Include="Lib.Harmony" Version="2.2.1" ExcludeAssets="runtime" PrivateAssets="all" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../ClaudiaKermin.Core/ClaudiaKermin.Core.csproj" />
