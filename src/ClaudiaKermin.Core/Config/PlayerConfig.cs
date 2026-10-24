@@ -11,7 +11,7 @@ namespace ClaudiaKermin.Core.Config
 {
     /// <summary>
     /// The player config file (outside the save). Holds <c>debug_tools</c>, the models offered at Mission
-    /// start (the first is the default), the default Spending Cap, the compaction trigger and the wait caps; later tickets
+    /// start (the first is the default), the default Spending Cap, the compaction trigger, the wait caps and the runaway multiplier; later tickets
     /// add the price table and the rest of the spec's settings. Format: <c>name = value</c> lines,
     /// <c>#</c> comments. A missing or unreadable value keeps its default.
     /// </summary>
@@ -42,6 +42,9 @@ namespace ClaudiaKermin.Core.Config
         /// <summary>The longest wait a Building Block sits through on the ground (or with no closed orbit), in seconds.</summary>
         public double WaitCapGroundSeconds = 10800;
 
+        /// <summary>The runaway hard stop, as a multiple of a Sequence Plan's planned duration (waits included); 3 is 300%.</summary>
+        public double RunawayMultiplier = 3;
+
         public string DefaultModel
         {
             get { return Models[0]; }
@@ -68,7 +71,9 @@ namespace ClaudiaKermin.Core.Config
             + "price.claude-fable-5-1 = 10, 50\n"
             + "# Longest wait inside a Maneuver Sequence: orbits in orbit, seconds on the ground. Longer waits become a Due Time.\n"
             + "wait_cap_orbits = 1\n"
-            + "wait_cap_ground_s = 10800\n";
+            + "wait_cap_ground_s = 10800\n"
+            + "# A script still running at this percentage of its planned duration (waits included) is stopped and made safe.\n"
+            + "runaway_multiplier = 300%\n";
 
         /// <summary>Loads the file, writing it with defaults first if it does not exist.</summary>
         public static PlayerConfig LoadOrCreate(string directory)
@@ -133,6 +138,15 @@ namespace ClaudiaKermin.Core.Config
                         double ground;
                         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out ground) && ground > 0)
                             config.WaitCapGroundSeconds = ground;
+                        break;
+                    case "runaway_multiplier":
+                        // "300%" or "3". Below 100% would stop a script before its own plan says it ends.
+                        double multiplier;
+                        if (double.TryParse(value.TrimEnd('%').Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out multiplier))
+                        {
+                            if (value.EndsWith("%", StringComparison.Ordinal)) multiplier /= 100;
+                            if (multiplier >= 1 && multiplier <= 100) config.RunawayMultiplier = multiplier;
+                        }
                         break;
                 }
             }

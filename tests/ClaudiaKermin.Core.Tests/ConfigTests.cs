@@ -181,6 +181,27 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void PlayerConfigReadsTheRunawayMultiplierWithThreeHundredPercentByDefault()
+        {
+            using (var dir = new TempDir())
+            {
+                var config = PlayerConfig.LoadOrCreate(dir.Sub);
+                Assert.Equal(3.0, config.RunawayMultiplier);
+                Assert.Contains("runaway_multiplier = 300%", File.ReadAllText(Path.Combine(dir.Sub, PlayerConfig.FileName)));
+
+                File.WriteAllText(Path.Combine(dir.Sub, PlayerConfig.FileName), "runaway_multiplier = 450%\n");
+                Assert.Equal(4.5, PlayerConfig.LoadOrCreate(dir.Sub).RunawayMultiplier);
+
+                File.WriteAllText(Path.Combine(dir.Sub, PlayerConfig.FileName), "runaway_multiplier = 2\n");
+                Assert.Equal(2.0, PlayerConfig.LoadOrCreate(dir.Sub).RunawayMultiplier);
+
+                // Under 100% would stop a script before its own plan says it ends.
+                File.WriteAllText(Path.Combine(dir.Sub, PlayerConfig.FileName), "runaway_multiplier = 50%\n");
+                Assert.Equal(3.0, PlayerConfig.LoadOrCreate(dir.Sub).RunawayMultiplier);
+            }
+        }
+
+        [Fact]
         public void SavingChecksTheKeyAndReportsTheResult()
         {
             using (var dir = new TempDir())
