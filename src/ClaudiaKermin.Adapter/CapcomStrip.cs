@@ -17,7 +17,8 @@ namespace ClaudiaKermin.Adapter
     {
         private const float Width = 620;
         private readonly MissionWindow _window;
-        private Rect _rect;
+        private readonly WindowFrame _frame =
+            new WindowFrame(0x434B04, "", "ClaudiaKerminCapcom", new Rect(0, 70, Width, 0), Vector2.zero, false);
         private GUIStyle _wrap;
 
         public bool UiHidden;
@@ -32,11 +33,21 @@ namespace ClaudiaKermin.Adapter
 
         public void OnGUI()
         {
-            if (UiHidden || View == null || View.Stage == MissionStage.None) return;
+            if (UiHidden || View == null || View.Stage == MissionStage.None)
+            {
+                Unlock();
+                return;
+            }
             GUI.skin = HighLogic.Skin;
             // Under the altimeter at the top centre; it grows to fit and can't be dragged off.
-            _rect = new Rect((Screen.width - Width) / 2f, 70, Width, _rect.height);
-            _rect = GUILayout.Window(0x434B04, _rect, Draw, "", GUILayout.Width(Width));
+            _frame.Rect = new Rect((Screen.width - Width) / 2f, 70, Width, _frame.Rect.height);
+            _frame.Show(Draw, GUILayout.Width(Width));
+        }
+
+        /// <summary>Releases the mouse lock; call when the strip goes away.</summary>
+        public void Unlock()
+        {
+            _frame.Unlock();
         }
 
         private void Draw(int id)

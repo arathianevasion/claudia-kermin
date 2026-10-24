@@ -78,8 +78,15 @@ namespace ClaudiaKermin.Adapter
             GameEvents.onShowUI.Remove(ShowUI);
             GameEvents.onGameSceneLoadRequested.Remove(SceneChanging);
             RemoveButtons();
+            UnlockAll();
+        }
+
+        private void UnlockAll()
+        {
+            _window.Unlock();
             _chatWindow.Unlock();
             _missions.Window.Unlock();
+            _missions.Strip.Unlock();
         }
 
         private void Update()
@@ -104,6 +111,12 @@ namespace ClaudiaKermin.Adapter
                 _chatWindow.OnGUI();
                 _missions.OnGUI();
             }
+            else
+            {
+                _chatWindow.Unlock();
+                _missions.Window.Unlock();
+                _missions.Strip.Unlock();
+            }
         }
 
         private static bool ChatSceneLoaded()
@@ -125,16 +138,15 @@ namespace ClaudiaKermin.Adapter
             _missions.Strip.UiHidden = false;
         }
 
-        // The chat and the Mission keep running across the change; only the keyboard locks are released.
+        // The chat and the Mission keep running across the change; only the input locks are released.
         // The settings window closes: the buttons are removed here and rebuilt unpressed when the launcher is
         // ready in the next scene, or not at all if that scene doesn't allow them.
         private void SceneChanging(GameScenes scene)
         {
             RemoveButtons();
             _window.Visible = false;
-            _chatWindow.Unlock();
+            UnlockAll();
             _chatWindow.UiHidden = false;
-            _missions.Window.Unlock();
             _missions.Window.UiHidden = false;
             _missions.Strip.UiHidden = false;
         }

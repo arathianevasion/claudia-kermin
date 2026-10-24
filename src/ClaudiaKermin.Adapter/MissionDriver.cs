@@ -70,6 +70,7 @@ namespace ClaudiaKermin.Adapter
             Strip.View = _mission.View;
             Window.OnGUI();
             if (HighLogic.LoadedScene == GameScenes.FLIGHT) Strip.OnGUI();
+            else Strip.Unlock();
             Carry();
         }
 

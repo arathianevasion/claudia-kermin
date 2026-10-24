@@ -29,12 +29,14 @@ namespace ClaudiaKermin.Adapter
 
         private readonly Action<MissionInput> _send;
         private readonly bool _debugTools;
-        private Rect _rect = new Rect(260, 120, 480, 520);
+        // Large enough by default to read a Sequence Plan card and its script without resizing.
+        private readonly WindowFrame _frame =
+            new WindowFrame(0x434B03, "Claudia: Mission", LockId, new Rect(260, 80, 700, 700), new Vector2(420, 360), true);
         private Vector2 _scroll;
         private int _seenLogCount = -1;
-        private bool _locked;
         private GUIStyle _wrap;
         private GUIStyle _bold;
+        private GUIStyle _script;
 
         // Start form.
         private string _goal = "";
@@ -69,25 +71,16 @@ namespace ClaudiaKermin.Adapter
                 return;
             }
             GUI.skin = HighLogic.Skin;
-            _rect = GUILayout.Window(0x434B03, _rect, Draw, "Claudia: Mission");
+            _frame.Show(Draw);
 
             // Keys typed into the window must not stage, throttle or rotate the craft.
-            if (GUI.GetNameOfFocusedControl() == InputControl) Lock();
-            else Unlock();
+            _frame.SetTyping(GUI.GetNameOfFocusedControl() == InputControl);
         }
 
+        /// <summary>Releases the input locks; call when the window goes away.</summary>
         public void Unlock()
         {
-            if (!_locked) return;
-            InputLockManager.RemoveControlLock(LockId);
-            _locked = false;
-        }
-
-        private void Lock()
-        {
-            if (_locked) return;
-            InputLockManager.SetControlLock(ControlTypes.KEYBOARDINPUT, LockId);
-            _locked = true;
+            _frame.Unlock();
         }
 
         /// <summary>A quick reply from here or the Capcom strip. Change and Ask pick what the reply box sends.</summary>
@@ -129,6 +122,8 @@ namespace ClaudiaKermin.Adapter
             {
                 _wrap = new GUIStyle(GUI.skin.label) { richText = false, wordWrap = true };
                 _bold = new GUIStyle(_wrap) { fontStyle = FontStyle.Bold };
+                // Scripts wrap to the card instead of running off the right edge; the log scrolls them.
+                _script = new GUIStyle(GUI.skin.textArea) { wordWrap = true, richText = false };
             }
             if (View.StartForm.CanStart) DrawStartForm();
             if (View.Stage != MissionStage.None) DrawMission();
@@ -138,6 +133,7 @@ namespace ClaudiaKermin.Adapter
                 if (GUILayout.Button("Capture Game Snapshot (debug)")) _send(new CaptureSnapshot());
                 GUI.enabled = true;
             }
+            _frame.DrawGrip();
             GUI.DragWindow();
         }
 
@@ -253,7 +249,7 @@ namespace ClaudiaKermin.Adapter
                 Toggle(_showScript, entry);
             GUILayout.EndHorizontal();
             if (_showWhy.Contains(entry)) GUILayout.Label("Why: " + entry.Why, _wrap);
-            if (_showScript.Contains(entry)) GUILayout.TextArea(entry.Script);
+            if (_showScript.Contains(entry)) GUILayout.TextArea(entry.Script, _script);
             GUILayout.EndVertical();
         }
 

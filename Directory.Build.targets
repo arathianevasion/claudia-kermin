@@ -6,6 +6,7 @@
     <Reference Include="UnityEngine" HintPath="$(KSPManagedDir)/UnityEngine.dll" Private="false" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(KSPManagedDir)/UnityEngine.CoreModule.dll" Private="false" />
     <Reference Include="UnityEngine.IMGUIModule" HintPath="$(KSPManagedDir)/UnityEngine.IMGUIModule.dll" Private="false" />
+    <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(KSPManagedDir)/UnityEngine.InputLegacyModule.dll" Private="false" />
     <Reference Include="UnityEngine.AnimationModule" HintPath="$(KSPManagedDir)/UnityEngine.AnimationModule.dll" Private="false" />
     <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(KSPManagedDir)/UnityEngine.TextRenderingModule.dll" Private="false" />
     <Reference Include="UnityEngine.UI" HintPath="$(KSPManagedDir)/UnityEngine.UI.dll" Private="false" />
