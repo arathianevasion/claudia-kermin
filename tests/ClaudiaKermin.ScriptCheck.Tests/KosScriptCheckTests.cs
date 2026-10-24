@@ -250,6 +250,34 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             Assert.Contains(result.Forbidden, f => f.EndsWith("(reboot or shut down processors)"));
         }
 
+        [Theory]
+        [InlineData("use physics warp", "set warpmode to choose \"PHYSICS\" if ship:altitude < 70000 else \"RAILS\".")]
+        [InlineData("use physics warp", "set warpmode to choose \"RAILS\" if ship:altitude < 70000 else \"PHYSICS\".")]
+        [InlineData("change kOS config", "set config:ipu to choose 2000 if ship:altitude > 1 else 500.")]
+        [InlineData("use physics warp", "set warpmode to ship:altitude > 1 and \"PHYSICS\".")]
+        public void ChoosingBetweenValuesStillChecksEachOne(string item, string script) { AssertForbidden(item, script); }
+
+        [Fact]
+        public void ChoosingBetweenAllowedValuesPasses()
+        {
+            AssertAllowed("set warpmode to choose \"RAILS\" if ship:altitude < 70000 else \"RAILS\".\n"
+                + "set warp to choose 3 if ship:altitude > 100000 else 1.");
+        }
+
+        [Fact]
+        public void AnotherVesselPassedToAFunctionIsStillAnotherVessel()
+        {
+            AssertForbidden("change or message other vessels",
+                "function poke { parameter other. other:parts[0]:getmodule(\"ModuleDecoupler\"):doevent(\"decouple\"). }\npoke(vessel(\"Other\")).");
+        }
+
+        [Fact]
+        public void OwnPartsPassedToAFunctionStayAllowed()
+        {
+            AssertAllowed("function deploy { parameter p. p:getmodule(\"ModuleParachute\"):doevent(\"deploy chute\"). }\n"
+                + "deploy(ship:partstagged(\"chute\")[0]).\nprint vessel(\"Other\"):altitude.");
+        }
+
         [Fact]
         public void TheShippedDebugScriptsPass()
         {

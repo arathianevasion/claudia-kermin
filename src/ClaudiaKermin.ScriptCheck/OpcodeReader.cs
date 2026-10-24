@@ -12,9 +12,9 @@ namespace ClaudiaKermin.ScriptCheck
     /// <summary>
     /// Reads compiled opcodes against the <see cref="ForbiddenList"/>. A symbolic stack follows what each
     /// opcode pushes, so a suffix knows its receiver (CONFIG, ADDONS, the TIMEWARP, another vessel) and a call
-    /// knows whether its arguments are constants. It reads branches straight through, which can leave stale
-    /// values on the stack but never hides a forbidden name. Values computed at run time can slip past it;
-    /// the runtime gates catch those (ADR 0003).
+    /// knows whether its arguments are constants. It reads both arms of a branch in turn; where an expression's
+    /// arms meet again (CHOOSE, AND, OR) their values are merged, so each one is checked. Values computed at
+    /// run time can slip past it; the runtime gates catch those (ADR 0003).
     /// </summary>
     internal sealed class OpcodeReader
     {
@@ -34,13 +34,19 @@ namespace ClaudiaKermin.ScriptCheck
             public string Suffix;
             /// <summary>Another vessel, or something reached from one (its parts, modules, control).</summary>
             public bool OtherVessel;
+            /// <summary>Popped from an empty stack: in a function, one of its parameters.</summary>
+            public bool Parameter;
+            /// <summary>Where branches meet: the values either arm may leave (null for a plain value).</summary>
+            public List<Value> Alternatives;
         }
 
         private readonly List<string> _findings = new List<string>();
         private readonly HashSet<string> _seen = new HashSet<string>();
         private readonly HashSet<string> _otherVesselVariables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _timewarpVariables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private bool _reporting;
+        /// <summary>Another vessel is passed to a user function somewhere, so any parameter may hold one.</summary>
+        private bool _otherVesselPassed;
+        private bool _recording;
 
         /// <summary>
         /// Each finding, e.g. "line 3: COPYPATH (touch files)", in order. The code is read twice: the first pass
@@ -51,7 +57,7 @@ namespace ClaudiaKermin.ScriptCheck
             var reader = new OpcodeReader();
             var list = new List<List<Opcode>>(sections);
             foreach (var section in list) reader.Walk(section);
-            reader._reporting = true;
+            reader._recording = true;
             foreach (var section in list) reader.Walk(section);
             return reader._findings;
         }
@@ -59,7 +65,58 @@ namespace ClaudiaKermin.ScriptCheck
         private void Walk(List<Opcode> code)
         {
             var stack = new Stack<Value>();
-            foreach (var op in code) Step(op, stack);
+            // Values an arm left on the stack when it jumped ahead, keyed by the label it jumped to.
+            var arms = new Dictionary<string, List<Value>>(StringComparer.Ordinal);
+            foreach (var op in code)
+            {
+                List<Value> waiting;
+                if (!string.IsNullOrEmpty(op.Label) && arms.TryGetValue(op.Label, out waiting))
+                {
+                    arms.Remove(op.Label);
+                    if (stack.Count > 0) waiting.Add(stack.Pop());
+                    stack.Push(Merge(waiting));
+                }
+
+                var jump = op as OpcodeBranchJump;
+                if (jump != null && stack.Count > 0 && !string.IsNullOrEmpty(jump.DestinationLabel))
+                {
+                    if (!arms.TryGetValue(jump.DestinationLabel, out waiting)) arms[jump.DestinationLabel] = waiting = new List<Value>();
+                    waiting.Add(stack.Pop());
+                    continue;
+                }
+                Step(op, stack);
+            }
+        }
+
+        private static Value Merge(List<Value> values)
+        {
+            var merged = new Value { Alternatives = new List<Value>() };
+            foreach (var value in values)
+            {
+                merged.Alternatives.AddRange(Each(value));
+                merged.OtherVessel |= value.OtherVessel;
+                if (value.Suffix == "timewarp") merged.Suffix = "timewarp";
+            }
+            return merged;
+        }
+
+        /// <summary>The plain values a value may be: itself, or each alternative where branches met.</summary>
+        private static IEnumerable<Value> Each(Value value)
+        {
+            if (value.Alternatives == null)
+            {
+                yield return value;
+                yield break;
+            }
+            foreach (var alternative in value.Alternatives)
+                foreach (var plain in Each(alternative)) yield return plain;
+        }
+
+        private static bool AnyVariable(Value value, string name)
+        {
+            foreach (var plain in Each(value))
+                if (plain.Variable == name) return true;
+            return false;
         }
 
         private void Step(Opcode op, Stack<Value> stack)
@@ -127,6 +184,7 @@ namespace ClaudiaKermin.ScriptCheck
                 {
                     var callee = Pop(stack);
                     foreach (var arg in args) Consumed(arg, line);
+                    PassedToFunction(args);
                     stack.Push(new Value { OtherVessel = callee.OtherVessel });
                 }
                 else stack.Push(Called(Name(destination), args, line));
@@ -228,7 +286,7 @@ namespace ClaudiaKermin.ScriptCheck
         {
             string item;
             if (ForbiddenList.Suffixes.TryGetValue(id, out item)) Found(line, ":" + id.ToUpperInvariant(), item);
-            if (receiver.Variable == "addons" && !ForbiddenList.AllowedAddonSuffixes.Contains(id))
+            if (AnyVariable(receiver, "addons") && !ForbiddenList.AllowedAddonSuffixes.Contains(id))
                 Found(line, "ADDONS:" + id.ToUpperInvariant(), ForbiddenList.OtherAddons);
             if (receiver.OtherVessel && ForbiddenList.OtherVesselMutators.Contains(id))
                 Found(line, ":" + id.ToUpperInvariant() + " on another vessel", ForbiddenList.OtherVessels);
@@ -237,11 +295,11 @@ namespace ClaudiaKermin.ScriptCheck
         private void SetSuffix(Value receiver, string id, Value value, int line)
         {
             var what = "SET :" + id.ToUpperInvariant();
-            if (receiver.Variable == "config") Found(line, "SET CONFIG:" + id.ToUpperInvariant(), ForbiddenList.ChangeConfig);
-            else if (receiver.Variable == "addons") Found(line, "SET ADDONS:" + id.ToUpperInvariant(), ForbiddenList.OtherAddons);
+            if (AnyVariable(receiver, "config")) Found(line, "SET CONFIG:" + id.ToUpperInvariant(), ForbiddenList.ChangeConfig);
+            else if (AnyVariable(receiver, "addons")) Found(line, "SET ADDONS:" + id.ToUpperInvariant(), ForbiddenList.OtherAddons);
             if (id == "activevessel") Found(line, what, ForbiddenList.SwitchVessels);
             if (id == "bootfilename") Found(line, what, ForbiddenList.SetBootFiles);
-            if (id == "mode" && !IsText(value, "rails") && (receiver.Suffix == "timewarp" || IsText(value, "physics")))
+            if (id == "mode" && !IsText(value, "rails") && (receiver.Suffix == "timewarp" || MayBeText(value, "physics")))
                 Found(line, "SET TIMEWARP:MODE", ForbiddenList.PhysicsWarp);
             if (receiver.OtherVessel) Found(line, what + " on another vessel", ForbiddenList.OtherVessels);
         }
@@ -249,36 +307,52 @@ namespace ClaudiaKermin.ScriptCheck
         private void Stored(string id, Value value, int line)
         {
             if (id == "warpmode" && !IsText(value, "rails")) Found(line, "SET WARPMODE", ForbiddenList.PhysicsWarp);
-            if (value.Variable == "config") Found(line, "CONFIG held in a variable", ForbiddenList.ChangeConfig);
-            if (value.Variable == "addons") Found(line, "ADDONS held in a variable", ForbiddenList.OtherAddons);
+            if (AnyVariable(value, "config")) Found(line, "CONFIG held in a variable", ForbiddenList.ChangeConfig);
+            if (AnyVariable(value, "addons")) Found(line, "ADDONS held in a variable", ForbiddenList.OtherAddons);
             var name = id.TrimEnd('*');
-            if (value.OtherVessel) _otherVesselVariables.Add(name);
+            if (value.OtherVessel || (value.Parameter && _otherVesselPassed)) _otherVesselVariables.Add(name);
             if (value.Suffix == "timewarp") _timewarpVariables.Add(name);
         }
 
         /// <summary>A value used as an argument or operand: CONFIG and ADDONS may only be read through a suffix.</summary>
         private void Consumed(Value value, int line)
         {
-            if (value.Variable == "config") Found(line, "CONFIG passed on", ForbiddenList.ChangeConfig);
-            if (value.Variable == "addons") Found(line, "ADDONS passed on", ForbiddenList.OtherAddons);
+            if (AnyVariable(value, "config")) Found(line, "CONFIG passed on", ForbiddenList.ChangeConfig);
+            if (AnyVariable(value, "addons")) Found(line, "ADDONS passed on", ForbiddenList.OtherAddons);
         }
 
         private Value Called(string name, List<Value> args, int line)
         {
             foreach (var arg in args) Consumed(arg, line);
+            if (!ForbiddenList.BuiltIns.Contains(name)) PassedToFunction(args);
             if (name == "makebuiltindelegate")
             {
-                if (args.Count == 1 && args[0].IsConstant && args[0].Text != null)
-                    Function(Lower(args[0].Text), args[0].Text.ToUpperInvariant() + "@", line);
-                else Found(line, "MAKEBUILTINDELEGATE", ForbiddenList.ComputedDelegate);
+                var constant = args.Count == 1;
+                if (constant)
+                    foreach (var plain in Each(args[0]))
+                        constant &= plain.IsConstant && plain.Text != null;
+                if (!constant)
+                {
+                    Found(line, "MAKEBUILTINDELEGATE", ForbiddenList.ComputedDelegate);
+                    return new Value();
+                }
+                foreach (var plain in Each(args[0])) Function(Lower(plain.Text), plain.Text.ToUpperInvariant() + "@", line);
                 return new Value();
             }
             Function(name, name.ToUpperInvariant(), line);
-            if ((name == "buildlist" || name == "printlist") && args.Count > 0 && args[0].IsConstant
-                && args[0].Text != null && ForbiddenList.FileListKinds.Contains(args[0].Text))
-                Found(line, "LIST " + args[0].Text.ToUpperInvariant(), ForbiddenList.TouchFiles);
-            var targets = name == "buildlist" && args.Count > 0 && IsText(args[0], "targets");
+            if ((name == "buildlist" || name == "printlist") && args.Count > 0)
+                foreach (var plain in Each(args[0]))
+                    if (plain.IsConstant && plain.Text != null && ForbiddenList.FileListKinds.Contains(plain.Text))
+                        Found(line, "LIST " + plain.Text.ToUpperInvariant(), ForbiddenList.TouchFiles);
+            var targets = name == "buildlist" && args.Count > 0 && MayBeText(args[0], "targets");
             return new Value { OtherVessel = name == "vessel" || targets };
+        }
+
+        /// <summary>Arguments to a user function or delegate: passing another vessel marks every parameter.</summary>
+        private void PassedToFunction(List<Value> args)
+        {
+            foreach (var arg in args)
+                if (arg.OtherVessel) _otherVesselPassed = true;
         }
 
         private void Function(string name, string what, int line)
@@ -289,19 +363,30 @@ namespace ClaudiaKermin.ScriptCheck
 
         private void Found(int line, string what, string item)
         {
-            if (!_reporting) return;
+            if (!_recording) return;
             var finding = "line " + line.ToString(CultureInfo.InvariantCulture) + ": " + what + " (" + item + ")";
             if (_seen.Add(finding)) _findings.Add(finding);
         }
 
         private static Value Pop(Stack<Value> stack)
         {
-            return stack.Count > 0 ? stack.Pop() : new Value();
+            return stack.Count > 0 ? stack.Pop() : new Value { Parameter = true };
         }
 
+        /// <summary>The value is that constant whichever way any branch went.</summary>
         private static bool IsText(Value value, string text)
         {
-            return value.IsConstant && string.Equals(value.Text, text, StringComparison.OrdinalIgnoreCase);
+            foreach (var plain in Each(value))
+                if (!plain.IsConstant || !string.Equals(plain.Text, text, StringComparison.OrdinalIgnoreCase)) return false;
+            return true;
+        }
+
+        /// <summary>The value may be that constant.</summary>
+        private static bool MayBeText(Value value, string text)
+        {
+            foreach (var plain in Each(value))
+                if (plain.IsConstant && string.Equals(plain.Text, text, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
         }
 
         /// <summary>A call target as written: "copypath()" (built-in), "vessel" (resolved at run time) or "$f*" (user function).</summary>
