@@ -63,6 +63,13 @@ namespace ClaudiaKermin.Core.Missions
         public ConfirmApproval(bool yes) { Yes = yes; }
     }
 
+    /// <summary>Raise cap, from a Mission Paused at its Spending Cap: sets a higher Spending Cap (USD) and resumes. A cap that is not higher is ignored.</summary>
+    public sealed class RaiseCap : MissionInput
+    {
+        public readonly decimal SpendingCap;
+        public RaiseCap(decimal spendingCap) { SpendingCap = spendingCap; }
+    }
+
     /// <summary>Sends the turn that failed again, unchanged.</summary>
     public sealed class Retry : MissionInput
     {

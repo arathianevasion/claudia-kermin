@@ -46,6 +46,9 @@ namespace ClaudiaKermin.Adapter
         private bool _confirmingEnd;
         private string _cap;
         private int _modelIndex;
+        // Raise cap asked for a new Spending Cap and awaits the amount.
+        private bool _raising;
+        private string _raiseTo = "";
 
         // Reply box.
         private string _typed = "";
@@ -96,6 +99,14 @@ namespace ClaudiaKermin.Adapter
                 case QuickReply.ConfirmApproval: _send(new ConfirmApproval(true)); break;
                 case QuickReply.NotYet: _send(new ConfirmApproval(false)); break;
                 case QuickReply.Retry: _send(new Retry()); break;
+                case QuickReply.RaiseCap:
+                    _raising = true;
+                    Visible = true;
+                    break;
+                case QuickReply.EndMission:
+                    _confirmingEnd = true;
+                    Visible = true;
+                    break;
                 case QuickReply.ChangeSomething:
                     _typingFor = TypingFor.Change;
                     Visible = true;
@@ -116,6 +127,8 @@ namespace ClaudiaKermin.Adapter
                 case QuickReply.AskQuestion: return "Ask a question";
                 case QuickReply.ConfirmApproval: return "Yes, approve";
                 case QuickReply.NotYet: return "Not yet";
+                case QuickReply.RaiseCap: return "Raise cap";
+                case QuickReply.EndMission: return "End Mission";
                 default: return "Retry";
             }
         }
@@ -163,7 +176,13 @@ namespace ClaudiaKermin.Adapter
 
             GUILayout.Label("Model (locked for the Mission):");
             var names = new string[form.Models.Count];
-            for (var i = 0; i < names.Length; i++) names[i] = form.Models[i] + (form.Models[i] == form.DefaultModel ? " (default)" : "");
+            for (var i = 0; i < names.Length; i++)
+            {
+                decimal estimate;
+                names[i] = form.Models[i] + (form.Models[i] == form.DefaultModel ? " (default)" : "")
+                    + (form.Estimates.TryGetValue(form.Models[i], out estimate)
+                        ? "  est. Mission cost ~$" + estimate.ToString("0.00", CultureInfo.InvariantCulture) : "");
+            }
             _modelIndex = Mathf.Clamp(_modelIndex, 0, Math.Max(0, names.Length - 1));
             _modelIndex = GUILayout.SelectionGrid(_modelIndex, names, 1);
 
@@ -182,8 +201,7 @@ namespace ClaudiaKermin.Adapter
         private void DrawMission()
         {
             GUILayout.Label("Mission Goal: " + View.Goal, _wrap);
-            GUILayout.Label("Model: " + View.Model + "   Spending Cap: $" + View.SpendingCap.ToString("0.00", CultureInfo.InvariantCulture)
-                + "   " + StageText(View), _wrap);
+            GUILayout.Label("Model: " + View.Model + "   Spent: " + SpendText(View) + "   " + StageText(View), _wrap);
 
             if (View.Log.Count != _seenLogCount)
             {
@@ -203,8 +221,45 @@ namespace ClaudiaKermin.Adapter
                     if (GUILayout.Button(Label(reply))) QuickReplied(reply);
                 GUILayout.EndHorizontal();
             }
+            DrawRaiseCap();
             DrawReplyBox();
             DrawEndMission();
+        }
+
+        // Raise cap: the Mission is Paused at its Spending Cap; the player picks a higher cap and it resumes.
+        private void DrawRaiseCap()
+        {
+            if (!View.QuickReplies.Contains(QuickReply.RaiseCap))
+            {
+                _raising = false;
+                _raiseTo = "";
+                return;
+            }
+            if (!_raising) return;
+            if (_raiseTo.Length == 0) _raiseTo = (View.SpendingCap * 2).ToString("0.00", CultureInfo.InvariantCulture);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Raise Spending Cap to $", GUILayout.ExpandWidth(false));
+            GUI.SetNextControlName(InputControl);
+            _raiseTo = GUILayout.TextField(_raiseTo, 10, GUILayout.Width(80));
+            decimal cap;
+            GUI.enabled = decimal.TryParse(_raiseTo, NumberStyles.Number, CultureInfo.InvariantCulture, out cap) && cap > View.SpendingCap;
+            if (GUILayout.Button("Raise", GUILayout.ExpandWidth(false)))
+            {
+                _send(new RaiseCap(cap));
+                _raising = false;
+                _raiseTo = "";
+            }
+            GUI.enabled = true;
+            if (GUILayout.Button("Cancel", GUILayout.ExpandWidth(false))) _raising = false;
+            GUILayout.EndHorizontal();
+        }
+
+        /// <summary>The cost so far against the Spending Cap, e.g. "$1.08 of $10.00", with the 80% warning.</summary>
+        public static string SpendText(MissionView view)
+        {
+            var text = "$" + (view.Spent + view.HeldCharges).ToString("0.00", CultureInfo.InvariantCulture)
+                + " of $" + view.SpendingCap.ToString("0.00", CultureInfo.InvariantCulture);
+            return view.CapWarning ? text + " (80% of the cap or more)" : text;
         }
 
         // The Mission Goal of a started Mission is shown read-only above; End Mission needs a confirmation.

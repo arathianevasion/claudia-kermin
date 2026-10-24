@@ -77,6 +77,7 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is ChangeSomething) ChangeRequested(((ChangeSomething)input).Text);
             else if (input is AskQuestion) Asked(((AskQuestion)input).Text);
             else if (input is Retry) Retried();
+            else if (input is RaiseCap) Raised(((RaiseCap)input).SpendingCap);
             else if (input is CaptureSnapshot) Capture();
             else if (input is KosRunRefused) RunRefused((KosRunRefused)input);
             else if (input is KosRunEnded) RunEnded((KosRunEnded)input);
@@ -142,6 +143,27 @@ namespace ClaudiaKermin.Core.Missions
             /// <summary>A turn that must follow the one in flight (a Debrief after a mid-run question).</summary>
             public Turn Next;
             public IRawStreamDump Dump;
+
+            // ---- Spending (state #42 snapshots: SpendingCap, Spent, Held) ----
+            /// <summary>Cost so far from real usage.</summary>
+            public decimal Spent;
+            /// <summary>Worst-case charges kept for cancelled and lost requests; never refunded.</summary>
+            public decimal Held;
+            /// <summary>The worst case of the request in flight; replaced by its real usage.</summary>
+            public decimal PendingCharge;
+            public bool Warned;
+            /// <summary>Paused because of the Spending Cap, so Raise cap resumes it.</summary>
+            public bool PausedForCap;
+            public int Requests;
+            /// <summary>How the last request ended, for the cost log.</summary>
+            public string Settlement = "";
+            public string Outcome = "";
+            public decimal Settled;
+
+            public decimal Committed
+            {
+                get { return Spent + Held; }
+            }
 
             public bool AwaitingApproval
             {
@@ -417,8 +439,13 @@ namespace ClaudiaKermin.Core.Missions
             request.System.AddRange(mission.System);
             request.Messages.AddRange(mission.Conversation);
             request.Messages.AddRange(turn.Messages);
-            if (!MaySend(mission, request)) return;
+            decimal worstCase;
+            if (!MaySend(mission, request, out worstCase)) return;
 
+            // Recorded before sending; replaced by the real usage, or kept if the request is cancelled or lost.
+            mission.PendingCharge = worstCase;
+            mission.Requests++;
+            LogCost(mission, "pending", worstCase, "");
             mission.InFlight = true;
             mission.Activity = "thinking";
             turn.Cancel = new CancellationTokenSource();
@@ -430,10 +457,20 @@ namespace ClaudiaKermin.Core.Missions
                 error => Finished(mission, turn, null));
         }
 
-        /// <summary>The Spending Cap's pre-send check goes here (a later ticket); for now every request may go.</summary>
-        private static bool MaySend(Mission mission, MessagesRequest request)
+        /// <summary>
+        /// The Spending Cap's pre-send check: spent + kept charges + the request's estimated input and its
+        /// worst-case <c>max_tokens</c> output must fit the cap, or the request is not sent and the Mission is
+        /// Paused with Raise cap or End Mission.
+        /// </summary>
+        private bool MaySend(Mission mission, MessagesRequest request, out decimal worstCase)
         {
-            return true;
+            // About 3 characters a token, rounded up: the estimate leans high.
+            var estimatedInput = (request.ToJson().Length + 2) / 3;
+            worstCase = _config.Prices.WorstCase(mission.Model, estimatedInput, request.MaxTokens);
+            if (mission.Committed + worstCase <= mission.SpendingCap) return true;
+            LogCost(mission, "blocked", worstCase, "over_cap");
+            PauseForCap(mission, "The next request could pass the Spending Cap ($" + Dollars(mission.SpendingCap) + "). Raise cap to carry on, or End Mission.");
+            return false;
         }
 
         private void Streamed(Mission mission, Turn turn, StreamUpdate update)
@@ -453,11 +490,15 @@ namespace ClaudiaKermin.Core.Missions
             mission.InFlight = false;
             mission.Activity = "";
             turn.Cancel.Dispose();
-            // The Mission was dropped (another save loaded) while this request ran.
+            // Settled and logged before the reply is applied, which may send the next request.
+            Settle(mission, turn, result);
+            LogCost(mission, mission.Settlement, mission.Settled, mission.Outcome);
+            // The Mission was dropped (End Mission, or another save loaded) while this request ran.
             if (mission != _mission) return;
             try
             {
                 Answered(mission, turn, result);
+                if (mission == _mission) AfterCharge(mission);
             }
             finally
             {
@@ -642,6 +683,7 @@ namespace ClaudiaKermin.Core.Missions
             if (mission == null || mission.Stage != MissionStage.Paused || mission.InFlight) return;
             mission.Stage = mission.StageBeforePause;
             mission.PauseReason = "";
+            mission.PausedForCap = false;
             if (mission.Pending != null) Send(mission, mission.Pending);
             else if (mission.Next != null)
             {
@@ -687,6 +729,117 @@ namespace ClaudiaKermin.Core.Missions
             _commands.Add(new PostScreenMessage(text));
         }
 
+        // ---- Spending Cap and cost ----
+
+        /// <summary>
+        /// Replaces the request's pending charge with what it really cost (refused, cut-off and off-schema
+        /// replies are paid too). A cancelled or lost request keeps its worst case instead; only a request
+        /// that was turned away before any reply began (the key rejected, no credit, no network, an HTTP
+        /// error status) is released, because nothing was billed.
+        /// </summary>
+        private void Settle(Mission mission, Turn turn, StreamResult result)
+        {
+            var pending = mission.PendingCharge;
+            mission.PendingCharge = 0m;
+            if (result != null && result.Status == StreamStatus.Completed && result.Message != null)
+            {
+                var usage = result.Message.Usage;
+                var model = usage.Iterations.Count > 0 ? mission.Model : result.Message.Model ?? mission.Model;
+                mission.Settled = _config.Prices.CostOf(usage, model);
+                mission.Spent += mission.Settled;
+                mission.Settlement = "paid";
+                mission.Outcome = PaidOutcome(turn, result.Message);
+                return;
+            }
+            mission.Settled = pending;
+            if (result != null && result.Status == StreamStatus.Failed && !MayHaveBilled(result.Failure))
+            {
+                mission.Settlement = "released";
+                mission.Outcome = "rejected";
+                return;
+            }
+            mission.Held += pending;
+            mission.Settlement = "kept";
+            mission.Outcome = result != null && result.Status == StreamStatus.Cancelled ? "cancelled" : "lost";
+        }
+
+        /// <summary>How a paid reply ended, for the cost log: completed, or refused, cut off or off the Mission reply schema.</summary>
+        private static string PaidOutcome(Turn turn, AssistantMessage message)
+        {
+            if (message.StopReason == StopReason.Refusal) return "refused";
+            if (message.StopReason == StopReason.MaxTokens) return "cut_off";
+            var reply = MissionReply.Parse(message.Text);
+            return reply == null || Mismatch(turn.Purpose, reply) != null ? "off_schema" : "completed";
+        }
+
+        private static bool MayHaveBilled(StreamFailure failure)
+        {
+            switch (failure)
+            {
+                case StreamFailure.Unauthorized:
+                case StreamFailure.LowCredit:
+                case StreamFailure.NoNetwork:
+                case StreamFailure.HttpStatus:
+                    return false;
+                default:
+                    return true;
+            }
+        }
+
+        /// <summary>After a request settled: the 80% warning (once), and Paused at the cap.</summary>
+        private void AfterCharge(Mission mission)
+        {
+            if (MissionOver) return;
+            if (!mission.Warned && mission.Committed >= mission.SpendingCap * 0.8m)
+            {
+                mission.Warned = true;
+                var text = "80% of the Spending Cap is spent: $" + Dollars(mission.Committed) + " of $" + Dollars(mission.SpendingCap) + ". Raise cap in time if the Mission needs more.";
+                Note(LogKind.Notice, text);
+                NeedsPlayer(text);
+            }
+            if (mission.Committed < mission.SpendingCap || mission.PausedForCap) return;
+            // A running sequence is not touched: its script finishes and the Debrief waits for Raise cap.
+            var reason = "The Spending Cap is reached ($" + Dollars(mission.Committed) + " of $" + Dollars(mission.SpendingCap) + "). Raise cap to carry on, or End Mission.";
+            if (mission.Stage == MissionStage.Paused) mission.PauseReason += " " + reason;
+            else Pause(mission, reason);
+            mission.PausedForCap = true;
+        }
+
+        private void PauseForCap(Mission mission, string reason)
+        {
+            Pause(mission, reason);
+            mission.PausedForCap = true;
+        }
+
+        private void Raised(decimal cap)
+        {
+            var mission = _mission;
+            if (MissionOver || cap <= mission.SpendingCap) return;
+            mission.SpendingCap = cap;
+            mission.Warned = mission.Committed >= cap * 0.8m;
+            Note(LogKind.Notice, "Spending Cap raised to $" + Dollars(cap) + ".");
+            LogCost(mission, "cap_raised", cap, "");
+            if (mission.Stage == MissionStage.Paused && mission.PausedForCap && mission.Committed < cap) Retried();
+        }
+
+        private void LogCost(Mission mission, string kind, decimal amount, string outcome)
+        {
+            try
+            {
+                MissionFolder.AppendCostEvent(mission.Folder, kind, mission.Requests, mission.Model, amount, outcome,
+                    mission.Spent, mission.Held, mission.SpendingCap);
+            }
+            catch (Exception e) when (IsFileError(e))
+            {
+                // The charge still counts in memory; only the log line is missing.
+            }
+        }
+
+        private static string Dollars(decimal value)
+        {
+            return value.ToString("0.00", CultureInfo.InvariantCulture);
+        }
+
         // ---- View ----
 
         private LogEntry Note(LogKind kind, string text)
@@ -720,6 +873,8 @@ namespace ClaudiaKermin.Core.Missions
             view.StartForm.Models = _config.Models.ToList();
             view.StartForm.DefaultModel = _config.DefaultModel;
             view.StartForm.DefaultSpendingCap = _config.DefaultSpendingCap;
+            foreach (var model in view.StartForm.Models)
+                view.StartForm.Estimates[model] = Math.Round(_config.Prices.EstimateMission(model), 2);
             view.StartForm.CanStart = _saveDirectory != null && MissionOver;
 
             if (mission != null)
@@ -729,6 +884,10 @@ namespace ClaudiaKermin.Core.Missions
                 view.Goal = mission.Goal;
                 view.Model = mission.Model;
                 view.SpendingCap = mission.SpendingCap;
+                view.Spent = mission.Spent;
+                view.HeldCharges = mission.Held;
+                view.PendingCharge = mission.PendingCharge;
+                view.CapWarning = mission.Committed >= mission.SpendingCap * 0.8m;
                 view.LatestLine = mission.LatestLine;
                 view.Busy = mission.InFlight;
                 view.Activity = mission.Activity;
@@ -742,7 +901,9 @@ namespace ClaudiaKermin.Core.Missions
                 view.CanType = !mission.InFlight && mission.Stage != MissionStage.Paused && mission.Stage != MissionStage.WaitingForFlight;
 
                 if (mission.Stage == MissionStage.Paused && !mission.InFlight)
-                    view.QuickReplies = new List<QuickReply> { QuickReply.Retry };
+                    view.QuickReplies = mission.PausedForCap
+                        ? new List<QuickReply> { QuickReply.RaiseCap, QuickReply.EndMission }
+                        : new List<QuickReply> { QuickReply.Retry };
                 else if (mission.AwaitingApproval && !mission.InFlight)
                 {
                     view.QuickReplies = mission.ConfirmPrompt != null

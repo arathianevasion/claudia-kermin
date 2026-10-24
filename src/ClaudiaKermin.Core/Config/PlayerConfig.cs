@@ -30,6 +30,9 @@ namespace ClaudiaKermin.Core.Config
         /// <summary>Input tokens at which server-side compaction runs.</summary>
         public int CompactionTriggerTokens = 150000;
 
+        /// <summary>What each model costs; add models with <c>price.&lt;model&gt; = input, output</c> lines (USD per million tokens).</summary>
+        public PriceTable Prices = PriceTable.Default();
+
         public string DefaultModel
         {
             get { return Models[0]; }
@@ -43,7 +46,15 @@ namespace ClaudiaKermin.Core.Config
             + "# Spending Cap prefilled in the Mission start form, in USD.\n"
             + "default_spending_cap = 10\n"
             + "# Input tokens at which the conversation is compacted server-side.\n"
-            + "compaction_trigger = 150000\n";
+            + "compaction_trigger = 150000\n"
+            + "# Price table, USD per million tokens (input, output). A model not listed is charged at the highest price here.\n"
+            + "# Add a model you want to try at your own risk: price.<model> = input, output\n"
+            + "price.claude-sonnet-5-5 = 2, 10\n"
+            + "price.claude-opus-5-5 = 4, 20\n"
+            + "price.claude-sonnet-5 = 2, 10\n"
+            + "price.claude-opus-5 = 5, 25\n"
+            + "price.claude-opus-4-8 = 5, 25\n"
+            + "price.claude-fable-5-1 = 10, 50\n";
 
         /// <summary>Loads the file, writing it with defaults first if it does not exist.</summary>
         public static PlayerConfig LoadOrCreate(string directory)
@@ -64,6 +75,17 @@ namespace ClaudiaKermin.Core.Config
                 if (eq < 0) continue;
                 var name = line.Substring(0, eq).Trim();
                 var value = line.Substring(eq + 1).Trim();
+                if (name.StartsWith("price.", StringComparison.Ordinal))
+                {
+                    var rates = value.Split(',');
+                    decimal input, output;
+                    if (name.Length > "price.".Length && rates.Length == 2
+                        && decimal.TryParse(rates[0].Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out input)
+                        && decimal.TryParse(rates[1].Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out output)
+                        && input > 0 && output > 0)
+                        config.Prices.Set(name.Substring("price.".Length), new ModelPrice(input, output));
+                    continue;
+                }
                 switch (name)
                 {
                     case "debug_tools":
