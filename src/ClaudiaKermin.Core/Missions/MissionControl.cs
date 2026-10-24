@@ -483,17 +483,14 @@ namespace ClaudiaKermin.Core.Missions
             mission.InFlight = false;
             mission.Activity = "";
             turn.Cancel.Dispose();
-            Settle(mission, result);
+            // Settled and logged before the reply is applied, which may send the next request.
+            Settle(mission, turn, result);
+            LogCost(mission, mission.Settlement, mission.Settled, mission.Outcome);
             // The Mission was dropped (End Mission, or another save loaded) while this request ran.
-            if (mission != _mission)
-            {
-                LogCost(mission, mission.Settlement, mission.Settled, mission.Outcome);
-                return;
-            }
+            if (mission != _mission) return;
             try
             {
                 Answered(mission, turn, result);
-                LogCost(mission, mission.Settlement, mission.Settled, mission.Outcome);
                 if (mission == _mission) AfterCharge(mission);
             }
             finally
@@ -517,13 +514,11 @@ namespace ClaudiaKermin.Core.Missions
             var message = result.Message;
             if (message.StopReason == StopReason.Refusal)
             {
-                mission.Outcome = "refused";
                 Pause(mission, "Claudia declined to answer that. Retry, or try again later.");
                 return;
             }
             if (message.StopReason == StopReason.MaxTokens)
             {
-                mission.Outcome = "cut_off";
                 Pause(mission, "Claudia's reply was cut short.");
                 return;
             }
@@ -531,7 +526,6 @@ namespace ClaudiaKermin.Core.Missions
             var problem = reply == null ? "it wasn't in the Mission reply format" : Mismatch(turn.Purpose, reply);
             if (problem != null)
             {
-                mission.Outcome = "off_schema";
                 Pause(mission, "Claudia's reply didn't fit: " + problem + ".");
                 return;
             }
@@ -736,7 +730,7 @@ namespace ClaudiaKermin.Core.Missions
         /// that was turned away before any reply began (the key rejected, no credit, no network, an HTTP
         /// error status) is released, because nothing was billed.
         /// </summary>
-        private void Settle(Mission mission, StreamResult result)
+        private void Settle(Mission mission, Turn turn, StreamResult result)
         {
             var pending = mission.PendingCharge;
             mission.PendingCharge = 0m;
@@ -747,7 +741,7 @@ namespace ClaudiaKermin.Core.Missions
                 mission.Settled = _config.Prices.CostOf(usage, model);
                 mission.Spent += mission.Settled;
                 mission.Settlement = "paid";
-                mission.Outcome = "completed";
+                mission.Outcome = PaidOutcome(turn, result.Message);
                 return;
             }
             mission.Settled = pending;
@@ -760,6 +754,15 @@ namespace ClaudiaKermin.Core.Missions
             mission.Held += pending;
             mission.Settlement = "kept";
             mission.Outcome = result != null && result.Status == StreamStatus.Cancelled ? "cancelled" : "lost";
+        }
+
+        /// <summary>How a paid reply ended, for the cost log: completed, or refused, cut off or off the Mission reply schema.</summary>
+        private static string PaidOutcome(Turn turn, AssistantMessage message)
+        {
+            if (message.StopReason == StopReason.Refusal) return "refused";
+            if (message.StopReason == StopReason.MaxTokens) return "cut_off";
+            var reply = MissionReply.Parse(message.Text);
+            return reply == null || Mismatch(turn.Purpose, reply) != null ? "off_schema" : "completed";
         }
 
         private static bool MayHaveBilled(StreamFailure failure)
@@ -787,7 +790,7 @@ namespace ClaudiaKermin.Core.Missions
                 Note(LogKind.Notice, text);
                 NeedsPlayer(text);
             }
-            if (mission.Committed < mission.SpendingCap) return;
+            if (mission.Committed < mission.SpendingCap || mission.PausedForCap) return;
             // A running sequence is not touched: its script finishes and the Debrief waits for Raise cap.
             var reason = "The Spending Cap is reached ($" + Dollars(mission.Committed) + " of $" + Dollars(mission.SpendingCap) + "). Raise cap to carry on, or End Mission.";
             if (mission.Stage == MissionStage.Paused) mission.PauseReason += " " + reason;
