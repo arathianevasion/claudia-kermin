@@ -1,0 +1,15 @@
+# Recorded Claude streams
+
+Hand-written server-sent event streams in the shapes the Messages API sends (per the streaming,
+compaction and fallback docs). Tests replay them byte for byte through the real parser via a fake
+transport. None came from a live API call, and none holds a key.
+
+- `text.sse`: a text reply with pings, escaped and multi-byte characters, and `usage.iterations`.
+- `thinking-tool-use.sse`: thinking (with a signature), text, then a tool_use with streamed input.
+- `unknown-block.sse`: an unknown block type, an unknown event, an unknown delta and new fields everywhere.
+- `compaction-fallback.sse`: a fallback block, a compaction block and per-attempt usage.
+- `refusal.sse`, `max-tokens-tool.sse`, `context-window.sse`: stop reasons.
+- `overloaded-error.sse`: an `error` event before any content.
+- `partial-text.sse`, `start-only.sse`: streams cut short; the tests add the stall or the break.
+
+`.gitattributes` keeps git from changing their bytes.
