@@ -47,6 +47,8 @@ namespace ClaudiaKermin.Adapter
         // The Craft Check findings scroll; a new result (a different set of findings) jumps back to the top.
         private Vector2 _checkScroll;
         private string _seenCheckResult = "";
+        // In Flight the Craft Check starts collapsed to one line so the Mission log gets the room; reset when Flight loads.
+        private bool _checkCollapsed = true;
         // End Mission asked "End this Mission?" and awaits Yes / No.
         private bool _confirmingEnd;
         private string _cap;
@@ -127,6 +129,12 @@ namespace ClaudiaKermin.Adapter
                     Visible = true;
                     break;
             }
+        }
+
+        /// <summary>Flight is loading: the Craft Check starts collapsed again.</summary>
+        public void FlightLoading()
+        {
+            _checkCollapsed = true;
         }
 
         public static string Label(QuickReply reply)
@@ -222,7 +230,26 @@ namespace ClaudiaKermin.Adapter
             var check = View.CraftCheck;
             var form = View.StartForm;
             GUILayout.Box("", GUILayout.Height(2), GUILayout.ExpandWidth(true));
-            GUILayout.Label("Craft Check", _bold);
+
+            // A check that needs the player is never hidden in Flight: Running, needs the simulator, errored, or Start Mission held closed.
+            var needsPlayer = check.State == CraftCheckState.Running || check.State == CraftCheckState.NeedsSimulator
+                || check.State == CraftCheckState.Error
+                || (check.State == CraftCheckState.Done && form.CanStart && !check.StartAllowed);
+            if (HighLogic.LoadedSceneIsFlight)
+            {
+                // Forced open without touching the player's choice, which comes back once the check no longer needs them.
+                var collapsed = _checkCollapsed && !needsPlayer;
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(collapsed ? CollapsedHeading(check) : "Craft Check", _bold);
+                if (!needsPlayer && GUILayout.Button(collapsed ? "Expand" : "Collapse", GUILayout.ExpandWidth(false)))
+                    _checkCollapsed = !_checkCollapsed;
+                GUILayout.EndHorizontal();
+                if (collapsed) return;
+            }
+            else
+            {
+                GUILayout.Label("Craft Check", _bold);
+            }
 
             if (form.CanStart)
             {
@@ -257,6 +284,22 @@ namespace ClaudiaKermin.Adapter
                     : "Start Mission opens once you have acknowledged every Warning.", _wrap);
         }
 
+        private static string VerdictText(CraftCheckView check)
+        {
+            return check.Verdict == CraftVerdict.Pass ? "Pass"
+                : check.Verdict == CraftVerdict.PassWithWarnings ? "Pass with Warnings" : "Fail";
+        }
+
+        /// <summary>The one line shown while collapsed, e.g. "Craft Check: Pass with Warnings (2)".</summary>
+        private static string CollapsedHeading(CraftCheckView check)
+        {
+            if (check.State == CraftCheckState.None) return "Craft Check: not checked yet";
+            if (check.State != CraftCheckState.Done) return "Craft Check";
+            return "Craft Check: " + VerdictText(check)
+                + (check.Verdict == CraftVerdict.Pass ? "" : " (" + check.Findings.Count.ToString(CultureInfo.InvariantCulture) + ")")
+                + (check.Stale ? " - the craft changed since" : "");
+        }
+
         private void DrawProcessorChoice(CraftCheckView check)
         {
             if (check.Processors.Count == 0) return;
@@ -272,8 +315,7 @@ namespace ClaudiaKermin.Adapter
 
         private void DrawCraftCheckResult(CraftCheckView check)
         {
-            var verdict = check.Verdict == CraftVerdict.Pass ? "Pass"
-                : check.Verdict == CraftVerdict.PassWithWarnings ? "Pass with Warnings" : "Fail";
+            var verdict = VerdictText(check);
             GUILayout.Label(verdict + (check.Stale ? " (the craft changed since; Start Mission checks again)" : ""), _bold);
             var signature = check.Summary;
             foreach (var finding in check.Findings) signature += "|" + finding.Code;
