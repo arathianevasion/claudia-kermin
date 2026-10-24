@@ -82,6 +82,10 @@ _Avoid_: budget (which means delta-v), limit, quota
 The state of a Mission that has stopped making progress, e.g. at its Spending Cap or on an API error, and can be resumed by the player.
 _Avoid_: suspended, on hold, abandoned
 
+**Blackout**:
+A period when Claudia has no link to Kerbin and flies the approved Mission Plan without asking for each Maneuver Sequence's Approval; her messages wait until the link returns. A Mission in Blackout is not Paused.
+_Avoid_: autonomous mode, offline, comms loss
+
 **Lost**:
 The outcome of a Mission that ends because Claudia was killed aboard the craft.
 _Avoid_: failed, crashed, KIA (for the Mission)
