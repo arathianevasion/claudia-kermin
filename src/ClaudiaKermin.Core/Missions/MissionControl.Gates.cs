@@ -35,6 +35,7 @@ namespace ClaudiaKermin.Core.Missions
             Note(LogKind.Notice, text);
             NeedsPlayer(text);
             Event(mission, "timed_out", text);
+            mission.RunEvents.Add(_ut, RunEventKind.Stopped, "timed out: the mod stopped the script");
             _commands.Add(new AbortScript(mission.RunningProcessor.Value, RunawayStop.Reason, mission.RunId.Value));
         }
 
@@ -47,6 +48,7 @@ namespace ClaudiaKermin.Core.Missions
             Note(LogKind.Notice, text);
             NeedsPlayer(text);
             Event(mission, "blocked", blocked.What);
+            mission.RunEvents.Add(_ut, RunEventKind.Stopped, mission.StopReason);
         }
 
         /// <summary>The run's outcome as the Debrief sees it: a run the mod stopped itself is Aborted, with the reason.</summary>

@@ -237,6 +237,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.AbortRecommendation = "";
             Note(LogKind.Player, "Abort.");
             Event(mission, "aborted", "the player pressed Abort");
+            mission.RunEvents.Add(_ut, RunEventKind.Stopped, "the player pressed Abort");
             _commands.Add(new AbortScript(mission.RunningProcessor.Value, "the player pressed Abort", mission.RunId.Value));
         }
 
@@ -256,7 +257,9 @@ namespace ClaudiaKermin.Core.Missions
             if (mission == null || !IsRunning(mission) || mission.RunId != ended.RunId) return;
             mission.BlocksDone++;
             mission.CurrentBlock = "";
-            Note(LogKind.Notice, BlockLine(ended.Block, ended.Result));
+            var line = BlockLine(ended.Block, ended.Result);
+            Note(LogKind.Notice, line);
+            if (!BlockSucceeded(ended.Result)) mission.RunEvents.Add(_ut, RunEventKind.BlockAborted, line.TrimEnd('.'));
         }
 
         /// <summary>"Building Block exec_node: done, 812 m/s used, 63 s." or "Building Block exec_node: failed (abort min_ec_pct: 8%), 40 s.".</summary>
@@ -264,7 +267,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             var text = "Building Block " + (string.IsNullOrEmpty(block) ? "?" : block) + ": ";
             object value;
-            var success = result != null && result.TryGetValue("success", out value) && value is bool && (bool)value;
+            var success = BlockSucceeded(result);
             var reason = result != null && result.TryGetValue("reason", out value) && value != null ? value.ToString() : "";
             text += success ? "done" : "failed" + (reason.Length > 0 ? " (" + reason + ")" : "");
             var dv = Number(result, "dv_used");
@@ -272,6 +275,12 @@ namespace ClaudiaKermin.Core.Missions
             var duration = Number(result, "duration");
             if (duration.HasValue) text += ", " + duration.Value.ToString("0", CultureInfo.InvariantCulture) + " s";
             return text + ".";
+        }
+
+        private static bool BlockSucceeded(IDictionary<string, object> result)
+        {
+            object value;
+            return result != null && result.TryGetValue("success", out value) && value is bool && (bool)value;
         }
 
         private static double? Number(IDictionary<string, object> result, string key)

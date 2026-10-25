@@ -196,6 +196,7 @@ namespace ClaudiaKermin.Core.Ui
                 case QuickReply.ManualControl: return "Take controls";
                 case QuickReply.HandBack: return "Hand back to Claudia";
                 case QuickReply.Abort: return "Abort";
+                case QuickReply.AcceptReducedGoal: return "Approve reduced goal";
                 default: return "Retry";
             }
         }
@@ -203,7 +204,7 @@ namespace ClaudiaKermin.Core.Ui
         /// <summary>The action the row fills with the accent and stretches; at most one is offered at a time.</summary>
         public static bool IsPrimary(QuickReply reply)
         {
-            return reply == QuickReply.Approve || reply == QuickReply.HandBack;
+            return reply == QuickReply.Approve || reply == QuickReply.HandBack || reply == QuickReply.AcceptReducedGoal;
         }
 
         /// <summary>Start Mission's label: what holds it back when a current Craft Check does.</summary>
@@ -513,7 +514,7 @@ namespace ClaudiaKermin.Core.Ui
         private static bool WaitsOnPlayer(MissionStage stage)
         {
             return stage == MissionStage.AwaitingPlanApproval || stage == MissionStage.AwaitingSequenceApproval
-                || stage == MissionStage.Paused || stage == MissionStage.UnsafeScript;
+                || stage == MissionStage.Paused || stage == MissionStage.UnsafeScript || stage == MissionStage.AwaitingReducedGoal;
         }
 
         /// <summary>
@@ -541,6 +542,7 @@ namespace ClaudiaKermin.Core.Ui
                     if (replies.Contains(QuickReply.RaiseCap)) return "Paused at the Spending Cap";
                     return view.PauseReason.Length > 0 ? "Paused: " + view.PauseReason : "Paused";
                 case MissionStage.UnsafeScript: return "Couldn't produce a safe script";
+                case MissionStage.AwaitingReducedGoal: return "Approve the reduced goal?";
                 default: return "";
             }
         }
@@ -585,6 +587,7 @@ namespace ClaudiaKermin.Core.Ui
                 case MissionStage.AwaitingSequenceApproval: return new StatusChip("Plan awaiting Approval", ChipTone.Info);
                 case MissionStage.Paused: return new StatusChip("Paused", ChipTone.Attention);
                 case MissionStage.UnsafeScript: return new StatusChip("No safe script", ChipTone.Attention);
+                case MissionStage.AwaitingReducedGoal: return new StatusChip("Reduced goal awaiting Approval", ChipTone.Attention);
                 case MissionStage.ManualControl: return new StatusChip("Manual Control · you fly", ChipTone.Attention);
                 case MissionStage.Succeeded: return new StatusChip("Mission Goal met", ChipTone.Success);
                 case MissionStage.Ended: return new StatusChip("Mission ended", ChipTone.Danger);

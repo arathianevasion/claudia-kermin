@@ -58,6 +58,8 @@ namespace ClaudiaKermin.Core.Missions
         public string HandBackMessage = "";
         /// <summary>Why the mod stopped the last run ("blocked: …", "timed out") until its Debrief; null otherwise.</summary>
         public string StopReason;
+        /// <summary>A Failed Debrief's reduced Mission Goal awaiting the player's Approval; "" otherwise.</summary>
+        public string ReducedGoal = "";
         public MissionPlan MissionPlan;
         /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
         public SequencePlan SequencePlan;
@@ -96,6 +98,7 @@ namespace ClaudiaKermin.Core.Missions
                 { "manualOrigin", ManualOrigin },
                 { "handBack", HandBack ? "true" : "false" },
                 { "handBackMessage", HandBackMessage },
+                { "reducedGoal", ReducedGoal },
             };
             if (StopReason != null) values["stopReason"] = StopReason;
             foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
@@ -134,6 +137,7 @@ namespace ClaudiaKermin.Core.Missions
                 ManualOrigin = Get(values, "manualOrigin"),
                 HandBack = Get(values, "handBack") == "true",
                 HandBackMessage = Get(values, "handBackMessage"),
+                ReducedGoal = Get(values, "reducedGoal"),
             };
             decimal cap;
             if (decimal.TryParse(Get(values, "spendingCap"), NumberStyles.Number, CultureInfo.InvariantCulture, out cap)) state.SpendingCap = cap;

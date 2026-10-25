@@ -196,7 +196,12 @@ namespace ClaudiaKermin.Core.Missions
             "The Maneuver Sequence has ended. Debrief it now: reply with kind \"debrief\" and debrief filled in. Rate it "
             + "against the Sequence Plan's target and tolerances, and set goal_reached to true only if the whole Mission "
             + "Goal is now met. If it isn't, the mod will ask you for the next Sequence Plan. A crossed Telemetry Check "
-            + "rules out Nominal; list each one with its verdict in what_happened.";
+            + "rules out Nominal; list each one with its verdict in what_happened. Fill the whole Debrief: outcome_vs_target (the "
+            + "script's report and the events the mod logged, against the target and tolerances, with numbers), plan_margin (the "
+            + "delta-v and resources left against the Maneuver Sequences still to fly, using the mod's margin recheck), science, "
+            + "goal_checklist (the Mission Goal as its steps, each done or not), and follow_up with follow_up_text: for Off-Nominal "
+            + "corrective_sequence or revised_plan; for Failed reduced_goal (follow_up_text is the reduced Mission Goal, which the "
+            + "player must approve) or end_mission; for Nominal none. If the script printed an error, quote what matters of it in what_happened.";
 
         // ---- Live supervision ----
 
