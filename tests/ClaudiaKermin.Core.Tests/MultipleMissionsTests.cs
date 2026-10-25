@@ -619,6 +619,51 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ALoadLeavesOutDismissedAndDeletedMissionsAndStillParksTheOthers()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief.sse",
+                "mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief.sse", "mission-plan.sse", "mission-plan.sse");
+            var mission = Control(transport);
+
+            // A finished and dismissed (#142): its folder stays as history.
+            var run = ToRunning(mission);
+            var dismissed = mission.View.MissionId;
+            mission.Send(new KosRunEnded(Finished(), run.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+            var states = mission.ExportStates().ToList();
+            mission.Send(new DismissMission());
+
+            // One finished and deleted (#43): its folder goes.
+            run = ToRunning(mission);
+            var deleted = mission.View.MissionId;
+            mission.Send(new KosRunEnded(Finished(), run.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+            states.AddRange(mission.ExportStates());
+            mission.Send(new DeleteMission(deleted));
+
+            // One parked at its boundary for another.
+            ToMissionPlan(mission, vesselId: "vessel-one");
+            var parked = mission.View.MissionId;
+            ToMissionPlan(mission, OtherGoal, "vessel-two", second: true);
+            var active = mission.View.MissionId;
+            states.AddRange(mission.ExportStates());
+
+            // A save that still holds all four, the finished ones first and marked as in play.
+            var later = Control(Replies());
+            later.Send(new MissionsRestored(_save.Path, states));
+            Assert.Equal(active, later.View.MissionId);
+            Assert.Equal(new[] { active, parked }, later.ExportStates().Select(s => s.Id).ToArray());
+            Assert.DoesNotContain(later.View.Missions, m => m.Id == deleted);
+            Assert.False(Entry(later, dismissed).Current);
+            Assert.Equal(MissionStatus.Succeeded, Entry(later, dismissed).Status);
+            Assert.True(Entry(later, parked).CanResume);
+
+            later.Send(new ResumeMission(parked));
+            Assert.Equal(parked, later.View.MissionId);
+            Assert.Equal(MissionStage.AwaitingPlanApproval, later.View.Stage);
+        }
+
+        [Fact]
         public void ASaveFromBeforeSeveralMissionsReadsAsTheActiveOne()
         {
             var state = new MissionSaveState { Id = "m1", Goal = "x" };
