@@ -41,7 +41,7 @@ namespace ClaudiaKermin.Core.Missions
                 {
                     Kind = LogKind.Debrief,
                     Title = MissionCards.LostTitle,
-                    Text = MissionCards.LostBody(info.Goal, "", entry.Cost, info.SpendingCap),
+                    Text = MissionCards.LostBody(info.Goal, "", entry.Cost, info.SpendingCap, entry.CostUnknown),
                     Why = MissionCards.LostWhy,
                     Outcome = "Failed",
                 };
@@ -80,6 +80,7 @@ namespace ClaudiaKermin.Core.Missions
                 Goal = info.Goal,
                 Status = status,
                 Cost = cost.Spent + cost.Held,
+                CostUnknown = cost.Unreadable,
                 SpendingCap = info.SpendingCap,
             };
             MissionStore.ReadVessel(folder, out entry.VesselId, out entry.VesselName);

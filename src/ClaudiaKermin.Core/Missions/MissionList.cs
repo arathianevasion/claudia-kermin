@@ -28,6 +28,8 @@ namespace ClaudiaKermin.Core.Missions
         public bool Current;
         /// <summary>What it cost: real usage plus the worst-case charges kept for cancelled and lost requests, USD.</summary>
         public decimal Cost;
+        /// <summary>The Mission's cost log could not be read, so what it cost is unknown, not zero.</summary>
+        public bool CostUnknown;
         public decimal SpendingCap;
         /// <summary>The Mission's craft (its vessel id and name) as last known; "" when never in Flight.</summary>
         public string VesselId = "";

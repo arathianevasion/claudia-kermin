@@ -87,11 +87,11 @@ namespace ClaudiaKermin.Core.Missions
         public const string LostWhy = "Claudia was killed aboard the craft.";
 
         /// <summary>The final Debrief from Mission Control for a Lost Mission; <paramref name="doing"/> is what it was in the middle of, or "".</summary>
-        public static string LostBody(string goal, string doing, decimal spent, decimal cap)
+        public static string LostBody(string goal, string doing, decimal spent, decimal cap, bool spentUnknown = false)
         {
             return "Claudia Kermin was killed aboard the craft" + (doing.Length > 0 ? " " + doing : "") + ".\n"
                 + "Mission Goal not met: " + goal + "\n"
-                + "Spent $" + spent.ToString("0.00", CultureInfo.InvariantCulture) + " of the $" + cap.ToString("0.00", CultureInfo.InvariantCulture)
+                + (spentUnknown ? "Spent an unknown amount (the cost log can't be read) of the $" : "Spent $" + spent.ToString("0.00", CultureInfo.InvariantCulture) + " of the $") + cap.ToString("0.00", CultureInfo.InvariantCulture)
                 + " Spending Cap. The Mission is Lost.";
         }
 
