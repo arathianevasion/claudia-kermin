@@ -117,6 +117,7 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is VesselsDocked) Docked((VesselsDocked)input);
             else if (input is VesselsSeparated) Separated((VesselsSeparated)input);
             else if (input is CraftRange) RangeSeen((CraftRange)input);
+            else if (input is CraftSafingUnreached) SafingUnreached(((CraftSafingUnreached)input).Reason);
             else if (input is VesselUnloaded) Unloaded(((VesselUnloaded)input).VesselId);
             else if (input is FarSwitchConfirmed) FarSwitched(((FarSwitchConfirmed)input).VesselName);
             else if (input is RunEventSeen) EventSeen((RunEventSeen)input);

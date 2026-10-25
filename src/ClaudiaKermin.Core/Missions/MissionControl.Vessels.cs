@@ -38,6 +38,8 @@ namespace ClaudiaKermin.Core.Missions
             public string InterruptReason;
             /// <summary>The craft docked since the pending plan was offered (what with), so Approve is Re-plan; "" otherwise.</summary>
             public string Recheck = "";
+            /// <summary>Why the craft is still to be made safe: a make-safe found it unloaded (#207); "" when none is owed. Saved.</summary>
+            public string SafePending = "";
             /// <summary>Requests sent when the craft docked: a plan from a later request was made with the facts after docking.</summary>
             public int RecheckSince;
         }
@@ -94,9 +96,30 @@ namespace ClaudiaKermin.Core.Missions
 
         // ---- Which vessel is the craft ----
 
+        /// <summary>The adapter couldn't make the unloaded craft safe: remember it until the craft is seen loaded (#207).</summary>
+        private void SafingUnreached(string reason)
+        {
+            if (_mission != null) _mission.SafePending = string.IsNullOrEmpty(reason) ? "the craft was left unsafe" : reason;
+        }
+
+        /// <summary>The craft is loaded now: make it safe as owed, once. If it still can't be reached the adapter says so again.</summary>
+        private void ApplyPendingSafety(Mission mission, IList<SeenVessel> vessels)
+        {
+            if (mission.SafePending.Length == 0 || mission.VesselId.Length == 0) return;
+            foreach (var vessel in vessels)
+            {
+                if (vessel.Id != mission.VesselId || !vessel.Loaded) continue;
+                var reason = mission.SafePending;
+                mission.SafePending = "";
+                _commands.Add(new MakeCraftSafe(reason + " (applied when the craft loaded)", mission.VesselId, mission.ProcessorPartId));
+                return;
+            }
+        }
+
         private void VesselsChanged(IList<SeenVessel> vessels)
         {
             var mission = _mission;
+            if (mission != null && vessels != null && _scene == GameScene.Flight) ApplyPendingSafety(mission, vessels);
             if (mission == null || !FollowsCraft(mission) || _scene != GameScene.Flight || vessels == null) return;
             var craft = MissionCraft.Follow(mission.Remote, mission.ProcessorPartId, mission.VesselId, vessels);
             if (craft != null)

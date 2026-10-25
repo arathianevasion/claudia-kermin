@@ -14,7 +14,7 @@ namespace ClaudiaKermin.Adapter
         /// The Mission's craft (by id, loaded or not in the scene), wherever the player is: its kOS locks are let go, then
         /// throttle 0 and SAS. With no craft on record, the active vessel.
         /// </summary>
-        public static void MakeSafe(MakeCraftSafe command)
+        public static void MakeSafe(MakeCraftSafe command, System.Action<MissionInput> send = null)
         {
             var active = FlightGlobals.ActiveVessel;
             var id = command.Target(active != null ? active.id.ToString("N") : null);
@@ -29,6 +29,8 @@ namespace ClaudiaKermin.Adapter
             {
                 Debug.Log(ModInfo.LogTag + " couldn't make the Mission's craft safe (" + command.Reason + "): vessel " + id +
                           (craft == null ? " not found" : " is not loaded"));
+                // The Mission remembers an unloaded craft and has it made safe when it next loads (#207).
+                if (craft != null && send != null) send(new CraftSafingUnreached(command.Reason));
                 return;
             }
 

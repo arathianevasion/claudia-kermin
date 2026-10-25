@@ -125,6 +125,8 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>A Kerbal on EVA.</summary>
         public bool Eva;
         public bool HasKosProcessor;
+        /// <summary>The vessel is loaded in the scene (its parts exist), so the mod can steer it; false when it is only a saved record.</summary>
+        public bool Loaded;
         /// <summary>The <c>persistentId</c>s of its parts with a kOS processor.</summary>
         public List<uint> ProcessorPartIds = new List<uint>();
         /// <summary>Part titles, filled only for docking and separation (<see cref="VesselsDocked"/>, <see cref="VesselsSeparated"/>).</summary>
@@ -172,6 +174,16 @@ namespace ClaudiaKermin.Core.Missions
             UnloadDistance = unloadDistance;
             RangeRate = rangeRate;
         }
+    }
+
+    /// <summary>
+    /// A <see cref="MakeCraftSafe"/> could not reach the Mission's craft because it is not loaded (#207). The Mission
+    /// remembers it, saved with it, and makes the craft safe the next time it is seen loaded.
+    /// </summary>
+    public sealed class CraftSafingUnreached : MissionInput
+    {
+        public readonly string Reason;
+        public CraftSafingUnreached(string reason) { Reason = reason ?? ""; }
     }
 
     /// <summary>The vessel with this id unloaded (it went out of physics range).</summary>

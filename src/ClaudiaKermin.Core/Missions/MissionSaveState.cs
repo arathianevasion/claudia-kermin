@@ -88,6 +88,8 @@ namespace ClaudiaKermin.Core.Missions
         public string PendingNotice = "";
         /// <summary>Paused because Claudia could fly no vessel, so Resume is offered.</summary>
         public bool PausedCannotFly;
+        /// <summary>Why the craft is still to be made safe because it was unloaded when the make-safe came (#207); "" for none and in older saves.</summary>
+        public string SafePending = "";
         public MissionPlan MissionPlan;
         /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
         public SequencePlan SequencePlan;
@@ -143,6 +145,7 @@ namespace ClaudiaKermin.Core.Missions
             if (RecheckSince != 0) values["recheckSince"] = RecheckSince.ToString(CultureInfo.InvariantCulture);
             if (PendingNotice.Length > 0) values["pendingNotice"] = PendingNotice;
             if (PausedCannotFly) values["pausedCannotFly"] = "true";
+            if (SafePending.Length > 0) values["safePending"] = SafePending;
             foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
             for (var i = 0; i < UnsafeProblems.Count; i++) values[UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture)] = UnsafeProblems[i];
             if (MissionPlan != null || SequencePlan != null) values["plans"] = WritePlans(MissionPlan, SequencePlan);
@@ -190,6 +193,7 @@ namespace ClaudiaKermin.Core.Missions
                 Recheck = Get(values, "recheck"),
                 PendingNotice = Get(values, "pendingNotice"),
                 PausedCannotFly = Get(values, "pausedCannotFly") == "true",
+                SafePending = Get(values, "safePending"),
             };
             double runStart;
             if (double.TryParse(Get(values, "runStartUt"), NumberStyles.Float, CultureInfo.InvariantCulture, out runStart)) state.RunStartUt = runStart;

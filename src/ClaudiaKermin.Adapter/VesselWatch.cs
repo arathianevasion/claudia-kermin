@@ -175,6 +175,7 @@ namespace ClaudiaKermin.Adapter
             }
             seen.ClaudiaAboard = crew.Any(Roster.RosterGateway.IsClaudia);
             seen.HasKosProcessor = seen.ProcessorPartIds.Count > 0;
+            seen.Loaded = vessel.loaded;
             return seen;
         }
     }
