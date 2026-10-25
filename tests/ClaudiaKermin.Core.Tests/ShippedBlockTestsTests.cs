@@ -3,14 +3,32 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using ClaudiaKermin.Core.Kos;
 using Xunit;
 
 namespace ClaudiaKermin.Core.Tests
 {
-    /// <summary>The block tests shipped in tests/blocks: each one's test.cfg must parse and name its files.</summary>
+    /// <summary>The block tests shipped in tests/blocks/: each must load in the debug runner.</summary>
     public class ShippedBlockTestsTests
     {
+        [Fact]
+        public void EveryShippedBlockTestParsesAndNamesALibraryBlockAndItsFiles()
+        {
+            var tests = Directory.GetDirectories(Path.Combine(RepoRoot(), "tests", "blocks"));
+            Assert.NotEmpty(tests);
+            foreach (var test in tests)
+            {
+                var name = Path.GetFileName(test);
+                var spec = BlockTestSpec.Parse(name, File.ReadAllText(Path.Combine(test, "test.cfg")));
+                Assert.True(CoreLibrary.Blocks.Any(b => b.Name == spec.Block), name + ": no block " + spec.Block);
+                Assert.True(File.Exists(Path.Combine(test, spec.Craft)), name + ": no " + spec.Craft);
+                Assert.True(File.Exists(Path.Combine(test, "scenario.sfs")), name + ": no scenario.sfs");
+                Assert.True(File.Exists(Path.Combine(test, "test.ks")), name + ": no test.ks");
+                Assert.NotEmpty(spec.Checks);
+            }
+        }
+
         [Theory]
         [InlineData("transfer_to", "Kerbin")]
         [InlineData("return", "Mun")]

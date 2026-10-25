@@ -21,7 +21,7 @@ namespace ClaudiaKermin.KOS
     /// </summary>
     [kOSAddon("CLAUDIA")]
     [KOSNomenclature("ClaudiaAddon")]
-    public class ClaudiaAddon : kOS.Suffixed.Addon
+    public partial class ClaudiaAddon : kOS.Suffixed.Addon
     {
         private static readonly Dictionary<uint, ClaudiaAddon> ByPart = new Dictionary<uint, ClaudiaAddon>();
 
@@ -32,6 +32,7 @@ namespace ClaudiaKermin.KOS
             // The Core Library's claudia_begin and claudia_finish call these, so the Capcom strip can show progress with no Claude call.
             AddSuffix("BLOCKSTART", new OneArgsSuffix<StringValue>(BlockStart, "A Building Block began"));
             AddSuffix("BLOCKRESULT", new TwoArgsSuffix<StringValue, Lexicon>(BlockResult, "A Building Block returned its result"));
+            AddTerrainSuffixes();
             if (shared.KSPPart != null) ByPart[shared.KSPPart.persistentId] = this;
         }
 

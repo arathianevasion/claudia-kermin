@@ -21,7 +21,7 @@
 //| <x> m/s is over max_residual", out of fuel, or an abort; on failure the node is left in place.
 //| Plan the node yourself first (ADD NODE(time, radial, normal, prograde)); the node must be far
 //| enough ahead to turn and start the burn (lead plus about 30 s).
-//| Example: `add node(time:seconds + 600, 0, 0, 120). local r is exec_node(). addons:claudia:report(r).`
+//| Example: `add node(time:seconds + 600, 0, 0, 120). local res is exec_node(). addons:claudia:report(res).`
 
 // The block's own options and defaults (max_duration "auto" is resolved once the burn is known).
 function exec_node_defaults {

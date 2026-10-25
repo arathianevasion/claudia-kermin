@@ -51,7 +51,21 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Contains("\n- exec_node(options): flies a maneuver node", CoreLibrary.Summaries());
             Assert.DoesNotContain("max_residual [0.5]", CoreLibrary.Summaries());
             Assert.Contains("max_residual [0.5]", CoreLibrary.FullDocs(new[] { "exec_node" }));
-            Assert.Equal("", CoreLibrary.FullDocs(new[] { "land" }));
+            Assert.Equal("", CoreLibrary.FullDocs(new[] { "no_such_block" }));
+        }
+
+        [Fact]
+        public void LandAndAscendShipWithDocsOfTheirSpecOptionsAndResults()
+        {
+            Assert.Contains("\n- land(options): lands on an airless body", CoreLibrary.Summaries());
+            Assert.Contains("\n- ascend(options): flies from the surface of an airless body", CoreLibrary.Summaries());
+            var land = CoreLibrary.FullDocs(new[] { "land" });
+            foreach (var text in new[] { "target [\"any\"]", "daylight [true]", "max_slope [8]", "max_divert [300]", "touchdown_speed [2]",
+                "gear_alt [1000]", "burn_margin [1.10]", "slope", "touchdown_speed_actual", "distance_to_target", "best_effort", "geo" })
+                Assert.Contains(text, land);
+            var ascend = CoreLibrary.FullDocs(new[] { "ascend" });
+            foreach (var text in new[] { "target_alt [\"auto\"]", "5 km above the body's highest terrain", "target_inc [0]", "ap_error" })
+                Assert.Contains(text, ascend);
         }
 
         [Fact]
