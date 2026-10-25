@@ -85,7 +85,7 @@ namespace ClaudiaKermin.KOS
         public void ReleaseControls(uint partId)
         {
             var addon = ClaudiaAddon.ForPart(partId);
-            if (addon == null) return;
+            if (addon == null || addon.Shared == null || addon.Shared.BindingMgr == null) return;
             var bindings = addon.Shared.BindingMgr;
             bindings.ToggleFlyByWire("steering", false);
             bindings.ToggleFlyByWire("throttle", false);

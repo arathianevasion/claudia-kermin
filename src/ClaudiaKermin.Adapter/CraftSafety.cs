@@ -23,15 +23,25 @@ namespace ClaudiaKermin.Adapter
             Vessel craft = null;
             if (FlightGlobals.Vessels != null)
                 foreach (var vessel in FlightGlobals.Vessels)
-                    if (vessel != null && vessel.id.ToString("N") == id) craft = vessel;
-            if (craft == null)
+                    if (vessel != null && vessel.id.ToString("N") == id) { craft = vessel; break; }
+            // An unloaded craft has no parts to steer and no processor running; it can't be made safe from here.
+            if (craft == null || !craft.loaded)
             {
-                Debug.Log(ModInfo.LogTag + " couldn't make the Mission's craft safe (" + command.Reason + "): no vessel " + id);
+                Debug.Log(ModInfo.LogTag + " couldn't make the Mission's craft safe (" + command.Reason + "): vessel " + id +
+                          (craft == null ? " not found" : " is not loaded"));
                 return;
             }
 
-            var runner = ScriptRunner.Current;
-            if (runner != null && command.ProcessorPartId.HasValue) runner.ReleaseControls(command.ProcessorPartId.Value);
+            // The throttle and SAS below must apply even if the lock release throws.
+            try
+            {
+                var runner = ScriptRunner.Current;
+                if (runner != null && command.ProcessorPartId.HasValue) runner.ReleaseControls(command.ProcessorPartId.Value);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning(ModInfo.LogTag + " couldn't release the kOS locks: " + e.Message);
+            }
             MakeSafe(craft);
         }
 
