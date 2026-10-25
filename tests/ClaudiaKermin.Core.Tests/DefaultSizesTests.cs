@@ -46,5 +46,36 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(DefaultSizes.StripWidthDesign, DefaultSizes.StripWidth(1f));
             Assert.Equal(DefaultSizes.MissionWidthDesign, DefaultSizes.Mission(1f, 0, 0).Width);
         }
+
+        [Fact]
+        public void At_the_current_scale_the_minimums_are_the_old_hand_picked_sizes()
+        {
+            Assert.Equal(430, DefaultSizes.MissionMin(1.2f).Width);
+            Assert.Equal(460, DefaultSizes.MissionMin(1.2f).Height);
+            Assert.Equal(450, DefaultSizes.SettingsMin(1.2f).Width);
+            Assert.Equal(400, DefaultSizes.SettingsMin(1.2f).Height);
+        }
+
+        [Theory]
+        [InlineData(0.8f)]
+        [InlineData(1f)]
+        [InlineData(1.2f)]
+        [InlineData(1.5f)]
+        public void A_default_is_never_clamped_by_its_minimum(float scale)
+        {
+            Assert.True(DefaultSizes.Mission(scale, 0, 0).Width >= DefaultSizes.MissionMin(scale).Width);
+            Assert.True(DefaultSizes.Mission(scale, 0, 0).Height >= DefaultSizes.MissionMin(scale).Height);
+            Assert.True(DefaultSizes.Settings(scale, 0, 0).Width >= DefaultSizes.SettingsMin(scale).Width);
+            Assert.True(DefaultSizes.Settings(scale, 0, 0).Height >= DefaultSizes.SettingsMin(scale).Height);
+        }
+
+        [Fact]
+        public void A_bigger_scale_makes_every_minimum_bigger()
+        {
+            Assert.True(DefaultSizes.MissionMin(1.5f).Width > 430);
+            Assert.True(DefaultSizes.MissionMin(1.5f).Height > 460);
+            Assert.True(DefaultSizes.SettingsMin(1.5f).Width > 450);
+            Assert.True(DefaultSizes.SettingsMin(1.5f).Height > 400);
+        }
     }
 }
