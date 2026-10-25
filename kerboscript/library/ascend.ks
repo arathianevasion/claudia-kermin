@@ -78,8 +78,8 @@ function ascend_azimuth {
   parameter inc, lat, v_orbit, v_ground.
   local inertial is arcsin(max(-1, min(1, cos(inc) / cos(lat)))).
   local east is v_orbit * sin(inertial) - v_ground.
-  local north is v_orbit * cos(inertial).
-  local az is arctan2(east, north).
+  local v_north is v_orbit * cos(inertial).
+  local az is arctan2(east, v_north).
   if az < 0 {
     set az to az + 360.
   }

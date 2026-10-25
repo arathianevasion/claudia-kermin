@@ -23,6 +23,8 @@
     <None Include="Fixtures/**/*.sse" CopyToOutputDirectory="PreserveNewest" />
     <!-- Game Snapshots, in the JSON the debug capture button writes. -->
     <None Include="Fixtures/**/*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The kOS documented built-in names (see KosBuiltinNames.cs). -->
+    <None Include="Fixtures/kos-builtins-documented.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
