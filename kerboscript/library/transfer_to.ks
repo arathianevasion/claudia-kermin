@@ -17,9 +17,9 @@
 //| Options:
 //|   target [required]: the body to reach, a name ("Mun") or a body (body("Minmus")).
 //|   target_pe [required]: periapsis altitude at the target, m.
-//|   window ["next"]: "next" departs in the next transfer window from 5 minutes ahead (RSVP's
-//|     cheapest departure within one synodic period); a time (UT seconds) departs in the first
-//|     window from that time. The block warps on rails to the window however far off it is: no Due
+//|   window ["next"]: "next" departs in the cheapest transfer window from 5 minutes ahead (RSVP
+//|     searches one period of the target, a Mun's 6 days or so); a time (UT seconds) searches
+//|     from that time instead. The block warps on rails to the window however far off it is: no Due
 //|     Time is needed for it.
 //|   correction [true]: false leaves out the mid-course correction.
 //|   max_duration ["auto"]: the time to the planned arrival plus 900 s.
@@ -117,6 +117,30 @@ function transfer_to_synodic {
     return max(period_a, period_b).
   }
   return 1 / beat.
+}
+
+// Seconds RSVP searches for a departure (s): the longer of the two periods, or the synodic period
+// if that is longer (RSVP's own default for a body). The craft leaves from its own orbit, so the
+// limit on the window is where the target is round its orbit, not the craft's lap: a span of
+// transfer_to_synodic(craft period, target period) is about one craft orbit for a moon, which left
+// the target's phase to chance (#228).
+function transfer_to_search_duration {
+  parameter period_a, period_b.
+  return max(max(period_a, period_b), transfer_to_synodic(period_a, period_b)).
+}
+
+// RSVP's options for the ejection burn: it creates the first node only, and costs each trial as
+// the ejection plus a circular capture at target_pe, the orbit circularize(at pe) flies afterwards,
+// so the window is the cheapest overall rather than the fastest. Time of flight and search interval
+// are left to RSVP's defaults.
+function transfer_to_rsvp_options {
+  parameter earliest, target_pe, craft_period, target_period.
+  return lexicon(
+    "create_maneuver_nodes", "first",
+    "final_orbit_periapsis", target_pe,
+    "final_orbit_type", "circular",
+    "earliest_departure", earliest,
+    "search_duration", transfer_to_search_duration(craft_period, target_period)).
 }
 
 // Coordinate descent: lowers cost(x) over the list of numbers x, one coordinate at a time, starting
@@ -314,13 +338,9 @@ function transfer_to {
 
   local earliest is transfer_to_earliest(time:seconds, opt:window).
 
-  // RSVP searches one synodic period, so it finds the next window, and adds the ejection node; on
-  // failure it removes every node.
-  local planned is transfer_to_rsvp():goto(dest, lexicon(
-    "create_maneuver_nodes", "first",
-    "final_orbit_periapsis", opt:target_pe,
-    "earliest_departure", earliest,
-    "search_duration", transfer_to_synodic(ship:orbit:period, dest:orbit:period))).
+  // RSVP searches a whole period of the target for the cheapest window, and adds the ejection node;
+  // on failure it removes every node.
+  local planned is transfer_to_rsvp():goto(dest, transfer_to_rsvp_options(earliest, opt:target_pe, ship:orbit:period, dest:orbit:period)).
   if not planned:success or not hasnode {
     return claudia_finish(ctx, false, transfer_to_rsvp_reason(planned), extra).
   }
