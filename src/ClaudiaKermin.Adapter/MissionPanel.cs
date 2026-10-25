@@ -168,6 +168,9 @@ namespace ClaudiaKermin.Adapter
             var model = _setup.ModelFor(form);
             decimal estimate;
             _log.GoalSet = settingUp && _goal.Length > 0;
+            _log.SetupModel = model;
+            _log.SetupRemote = _setup.Remote;
+            _log.SetupCap = _setup.SpendingCap;
             _log.Estimate = settingUp && form.Estimates.TryGetValue(model, out estimate) ? estimate : (decimal?)null;
             _log.CheckAgain = () => _goal.Length > 0 && form.Models.Count > 0 && _view.CraftCheck.State != CraftCheckState.Running
                 ? new RunCraftCheck(_goal, model, _setup.Remote) : null;
