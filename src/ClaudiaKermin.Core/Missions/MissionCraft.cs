@@ -30,7 +30,10 @@ namespace ClaudiaKermin.Core.Missions
             return string.IsNullOrEmpty(vesselId) || snapshot.Craft.VesselId == vesselId;
         }
 
-        /// <summary>The same rule over a vessel the adapter saw (loaded or not).</summary>
+        /// <summary>
+        /// The same rule over a vessel the adapter saw (loaded or not). Unlike a snapshot, with no vessel id on record this
+        /// matches nothing: the vessels seen are all of them, and every one would match.
+        /// </summary>
         public static bool Is(bool remote, uint? processorPartId, string vesselId, SeenVessel vessel)
         {
             if (vessel == null) return false;

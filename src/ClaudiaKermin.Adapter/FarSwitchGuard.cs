@@ -49,6 +49,9 @@ namespace ClaudiaKermin.Adapter
             var target = __0;
             if (switching || driver == null || target == null || target.loaded || !HighLogic.LoadedSceneIsFlight) return true;
             if (!driver.LeavingFlightNeedsConfirmation || target == FlightGlobals.ActiveVessel) return true;
+            // KSP refuses the switch itself when it can't save now (under thrust, say) unless forced: let it, with its own
+            // message, and the run carries on untouched.
+            if (!__1 && FlightGlobals.ClearToSave() != ClearToSaveStatus.CLEAR) return true;
 
             var name = target.GetDisplayName();
             var dialog = new MultiOptionDialog(

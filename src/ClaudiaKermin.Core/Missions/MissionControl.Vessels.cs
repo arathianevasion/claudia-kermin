@@ -15,7 +15,7 @@ namespace ClaudiaKermin.Core.Missions
     /// Check, Manual Control and the control locks are always about the craft. The player may fly elsewhere between
     /// sequences and nearby while Running; a run whose craft unloads (a far switch the player confirmed, or flying out
     /// of range) is interrupted and Debriefed once the player is back in the craft. Resume is refused from any other
-    /// vessel. The mod never switches vessels itself: only the Go to button does, when the player presses it.
+    /// vessel. The mod never switches vessels on its own; the Go to button switches only when the player presses it.
     /// </summary>
     public sealed partial class MissionControl
     {
