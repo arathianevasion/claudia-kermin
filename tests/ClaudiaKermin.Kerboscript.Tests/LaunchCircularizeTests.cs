@@ -101,24 +101,20 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         // LAZcalc_azimuth is the patched lib_lazcalc's arithmetic without the ship: Kerbin, 80 km orbit,
-        // on the equator (latitude 0), 45 degrees; the list is what LAZcalc_init builds, node epsilon 0.
+        // on the equator (latitude 0); the list is what LAZcalc_init builds: inclination, latitude,
+        // equatorial speed, orbital speed, node, node epsilon (m/s of north speed that switches the node).
         [Theory]
-        [InlineData("Ascending", 0, "41.7")]
-        [InlineData("Descending", 0, "138.3")]
-        [InlineData("Ascending", -3, "41.7")]
-        public void A_northward_and_a_southward_launch_both_get_a_heading(string node, double northSpeed, string azimuth)
+        [InlineData(45, "Ascending", 0, 0, "41.7")]
+        [InlineData(45, "Descending", 0, 0, "138.3")]
+        [InlineData(135, "Ascending", 0, 0, "312.1")]
+        [InlineData(135, "Descending", 0, 0, "227.9")]
+        [InlineData(45, "Descending", 10, 50, "41.7")]
+        [InlineData(45, "Ascending", 10, -50, "138.3")]
+        [InlineData(45, "Descending", 10, -3, "138.3")]
+        public void A_northward_and_a_southward_launch_both_get_a_heading(double inc, string node, double epsilon, double northSpeed, string azimuth)
         {
-            var data = "list(45, 0, 174.94, 2278.9, \"" + node + "\", 0)";
+            var data = "list(" + inc + ", 0, 174.94, 2278.9, \"" + node + "\", " + epsilon + ")";
             Assert.Equal(azimuth, One("round(LAZcalc_azimuth(" + data + ", 0, " + northSpeed + "), 1)"));
-        }
-
-        // An azimuth the original fell off the end for (90 to 270) is returned as it is.
-        [Fact]
-        public void An_azimuth_in_the_middle_of_the_compass_is_returned_not_nothing()
-        {
-            // Retrograde 120 degrees from the equator: azimuth is 180 - 41.7 mirrored; any Descending result is 90..270.
-            var data = "list(135, 0, 174.94, 2278.9, \"Descending\", 0)";
-            Assert.Equal("True", One("LAZcalc_azimuth(" + data + ", 0, 0):istype(\"Scalar\")"));
         }
 
         [Theory]
