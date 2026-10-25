@@ -1611,18 +1611,22 @@ namespace ClaudiaKermin.Core.Missions
             Note(LogKind.Notice, "Spending Cap raised to $" + Dollars(cap) + ".");
             LogCost(mission, "cap_raised", cap, "");
             WriteInfo(mission);
-            if (mission.Stage == MissionStage.Paused && mission.PausedForCap && mission.Committed < cap)
-            {
-                if (mission.EvaScience.Length == 0) Retried();
-                else
-                {
-                    // The cap was only half of what held the Mission: it still waits for the player's EVA.
-                    mission.PausedForCap = false;
-                    mission.PauseReason = EvaPauseReason(mission.EvaScience);
-                }
-            }
+            CarryOnIfCapCovers(mission);
             if (mission.WaitingForCap && mission.Pending != null && !mission.InFlight && mission.Stage != MissionStage.Paused)
                 Send(mission, mission.Pending);
+        }
+
+        /// <summary>A Mission Paused at the Spending Cap whose cap now covers what it has spent sends the waiting request, as a raise does (also after a load that finds a cap raised since the save).</summary>
+        private void CarryOnIfCapCovers(Mission mission)
+        {
+            if (mission.Stage != MissionStage.Paused || !mission.PausedForCap || mission.Committed >= mission.SpendingCap) return;
+            if (mission.EvaScience.Length == 0) Retried();
+            else
+            {
+                // The cap was only half of what held the Mission: it still waits for the player's EVA.
+                mission.PausedForCap = false;
+                mission.PauseReason = EvaPauseReason(mission.EvaScience);
+            }
         }
 
         private void LogCost(Mission mission, string kind, decimal amount, string outcome)

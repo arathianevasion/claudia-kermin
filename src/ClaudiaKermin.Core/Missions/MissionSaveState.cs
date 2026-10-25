@@ -94,6 +94,8 @@ namespace ClaudiaKermin.Core.Missions
         public readonly List<string> HeldWords = new List<string>();
         /// <summary>How many of Claudia's log entries wait for the link (LogEntry.Queued): the latest of her entries in the log, since her entries before a Blackout were shown.</summary>
         public int QueuedEntries;
+        /// <summary>Paused at the Spending Cap, so Raise cap is offered and a raised cap sends the waiting request.</summary>
+        public bool PausedForCap;
         public MissionPlan MissionPlan;
         /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
         public SequencePlan SequencePlan;
@@ -151,6 +153,7 @@ namespace ClaudiaKermin.Core.Missions
             if (RecheckSince != 0) values["recheckSince"] = RecheckSince.ToString(CultureInfo.InvariantCulture);
             if (PendingNotice.Length > 0) values["pendingNotice"] = PendingNotice;
             if (PausedCannotFly) values["pausedCannotFly"] = "true";
+            if (PausedForCap) values["pausedForCap"] = "true";
             foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
             for (var i = 0; i < UnsafeProblems.Count; i++) values[UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture)] = UnsafeProblems[i];
             if (QueuedEntries > 0) values["queuedEntries"] = QueuedEntries.ToString(CultureInfo.InvariantCulture);
@@ -201,6 +204,7 @@ namespace ClaudiaKermin.Core.Missions
                 Recheck = Get(values, "recheck"),
                 PendingNotice = Get(values, "pendingNotice"),
                 PausedCannotFly = Get(values, "pausedCannotFly") == "true",
+                PausedForCap = Get(values, "pausedForCap") == "true",
             };
             double runStart;
             if (double.TryParse(Get(values, "runStartUt"), NumberStyles.Float, CultureInfo.InvariantCulture, out runStart)) state.RunStartUt = runStart;
