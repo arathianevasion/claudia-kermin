@@ -159,34 +159,40 @@ namespace ClaudiaKermin.Core.Missions
         /// The structured-output schema. Short "why" fields only: the mod never asks for written-out
         /// thinking. No numeric or length limits (structured outputs don't support them).
         /// </summary>
+        // Union budget (#199): the API compiles this schema to a grammar, and each anyOf or type array makes that
+        // grammar grow fast. Past a limit every request is a 400 ("compiled grammar is too large"), and the
+        // limit is lower than the documented 16 unions once nested objects count. So only the four parts are
+        // nullable; any other "none" is a sentinel (-1, "", "none") that Parse maps back to null. A new nullable
+        // field must be probed against the API first (tools/ClaudiaKermin.SchemaProbe); MissionReplySchemaTests
+        // holds the budget. Limits: https://platform.claude.com/docs/en/build-with-claude/structured-outputs#schema-complexity-limits
         public const string SchemaJson =
             "{\"type\":\"object\",\"additionalProperties\":false,"
             + "\"required\":[\"kind\",\"say\",\"reply_intent\",\"mission_plan\",\"sequence_plan\",\"debrief\",\"alert\"],"
             + "\"properties\":{"
             + "\"kind\":{\"type\":\"string\",\"enum\":[\"mission_plan\",\"sequence_plan\",\"debrief\",\"answer\",\"alert\"]},"
             + "\"say\":{\"type\":\"string\",\"description\":\"Your line to the player: concise mission-control voice, key numbers first, one or two sentences.\"},"
-            + "\"reply_intent\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"approve\",\"revise\",\"question\",\"unclear\"]},{\"type\":\"null\"}],"
-            + "\"description\":\"Only when classifying the player's typed reply to a pending plan; otherwise null.\"},"
+            + "\"reply_intent\":{\"type\":\"string\",\"enum\":[\"none\",\"approve\",\"revise\",\"question\",\"unclear\"],"
+            + "\"description\":\"Only when classifying the player's typed reply to a pending plan; otherwise none.\"},"
             + "\"mission_plan\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
             + "\"required\":[\"why\",\"sequences\",\"total_delta_v\",\"expected_duration\",\"mission_time_s\",\"new_goal\",\"child_vessels\"],\"properties\":{"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
             + "\"child_vessels\":{\"type\":\"array\",\"description\":\"The Child Vessels you plan to fly, each named once; separated vessels not named here are ignored.\","
             + "\"items\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"name\",\"separation_stage\",\"vessel_id\"],\"properties\":{"
             + "\"name\":{\"type\":\"string\",\"description\":\"Your name for it, used as the vessel of its sequences.\"},"
-            + "\"separation_stage\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"The separation stage that releases it, from the separations facts; null for one already separated.\"},"
-            + "\"vessel_id\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"For a vessel already separated, its id from the mod's notice; otherwise null.\"}}}},"
+            + "\"separation_stage\":{\"type\":\"integer\",\"description\":\"The separation stage that releases it, from the separations facts; -1 for one already separated.\"},"
+            + "\"vessel_id\":{\"type\":\"string\",\"description\":\"For a vessel already separated, its id from the mod's notice; otherwise empty.\"}}}},"
             + "\"sequences\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"additionalProperties\":false,"
             + "\"required\":[\"name\",\"intent\",\"delta_v\",\"timing\",\"due_time_ut\",\"manual\",\"vessel\"],\"properties\":{"
             + "\"vessel\":{\"type\":\"string\",\"description\":\"craft, or the name of the Child Vessel this sequence flies.\"},"
             + "\"name\":{\"type\":\"string\"},\"intent\":{\"type\":\"string\"},"
             + "\"delta_v\":{\"type\":\"number\",\"description\":\"m/s\"},"
             + "\"timing\":{\"type\":\"string\",\"description\":\"Due Time or rough timing\"},"
-            + "\"due_time_ut\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"description\":\"The Due Time as UT in seconds, only when the wait before this sequence needs the player (e.g. docking or an EVA by hand); otherwise null. A wait for a window, daylight or a hold goes inside the sequence's script, which warps there.\"},"
+            + "\"due_time_ut\":{\"type\":\"number\",\"description\":\"The Due Time as UT in seconds, only when the wait before this sequence needs the player (e.g. docking or an EVA by hand); otherwise -1. A wait for a window, daylight or a hold goes inside the sequence's script, which warps there.\"},"
             + "\"manual\":{\"type\":\"boolean\",\"description\":\"True for a stretch the player flies by hand.\"}}}},"
             + "\"total_delta_v\":{\"type\":\"number\",\"description\":\"m/s\"},"
             + "\"expected_duration\":{\"type\":\"string\"},"
-            + "\"mission_time_s\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"description\":\"Expected total Mission time in seconds, waits between sequences included.\"},"
-            + "\"new_goal\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Only when the player asked to change the Mission Goal itself: the new Mission Goal in their words, which replaces the old one if they approve this plan; otherwise null.\"}}},{\"type\":\"null\"}]},"
+            + "\"mission_time_s\":{\"type\":\"number\",\"description\":\"Expected total Mission time in seconds, waits between sequences included; -1 if you can't say.\"},"
+            + "\"new_goal\":{\"type\":\"string\",\"description\":\"Only when the player asked to change the Mission Goal itself: the new Mission Goal in their words, which replaces the old one if they approve this plan; otherwise empty.\"}}},{\"type\":\"null\"}]},"
             + "\"sequence_plan\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
             + "\"required\":[\"name\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"telemetry_checks\",\"risks\",\"custom_script\",\"custom_script_reason\",\"script\",\"due_time_ut\",\"window_closes_ut\",\"late_window_dv\",\"manual\",\"vessel\"],"
             + "\"properties\":{"
@@ -210,9 +216,9 @@ namespace ClaudiaKermin.Core.Missions
             + "\"risks\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},"
             + "\"custom_script\":{\"type\":\"boolean\",\"description\":\"True when the script is written from scratch instead of from Building Blocks.\"},"
             + "\"custom_script_reason\":{\"type\":\"string\",\"description\":\"For a Custom Script, one short sentence on why no Building Block fits; otherwise empty.\"},"
-            + "\"due_time_ut\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"description\":\"The earliest UT in seconds the sequence may start, only when a wait that needs the player comes first; otherwise null. The script itself warps through waits for windows, daylight or holds.\"},"
-            + "\"window_closes_ut\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"description\":\"UT in seconds after which the planned window is missed, if the sequence depends on one; otherwise null.\"},"
-            + "\"late_window_dv\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"description\":\"Delta-v in m/s of the next window if the planned one is missed; null when there is none.\"},"
+            + "\"due_time_ut\":{\"type\":\"number\",\"description\":\"The earliest UT in seconds the sequence may start, only when a wait that needs the player comes first; otherwise -1. The script itself warps through waits for windows, daylight or holds.\"},"
+            + "\"window_closes_ut\":{\"type\":\"number\",\"description\":\"UT in seconds after which the planned window is missed, if the sequence depends on one; otherwise -1.\"},"
+            + "\"late_window_dv\":{\"type\":\"number\",\"description\":\"Delta-v in m/s of the next window if the planned one is missed; -1 when there is none.\"},"
             + "\"script\":{\"type\":\"string\",\"description\":\"The complete Mission Script in kerboscript; empty for a manual stretch.\"},"
             + "\"manual\":{\"type\":\"boolean\",\"description\":\"True when the player flies this stretch by hand (docking, EVA science, or when they say they will fly it): the script is then empty.\"}}},{\"type\":\"null\"}]},"
             + "\"debrief\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
@@ -232,10 +238,11 @@ namespace ClaudiaKermin.Core.Missions
             + "\"description\":\"Off-Nominal: corrective_sequence or revised_plan. Failed: reduced_goal (the player must approve it) or end_mission. Nominal: none.\"},"
             + "\"follow_up_text\":{\"type\":\"string\",\"description\":\"The corrective sequence or the revised Mission Plan in a few words; for reduced_goal, the reduced Mission Goal itself; otherwise empty.\"}}},{\"type\":\"null\"}]},"
             + "\"alert\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"verdict\",\"why\",\"follow_up_threshold\"],\"properties\":{"
+            + "\"required\":[\"verdict\",\"why\",\"set_follow_up_threshold\",\"follow_up_threshold\"],\"properties\":{"
             + "\"verdict\":{\"type\":\"string\",\"enum\":[\"carry_on\",\"abort\"],\"description\":\"abort recommends the player Abort; you never abort yourself.\"},"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
-            + "\"follow_up_threshold\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"description\":\"With carry_on: one more threshold for the same check, in its units, for one more Alert; otherwise null.\"}}},{\"type\":\"null\"}]}"
+            + "\"set_follow_up_threshold\":{\"type\":\"boolean\",\"description\":\"True only with carry_on, when you set follow_up_threshold.\"},"
+            + "\"follow_up_threshold\":{\"type\":\"number\",\"description\":\"When set_follow_up_threshold is true: one more threshold for the same check, in its units, for one more Alert; otherwise 0 (ignored).\"}}},{\"type\":\"null\"}]}"
             + "}}";
 
         /// <summary>The reply in a message's text, or null when it isn't a reply in this schema.</summary>
@@ -266,7 +273,7 @@ namespace ClaudiaKermin.Core.Missions
                     Why = JsonNode.Str(plan["why"]) ?? "",
                     TotalDeltaV = JsonNode.Double(plan["total_delta_v"]) ?? 0,
                     ExpectedDuration = JsonNode.Str(plan["expected_duration"]) ?? "",
-                    MissionTimeSeconds = JsonNode.Double(plan["mission_time_s"]),
+                    MissionTimeSeconds = NonNegative(plan["mission_time_s"]),
                     NewGoal = Goal(JsonNode.Str(plan["new_goal"])),
                 };
                 var sequences = plan["sequences"];
@@ -280,7 +287,7 @@ namespace ClaudiaKermin.Core.Missions
                             Intent = JsonNode.Str(s["intent"]) ?? "",
                             DeltaV = JsonNode.Double(s["delta_v"]) ?? 0,
                             Timing = JsonNode.Str(s["timing"]) ?? "",
-                            DueTimeUt = JsonNode.Double(s["due_time_ut"]),
+                            DueTimeUt = NonNegative(s["due_time_ut"]),
                             Manual = JsonNode.Bool(s["manual"]) ?? false,
                             Vessel = (JsonNode.Str(s["vessel"]) ?? "").Trim(),
                         });
@@ -297,7 +304,7 @@ namespace ClaudiaKermin.Core.Missions
                         reply.MissionPlan.ChildVessels.Add(new PlannedChildVessel
                         {
                             Name = name,
-                            SeparationStage = stage.HasValue ? (int?)stage.Value : null,
+                            SeparationStage = stage.HasValue && stage.Value >= 0 ? (int?)stage.Value : null,
                             VesselId = (JsonNode.Str(c["vessel_id"]) ?? "").Trim(),
                         });
                     }
@@ -322,9 +329,9 @@ namespace ClaudiaKermin.Core.Missions
                     Script = JsonNode.Str(sequence["script"]) ?? "",
                     CustomScript = JsonNode.Bool(sequence["custom_script"]) ?? false,
                     CustomScriptReason = JsonNode.Str(sequence["custom_script_reason"]) ?? "",
-                    DueTimeUt = JsonNode.Double(sequence["due_time_ut"]),
-                    WindowClosesUt = JsonNode.Double(sequence["window_closes_ut"]),
-                    LateWindowDeltaV = JsonNode.Double(sequence["late_window_dv"]),
+                    DueTimeUt = NonNegative(sequence["due_time_ut"]),
+                    WindowClosesUt = NonNegative(sequence["window_closes_ut"]),
+                    LateWindowDeltaV = NonNegative(sequence["late_window_dv"]),
                     Manual = JsonNode.Bool(sequence["manual"]) ?? false,
                     Vessel = (JsonNode.Str(sequence["vessel"]) ?? "").Trim(),
                 };
@@ -360,7 +367,7 @@ namespace ClaudiaKermin.Core.Missions
                     {
                         Abort = verdict == "abort",
                         Why = JsonNode.Str(alert["why"]) ?? "",
-                        FollowUpThreshold = verdict == "abort" ? null : JsonNode.Double(alert["follow_up_threshold"]),
+                        FollowUpThreshold = verdict == "abort" ? null : FollowUpThreshold(alert),
                     };
                 }
             }
@@ -401,6 +408,23 @@ namespace ClaudiaKermin.Core.Missions
                 if (text.Length > 0) items.Add(new GoalItem { Item = text, Done = JsonNode.Bool(item["done"]) ?? false });
             }
             return items;
+        }
+
+        /// <summary>A UT, delta-v, duration or stage: null when absent, null (saved plans) or the -1 sentinel (any negative).</summary>
+        private static double? NonNegative(JsonNode node)
+        {
+            var value = JsonNode.Double(node);
+            return value.HasValue && value.Value >= 0 ? value : null;
+        }
+
+        /// <summary>
+        /// A threshold can be negative (vertical_speed), so it has a flag instead of a sentinel. A reply without the
+        /// flag (one recorded before #199) keeps its threshold when there is one.
+        /// </summary>
+        private static double? FollowUpThreshold(JsonNode alert)
+        {
+            var set = JsonNode.Bool(alert["set_follow_up_threshold"]);
+            return set == false ? null : JsonNode.Double(alert["follow_up_threshold"]);
         }
 
         private static string Goal(string text)

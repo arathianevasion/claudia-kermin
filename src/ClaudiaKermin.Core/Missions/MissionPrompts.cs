@@ -142,7 +142,7 @@ namespace ClaudiaKermin.Core.Missions
                 + "expected_duration_s, since the mod stops a script still running at 300% of it. A Due Time is only for a wait "
                 + "between sequences that needs the player, e.g. \"come back when you've docked\" or an EVA they must make; it is "
                 + "the earliest UT (seconds) the next Maneuver Sequence may start. Put it in due_time_ut in the Mission Plan's sequence "
-                + "and in the Sequence Plan (null otherwise, which is almost always), and give the Mission Plan's mission_time_s as the "
+                + "and in the Sequence Plan (-1 otherwise, which is almost always), and give the Mission Plan's mission_time_s as the "
                 + "total Mission time including every wait. For a Due Time the mod sets an alarm and offers the player a Warp to Due "
                 + "Time button; it never warps between sequences itself. If a sequence depends on a window, set window_closes_ut to the UT after which that window is missed "
                 + "and late_window_dv to the delta-v (m/s) of the next window; when the player approves after the window has closed, "
@@ -216,7 +216,7 @@ namespace ClaudiaKermin.Core.Missions
 
         public const string AlertNotice =
             "Judge this Alert now, briefly: reply with kind \"alert\" and alert filled in. verdict \"carry_on\" lets the sequence "
-            + "go on (you may set follow_up_threshold, in the check's units, for one more Alert on it); \"abort\" recommends that "
+            + "go on (you may set set_follow_up_threshold and a follow_up_threshold, in the check's units, for one more Alert on it); \"abort\" recommends that "
             + "the player press Abort. You never abort the sequence yourself, and the script keeps running until the player acts.";
 
         public const string QuestionNotice =
@@ -235,7 +235,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             return " If the player asks to change the Mission Goal itself, "
                 + (missionPlan ? "" : "reply with kind \"mission_plan\" instead, planning for the new goal, and ")
-                + "set new_goal to the new goal in their words; otherwise new_goal is null.";
+                + "set new_goal to the new goal in their words; otherwise new_goal is empty.";
         }
 
         public static string ReplyNotice(bool missionPlan)
