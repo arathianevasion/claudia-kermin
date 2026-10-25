@@ -12,7 +12,8 @@ namespace ClaudiaKermin.Adapter
     /// <summary>
     /// Watches the game for the notable events of a run (a stage fired, a part destroyed or broken off, a part close to its
     /// heat limit, science collected) and reports each to Mission Control as a <see cref="RunEventSeen"/>, for the Debrief.
-    /// Reports only while a sequence is Running and only for the vessel the player is flying; the core keeps the log.
+    /// Reports only while a sequence is Running and only for the Mission craft (the vessel the run flies, decided by
+    /// <see cref="RunEventFilter"/>), so staging or science on another vessel after a switch is left out; the core keeps the log.
     /// </summary>
     public sealed class RunEventWatcher
     {
@@ -20,18 +21,21 @@ namespace ClaudiaKermin.Adapter
 
         private readonly Action<MissionInput> _send;
         private readonly Func<bool> _running;
+        private readonly Func<string> _craft;
+        private readonly Func<string> _child;
         private readonly HashSet<uint> _hot = new HashSet<uint>();
         private float _nextHeat;
 
-        public RunEventWatcher(Action<MissionInput> send, Func<bool> running)
+        public RunEventWatcher(Action<MissionInput> send, Func<bool> running, Func<string> craftVesselId, Func<string> runningChildVesselId)
         {
             _send = send;
             _running = running;
+            _craft = craftVesselId;
+            _child = runningChildVesselId;
             GameEvents.onStageActivate.Add(OnStage);
             GameEvents.onPartDie.Add(OnPartDie);
             GameEvents.onPartJointBreak.Add(OnJointBreak);
             GameEvents.OnExperimentDeployed.Add(OnExperiment);
-            GameEvents.OnScienceRecieved.Add(OnScience);
         }
 
         /// <summary>Call each frame: parts near their heat limit are reported once per run.</summary>
@@ -45,7 +49,7 @@ namespace ClaudiaKermin.Adapter
             if (Time.realtimeSinceStartup < _nextHeat) return;
             _nextHeat = Time.realtimeSinceStartup + HeatSeconds;
             var vessel = FlightGlobals.ActiveVessel;
-            if (vessel == null) return;
+            if (vessel == null || !IsCraft(vessel)) return;
             foreach (var part in vessel.Parts)
             {
                 var percent = PartHeat.Percent(part.temperature, part.maxTemp, part.skinTemperature, part.skinMaxTemp);
@@ -54,9 +58,14 @@ namespace ClaudiaKermin.Adapter
             }
         }
 
+        private bool IsCraft(Vessel vessel)
+        {
+            return vessel != null && RunEventFilter.Accepts(vessel.id.ToString("N"), _craft(), _child());
+        }
+
         private bool Flying(Part part)
         {
-            return _running() && part != null && part.vessel != null && part.vessel == FlightGlobals.ActiveVessel;
+            return _running() && part != null && IsCraft(part.vessel);
         }
 
         private void Report(RunEventKind kind, string text)
@@ -66,7 +75,8 @@ namespace ClaudiaKermin.Adapter
 
         private void OnStage(int stage)
         {
-            Report(RunEventKind.Staging, "stage " + stage + " fired");
+            // Staging acts on the vessel the player is flying, so that is the vessel the stage belongs to.
+            if (IsCraft(FlightGlobals.ActiveVessel)) Report(RunEventKind.Staging, "stage " + stage + " fired");
         }
 
         private void OnPartDie(Part part)
@@ -81,12 +91,9 @@ namespace ClaudiaKermin.Adapter
 
         private void OnExperiment(ScienceData data)
         {
-            if (data != null) Report(RunEventKind.Science, data.title + " collected (" + data.dataAmount.ToString("0.#") + " Mits)");
-        }
-
-        private void OnScience(float amount, ScienceSubject subject, ProtoVessel source, bool reverted)
-        {
-            if (!reverted && subject != null) Report(RunEventKind.Science, subject.title + ": " + amount.ToString("0.#") + " science received");
+            // One line per result: the deployed experiment is logged here and the science-received event for the same result is not
+            // watched. The event carries no vessel; an experiment runs on the vessel the player is flying.
+            if (data != null && IsCraft(FlightGlobals.ActiveVessel)) Report(RunEventKind.Science, data.title + " collected (" + data.dataAmount.ToString("0.#") + " Mits)");
         }
     }
 }
