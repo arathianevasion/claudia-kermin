@@ -18,33 +18,35 @@ namespace ClaudiaKermin.Adapter
     {
         private GUIStyle _art, _title, _secondary, _text;
         private GUISkin _stylesFor;
-        private float _charWidth;
 
         /// <summary>
         /// Draws the banner in a transcript <paramref name="width"/> wide. The pending setup stands in for the Mission's
-        /// model, type and Spending Cap until there is a Mission.
+        /// model and type until there is a Mission.
         /// </summary>
-        public void Draw(MissionView view, float width, string setupModel, bool setupRemote, decimal setupCap, bool goalSet)
+        public void Draw(MissionView view, float width, string setupModel, bool setupRemote, bool goalSet)
         {
             if (!WelcomeBanner.Shows(view.Stage)) return;
             Styles();
-            var lines = WelcomeBanner.Lines(view, setupModel, setupRemote, setupCap, Site(), goalSet, ModInfo.Version);
-            // The card's padding and the art's gap to the text come off the width before counting columns.
-            var columns = WelcomeBanner.Columns(width, _charWidth, 2 * ClaudiaSkin.Padding + ClaudiaSkin.Gap);
-            var wide = WelcomeBanner.ChooseLayout(columns) == BannerLayout.Wide;
+            var lines = WelcomeBanner.Lines(view, setupModel, setupRemote, Site(), goalSet, ModInfo.Version);
+            // Measured, not counted: the art's width plus the widest text line, against the card's inner width.
+            var gap = ClaudiaSkin.Gap * 2;
+            var widest = 0f;
+            foreach (var line in lines) widest = Mathf.Max(widest, StyleOf(line).CalcSize(new GUIContent(line.Text)).x);
+            var artWidth = _art.CalcSize(new GUIContent(WelcomeBanner.Art)).x;
+            var wide = WelcomeBanner.ChooseLayout(width - 2 * ClaudiaSkin.Padding, artWidth, gap, widest) == BannerLayout.Wide;
 
+            // No expanding height anywhere: the card is as tall as its content and the log follows it.
             if (wide)
             {
-                ClaudiaSkin.BeginCard();
-                GUILayout.BeginHorizontal();
+                ClaudiaSkin.BeginCard(GUILayout.ExpandHeight(false));
+                GUILayout.BeginHorizontal(GUILayout.ExpandHeight(false));
                 DrawArt();
-                GUILayout.Space(ClaudiaSkin.Gap * 2);
-                GUILayout.BeginVertical();
-                GUILayout.FlexibleSpace();
+                GUILayout.Space(gap);
+                GUILayout.BeginVertical(GUILayout.ExpandHeight(false));
                 DrawLines(lines);
-                GUILayout.FlexibleSpace();
                 GUILayout.EndVertical();
                 GUILayout.EndHorizontal();
+                GUILayout.Label(WelcomeBanner.ClosingLine, _secondary);
                 ClaudiaSkin.EndCard();
             }
             else
@@ -52,8 +54,14 @@ namespace ClaudiaKermin.Adapter
                 DrawArt();
                 GUILayout.Space(ClaudiaSkin.Gap);
                 DrawLines(lines);
+                GUILayout.Label(WelcomeBanner.ClosingLine, _secondary);
                 GUILayout.Space(ClaudiaSkin.Gap);
             }
+        }
+
+        private GUIStyle StyleOf(BannerLine line)
+        {
+            return line.Tone == BannerTone.Title ? _title : line.Tone == BannerTone.Secondary ? _secondary : _text;
         }
 
         // One label for every row, so the half blocks meet.
@@ -65,7 +73,7 @@ namespace ClaudiaKermin.Adapter
         private void DrawLines(System.Collections.Generic.IList<BannerLine> lines)
         {
             foreach (var line in lines)
-                GUILayout.Label(line.Text, line.Tone == BannerTone.Title ? _title : line.Tone == BannerTone.Secondary ? _secondary : _text);
+                GUILayout.Label(line.Text, StyleOf(line));
         }
 
         private static BannerSite Site()
@@ -92,8 +100,6 @@ namespace ClaudiaKermin.Adapter
             _title.normal.textColor = ClaudiaSkin.Accent;
             _secondary = ClaudiaSkin.Secondary;
             _text = ClaudiaSkin.Body;
-            // One block cell is as wide as any monospace character.
-            _charWidth = _art.CalcSize(new GUIContent("█")).x;
         }
     }
 }

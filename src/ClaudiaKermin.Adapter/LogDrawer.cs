@@ -43,10 +43,9 @@ namespace ClaudiaKermin.Adapter
         public bool GoalSet;
         /// <summary>The estimated cost of the Mission for the chosen model, for the facts row; null for none.</summary>
         public decimal? Estimate;
-        /// <summary>The pending setup's model, type and Spending Cap, which the welcome banner shows until there is a Mission; set before <see cref="Draw"/>.</summary>
+        /// <summary>The pending setup's model and type, which the welcome banner shows until there is a Mission; set before <see cref="Draw"/>.</summary>
         public string SetupModel = "";
         public bool SetupRemote;
-        public decimal SetupCap;
         /// <summary>Builds the input Check again sends, or null when it can't be sent yet (no Mission Goal pinned).</summary>
         public Func<MissionInput> CheckAgain;
         // In Flight the Craft Check starts collapsed to one line so the Mission log gets the room; reset when Flight loads.
@@ -86,7 +85,7 @@ namespace ClaudiaKermin.Adapter
             _seenConfirm = confirming;
             _scroll = GUILayout.BeginScrollView(_scroll, false, false, GUIStyle.none, GUI.skin.verticalScrollbar, GUIStyle.none, options);
             // The first item of a full transcript; drawing only, never a log entry.
-            if (_send != null) _banner.Draw(view, width, SetupModel, SetupRemote, SetupCap, GoalSet);
+            if (_send != null) _banner.Draw(view, width, SetupModel, SetupRemote, GoalSet);
             if (_send != null && (view.StartForm.CanStart || view.CraftCheck.State != CraftCheckState.None)) DrawCraftCheck(view);
             if (_send != null && view.StartForm.CanStart && view.StartForm.Refusal.Length > 0) GUILayout.Label(view.StartForm.Refusal, ClaudiaSkin.DangerText);
             foreach (var entry in view.Log) DrawEntry(entry, view.Ut, width);
