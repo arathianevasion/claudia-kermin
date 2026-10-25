@@ -39,10 +39,9 @@ namespace ClaudiaKermin.Adapter
         private GUIStyle _bold;
         private GUIStyle _goalStyle;
 
-        // Start form.
+        // Start form: the Mission Goal here; type, model, Spending Cap and Mission Settings in the setup (the Settings window edits them).
+        private readonly MissionSetup _setup;
         private string _goal = "";
-        /// <summary>The start form's Mission type: Claudia stays at Mission Control (remote) or flies aboard (crewed, the default).</summary>
-        private bool _remote;
         private Vector2 _goalScroll;
         // The Craft Check findings scroll; a new result (a different set of findings) jumps back to the top.
         private Vector2 _checkScroll;
@@ -51,11 +50,6 @@ namespace ClaudiaKermin.Adapter
         private bool _checkCollapsed = true;
         // End Mission asked "End this Mission?" and awaits Yes / No.
         private bool _confirmingEnd;
-        private string _cap;
-        private int _modelIndex;
-        // Mission Settings in the start form and in the edit box; null until first drawn (then prefilled from the view).
-        private MissionSettingsValues _settings;
-        private bool _editingSettings;
         // Raise cap asked for a new Spending Cap and awaits the amount.
         private bool _raising;
         private string _raiseTo = "";
@@ -70,9 +64,13 @@ namespace ClaudiaKermin.Adapter
         /// <summary>Set before each OnGUI.</summary>
         public MissionView View;
 
-        public MissionWindow(Action<MissionInput> send, bool debugTools)
+        /// <summary>Opens the Settings window; set by the owner.</summary>
+        public Action OpenSettings;
+
+        public MissionWindow(Action<MissionInput> send, MissionSetup setup, bool debugTools)
         {
             _send = send;
+            _setup = setup;
             _debugTools = debugTools;
             _frame.Remember("mission");
             // The VAB/SPH Mission board has two panes, so it opens wider.
@@ -246,7 +244,7 @@ namespace ClaudiaKermin.Adapter
             else if (View.StartForm.CanStart && View.StartForm.Models.Count > 0)
             {
                 decimal estimate;
-                var model = View.StartForm.Models[Mathf.Clamp(_modelIndex, 0, View.StartForm.Models.Count - 1)];
+                var model = _setup.ModelFor(View.StartForm);
                 if (View.StartForm.Estimates.TryGetValue(model, out estimate))
                     GUILayout.Label("Cost: a whole Mission is about $" + estimate.ToString("0.00", CultureInfo.InvariantCulture) + " with " + model + ".", _wrap);
             }
@@ -269,7 +267,7 @@ namespace ClaudiaKermin.Adapter
         private void DrawStartForm()
         {
             var form = View.StartForm;
-            if (_cap == null) _cap = form.DefaultSpendingCap.ToString("0.00", CultureInfo.InvariantCulture);
+            _setup.SeedFrom(form);
             GUILayout.Label("Start a Mission", _bold);
             GUILayout.Label("Mission Goal:");
             // About 9 lines by default; taller as the player resizes the window.
@@ -279,88 +277,33 @@ namespace ClaudiaKermin.Adapter
             _goal = GUILayout.TextArea(_goal, 4000, _goalStyle);
             GUILayout.EndScrollView();
             if (GUILayout.Button("Clear", GUILayout.ExpandWidth(false))) _goal = "";
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Spending Cap $", GUILayout.ExpandWidth(false));
-            GUI.SetNextControlName(InputControl);
-            _cap = GUILayout.TextField(_cap, 10, GUILayout.Width(80));
-            GUILayout.EndHorizontal();
 
-            GUILayout.Label("Mission type:");
-            _remote = GUILayout.SelectionGrid(_remote ? 1 : 0, new[] { "Crewed (Claudia flies aboard)", "Remote (Claudia at Mission Control)" }, 1) == 1;
+            // Type, model, Spending Cap and Mission Settings are chosen in the Settings window.
+            GUILayout.Label((_setup.Remote ? "Remote" : "Crewed") + "; model " + _setup.ModelFor(form) + "; Spending Cap $"
+                + _setup.SpendingCap.ToString("0.00", CultureInfo.InvariantCulture) + "; " + _setup.Settings.Summary(), _wrap);
+            DrawSettingsButton();
 
-            GUILayout.Label("Model (locked for the Mission):");
-            var names = new string[form.Models.Count];
-            for (var i = 0; i < names.Length; i++)
-            {
-                decimal estimate;
-                names[i] = form.Models[i] + (form.Models[i] == form.DefaultModel ? " (default)" : "")
-                    + (form.Estimates.TryGetValue(form.Models[i], out estimate)
-                        ? "  est. Mission cost ~$" + estimate.ToString("0.00", CultureInfo.InvariantCulture) : "");
-            }
-            _modelIndex = Mathf.Clamp(_modelIndex, 0, Math.Max(0, names.Length - 1));
-            _modelIndex = GUILayout.SelectionGrid(_modelIndex, names, 1);
-
-            if (_settings == null) _settings = form.DefaultSettings.Copy();
-            DrawSettingsControls(_settings);
-
-            decimal cap;
-            var capOk = decimal.TryParse(_cap, NumberStyles.Number, CultureInfo.InvariantCulture, out cap) && cap > 0;
             // Start Mission runs the Craft Check first; it is disabled on a Blocker and until every Warning is acknowledged.
-            GUI.enabled = capOk && _goal.Trim().Length > 0 && names.Length > 0 && View.CraftCheck.StartAllowed;
+            GUI.enabled = _setup.SpendingCap > 0 && _goal.Trim().Length > 0 && form.Models.Count > 0 && View.CraftCheck.StartAllowed;
             if (GUILayout.Button("Start Mission"))
             {
                 // The goal stays until the Mission has actually started: the Craft Check may still hold it back.
-                _send(new StartMission(_goal, cap, form.Models[_modelIndex], _settings.Copy(), _remote));
+                _send(new StartMission(_goal, _setup.SpendingCap, _setup.ModelFor(form), _setup.Settings.Copy(), _setup.Remote));
             }
             GUI.enabled = true;
             if (form.Refusal.Length > 0) GUILayout.Label(form.Refusal, _wrap);
-            if (!capOk) GUILayout.Label("The Spending Cap must be a positive number of dollars.", _wrap);
         }
 
-        /// <summary>The Mission Settings: Daylight landing and Time versus delta-v.</summary>
-        private void DrawSettingsControls(MissionSettingsValues settings)
+        private void DrawSettingsButton()
         {
-            GUILayout.Label("Mission Settings:", _bold);
-            settings.DaylightLanding = GUILayout.Toggle(settings.DaylightLanding, "Daylight landing");
-            GUILayout.Label("Time versus delta-v:");
-            var choices = new[]
-            {
-                MissionSettingsValues.Label(TimeVersusDeltaV.Fastest),
-                MissionSettingsValues.Label(TimeVersusDeltaV.Balanced),
-                MissionSettingsValues.Label(TimeVersusDeltaV.MostEfficient),
-            };
-            settings.TimeVersusDeltaV = (TimeVersusDeltaV)GUILayout.SelectionGrid((int)settings.TimeVersusDeltaV, choices, 1);
+            if (OpenSettings != null && GUILayout.Button("Settings", GUILayout.ExpandWidth(false))) OpenSettings();
         }
 
-        /// <summary>The Mission's settings on the board; while a plan awaits Approval they can be edited, which asks Claudia for a revised Mission Plan.</summary>
+        /// <summary>The Mission's settings on the board; while a plan awaits Approval they can be changed in the Settings window, which asks Claudia for a revised Mission Plan.</summary>
         private void DrawSettings()
         {
             GUILayout.Label(View.Settings.Summary(), _wrap);
-            if (!View.CanEditSettings)
-            {
-                _editingSettings = false;
-                return;
-            }
-            if (!_editingSettings)
-            {
-                if (GUILayout.Button("Edit Mission Settings", GUILayout.ExpandWidth(false)))
-                {
-                    _settings = View.Settings.Copy();
-                    _editingSettings = true;
-                }
-                return;
-            }
-            DrawSettingsControls(_settings);
-            GUILayout.BeginHorizontal();
-            GUI.enabled = !_settings.SameAs(View.Settings);
-            if (GUILayout.Button("Apply (Claudia revises the Mission Plan)", GUILayout.ExpandWidth(false)))
-            {
-                _send(new EditSettings(_settings.Copy()));
-                _editingSettings = false;
-            }
-            GUI.enabled = true;
-            if (GUILayout.Button("Cancel", GUILayout.ExpandWidth(false))) _editingSettings = false;
-            GUILayout.EndHorizontal();
+            DrawSettingsButton();
         }
 
         /// <summary>The Craft Check, pinned at the bottom of the Mission board.</summary>
@@ -394,10 +337,12 @@ namespace ClaudiaKermin.Adapter
             {
                 GUI.enabled = _goal.Trim().Length > 0 && form.Models.Count > 0 && check.State != CraftCheckState.Running;
                 if (GUILayout.Button("Check craft", GUILayout.ExpandWidth(false)))
-                    _send(new RunCraftCheck(_goal, form.Models[Mathf.Clamp(_modelIndex, 0, form.Models.Count - 1)], _remote));
+                    _send(new RunCraftCheck(_goal, _setup.ModelFor(form), _setup.Remote));
                 GUI.enabled = true;
             }
-            DrawProcessorChoice(check);
+            // Chosen in the Settings window.
+            foreach (var processor in check.Processors)
+                if (processor.Chosen) GUILayout.Label("Claudia's kOS processor: " + processor.Title, _wrap);
 
             // Any result after a pause (Running, Error, ...) is new, even if it matches the last one.
             if (check.State != CraftCheckState.Done) _seenCheckResult = "";
@@ -437,19 +382,6 @@ namespace ClaudiaKermin.Adapter
             return "Craft Check: " + VerdictText(check)
                 + (check.Verdict == CraftVerdict.Pass ? "" : " (" + check.Findings.Count.ToString(CultureInfo.InvariantCulture) + ")")
                 + (check.Stale ? " - the craft changed since" : "");
-        }
-
-        private void DrawProcessorChoice(CraftCheckView check)
-        {
-            if (check.Processors.Count == 0) return;
-            GUILayout.Label("Claudia's kOS processor (default: the one nearest the root):", _wrap);
-            foreach (var processor in check.Processors)
-            {
-                var label = (processor.Chosen ? "(x) " : "( ) ") + processor.Title
-                    + (processor.BootFile.Length > 0 ? " [boot file: " + processor.BootFile + "]" : "");
-                if (GUILayout.Button(label, GUILayout.ExpandWidth(false)) && !processor.Chosen) _send(new ChooseProcessor(processor.PartId));
-            }
-            if (GUILayout.Button("Use the one nearest the root", GUILayout.ExpandWidth(false))) _send(new ChooseProcessor(null));
         }
 
         private void DrawCraftCheckResult(CraftCheckView check)

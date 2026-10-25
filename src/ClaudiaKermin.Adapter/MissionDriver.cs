@@ -33,6 +33,14 @@ namespace ClaudiaKermin.Adapter
 
         public readonly MissionWindow Window;
         public readonly CapcomStrip Strip;
+        /// <summary>The Mission being set up, shared by the Mission window and the Settings window.</summary>
+        public readonly MissionSetup Setup = new MissionSetup();
+
+        /// <summary>What the windows draw.</summary>
+        public MissionView View
+        {
+            get { return _mission.View; }
+        }
         /// <summary>The control locks while Claudia has the craft; the owner releases them with the other locks (scene change, shutdown).</summary>
         public readonly CraftLocks Locks = new CraftLocks();
 
@@ -71,7 +79,7 @@ namespace ClaudiaKermin.Adapter
         {
             Current = this;
             _mission = mission;
-            Window = new MissionWindow(Send, debugTools);
+            Window = new MissionWindow(Send, Setup, debugTools);
             Strip = new CapcomStrip(Window);
             GameEvents.onKerbalStatusChange.Add(OnKerbalStatusChange);
         }
@@ -133,6 +141,10 @@ namespace ClaudiaKermin.Adapter
             var locks = scene == GameScene.Flight ? _mission.View.Locks : ControlLocks.None;
             Locks.Apply(locks);
             _inputWatcher.Update(locks != ControlLocks.None, seconds => Send(new ManualInputHeld(seconds)));
+
+            // Once a Mission is under way its setup is spent: the next one starts from the defaults.
+            if (_mission.View.CanEndMission) Setup.Reset();
+            else Setup.SeedFrom(_mission.View.StartForm);
             Carry();
         }
 
