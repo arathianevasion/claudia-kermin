@@ -7,6 +7,7 @@ using System.IO;
 using ClaudiaKermin.Adapter.Roster;
 using ClaudiaKermin.Core.Config;
 using ClaudiaKermin.Core.Missions;
+using ClaudiaKermin.Core.Ui;
 using UnityEngine;
 
 namespace ClaudiaKermin.Adapter
@@ -43,7 +44,7 @@ namespace ClaudiaKermin.Adapter
         private readonly string _configDirectory;
         private readonly ChatWindow _chat;
         private readonly WindowFrame _frame =
-            new WindowFrame(0x434B01, "", "ClaudiaKerminSettings", new Rect(200, 90, 450, 700), new Vector2(450, 400), true);
+            new WindowFrame(0x434B01, "", "ClaudiaKerminSettings", MissionWindow.DefaultRect(DefaultSizes.Settings(ClaudiaSkin.FontScale, 200, 90)),new Vector2(450, 400), true);
 
         private MissionView _view;
         private Context _context;

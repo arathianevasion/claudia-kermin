@@ -22,7 +22,7 @@ namespace ClaudiaKermin.Adapter
     /// </summary>
     public class CapcomStrip
     {
-        private const float DefaultWidth = 740;
+        private static readonly float DefaultWidth = DefaultSizes.StripWidth(ClaudiaSkin.FontScale);
         private static readonly float MinWidth = ClaudiaSkin.Scaled(520);
         private const float Top = 70;
         private const string MemoryName = "capcom";
@@ -34,7 +34,7 @@ namespace ClaudiaKermin.Adapter
         // A drag shorter than this was a click (the first of a double-click), not a move.
         private const float DragThreshold = 3;
         private static readonly float MeterWidth = ClaudiaSkin.Scaled(72);
-        private const float DefaultPanelHeight = 640;
+        private static readonly float DefaultPanelHeight = DefaultSizes.PanelHeight(ClaudiaSkin.FontScale);
         private const string PanelMemoryName = "panel";
         // Below this the prompt and the control bar leave the transcript no room; only a very short screen gets there.
         private const float MinPanelHeight = 200;
