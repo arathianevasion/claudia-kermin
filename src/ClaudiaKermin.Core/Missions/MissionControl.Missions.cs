@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 
@@ -56,13 +57,25 @@ namespace ClaudiaKermin.Core.Missions
         private List<MissionListEntry> _others = new List<MissionListEntry>();
         private readonly Dictionary<string, MissionListEntry> _finishedCache = new Dictionary<string, MissionListEntry>();
 
+        private DateTime _lastIdStamp;
+
+        /// <summary>A Mission id: the UTC start time to the second (so name order is start order, even for two Missions started in one second) and four random hex digits.</summary>
+        private string NewMissionId()
+        {
+            var stamp = DateTime.UtcNow;
+            if (stamp.ToString("yyyyMMdd-HHmmss") == _lastIdStamp.ToString("yyyyMMdd-HHmmss") || stamp < _lastIdStamp) stamp = _lastIdStamp.AddSeconds(1);
+            _lastIdStamp = stamp;
+            return "m" + stamp.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-" + Guid.NewGuid().ToString("N").Substring(0, 4);
+        }
+
         /// <summary>
-        /// The Mission is between Maneuver Sequences: nothing is Running, no request is out for it and it is not in a manual
-        /// stretch, so it can be left as it is and picked up again later.
+        /// The Mission is between Maneuver Sequences: nothing is Running, no request is out for it, it is not in a manual stretch and
+        /// the sequence that just ran has had its Debrief, so it can be left as it is and picked up again later.
         /// </summary>
         private static bool AtBoundary(Mission mission)
         {
-            return !mission.InFlight && !IsRunning(mission) && mission.Stage != MissionStage.ManualControl;
+            var stage = mission.Stage == MissionStage.Paused ? mission.StageBeforePause : mission.Stage;
+            return !mission.InFlight && !IsRunning(mission) && stage != MissionStage.ManualControl && stage != MissionStage.Debriefing;
         }
 
         /// <summary>
@@ -109,6 +122,8 @@ namespace ClaudiaKermin.Core.Missions
             Event(mission, "paused", "paused at a sequence boundary to make room for another Mission");
             _historyVersion++;
             _mission = null;
+            // No craft to follow now: the facts are those of the vessel the player is in.
+            if (_scene == GameScene.Flight && _active != null) _snapshot = _active;
         }
 
         /// <summary>Carries out the queued switch once the active Mission is at a boundary; called before the view is rebuilt, after any input or reply.</summary>
@@ -153,6 +168,8 @@ namespace ClaudiaKermin.Core.Missions
             Reinstate(restore, false);
             var mission = _mission;
             if (mission == null) return;
+            // The facts held are those of the vessel the player is in; they are the Mission's only if that is its craft.
+            if (_snapshot != null && !MissionCraft.Is(mission.Remote, mission.ProcessorPartId, mission.VesselId, _snapshot)) _snapshot = null;
             Event(mission, "resumed", "resumed from the Missions list");
             // A Mission parked at a boundary carries on from there; one that was Paused for a reason (or has no snapshot) waits for its own Resume or Retry.
             if (mission.Stage == MissionStage.Paused && mission.PauseReason.Length == 0 && !restore.NoSnapshot)

@@ -273,6 +273,8 @@ namespace ClaudiaKermin.Core.Missions
         {
             var goal = (start.Goal ?? "").Trim();
             if (goal.Length == 0 || start.SpendingCap <= 0 || !_config.Models.Contains(start.Model) || _saveDirectory == null) return;
+            // Another Mission in play pauses at its next sequence boundary first, before the new craft is checked (MissionControl.Missions.cs).
+            if (!MissionOver && !MakeRoom(new QueuedSwitch { Kind = SwitchKind.Start, Start = start })) return;
 
             // A remote Mission needs a link (or the pad); a crewed one can't have Claudia while she is Missing. No request is spent on either.
             _startRefusal = StartRefusal(start);
@@ -293,11 +295,8 @@ namespace ClaudiaKermin.Core.Missions
             }
             if (!_craftCheck.Cleared) return;
             _pendingStart = null;
-            // Another Mission in play pauses at its next sequence boundary first (MissionControl.Missions.cs).
-            if (!MakeRoom(new QueuedSwitch { Kind = SwitchKind.Start, Start = start })) return;
 
-            var id = "m" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-"
-                + Guid.NewGuid().ToString("N").Substring(0, 4);
+            var id = NewMissionId();
             var mission = new Mission
             {
                 Id = id,
