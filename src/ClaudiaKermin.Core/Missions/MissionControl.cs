@@ -93,7 +93,8 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is AskQuestion) Asked(((AskQuestion)input).Text);
             else if (input is Retry || input is Resume) Retried();
             else if (input is RaiseCap) Raised(((RaiseCap)input).SpendingCap);
-            else if (input is RetryWithNote) ScriptRetried(((RetryWithNote)input).Note ?? "", false);
+            else if (input is RetryWithNote) { if (!RefusalRetriedWithNote(((RetryWithNote)input).Note)) ScriptRetried(((RetryWithNote)input).Note ?? "", false); }
+            else if (input is ChooseModel) ModelChosen(((ChooseModel)input).Model);
             else if (input is Replan) Replanned();
             else if (input is TakeManualControl) TakeManual("the Manual Control button");
             else if (input is ManualInputHeld) InputHeld(((ManualInputHeld)input).Seconds);
@@ -957,13 +958,14 @@ namespace ClaudiaKermin.Core.Missions
             }
             if (result.Status != StreamStatus.Completed)
             {
-                Failed(mission, turn, Describe(result));
+                if (result.Failure == StreamFailure.ModelNotFound) ModelGone(mission, turn);
+                else Failed(mission, turn, Describe(result));
                 return;
             }
             var message = result.Message;
             if (message.StopReason == StopReason.Refusal)
             {
-                Failed(mission, turn, "Claudia declined to answer that. Retry, or try again later.");
+                Refused(mission, turn);
                 return;
             }
             if (message.StopReason == StopReason.MaxTokens)
@@ -1338,6 +1340,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             if (mission.Stage != MissionStage.Paused) mission.StageBeforePause = mission.Stage;
             mission.Stage = MissionStage.Paused;
+            mission.PauseCause = PauseCause.Other;
             mission.PauseReason = reason;
             Note(LogKind.Notice, reason);
             NeedsPlayer("Claudia's Mission is Paused.");
@@ -1352,6 +1355,8 @@ namespace ClaudiaKermin.Core.Missions
                 return;
             }
             if (mission == null || mission.Stage != MissionStage.Paused || mission.InFlight) return;
+            // A retired model is only left by Choose model (or End Mission).
+            if (mission.PauseCause == PauseCause.ModelGone) return;
             CraftCheckOnResume(mission);
             if (mission.EvaScience.Length > 0)
             {
@@ -1363,6 +1368,7 @@ namespace ClaudiaKermin.Core.Missions
             }
             mission.Stage = mission.StageBeforePause;
             mission.PauseReason = "";
+            mission.PauseCause = PauseCause.Other;
             mission.PausedForCap = false;
             mission.AwaitingResume = false;
             if (mission.Pending != null)
@@ -1458,6 +1464,7 @@ namespace ClaudiaKermin.Core.Missions
             {
                 case StreamFailure.Unauthorized:
                 case StreamFailure.LowCredit:
+                case StreamFailure.ModelNotFound:
                 case StreamFailure.NoNetwork:
                 case StreamFailure.HttpStatus:
                     return false;
@@ -1611,7 +1618,7 @@ namespace ClaudiaKermin.Core.Missions
                 }
                 view.AbortRecommended = mission.AbortRecommendation;
                 // While Running a question queues behind whatever is in hand, so typing stays open.
-                view.CanType = (!mission.InFlight || mission.Stage == MissionStage.Running) && mission.Stage != MissionStage.Paused
+                view.CanType = (!mission.InFlight || mission.Stage == MissionStage.Running) && (mission.Stage != MissionStage.Paused || mission.PauseCause == PauseCause.Refusal)
                     && mission.Stage != MissionStage.WaitingForFlight && mission.Stage != MissionStage.Lost;
 
                 view.LeavingFlightNeedsConfirmation = IsRunning(mission);
@@ -1647,9 +1654,9 @@ namespace ClaudiaKermin.Core.Missions
                     view.QuickReplies = replies;
                 }
                 else if (mission.Stage == MissionStage.Paused && !mission.InFlight)
-                    view.QuickReplies = mission.PausedForCap
+                    view.QuickReplies = PausedReplies(mission) ?? (mission.PausedForCap
                         ? new List<QuickReply> { QuickReply.RaiseCap, QuickReply.EndMission }
-                        : new List<QuickReply> { mission.AwaitingResume || mission.EvaScience.Length > 0 ? QuickReply.Resume : QuickReply.Retry };
+                        : new List<QuickReply> { mission.AwaitingResume || mission.EvaScience.Length > 0 ? QuickReply.Resume : QuickReply.Retry });
                 else if (mission.Stage == MissionStage.UnsafeScript && !mission.InFlight)
                     view.QuickReplies = new List<QuickReply> { QuickReply.Retry, QuickReply.RetryWithNote, QuickReply.Replan };
                 else if (mission.Declined && !mission.InFlight)

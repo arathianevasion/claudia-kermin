@@ -78,6 +78,8 @@ namespace ClaudiaKermin.Core.Missions
         Resume,
         /// <summary>After "Couldn't produce a safe script": the reply box sends a note with the retry.</summary>
         RetryWithNote,
+        /// <summary>Paused because the model is retired or not found: pick another (see <c>StartForm.Models</c>).</summary>
+        ChooseModel,
         /// <summary>After "Couldn't produce a safe script": ask for a different Sequence Plan.</summary>
         Replan,
         /// <summary>A Sequence Plan has a Due Time still ahead: warp to it on rails.</summary>

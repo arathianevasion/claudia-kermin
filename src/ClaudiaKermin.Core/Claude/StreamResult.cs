@@ -28,6 +28,8 @@ namespace ClaudiaKermin.Core.Claude
         Unauthorized,
         /// <summary>The account's credit balance is too low.</summary>
         LowCredit,
+        /// <summary>404 or <c>not_found_error</c>: the model is retired or does not exist.</summary>
+        ModelNotFound,
         /// <summary>Any other non-2xx status.</summary>
         HttpStatus,
     }

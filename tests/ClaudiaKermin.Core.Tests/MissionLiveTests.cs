@@ -213,7 +213,7 @@ namespace ClaudiaKermin.Core.Tests
 
             Assert.Equal(MissionStage.Running, mission.View.Stage);
             Assert.Equal("", mission.View.PauseReason);
-            Assert.Contains(mission.View.Log, e => e.Kind == LogKind.Notice && e.Text.StartsWith("Claudia couldn't answer that"));
+            Assert.Contains(mission.View.Log, e => e.Kind == LogKind.Claudia && e.Text == ClaudiaKermin.Core.Chat.ChatSession.RefusalLine);
 
             // The run's Debrief is the next request, as usual.
             mission.Send(new KosRunEnded(Finished(), start.RunId));
