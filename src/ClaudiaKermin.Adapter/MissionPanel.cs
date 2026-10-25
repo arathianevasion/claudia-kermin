@@ -496,6 +496,9 @@ namespace ClaudiaKermin.Adapter
                 if (ClaudiaSkin.SmallButton("Capture Game Snapshot (debug)", GUILayout.ExpandWidth(false))) _send(new CaptureSnapshot());
                 GUI.enabled = true;
             }
+            // Pause Mission pauses at the next sequence boundary, never mid-sequence, then the start form is offered for another Mission.
+            if (_view.SwitchQueued) GUILayout.Label("Pausing after this sequence", ClaudiaSkin.Secondary, GUILayout.ExpandWidth(false));
+            else if (_view.CanPauseMission && ClaudiaSkin.SmallButton("Pause Mission", GUILayout.ExpandWidth(false))) _send(new PauseMission());
             if (!_view.CanEndMission) _confirmingEnd = false;
             else if (ClaudiaSkin.DangerButton("End Mission", GUILayout.ExpandWidth(false), GUILayout.Height(ClaudiaSkin.Scaled(32)))) _confirmingEnd = true;
             GUILayout.EndHorizontal();

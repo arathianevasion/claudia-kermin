@@ -138,6 +138,10 @@ _Avoid_: failed, crashed, KIA (for the Mission)
 The slim bar in Flight (under the altimeter unless the player drags it elsewhere) through which the player follows a Mission without leaving the flight view: Claudia's portrait and latest line, where the Mission is in its Mission Plan, the Spending Cap, what is locked, and a tab that expands the Mission window docked to it (amber when Claudia needs the player).
 _Avoid_: HUD, status bar, ticker
 
+**Missions list**:
+The read-only list, in the Space Center and Tracking Station, of every Mission in the save: the active one, Paused ones, then finished ones (succeeded, ended or Lost) kept as history with their final Debrief and cost. A save holds several Missions with one active; starting or resuming another Pauses the active one at its next sequence boundary (never mid-sequence). The list switches to a Mission's vessel, resumes a Paused Mission, and deletes a finished one with its folder.
+_Avoid_: Mission history (the finished part of the list), Mission manager
+
 ### Scripts
 
 **Core Library**:
