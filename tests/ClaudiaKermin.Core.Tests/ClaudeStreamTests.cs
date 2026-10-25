@@ -172,6 +172,31 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void UnknownBlockThatStreamedDeltasIsDroppedFromTheEchoedTurnAndLogged()
+        {
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("unknown-block-streamed.sse", 5), ScriptedResponse.Fixture("text.sse"));
+            var client = Client(transport);
+            var request = Ask();
+            var first = Run(client, request);
+
+            Assert.Equal(StreamStatus.Completed, first.Status);
+            // The streamed block is gone; the delta-less unknown block and the text stay, in order.
+            Assert.Equal(2, first.Message.Content.Count);
+            Assert.Equal("star_chart", Assert.IsType<UnknownBlock>(first.Message.Content[0]).Type);
+            Assert.Equal("Logged.", Assert.IsType<TextBlock>(first.Message.Content[1]).Text);
+            Assert.Contains(_log, l => l.Contains("ignored block type star_log dropped from the echoed turn"));
+            Assert.DoesNotContain(_log, l => l.Contains("Mun transfer") || l.Contains("circularise"));
+
+            request.Messages.Add(first.Message.ToMessage());
+            request.Messages.Add(Message.UserText("Thanks"));
+            Run(client, request);
+
+            var sent = transport.Requests[1].Body;
+            Assert.DoesNotContain("star_log", sent);
+            Assert.Contains("\"content\":[{\"type\":\"star_chart\",\"payload\":{\"bodies\":[\"Mun\"]}},{\"type\":\"text\",\"text\":\"Logged.\"}]", sent);
+        }
+
+        [Fact]
         public void UnknownEventsAndDeltasAreLoggedAndIgnored()
         {
             var result = Run(Client(new StreamingFakeTransport(ScriptedResponse.Fixture("unknown-block.sse"))));
