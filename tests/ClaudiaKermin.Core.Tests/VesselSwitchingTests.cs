@@ -455,6 +455,66 @@ namespace ClaudiaKermin.Core.Tests
             Assert.DoesNotContain(mission.View.Log, e => e.Text.StartsWith("Docked with"));
         }
 
+        // ---- The craft's id and processor follow docking and undocking (#200, #191) ----
+
+        [Fact]
+        public void AKillAboardTheCraftAfterADockingMakesTheMissionLost()
+        {
+            var mission = Control(Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief.sse"));
+            ToRunning(mission);
+
+            // Docking gives the merged craft a new vessel id.
+            mission.Send(new VesselsSeen(new[] { Vessel("docked", "Craft + Tanker", claudia: true, processors: Processor) }));
+            mission.Send(new ClaudiaKilled("docked"));
+
+            Assert.Equal(MissionStage.Lost, mission.View.Stage);
+        }
+
+        [Fact]
+        public void AKillAfterAnUndockingIsTheMissionsLossOnlyAboardTheVesselClaudiaStayedIn()
+        {
+            var mission = Control(Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief.sse"));
+            ToRunning(mission);
+
+            // Undocking: Claudia stays in the half that now has a new id; the other half keeps the old one.
+            mission.Send(new VesselsSeen(new[] { Vessel("craft", "Lander"), Vessel("undocked", "Craft", claudia: true, processors: Processor) }));
+            mission.Send(new ClaudiaKilled("craft"));
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+
+            mission.Send(new ClaudiaKilled("undocked"));
+            Assert.Equal(MissionStage.Lost, mission.View.Stage);
+        }
+
+        [Fact]
+        public void TheCraftsProcessorFollowsClaudiaToTheVesselSheStaysInAfterAnUndocking()
+        {
+            var mission = Control(Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-failed.sse"));
+            var start = ToRunning(mission);
+            Assert.Equal(Processor, start.ProcessorPartId);
+
+            // The processor she used went with the other half; hers has its own.
+            mission.Send(new VesselsSeen(new[] { Vessel("probe", "Probe", processors: Processor), Vessel("undocked", "Craft", claudia: true, processors: 4001) }));
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
+
+            var safe = mission.TakeCommands().OfType<MakeCraftSafe>().Single();
+            Assert.Equal("undocked", safe.VesselId);
+            Assert.Equal(4001u, safe.ProcessorPartId);
+        }
+
+        [Fact]
+        public void ARemoteMissionKeepsItsOriginalProcessorAcrossADocking()
+        {
+            var mission = Control(Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-failed.sse"));
+            var start = ToRunning(mission, remote: true);
+
+            mission.Send(new VesselsSeen(new[] { Vessel("docked", "Probe + Tug", claudia: false, processors: new uint[] { 4001, Processor }) }));
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
+
+            Assert.Equal(Processor, mission.TakeCommands().OfType<MakeCraftSafe>().Single().ProcessorPartId);
+        }
+
         // ---- Resume needs the craft (#124) ----
 
         [Fact]
