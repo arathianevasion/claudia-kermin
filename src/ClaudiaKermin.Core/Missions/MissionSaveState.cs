@@ -41,6 +41,8 @@ namespace ClaudiaKermin.Core.Missions
         public readonly List<string> UnsafeProblems = new List<string>();
         public string LatestLine = "";
         public string PauseReason = "";
+        /// <summary>Why a Paused Mission paused, when Retry is not the only way out: "Refusal" or "ModelGone"; "" for a plain Pause and in older saves.</summary>
+        public string PauseCause = "";
         /// <summary>The Mission's vessel, for the Go to button at a Due Time.</summary>
         public string VesselId = "";
         public string VesselName = "";
@@ -111,6 +113,7 @@ namespace ClaudiaKermin.Core.Missions
                 { "handBackMessage", HandBackMessage },
                 { "reducedGoal", ReducedGoal },
             };
+            if (PauseCause.Length > 0) values["pauseCause"] = PauseCause;
             if (StopReason != null) values["stopReason"] = StopReason;
             if (InterruptReason != null) values["interruptReason"] = InterruptReason;
             if (ProcessorPartId.HasValue) values["processorPartId"] = ProcessorPartId.Value.ToString(CultureInfo.InvariantCulture);
@@ -144,6 +147,7 @@ namespace ClaudiaKermin.Core.Missions
                 StageBeforePause = ParseStage(Get(values, "stageBeforePause")),
                 LatestLine = Get(values, "latestLine"),
                 PauseReason = Get(values, "pauseReason"),
+                PauseCause = Get(values, "pauseCause"),
                 VesselId = Get(values, "vesselId"),
                 VesselName = Get(values, "vesselName"),
                 DueNotified = Get(values, "dueNotified") == "true",
