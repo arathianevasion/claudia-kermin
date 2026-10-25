@@ -62,6 +62,8 @@ namespace ClaudiaKermin.Core.Missions
         public string InterruptReason;
         /// <summary>The original kOS processor's part, which a remote Mission's craft follows; null before Flight or in older saves.</summary>
         public uint? ProcessorPartId;
+        /// <summary>A Failed Debrief's reduced Mission Goal awaiting the player's Approval; "" otherwise.</summary>
+        public string ReducedGoal = "";
         public MissionPlan MissionPlan;
         /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
         public SequencePlan SequencePlan;
@@ -100,6 +102,7 @@ namespace ClaudiaKermin.Core.Missions
                 { "manualOrigin", ManualOrigin },
                 { "handBack", HandBack ? "true" : "false" },
                 { "handBackMessage", HandBackMessage },
+                { "reducedGoal", ReducedGoal },
             };
             if (StopReason != null) values["stopReason"] = StopReason;
             if (InterruptReason != null) values["interruptReason"] = InterruptReason;
@@ -140,6 +143,7 @@ namespace ClaudiaKermin.Core.Missions
                 ManualOrigin = Get(values, "manualOrigin"),
                 HandBack = Get(values, "handBack") == "true",
                 HandBackMessage = Get(values, "handBackMessage"),
+                ReducedGoal = Get(values, "reducedGoal"),
             };
             decimal cap;
             if (decimal.TryParse(Get(values, "spendingCap"), NumberStyles.Number, CultureInfo.InvariantCulture, out cap)) state.SpendingCap = cap;

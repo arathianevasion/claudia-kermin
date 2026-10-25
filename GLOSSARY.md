@@ -76,6 +76,10 @@ _Avoid_: alarm (the stock Alarm Clock's word), warning (a Craft Check finding)
 Claudia's chat-based evaluation after a Maneuver Sequence: what happened versus the plan, progress toward the Mission Goal, and the proposed next Maneuver Sequence with its reasoning.
 _Avoid_: report (what a script does with its Script Result), evaluation, review
 
+**Margin recheck**:
+The Craft Check run again inside every Debrief, on the craft as it is now against the Maneuver Sequences still to fly in the Mission Plan; charged to the Mission like any other request, and skipped when the Spending Cap has no room for it beside the Debrief.
+_Avoid_: second Craft Check, re-check
+
 **Nominal**:
 A Debrief outcome: the Maneuver Sequence ended within its Sequence Plan's tolerances.
 

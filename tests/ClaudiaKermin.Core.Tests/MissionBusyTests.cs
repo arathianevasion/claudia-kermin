@@ -180,6 +180,10 @@ namespace ClaudiaKermin.Core.Tests
 
             var report = new System.Collections.Generic.Dictionary<string, object> { { "success", true }, { "reason", "link check" }, { "situation", "PRELAUNCH" } };
             mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Finished, report, "", "", false), start.RunId));
+            // The Debrief starts with its margin recheck, then the Debrief request itself: busy throughout, never idle between.
+            AssertBusyWith(mission.View, "Claudia is rechecking margins…");
+            WaitForRequests(transport, 3);
+            DrainUntil(mission, v => v.Activity == "thinking");
             AssertBusyWith(mission.View, "Claudia is thinking…");
 
             debrief.Gate.Set();

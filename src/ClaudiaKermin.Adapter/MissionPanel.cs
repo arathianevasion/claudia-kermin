@@ -147,6 +147,7 @@ namespace ClaudiaKermin.Adapter
                 case QuickReply.GoToVessel: _send(new GoToVessel()); break;
                 case QuickReply.ManualControl: _send(new TakeManualControl()); break;
                 case QuickReply.Abort: _send(new AbortSequence()); break;
+                case QuickReply.AcceptReducedGoal: _send(new AcceptReducedGoal()); break;
                 case QuickReply.HandBack:
                     // Whatever is in the prompt goes with it as the optional message about what the player did.
                     _send(new HandBack(_typed));

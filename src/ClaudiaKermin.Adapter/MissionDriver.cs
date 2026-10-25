@@ -31,6 +31,8 @@ namespace ClaudiaKermin.Adapter
 
         private readonly ManualInputWatcher _inputWatcher = new ManualInputWatcher();
         private readonly VesselWatch _vessels;
+        /// <summary>Staging, part loss, overheating and science during a run, for its Debrief.</summary>
+        private readonly RunEventWatcher _events;
 
         /// <summary>The Mission window's body, drawn by the floating window or, docked in Flight, under the Capcom strip.</summary>
         public readonly MissionPanel Panel;
@@ -135,6 +137,7 @@ namespace ClaudiaKermin.Adapter
             Strip = new CapcomStrip(Panel) { TabClicked = () => PanelOpen = !PanelOpen };
             GameEvents.onKerbalStatusChange.Add(OnKerbalStatusChange);
             _vessels = new VesselWatch(Send);
+            _events = new RunEventWatcher(Send, () => _mission.View.Stage == MissionStage.Running);
             // Building Block progress, for the strip and the log, with no Claude call behind it.
             ScriptRunner.BlockReported = (runId, block, result) =>
                 Send(result == null ? (MissionInput)new KosBlockStarted(block, runId) : new KosBlockEnded(block, result, runId));
@@ -200,6 +203,7 @@ namespace ClaudiaKermin.Adapter
             var locks = scene == GameScene.Flight ? _mission.View.Locks : ControlLocks.None;
             Locks.Apply(locks);
             _inputWatcher.Update(locks != ControlLocks.None, seconds => Send(new ManualInputHeld(seconds)));
+            if (scene == GameScene.Flight) _events.Update();
 
             // Once a Mission is under way its setup is spent: the next one starts from the defaults.
             if (_mission.View.CanEndMission) Setup.Reset();

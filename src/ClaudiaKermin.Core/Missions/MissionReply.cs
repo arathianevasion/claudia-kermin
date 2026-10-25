@@ -72,6 +72,28 @@ namespace ClaudiaKermin.Core.Missions
         public string Next = "";
         /// <summary>Science only a Kerbal on EVA can do, for the player to do by hand before the Mission carries on; "" if none is needed.</summary>
         public string EvaScience = "";
+        /// <summary>The outcome against the Sequence Plan's target, from the script's report and the mod's observations.</summary>
+        public string OutcomeVsTarget = "";
+        /// <summary>The delta-v and resources left against the rest of the Mission Plan.</summary>
+        public string PlanMargin = "";
+        /// <summary>The science collected, in her words.</summary>
+        public string Science = "";
+        /// <summary>The Mission Goal as steps, each done or not.</summary>
+        public List<GoalItem> Checklist = new List<GoalItem>();
+        /// <summary>What she proposes next (see <see cref="FollowUps"/>); "" or "none" when nothing more is proposed.</summary>
+        public string FollowUp = "";
+        /// <summary>The corrective sequence or revised Mission Plan in a few words, or for "reduced_goal" the reduced Mission Goal itself.</summary>
+        public string FollowUpText = "";
+    }
+
+    /// <summary>The values of a Debrief's follow_up.</summary>
+    public static class FollowUps
+    {
+        public const string None = "none";
+        public const string CorrectiveSequence = "corrective_sequence";
+        public const string RevisedPlan = "revised_plan";
+        public const string ReducedGoal = "reduced_goal";
+        public const string EndMission = "end_mission";
     }
 
     /// <summary>Claudia's verdict on an Alert: let the sequence carry on, or recommend the player Abort (she never aborts herself).</summary>
@@ -167,13 +189,21 @@ namespace ClaudiaKermin.Core.Missions
             + "\"script\":{\"type\":\"string\",\"description\":\"The complete Mission Script in kerboscript; empty for a manual stretch.\"},"
             + "\"manual\":{\"type\":\"boolean\",\"description\":\"True when the player flies this stretch by hand (docking, EVA science, or when they say they will fly it): the script is then empty.\"}}},{\"type\":\"null\"}]},"
             + "\"debrief\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"outcome\",\"why\",\"what_happened\",\"goal_reached\",\"next\",\"eva_science\"],\"properties\":{"
+            + "\"required\":[\"outcome\",\"why\",\"what_happened\",\"goal_reached\",\"next\",\"eva_science\",\"outcome_vs_target\",\"plan_margin\",\"science\",\"goal_checklist\",\"follow_up\",\"follow_up_text\"],\"properties\":{"
             + "\"outcome\":{\"type\":\"string\",\"enum\":[\"Nominal\",\"Off-Nominal\",\"Failed\"]},"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
             + "\"what_happened\":{\"type\":\"string\"},"
             + "\"goal_reached\":{\"type\":\"boolean\"},"
             + "\"next\":{\"type\":\"string\"},"
-            + "\"eva_science\":{\"type\":\"string\",\"description\":\"Science only a Kerbal on EVA can do next, as an instruction to the player; empty if none is needed.\"}}},{\"type\":\"null\"}]},"
+            + "\"eva_science\":{\"type\":\"string\",\"description\":\"Science only a Kerbal on EVA can do next, as an instruction to the player; empty if none is needed.\"},"
+            + "\"outcome_vs_target\":{\"type\":\"string\",\"description\":\"The outcome against the Sequence Plan's target and tolerances, from the script's report and the mod's events, with the numbers.\"},"
+            + "\"plan_margin\":{\"type\":\"string\",\"description\":\"The delta-v and resources left against the rest of the Mission Plan, using the mod's margin recheck.\"},"
+            + "\"science\":{\"type\":\"string\",\"description\":\"The science collected in this sequence and what is still to gain; empty if none.\"},"
+            + "\"goal_checklist\":{\"type\":\"array\",\"description\":\"The Mission Goal as its steps, each done or not yet.\",\"items\":{\"type\":\"object\",\"additionalProperties\":false,"
+            + "\"required\":[\"item\",\"done\"],\"properties\":{\"item\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"}}}},"
+            + "\"follow_up\":{\"type\":\"string\",\"enum\":[\"none\",\"corrective_sequence\",\"revised_plan\",\"reduced_goal\",\"end_mission\"],"
+            + "\"description\":\"Off-Nominal: corrective_sequence or revised_plan. Failed: reduced_goal (the player must approve it) or end_mission. Nominal: none.\"},"
+            + "\"follow_up_text\":{\"type\":\"string\",\"description\":\"The corrective sequence or the revised Mission Plan in a few words; for reduced_goal, the reduced Mission Goal itself; otherwise empty.\"}}},{\"type\":\"null\"}]},"
             + "\"alert\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
             + "\"required\":[\"verdict\",\"why\",\"follow_up_threshold\"],\"properties\":{"
             + "\"verdict\":{\"type\":\"string\",\"enum\":[\"carry_on\",\"abort\"],\"description\":\"abort recommends the player Abort; you never abort yourself.\"},"
@@ -265,6 +295,12 @@ namespace ClaudiaKermin.Core.Missions
                     GoalReached = JsonNode.Bool(debrief["goal_reached"]) ?? false,
                     Next = JsonNode.Str(debrief["next"]) ?? "",
                     EvaScience = (JsonNode.Str(debrief["eva_science"]) ?? "").Trim(),
+                    OutcomeVsTarget = (JsonNode.Str(debrief["outcome_vs_target"]) ?? "").Trim(),
+                    PlanMargin = (JsonNode.Str(debrief["plan_margin"]) ?? "").Trim(),
+                    Science = (JsonNode.Str(debrief["science"]) ?? "").Trim(),
+                    Checklist = Checklist(debrief["goal_checklist"]),
+                    FollowUp = (JsonNode.Str(debrief["follow_up"]) ?? "").Trim(),
+                    FollowUpText = (JsonNode.Str(debrief["follow_up_text"]) ?? "").Trim(),
                 };
             }
 
@@ -307,6 +343,18 @@ namespace ClaudiaKermin.Core.Missions
                 });
             }
             return checks;
+        }
+
+        private static List<GoalItem> Checklist(JsonNode node)
+        {
+            var items = new List<GoalItem>();
+            if (node == null) return items;
+            foreach (var item in node.Items.Where(i => i.Kind == JsonKind.Object))
+            {
+                var text = (JsonNode.Str(item["item"]) ?? "").Trim();
+                if (text.Length > 0) items.Add(new GoalItem { Item = text, Done = JsonNode.Bool(item["done"]) ?? false });
+            }
+            return items;
         }
 
         private static JsonNode Object(JsonNode node)

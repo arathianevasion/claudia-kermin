@@ -34,6 +34,8 @@ namespace ClaudiaKermin.Core.Missions
         Lost,
         /// <summary>The player flies the craft and Claudia only advises; ends at Hand back, which Debriefs the stretch. Not Paused.</summary>
         ManualControl,
+        /// <summary>A Failed Debrief offered a reduced Mission Goal: Approve it (Claudia then revises the Mission Plan) or End Mission.</summary>
+        AwaitingReducedGoal,
     }
 
     /// <summary>
@@ -92,6 +94,8 @@ namespace ClaudiaKermin.Core.Missions
         HandBack,
         /// <summary>Running: stop the script and make the craft safe; the mod records that the player aborted it.</summary>
         Abort,
+        /// <summary>After a Failed Debrief offering a reduced goal: approve it.</summary>
+        AcceptReducedGoal,
     }
 
     public enum LogKind
@@ -123,6 +127,8 @@ namespace ClaudiaKermin.Core.Missions
         public string CustomScriptReason = "";
         /// <summary>A Debrief's outcome (Nominal, Off-Nominal, Failed); "" otherwise.</summary>
         public string Outcome = "";
+        /// <summary>A Debrief's full picture (margin bar, events, checklist, follow-up, script error); null for other entries.</summary>
+        public DebriefDetail Debrief;
         /// <summary>The model that answered, when a fallback model served the reply; "" otherwise.</summary>
         public string AnsweredBy = "";
         /// <summary>The universal time the entry was made; stamped when the entry first reaches a view (so an entry from before a load reads as the load time); 0 until a UT has been reported.</summary>
