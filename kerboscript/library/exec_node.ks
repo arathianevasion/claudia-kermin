@@ -16,8 +16,8 @@
 //|   rcs_trim [false]: true trims a residual above max_residual with RCS translation (up to 60 s).
 //|   max_duration ["auto"]: the wait to the burn plus twice the burn time plus 300 s.
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block.
-//| Extra results: residual (m/s the node still needed when the block ended), burn_time (s the
-//| engines burned). Fails with "no maneuver node", "no thrust", a node or lead it can't read, "residual
+//| Extra results: node_dv (m/s the node asked for before the burn), residual (m/s the node still
+//| needed when the block ended), burn_time (s the engines burned). Fails with "no maneuver node", "no thrust", a node or lead it can't read, "residual
 //| <x> m/s is over max_residual", out of fuel, or an abort; on failure the node is left in place.
 //| Plan the node yourself first (ADD NODE(time, radial, normal, prograde)); the node must be far
 //| enough ahead to turn and start the burn (lead plus about 30 s).
@@ -60,7 +60,7 @@ function exec_node_timing {
 
 function exec_node {
   parameter options is lexicon().
-  local extra is lexicon("residual", -1, "burn_time", 0).
+  local extra is lexicon("node_dv", -1, "residual", -1, "burn_time", 0).
   local ctx is claudia_begin("exec_node", options, exec_node_defaults(), "auto").
   if ctx:error <> "" {
     return claudia_finish(ctx, false, ctx:error, extra).
@@ -80,7 +80,8 @@ function exec_node {
   } else {
     set nd to opt:node.
   }
-  set extra:residual to round(nd:deltav:mag, 3).
+  set extra:node_dv to round(nd:deltav:mag, 3).
+  set extra:residual to extra:node_dv.
 
   // A craft whose engines aren't lit yet stages into them (within stage_limit).
   if ship:availablethrust <= 0 {
