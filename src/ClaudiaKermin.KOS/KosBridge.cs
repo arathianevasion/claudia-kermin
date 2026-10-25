@@ -282,7 +282,8 @@ namespace ClaudiaKermin.KOS
             };
 
             // Every run starts with SAS off, whatever left it on (a hand back, a make-safe, the player): it fights kOS steering.
-            CraftSafety.SasOff(shared.Vessel, "run start");
+            try { CraftSafety.SasOff(shared.Vessel, "run start"); }
+            catch (Exception e) { Debug.LogWarning(ModInfo.LogTag + " couldn't turn SAS off at run start: " + e.Message); }
             _runs[pending.PartId] = run;
             KosGates.Runs.Open(pending.PartId, pending.RunId);
             shared.Cpu.AddPopContextNotifyee(run);

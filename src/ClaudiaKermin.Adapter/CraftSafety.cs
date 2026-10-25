@@ -63,7 +63,12 @@ namespace ClaudiaKermin.Adapter
         /// <summary>SAS off, logged. Every run starts this way: SAS and kOS cooked steering pull against each other.</summary>
         public static void SasOff(Vessel vessel, string why)
         {
-            if (vessel == null || !vessel.loaded) return;
+            if (vessel == null) return;
+            if (!vessel.loaded)
+            {
+                Debug.Log(ModInfo.LogTag + " couldn't turn SAS off (" + why + "): '" + vessel.vesselName + "' is not loaded");
+                return;
+            }
             var was = vessel.ActionGroups[KSPActionGroup.SAS];
             vessel.ActionGroups.SetGroup(KSPActionGroup.SAS, false);
             Debug.Log(ModInfo.LogTag + " SAS turned off on '" + vessel.vesselName + "' (" + why + "), was " + (was ? "on" : "off"));
