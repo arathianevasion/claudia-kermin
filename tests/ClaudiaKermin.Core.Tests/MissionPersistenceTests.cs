@@ -433,6 +433,24 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ASpendingCapRaisedAfterASaveHoldsOnLoad()
+        {
+            var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-priced.sse")));
+            ToMissionPlan(mission);
+            var saved = Saved(mission);
+            Assert.Equal(10m, saved[0].SpendingCap);
+
+            mission.Send(new RaiseCap(25m));
+            Assert.Equal(25m, mission.View.SpendingCap);
+            mission.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Equal(25m, mission.View.SpendingCap);
+
+            var later = Control(new StreamingFakeTransport());
+            later.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Equal(25m, later.View.SpendingCap);
+        }
+
+        [Fact]
         public void ATornLastLineInTheCostLogFallsBackToTheLineBeforeIt()
         {
             var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-priced.sse")));
