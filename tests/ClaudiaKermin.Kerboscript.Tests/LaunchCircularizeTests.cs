@@ -113,6 +113,34 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(north, printed[1]);
         }
 
+        // LAZcalc_init puts a red message on the HUD for an inclination the latitude can't reach, so
+        // launch hands it one just inside what the latitude allows, keeping the sign (negative: southward).
+        [Theory]
+        [InlineData(0, -0.0972, "0.0982")]
+        [InlineData(-0.05, -0.0972, "-0.0982")]
+        [InlineData(0, 0, "0.001")]
+        [InlineData(6, -0.0972, "6")]
+        [InlineData(-6, 28.5, "-28.501")]
+        [InlineData(179.99, 28.5, "151.499")]
+        [InlineData(-180, -0.0972, "-179.9018")]
+        public void The_inclination_handed_to_lib_lazcalc_is_one_the_latitude_can_reach(double inc, double lat, string clamped)
+        {
+            Assert.Equal(clamped, One("round(launch_laz_inc(" + inc + ", " + lat + "), 4)"));
+        }
+
+        // ---- launch: losing control ----
+
+        [Theory]
+        [InlineData("false", 0.374, 12345.6, 153.2, 150.4, 9642.7,
+            "lost control: 153 degrees off the ascent path at 9643 m, burning at 37% throttle, q 12346 Pa, 150 degrees off the airflow")]
+        [InlineData("true", 0, 31000, 40.6, 39.5, 4860.2,
+            "lost control: 41 degrees off the ascent path at 4860 m, coasting at 0% throttle, q 31000 Pa, 40 degrees off the airflow")]
+        public void The_lost_control_reason_says_whether_it_was_burning_or_coasting_with_throttle_q_and_the_angle_off_the_airflow(
+            string coasting, double throttle, double q, double offAim, double offFlow, double altitude, string reason)
+        {
+            Assert.Equal(reason, One("launch_lost_control(" + coasting + ", " + throttle + ", " + q + ", " + offAim + ", " + offFlow + ", " + altitude + ")"));
+        }
+
         // ---- circularize ----
 
         // A 70 x 100 km Kerbin orbit: sma 685 km, ecc 15/685.

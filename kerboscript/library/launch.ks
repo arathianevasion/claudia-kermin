@@ -191,6 +191,30 @@ function launch_limit_aoa {
   return flow:normalized * cos(max_aoa) + side:normalized * sin(max_aoa).
 }
 
+// The inclination to hand LAZcalc_init for inc (degrees, negative southward) from latitude lat: its
+// size kept 0.001 degrees inside abs(lat) .. 180 - abs(lat), so LAZcalc_init (which reads the
+// latitude again) never clamps it with a red HUD message; the sign kept.
+function launch_laz_inc {
+  parameter inc, lat.
+  local margin is 0.001.
+  local inc_size is min(180 - abs(lat) - margin, max(abs(lat) + margin, abs(inc))).
+  if inc < 0 {
+    return -inc_size.
+  }
+  return inc_size.
+}
+
+// Why the block stopped for lost control: off_aim and off_flow are the nose's degrees off the aim and
+// off the airflow (srfprograde), tset the throttle (0..1), q_pa the dynamic pressure (Pa), alt (m).
+function launch_lost_control {
+  parameter coasting, tset, q_pa, off_aim, off_flow, alt.
+  local doing is "burning".
+  if coasting {
+    set doing to "coasting".
+  }
+  return "lost control: " + round(off_aim) + " degrees off the ascent path at " + round(alt) + " m, " + doing + " at " + round(100 * tset) + "% throttle, q " + round(q_pa) + " Pa, " + round(off_flow) + " degrees off the airflow".
+}
+
 // When to launch and into what inclination: lexicon("error", "" or why not, "wait", s, "inc", degrees).
 // options are the ones given (to tell whether target_inc was).
 function launch_when {
@@ -294,7 +318,7 @@ function launch {
   local laz is list().
   local laz_on is hdg:istype("String").
   if laz_on {
-    set laz to LAZcalc_init(target_ap, go:inc).
+    set laz to LAZcalc_init(target_ap, launch_laz_inc(go:inc, ship:latitude)).
     set hdg to LAZcalc(laz).
     if not hdg:istype("Scalar") {
       set hdg to 90.
@@ -405,11 +429,12 @@ function launch {
     set aim to want.
 
     // A craft far off its steering for 3 s in the air has lost control: stop rather than tumble on.
-    if vang(ship:facing:forevector, aim) > 30 and q_pa > launch_aero_q() {
+    local off_aim is vang(ship:facing:forevector, aim).
+    if off_aim > 30 and q_pa > launch_aero_q() {
       if off_since < 0 {
         set off_since to time:seconds.
       } else if time:seconds - off_since > 3 {
-        set reason to "lost control: " + round(vang(ship:facing:forevector, aim)) + " degrees off the ascent path at " + round(altitude) + " m".
+        set reason to launch_lost_control(coasting, tset, q_pa, off_aim, vang(ship:facing:forevector, ship:srfprograde:vector), altitude).
         break.
       }
     } else {
