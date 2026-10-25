@@ -157,6 +157,26 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(start.RunId, mission.TakeCommands().OfType<AbortScript>().Single().RunId);
         }
 
+        [Fact]
+        public void ARunRefusalWhilePausedFromRunningIsNotLostAndResumeDoesNotLeaveTheMissionRunningWithNoScript()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), AltitudeCheck(100)),
+                ScriptedResponse.Fixture("refusal.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission, 10m);
+            mission.Send(Snapshot(s => s.Altitude = 500));
+            DrainUntil(mission, v => v.Stage == MissionStage.Paused);
+
+            mission.Send(new KosRunRefused("the processor is busy", start.RunId));
+
+            Assert.Equal(MissionStage.Paused, mission.View.Stage);
+            Assert.Contains(mission.View.Log, e => e.Text.Contains("The script didn't start: the processor is busy"));
+            mission.Send(new Retry());
+            Assert.NotEqual(MissionStage.Running, mission.View.Stage);
+        }
+
         // ---- Questions while Running ----
 
         [Fact]
