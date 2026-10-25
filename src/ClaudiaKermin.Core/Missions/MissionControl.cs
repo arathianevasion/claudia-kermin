@@ -1665,6 +1665,9 @@ namespace ClaudiaKermin.Core.Missions
                         ? new List<QuickReply> { QuickReply.ConfirmApproval, QuickReply.NotYet }
                         : new List<QuickReply> { first ?? QuickReply.Approve, QuickReply.ChangeSomething, QuickReply.AskQuestion };
                 }
+                // Paused mid-run, the script still flies: Abort stays on offer.
+                if (mission.Stage == MissionStage.Paused && IsRunning(mission) && mission.RunId.HasValue && mission.StopReason == null)
+                    view.QuickReplies = new[] { QuickReply.Abort }.Concat(view.QuickReplies).ToList();
                 if (mission.WaitingForCap && !view.QuickReplies.Contains(QuickReply.RaiseCap))
                     view.QuickReplies = view.QuickReplies.Concat(new[] { QuickReply.RaiseCap }).ToList();
             }

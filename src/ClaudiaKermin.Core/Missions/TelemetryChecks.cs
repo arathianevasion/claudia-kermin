@@ -97,10 +97,11 @@ namespace ClaudiaKermin.Core.Missions
             }
         }
 
-        /// <summary>The same quantity, for telling whether Claudia already set a check on it.</summary>
+        /// <summary>The same quantity watched the same way, for telling whether Claudia already set a check a default would fill.</summary>
         public bool SameQuantity(TelemetryCheck other)
         {
-            return Quantity == other.Quantity && (Quantity != TelemetryQuantity.Resource || string.Equals(Resource, other.Resource, StringComparison.OrdinalIgnoreCase));
+            return Quantity == other.Quantity && Below == other.Below
+                && (Quantity != TelemetryQuantity.Resource || string.Equals(Resource, other.Resource, StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>The reading is past <paramref name="threshold"/>; false when the quantity can't be measured now.</summary>

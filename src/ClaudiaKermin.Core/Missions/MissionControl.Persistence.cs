@@ -111,6 +111,8 @@ namespace ClaudiaKermin.Core.Missions
         private void RecordUnanswered(Mission mission, Turn turn)
         {
             ApplyLoadNotice(mission, turn);
+            // An Alert judges a live run, and no run survives a quit or a load: there is nothing to re-send it for.
+            if (turn.Purpose == Purpose.Alert) return;
             try
             {
                 MissionStore.WriteUnanswered(mission.Folder, new UnansweredTurn
@@ -540,7 +542,8 @@ namespace ClaudiaKermin.Core.Missions
             }
             Purpose purpose;
             if (turn == null || turn.BaseMessages != mission.Conversation.Count || !Enum.TryParse(turn.Purpose, out purpose)) return null;
-            return turn;
+            // Never recorded, and no run is left to judge: an Alert in the folder is not re-sent.
+            return purpose == Purpose.Alert ? null : turn;
         }
 
         private static string Describe(MissionStage stage)

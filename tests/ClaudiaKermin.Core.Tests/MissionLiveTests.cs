@@ -91,6 +91,72 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(2, transport.Requests.Count);
         }
 
+        [Fact]
+        public void ARunThatEndsWithAQuestionWaitingAtTheCapStillPausesForItsDebrief()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan-priced.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-priced.sse"),
+                ScriptedResponse.Fixture("mission-debrief.sse"),
+                ScriptedResponse.Fixture("mission-answer.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission, 1.20m);
+            mission.Send(new AskQuestion("How long will it take?"));
+            Assert.Contains("Spending Cap", mission.View.CapWait);
+
+            // Story 124: the Debrief goes first, and at the cap it Pauses the Mission with Raise cap or End Mission.
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            Assert.Equal(MissionStage.Paused, mission.View.Stage);
+            Assert.Equal(new[] { QuickReply.RaiseCap, QuickReply.EndMission }, mission.View.QuickReplies);
+            Assert.Equal("", mission.View.CapWait);
+
+            mission.Send(new RaiseCap(10m));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded && !v.Busy && transport.Requests.Count == 4);
+            Assert.Contains("kOS run ended: Finished.", LastUserText(transport.Requests[2]));
+            Assert.Contains("How long will it take?", LastUserText(transport.Requests[3]));
+        }
+
+        [Fact]
+        public void AnAlertWaitingAtTheCapWhenTheRunEndsIsDroppedNotSent()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan-priced.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan-priced.sse"), AltitudeCheck(100)),
+                ScriptedResponse.Fixture("mission-debrief.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission, 1.20m);
+            mission.Send(Snapshot(s => s.Altitude = 500));
+            Assert.Contains("Spending Cap", mission.View.CapWait);
+
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            Assert.Equal(MissionStage.Paused, mission.View.Stage);
+            mission.Send(new RaiseCap(10m));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+
+            Assert.Equal(3, transport.Requests.Count);
+            Assert.Contains("altitude 500 m over 100 m: not judged: the run ended first", LastUserText(transport.Requests[2]));
+        }
+
+        [Fact]
+        public void AnAlertClaudiaCantJudgePausesTheMissionButTheRunCanStillBeAborted()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), AltitudeCheck(100)),
+                ScriptedResponse.Fixture("refusal.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission, 10m);
+
+            mission.Send(Snapshot(s => s.Altitude = 500));
+            DrainUntil(mission, v => v.Stage == MissionStage.Paused);
+            Assert.Equal(QuickReply.Abort, mission.View.QuickReplies.First());
+            Assert.Contains(QuickReply.Retry, mission.View.QuickReplies);
+            mission.TakeCommands();
+
+            mission.Send(new AbortSequence());
+            Assert.Equal(start.RunId, mission.TakeCommands().OfType<AbortScript>().Single().RunId);
+        }
+
         // ---- Questions while Running ----
 
         [Fact]
@@ -237,7 +303,7 @@ namespace ClaudiaKermin.Core.Tests
             var result = new Dictionary<string, object> { { "success", true }, { "reason", "" }, { "dv_used", 9.6 }, { "duration", 2.2 } };
             mission.Send(new KosBlockEnded("exec_node", result, start.RunId));
             mission.Send(new KosBlockEnded("exec_node", result, start.RunId + 1));
-            Assert.Single(mission.View.Log, e => e.Kind == LogKind.Notice && e.Text == "Block exec_node: done, 10 m/s used, 2 s.");
+            Assert.Single(mission.View.Log, e => e.Kind == LogKind.Notice && e.Text == "Building Block exec_node: done, 10 m/s used, 2 s.");
             Assert.Equal(1, mission.View.RunProgress.BlocksDone);
             Assert.Equal("", mission.View.RunProgress.Block);
 

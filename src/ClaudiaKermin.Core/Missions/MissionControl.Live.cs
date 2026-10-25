@@ -110,10 +110,21 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>
         /// The run is over for the loop (it ended, was aborted for Manual Control, refused or interrupted): Alerts not yet
-        /// sent are dropped, since there is nothing left to abort, and their crossings go to the Debrief unjudged.
+        /// sent are dropped, since there is nothing left to abort, and their crossings go to the Debrief unjudged. A
+        /// question waiting at the cap goes back in the queue, so the run's Debrief goes first and Pauses at the cap as
+        /// usual (story 124).
         /// </summary>
         private static void EndLive(Mission mission)
         {
+            if (mission.WaitingForCap && !mission.InFlight && mission.Pending != null)
+            {
+                var waiting = mission.Pending;
+                mission.Pending = null;
+                mission.WaitingForCap = false;
+                mission.CapWaitText = "";
+                ClearUnanswered(mission);
+                mission.Queue.Insert(0, waiting);
+            }
             foreach (var alert in mission.Queue.Where(t => t.Purpose == Purpose.Alert).ToList())
             {
                 mission.Queue.Remove(alert);
@@ -219,7 +230,8 @@ namespace ClaudiaKermin.Core.Missions
         private void AbortPressed()
         {
             var mission = _mission;
-            if (mission == null || mission.Stage != MissionStage.Running || !mission.RunId.HasValue || !mission.RunningProcessor.HasValue) return;
+            // Paused mid-run (an Alert Claudia couldn't judge) the script still flies, so Abort still stops it.
+            if (mission == null || !IsRunning(mission) || !mission.RunId.HasValue || !mission.RunningProcessor.HasValue) return;
             if (mission.StopReason != null) return;
             mission.StopReason = "aborted by the player";
             mission.AbortRecommendation = "";
@@ -247,10 +259,10 @@ namespace ClaudiaKermin.Core.Missions
             Note(LogKind.Notice, BlockLine(ended.Block, ended.Result));
         }
 
-        /// <summary>"Block exec_node: done, 812 m/s used, 63 s" or "Block exec_node: failed (abort min_ec_pct: 8%), 40 s".</summary>
-        internal static string BlockLine(string block, IDictionary<string, object> result)
+        /// <summary>"Building Block exec_node: done, 812 m/s used, 63 s." or "Building Block exec_node: failed (abort min_ec_pct: 8%), 40 s.".</summary>
+        private static string BlockLine(string block, IDictionary<string, object> result)
         {
-            var text = "Block " + (string.IsNullOrEmpty(block) ? "?" : block) + ": ";
+            var text = "Building Block " + (string.IsNullOrEmpty(block) ? "?" : block) + ": ";
             object value;
             var success = result != null && result.TryGetValue("success", out value) && value is bool && (bool)value;
             var reason = result != null && result.TryGetValue("reason", out value) && value != null ? value.ToString() : "";

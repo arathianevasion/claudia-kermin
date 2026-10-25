@@ -209,9 +209,9 @@ namespace ClaudiaKermin.Core.Tests
             var recommended = View(MissionStage.Running);
             recommended.AbortRecommended = "Claudia recommends Abort: delta-v used 100 m/s over 50 m/s.";
 
-            var alert = watch.Observe(recommended);
-            Assert.Equal(AttentionKind.Abort, alert.Kind);
-            Assert.Equal("Claudia recommends Abort.", alert.Text);
+            var attention = watch.Observe(recommended);
+            Assert.Equal(AttentionKind.Abort, attention.Kind);
+            Assert.Equal("Claudia recommends Abort.", attention.Text);
             Assert.Null(watch.Observe(recommended));
         }
     }
