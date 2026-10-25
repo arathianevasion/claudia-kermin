@@ -14,7 +14,7 @@ namespace ClaudiaKermin.Core.Tests
     {
         private static string[] Text(MissionView view, BannerSite site = BannerSite.Pad, bool goalSet = false)
         {
-            return WelcomeBanner.Lines(view, "claude-sonnet-5-5", false, 10m, site, goalSet, "0.9.0").Select(l => l.Text).ToArray();
+            return WelcomeBanner.Lines(view, "claude-sonnet-5-5", false, site, goalSet, "0.9.0").Select(l => l.Text).ToArray();
         }
 
         private static MissionView WithCraft(string name)
@@ -47,7 +47,6 @@ namespace ClaudiaKermin.Core.Tests
                 "Claudia Kermin  v0.9.0",
                 "I fly, you clean up",
                 "claude-sonnet-5-5 · Crewed",
-                "Spending Cap $10.00",
                 "Untitled Space Craft on the pad",
                 "Describe a Mission Goal to begin.",
             }, Text(WithCraft("Untitled Space Craft")));
@@ -56,7 +55,7 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void LinesAreStyledTitleSecondaryText()
         {
-            var lines = WelcomeBanner.Lines(new MissionView(), "m", true, 5m, BannerSite.None, false, "1.0.0");
+            var lines = WelcomeBanner.Lines(new MissionView(), "m", true, BannerSite.None, false, "1.0.0");
             Assert.Equal(BannerTone.Title, lines[0].Tone);
             Assert.Equal(BannerTone.Secondary, lines[1].Tone);
             Assert.Equal(BannerTone.Text, lines[2].Tone);
@@ -77,13 +76,11 @@ namespace ClaudiaKermin.Core.Tests
             view.Stage = MissionStage.Running;
             view.Model = "claude-opus-5-5";
             view.Remote = true;
-            view.SpendingCap = 25.5m;
             Assert.Equal(new[]
             {
                 "Claudia Kermin  v0.9.0",
                 "I fly, you clean up",
                 "claude-opus-5-5 · Remote",
-                "Spending Cap $25.50",
                 "Mun Lander in the VAB",
             }, Text(view, BannerSite.Vab));
         }
@@ -100,8 +97,8 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void NoCraftOrNoSiteOmitsTheCraftLine()
         {
-            Assert.Equal(5, Text(WithCraft("")).Length);
-            Assert.Equal(5, Text(WithCraft("X"), BannerSite.None).Length);
+            Assert.Equal(4, Text(WithCraft("")).Length);
+            Assert.Equal(4, Text(WithCraft("X"), BannerSite.None).Length);
         }
 
         [Fact]
@@ -111,22 +108,27 @@ namespace ClaudiaKermin.Core.Tests
                 Assert.True(WelcomeBanner.Shows(stage));
         }
 
-        [Theory]
-        [InlineData(65, BannerLayout.Narrow)]
-        [InlineData(66, BannerLayout.Wide)]
-        [InlineData(120, BannerLayout.Wide)]
-        [InlineData(0, BannerLayout.Narrow)]
-        public void LayoutIsWideFrom66Columns(int columns, BannerLayout expected)
+        [Fact]
+        public void NoLineMentionsTheSpendingCap()
         {
-            Assert.Equal(expected, WelcomeBanner.ChooseLayout(columns));
+            Assert.DoesNotContain(Text(WithCraft("X")), t => t.Contains("Spending Cap"));
         }
 
         [Fact]
-        public void ColumnsAreWholeCharactersThatFitAfterPadding()
+        public void ClosingLineIsExactlyWhatTheTicketAsks()
         {
-            Assert.Equal(10, WelcomeBanner.Columns(120, 10, 20));
-            Assert.Equal(0, WelcomeBanner.Columns(5, 10, 20));
-            Assert.Equal(0, WelcomeBanner.Columns(100, 0, 0));
+            Assert.Equal("Tell me where you want to go and I might take you there!!", WelcomeBanner.ClosingLine);
+        }
+
+        // Art 224 wide, gap 16, widest text line 180: needs 420.
+        [Theory]
+        [InlineData(420f, BannerLayout.Wide)]
+        [InlineData(419.9f, BannerLayout.Narrow)]
+        [InlineData(900f, BannerLayout.Wide)]
+        [InlineData(0f, BannerLayout.Narrow)]
+        public void LayoutIsWideWhenArtGapAndWidestLineFit(float available, BannerLayout expected)
+        {
+            Assert.Equal(expected, WelcomeBanner.ChooseLayout(available, 224f, 16f, 180f));
         }
     }
 }

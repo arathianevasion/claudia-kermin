@@ -44,6 +44,7 @@ namespace ClaudiaKermin.Adapter
         /// <summary>The window's style (e.g. <see cref="ClaudiaSkin.Window"/>); unset uses the current skin's window.</summary>
         public GUIStyle Style;
 
+        /// <param name="title">The stock window title. Empty for windows in <see cref="ClaudiaSkin.Window"/>, which draw their own title bar, so the title shows once.</param>
         /// <param name="lockId">Unique per window; the keyboard and mouse locks get their own suffixes.</param>
         /// <param name="min">Smallest size the grip allows; ignored when the window isn't resizable.</param>
         public WindowFrame(int windowId, string title, string lockId, Rect initial, Vector2 min, bool resizable)

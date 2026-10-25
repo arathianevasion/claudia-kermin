@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Andrew Watson
 
 using System.Collections.Generic;
-using System.Globalization;
 using ClaudiaKermin.Core.Missions;
 
 namespace ClaudiaKermin.Core.Ui
@@ -54,8 +53,8 @@ namespace ClaudiaKermin.Core.Ui
     {
         public const string Tagline = "I fly, you clean up";
 
-        /// <summary>The transcript is at least this many monospace columns wide: the wide layout fits.</summary>
-        public const int WideColumns = 66;
+        /// <summary>The line under the art and text, in secondary text.</summary>
+        public const string ClosingLine = "Tell me where you want to go and I might take you there!!";
 
         /// <summary>
         /// The art: 7 rows by 28 columns of █ ▀ ▄ and spaces, each cell two vertical pixels, trailing spaces trimmed.
@@ -80,32 +79,26 @@ namespace ClaudiaKermin.Core.Ui
             return true;
         }
 
-        /// <summary>Wide when the transcript is at least <see cref="WideColumns"/> monospace columns wide.</summary>
-        public static BannerLayout ChooseLayout(int columns)
+        /// <summary>
+        /// Wide when the art, the gap and the widest text line (all measured by the adapter, in pixels) fit in
+        /// <paramref name="available"/>, the card's inner width; otherwise the text stacks under the art.
+        /// </summary>
+        public static BannerLayout ChooseLayout(float available, float artWidth, float gap, float widestTextWidth)
         {
-            return columns >= WideColumns ? BannerLayout.Wide : BannerLayout.Narrow;
-        }
-
-        /// <summary>How many whole monospace columns of <paramref name="charWidth"/> fit in <paramref name="width"/> after the padding.</summary>
-        public static int Columns(float width, float charWidth, float padding)
-        {
-            if (charWidth <= 0) return 0;
-            var columns = (int)((width - padding) / charWidth);
-            return columns < 0 ? 0 : columns;
+            return artWidth + gap + widestTextWidth <= available ? BannerLayout.Wide : BannerLayout.Narrow;
         }
 
         /// <summary>
-        /// The text lines. The model, type and Spending Cap are the Mission's when one exists, otherwise the pending
-        /// setup's (<paramref name="setupModel"/>, <paramref name="setupRemote"/>, <paramref name="setupCap"/>).
-        /// <paramref name="goalSet"/> is the Mission Goal pinned in the start form.
+        /// The text lines. The model and type are the Mission's when one exists, otherwise the pending setup's
+        /// (<paramref name="setupModel"/>, <paramref name="setupRemote"/>). <paramref name="goalSet"/> is the Mission
+        /// Goal pinned in the start form. <see cref="ClosingLine"/> is not among them: it goes under the whole block.
         /// </summary>
-        public static IList<BannerLine> Lines(MissionView view, string setupModel, bool setupRemote, decimal setupCap,
+        public static IList<BannerLine> Lines(MissionView view, string setupModel, bool setupRemote,
             BannerSite site, bool goalSet, string version)
         {
             var mission = view.Stage != MissionStage.None;
             var model = mission ? view.Model : setupModel;
             var remote = mission ? view.Remote : setupRemote;
-            var cap = mission ? view.SpendingCap : setupCap;
 
             var lines = new List<BannerLine>
             {
@@ -113,7 +106,6 @@ namespace ClaudiaKermin.Core.Ui
                 new BannerLine(Tagline, BannerTone.Secondary),
             };
             if (model.Length > 0) lines.Add(new BannerLine(model + " · " + (remote ? "Remote" : "Crewed"), BannerTone.Text));
-            lines.Add(new BannerLine("Spending Cap $" + cap.ToString("0.00", CultureInfo.InvariantCulture), BannerTone.Text));
 
             var craft = view.CraftCheck.CraftName;
             if (craft.Length > 0 && site != BannerSite.None)
