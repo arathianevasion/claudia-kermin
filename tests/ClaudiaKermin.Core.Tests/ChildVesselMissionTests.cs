@@ -382,6 +382,7 @@ namespace ClaudiaKermin.Core.Tests
             var saved = MissionSaveState.FromValues(Assert.Single(mission.ExportStates()).ToValues());
             Assert.Equal(newGoal, saved.MissionPlan.NewGoal);
             Assert.Equal("Probe", saved.MissionPlan.ChildVessels.Single().Name);
+            Assert.Equal(2, saved.MissionPlan.ChildVessels.Single().SeparationStage);
             Assert.Equal("Probe", saved.MissionPlan.Sequences[1].Vessel);
             Assert.Equal(Goal, saved.Goal);
 
@@ -393,6 +394,18 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(Goal, reloaded.View.Goal);
             reloaded.Send(new Approve());
             Assert.Equal(newGoal, reloaded.View.Goal);
+        }
+
+        [Fact]
+        public void TheSaveCarriesBothAReducedGoalAndChildVessels()
+        {
+            const string children = "[{\"name\":\"Probe\",\"vessel_id\":\"probe-1\",\"vessel_name\":\"Probe\",\"separated\":true,\"processors\":[7]}]";
+            var state = new MissionSaveState { Id = "m1", ReducedGoal = "Reach a stable orbit of Kerbin.", ChildVessels = children };
+
+            var saved = MissionSaveState.FromValues(state.ToValues());
+
+            Assert.Equal("Reach a stable orbit of Kerbin.", saved.ReducedGoal);
+            Assert.Equal(children, saved.ChildVessels);
         }
     }
 }
