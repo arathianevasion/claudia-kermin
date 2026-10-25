@@ -267,7 +267,6 @@ namespace ClaudiaKermin.Adapter
         private void DrawStartForm()
         {
             var form = View.StartForm;
-            _setup.SeedFrom(form);
             GUILayout.Label("Start a Mission", _bold);
             GUILayout.Label("Mission Goal:");
             // About 9 lines by default; taller as the player resizes the window.

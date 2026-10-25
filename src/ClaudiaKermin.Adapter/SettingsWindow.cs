@@ -54,6 +54,8 @@ namespace ClaudiaKermin.Adapter
         private bool _remote;
         private string _model = "";
         private string _cap = "";
+        // During a Mission: the cap the field was filled from, so a raise made elsewhere (the Mission window) refreshes an untouched field.
+        private decimal _capDraftedFrom;
         private MissionSettingsValues _settings = new MissionSettingsValues();
         // Picked here and not yet applied; null in _processor is "nearest the root".
         private bool _processorPicked;
@@ -129,6 +131,7 @@ namespace ClaudiaKermin.Adapter
             switch (_context)
             {
                 case Context.DuringMission:
+                    _capDraftedFrom = _view.SpendingCap;
                     _cap = Dollars(_view.SpendingCap);
                     _settings = _view.Settings.Copy();
                     break;
@@ -277,15 +280,21 @@ namespace ClaudiaKermin.Adapter
 
         private void DrawSpendingCap(bool during)
         {
+            if (during && _view.SpendingCap != _capDraftedFrom)
+            {
+                if (_cap == Dollars(_capDraftedFrom)) _cap = Dollars(_view.SpendingCap);
+                _capDraftedFrom = _view.SpendingCap;
+            }
             GUILayout.Label("Spending Cap", _label);
             if (during) GUILayout.Label("$" + Dollars(_view.Spent + _view.HeldCharges) + " spent so far", ClaudiaSkin.Secondary);
+            // Judged before the field: typing changes _cap mid-event, and the label below mustn't appear or vanish within one frame's layout.
+            var error = CapError();
             GUILayout.BeginHorizontal();
             GUILayout.Label("$", ClaudiaSkin.Body, GUILayout.ExpandWidth(false));
             GUI.SetNextControlName(CapControl);
             _cap = GUILayout.TextField(_cap, 10, ClaudiaSkin.TextField, GUILayout.Width(120));
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
-            var error = CapError();
             if (error.Length > 0) GUILayout.Label(error, ClaudiaSkin.DangerText);
             else if (!during) GUILayout.Label("Pauses the Mission when reached", ClaudiaSkin.Secondary);
         }
