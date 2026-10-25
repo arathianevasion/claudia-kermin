@@ -39,7 +39,7 @@
 //| (true if nothing within max_divert was flat enough and it landed on the least steep spot
 //| found), burn_start_ut (when the braking burn was planned to start; -1 if it never got that far),
 //| impact_ut (when the orbit after the deorbit burn meets the ground at the site's height; -1 if it
-//| clears it); geo (lat, lng, alt) is the common field once landed. Fails with "land flies airless
+//| clears it or it never got that far); geo (lat, lng, alt) is the common field once landed. Fails with "land flies airless
 //| bodies only", an orbit it can't land from, a site off the ground track, no daylight pass,
 //| not enough delta-v, "tipped over", out of fuel, or an abort; a failure in the
 //| descent leaves the craft safe but falling, so give it the delta-v (and TWR over 1.5) it needs.
