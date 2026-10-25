@@ -566,7 +566,9 @@ namespace ClaudiaKermin.Adapter
             var tabWidth = textWidth + 14 + 6 + 2 * ClaudiaSkin.Padding;
 
             var tab = new Rect(row.x + (row.width - tabWidth) / 2f, row.y, tabWidth, row.height);
-            if (GUI.Button(tab, GUIContent.none, GUIStyle.none) && TabClicked != null) TabClicked();
+            // The Due Time in the tab reads from now; the date it lands on is the hover.
+            var hover = needs && View.DueTime.HasDueTime ? View.DueTime.Date : "";
+            if (GUI.Button(tab, new GUIContent("", hover), GUIStyle.none) && TabClicked != null) TabClicked();
             if (Event.current.type != EventType.Repaint) return;
 
             // The box runs under what it joins so only its outer corners show; that edge's border is cleared where they join.

@@ -11,6 +11,7 @@ using System.Threading;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Config;
 using ClaudiaKermin.Core.Missions;
+using ClaudiaKermin.Core.Ui;
 using Xunit;
 
 namespace ClaudiaKermin.Core.Tests
@@ -156,8 +157,8 @@ namespace ClaudiaKermin.Core.Tests
 
             var card = mission.View.Log.Single(e => e.Kind == LogKind.MissionPlan);
             Assert.Contains("Mun transfer", card.Text);
-            Assert.Contains("Due Time " + MissionClock.Ut(Due), card.Text);
-            Assert.Contains("Total Mission time " + MissionClock.Span(250000), card.Text);
+            Assert.Contains("Due Time " + KerbinTime.Date(Due), card.Text);
+            Assert.Contains("Total Mission time " + KerbinTime.Span(250000), card.Text);
             // The first sequence goes right after the launch: no Due Time on its line.
             Assert.DoesNotContain("Launch: Reach a 100 km orbit. (3,400 m/s, right away; Due", card.Text);
         }
@@ -170,7 +171,7 @@ namespace ClaudiaKermin.Core.Tests
             ToSequencePlan(mission);
 
             var card = mission.View.Log.Last(e => e.Kind == LogKind.SequencePlan);
-            Assert.StartsWith("Due Time: " + MissionClock.Ut(Due), card.Text);
+            Assert.StartsWith("Due Time: " + KerbinTime.Date(Due), card.Text);
             var alarm = Assert.Single(Of<SetDueTimeAlarm>(mission.TakeCommands()));
             Assert.Equal(Due, alarm.Ut);
             Assert.Equal(mission.View.MissionId, alarm.MissionId);
@@ -288,7 +289,7 @@ namespace ClaudiaKermin.Core.Tests
 
             var commands = mission.TakeCommands();
             Assert.Single(Of<DropWarp>(commands));
-            Assert.Contains("Due Time missed by 3 d 0 h", Assert.Single(Of<PostScreenMessage>(commands)).Text);
+            Assert.Contains("Due Time missed by 3d", Assert.Single(Of<PostScreenMessage>(commands)).Text);
             Assert.Equal(MissionStage.AwaitingSequenceApproval, mission.View.Stage);
             Assert.False(mission.View.Busy);
             Assert.Equal(2, transport.Requests.Count);
@@ -627,14 +628,14 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
-        public void TheClockFormatsKerbinTime()
+        public void TheDueTimeReadsFromNowWithTheKerbinDateForHover()
         {
-            Assert.Equal("Y1 D1 00:00:00", MissionClock.Ut(0));
-            Assert.Equal("Y1 D2 01:01:01", MissionClock.Ut(21600 + 3600 + 61));
-            Assert.Equal("Y2 D1 00:00:00", MissionClock.Ut(426 * 21600));
-            Assert.Equal("3 d 0 h", MissionClock.Span(3 * 21600));
-            Assert.Equal("2 h 5 min", MissionClock.Span(2 * 3600 + 300));
-            Assert.Equal("30 s", MissionClock.Span(30));
+            var transport = new StreamingFakeTransport(TimedMissionPlan(), SequencePlan(Due));
+            var mission = Control(transport);
+            ToSequencePlan(mission);
+
+            Assert.Equal(KerbinTime.FromNow(Due, Now), mission.View.DueTime.Text);
+            Assert.Equal(KerbinTime.Date(Due), mission.View.DueTime.Date);
         }
     }
 }

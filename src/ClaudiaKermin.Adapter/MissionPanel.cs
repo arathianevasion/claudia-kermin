@@ -236,7 +236,13 @@ namespace ClaudiaKermin.Adapter
         private void DrawBusyLine()
         {
             var line = MissionWindowRules.BusyLine(_view);
-            if (line.Length == 0) return;
+            if (line.Length == 0)
+            {
+                // A Sequence Plan's Due Time reads from now; the date it lands on is the hover.
+                if (_view.Stage == MissionStage.AwaitingSequenceApproval && _view.DueTime.HasDueTime)
+                    GUILayout.Label(new GUIContent(_view.DueTime.Reached ? "Due Time reached" : "Due Time " + _view.DueTime.Text, _view.DueTime.Date), ClaudiaSkin.Muted);
+                return;
+            }
             GUILayout.Label(line, ClaudiaSkin.Muted);
         }
 
