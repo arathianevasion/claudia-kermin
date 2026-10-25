@@ -212,6 +212,67 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(CraftVerdict.Pass, remote.View.CraftCheck.Verdict);
         }
 
+        private static GameSnapshot RemoteCraft(Action<GameSnapshot> change)
+        {
+            var snapshot = Editor(0);
+            change(snapshot);
+            return snapshot;
+        }
+
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
+        public void ARemoteCraftWithoutAProbeCoreOrAnAntennaIsABlockerEvenWhenClaudeMissesIt(bool dropCore, bool dropAntenna)
+        {
+            // Claude's reply (a Pass) says nothing; the mod counts the parts itself.
+            var mission = Direct(Replies("craft-check-pass.sse"));
+            mission.Send(new SceneChanged(GameScene.Editor));
+            Check(mission, RemoteCraft(s =>
+            {
+                if (dropCore) s.Craft.Parts.RemoveAll(p => p.Tags.Contains("probe_core"));
+                if (dropAntenna) s.Craft.Parts.RemoveAll(p => p.Tags.Contains("antenna"));
+            }), remote: true);
+
+            var check = mission.View.CraftCheck;
+            Assert.Equal(CraftVerdict.Fail, check.Verdict);
+            var blocker = Assert.Single(check.Findings);
+            Assert.Equal("no_probe_core_or_antenna", blocker.Code);
+            Assert.Equal(CraftFindingSeverity.Blocker, blocker.Severity);
+            Assert.Equal(dropCore, blocker.Explanation.Contains("no probe core"));
+            Assert.Equal(dropAntenna, blocker.Explanation.Contains("no antenna"));
+            Assert.False(check.StartAllowed);
+        }
+
+        [Fact]
+        public void AnAntennaWithNoTransmitterPowerDoesNotReachHomeAndCommNetOffNeedsNone()
+        {
+            var weak = Direct(Replies("craft-check-pass.sse"));
+            weak.Send(new SceneChanged(GameScene.Editor));
+            Check(weak, RemoteCraft(s => s.Craft.Parts.First(p => p.Tags.Contains("antenna")).AntennaPower = 0), remote: true);
+            Assert.Equal("no_probe_core_or_antenna", Assert.Single(weak.View.CraftCheck.Findings).Code);
+
+            var noCommNet = Direct(Replies("craft-check-pass.sse"));
+            noCommNet.Send(new SceneChanged(GameScene.Editor));
+            Check(noCommNet, RemoteCraft(s =>
+            {
+                s.CommNetEnabled = false;
+                s.Craft.Parts.RemoveAll(p => p.Tags.Contains("antenna"));
+            }), remote: true);
+            Assert.Equal(CraftVerdict.Pass, noCommNet.View.CraftCheck.Verdict);
+        }
+
+        [Fact]
+        public void ACrewedMissionNeedsNeitherAProbeCoreNorAnAntenna()
+        {
+            var mission = Direct(Replies("craft-check-pass.sse"));
+            mission.Send(new SceneChanged(GameScene.Editor));
+            var crewed = Editor(2, "Claudia Kermin");
+            crewed.Craft.Parts.RemoveAll(p => p.Tags.Contains("probe_core") || p.Tags.Contains("antenna"));
+            Check(mission, crewed);
+            Assert.Equal(CraftVerdict.Pass, mission.View.CraftCheck.Verdict);
+        }
+
         [Fact]
         public void OtherKerbalsRideAsPassengersAndDoNotBlockASeatThatIsFree()
         {

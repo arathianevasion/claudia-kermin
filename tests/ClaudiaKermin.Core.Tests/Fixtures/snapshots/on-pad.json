@@ -13,7 +13,9 @@
       { "id": 3101, "parent": null, "name": "mk1pod.v2", "title": "Mk1 Command Pod", "kos": false, "stage": 1, "tags": ["command", "crew_seat"], "seats": 1 },
       { "id": 3102, "parent": 3101, "name": "kOSMachine1m", "title": "CX-4181 Scriptable Control System", "kos": true, "stage": 1, "tags": ["kos_processor"] },
       { "id": 3103, "parent": 3102, "name": "fuelTankSmallFlat", "title": "FL-T100 Fuel Tank", "kos": false, "stage": 0 },
-      { "id": 3104, "parent": 3103, "name": "liquidEngine3.v2", "title": "LV-909 \"Terrier\" Liquid Fuel Engine", "kos": false, "stage": 0, "tags": ["engine"] }
+      { "id": 3104, "parent": 3103, "name": "liquidEngine3.v2", "title": "LV-909 \"Terrier\" Liquid Fuel Engine", "kos": false, "stage": 0, "tags": ["engine"] },
+      { "id": 3201, "parent": 3101, "name": "probeCoreOcto.v2", "title": "Probodobodyne OKTO", "kos": false, "stage": 1, "tags": ["command", "probe_core"] },
+      { "id": 3202, "parent": 3101, "name": "longAntenna", "title": "Communotron 16", "kos": false, "stage": 1, "tags": ["antenna"], "antenna": 500000 }
     ]
   },
   "stages": [
