@@ -140,6 +140,27 @@ namespace ClaudiaKermin.Core.Ui
         }
     }
 
+    /// <summary>
+    /// Where the Capcom strip's window takes the mouse from the game. The window is as wide as the strip with the expand
+    /// tab's row on one edge, and only the tab is drawn in that row: the transparent band either side of it is the game's.
+    /// </summary>
+    public static class CapcomStripHit
+    {
+        /// <summary>
+        /// True when the point (<paramref name="x"/>, <paramref name="y"/>, from the window's top left) is over the strip, the
+        /// docked panel or the tab. The tab row is the top <paramref name="tabHeight"/> when the panel opens
+        /// <see cref="PanelSide.Above"/>, otherwise the bottom one; in it only the <paramref name="tabWidth"/> centred counts.
+        /// </summary>
+        public static bool Locks(float x, float y, float windowWidth, float windowHeight, PanelSide side, float tabHeight, float tabWidth)
+        {
+            if (x < 0 || y < 0 || x >= windowWidth || y >= windowHeight) return false;
+            var inTabRow = side == PanelSide.Above ? y < tabHeight : y >= windowHeight - tabHeight;
+            if (!inTabRow) return true;
+            var left = (windowWidth - tabWidth) / 2f;
+            return x >= left && x < left + tabWidth;
+        }
+    }
+
     /// <summary>The first and last segment (inclusive) that show.</summary>
     public struct VisibleRange : IEquatable<VisibleRange>
     {

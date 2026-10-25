@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Andrew Watson
 
+using System;
 using ClaudiaKermin.Core.Ui;
 using UnityEngine;
 
@@ -45,6 +46,9 @@ namespace ClaudiaKermin.Adapter
 
         public Rect Rect;
 
+        /// <summary>Decides, for a point in the window's own coordinates, whether it takes the mouse from the game; null means the whole window does.</summary>
+        public Func<Vector2, bool> LocksMouseAt;
+
         /// <summary>The window's style (e.g. <see cref="ClaudiaSkin.Window"/>); unset uses the current skin's window.</summary>
         public GUIStyle Style;
 
@@ -88,7 +92,7 @@ namespace ClaudiaKermin.Adapter
             Rect = KeepOnScreen(Rect);
             StoreWhenSettled();
             // A held button keeps the lock, so a fast window drag can't outrun the pointer and drop it.
-            SetMouseLock(_resizing || Rect.Contains(GuiMouse()) || (_mouseLocked && Input.GetMouseButton(0)));
+            SetMouseLock(_resizing || OverLocking(GuiMouse()) || (_mouseLocked && Input.GetMouseButton(0)));
         }
 
         /// <summary>
@@ -241,6 +245,11 @@ namespace ClaudiaKermin.Adapter
                 rect.height = Mathf.Min(rect.height, Screen.height);
             }
             return rect;
+        }
+
+        private bool OverLocking(Vector2 mouse)
+        {
+            return Rect.Contains(mouse) && (LocksMouseAt == null || LocksMouseAt(mouse - Rect.position));
         }
 
         private static Vector2 GuiMouse()

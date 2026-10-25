@@ -44,6 +44,8 @@ namespace ClaudiaKermin.Adapter
         private readonly MissionPanel _panel;
         private readonly WindowFrame _frame =
             new WindowFrame(0x434B04, "", "ClaudiaKerminCapcom", new Rect(0, Top, DefaultWidth, 0), new Vector2(MinWidth, MinPanelHeight), false);
+        // The expand tab's width as last drawn; the mouse lock leaves the transparent band either side of it to the game.
+        private float _tabWidth;
         private Texture2D _portrait;
 
         // Built from ClaudiaSkin's styles, so they follow its font sizes; rebuilt when it rebuilds.
@@ -142,9 +144,16 @@ namespace ClaudiaKermin.Adapter
             var y = above ? _place.Y - TabHeight() - (expanded ? _place.PanelHeight : 0) : _place.Y;
             _frame.Rect = new Rect(_place.X, y, _width, height);
             _frame.Style = _window;
+            _frame.LocksMouseAt = LocksMouseAt;
             _frame.Show(Draw, GUILayout.Width(_width));
             // Keys typed into the docked prompt must not stage, throttle or rotate the craft.
             _frame.SetTyping(expanded && MissionPanel.Typing);
+        }
+
+        private bool LocksMouseAt(Vector2 local)
+        {
+            var r = _frame.Rect;
+            return CapcomStripHit.Locks(local.x, local.y, r.width, r.height, _place.Side, TabHeight(), _tabWidth);
         }
 
         /// <summary>Releases the input locks; call when the strip goes away.</summary>
@@ -565,6 +574,7 @@ namespace ClaudiaKermin.Adapter
             var textWidth = Mathf.Min(textStyle.CalcSize(new GUIContent(text)).x, _width - 120);
             var tabWidth = textWidth + 14 + 6 + 2 * ClaudiaSkin.Padding;
 
+            _tabWidth = tabWidth;
             var tab = new Rect(row.x + (row.width - tabWidth) / 2f, row.y, tabWidth, row.height);
             // The Due Time in the tab reads from now; the date it lands on is the hover.
             var hover = needs && View.DueTime.HasDueTime ? View.DueTime.Date : "";
