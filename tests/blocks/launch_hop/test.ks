@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Andrew Watson
 //
 // launch vertical hop block test: the reference craft (finned, for its unpowered coast in thick air)
-// climbs straight up from the pad to an 8 km apoapsis (turn_start_speed above anything it reaches), cuts off in thick air and coasts to the
-// top of the climb, where launch ends. A trigger watches the worst tilt from vertical (test_max_tilt:
+// climbs straight up from the pad to an 8 km apoapsis (turn_start_speed above anything it
+// reaches), cuts off in thick air and coasts to the top of the climb, where launch ends. A trigger watches the worst tilt from vertical (test_max_tilt:
 // the coast must be smooth, no flip) and the lowest thrust-to-weight while an engine burns
 // (test_min_twr: the throttle must not collapse before cutoff).
 

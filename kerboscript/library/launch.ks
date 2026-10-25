@@ -38,7 +38,7 @@
 //| loss), max_q (Pa, highest dynamic pressure), coast_ap (m, apoapsis at first engine cutoff).
 //| Fails with "launch starts on the ground", "no atmosphere on <body>: use ascend", "no thrust", a
 //| launch_at it can't use, a wait over the cap, "lost control: ..." (saying whether it was burning or
-//| coasting, the throttle and q), "fell back into the
+//| coasting, the throttle, q and the nose's angle off the airflow), "fell back into the
 //| atmosphere: ...", out of fuel, or an abort.
 //| Example: `local res is launch(lexicon("target_ap", 80000)). if res:success { set res to circularize(lexicon("at", "ap")). }
 //| addons:claudia:report(res).`
@@ -206,14 +206,15 @@ function launch_laz_inc {
   return inc_size.
 }
 
-// Why the block stopped for lost control: off_aim and off_flow are the nose's degrees off the aim and
-// off the airflow (srfprograde), tset the throttle (0..1), q_pa the dynamic pressure (Pa), alt_m the
-// altitude (m).
+// Why the block stopped for lost control: burning is whether an engine gave thrust (not what the
+// throttle asked: between stages it asks with none), tset the throttle (0..1), q_pa the dynamic
+// pressure (Pa), off_aim and off_flow the nose's degrees off the aim and off the airflow
+// (srfprograde), alt_m the altitude (m).
 function launch_lost_control {
-  parameter coasting, tset, q_pa, off_aim, off_flow, alt_m.
-  local doing is "burning".
-  if coasting {
-    set doing to "coasting".
+  parameter burning, tset, q_pa, off_aim, off_flow, alt_m.
+  local doing is "coasting".
+  if burning {
+    set doing to "burning".
   }
   return "lost control: " + round(off_aim) + " degrees off the ascent path at " + round(alt_m) + " m, " + doing + " at " + round(100 * tset) + "% throttle, q " + round(q_pa) + " Pa, " + round(off_flow) + " degrees off the airflow".
 }
@@ -437,7 +438,8 @@ function launch {
       if off_since < 0 {
         set off_since to time:seconds.
       } else if time:seconds - off_since > 3 {
-        set reason to launch_lost_control(coasting, tset, q_pa, off_aim, vang(ship:facing:forevector, ship:srfprograde:vector), altitude).
+        local off_flow is vang(ship:facing:forevector, ship:srfprograde:vector).
+        set reason to launch_lost_control(ship:thrust > 0, tset, q_pa, off_aim, off_flow, altitude).
         break.
       }
     } else {

@@ -131,14 +131,16 @@ namespace ClaudiaKermin.Kerboscript.Tests
         // ---- launch: losing control ----
 
         [Theory]
-        [InlineData("false", 0.374, 12345.6, 153.2, 150.4, 9642.7,
+        [InlineData("true", 0.374, 12345.6, 153.2, 150.4, 9642.7,
             "lost control: 153 degrees off the ascent path at 9643 m, burning at 37% throttle, q 12346 Pa, 150 degrees off the airflow")]
-        [InlineData("true", 0, 31000, 40.6, 39.5, 4860.2,
+        [InlineData("false", 0, 31000, 40.6, 39.5, 4860.2,
             "lost control: 41 degrees off the ascent path at 4860 m, coasting at 0% throttle, q 31000 Pa, 40 degrees off the airflow")]
+        [InlineData("false", 1, 20000, 57, 52, 9303,
+            "lost control: 57 degrees off the ascent path at 9303 m, coasting at 100% throttle, q 20000 Pa, 52 degrees off the airflow")]
         public void The_lost_control_reason_says_whether_it_was_burning_or_coasting_with_throttle_q_and_the_angle_off_the_airflow(
-            string coasting, double throttle, double q, double offAim, double offFlow, double altitude, string reason)
+            string burning, double throttle, double q, double offAim, double offFlow, double altitude, string reason)
         {
-            Assert.Equal(reason, One("launch_lost_control(" + coasting + ", " + throttle + ", " + q + ", " + offAim + ", " + offFlow + ", " + altitude + ")"));
+            Assert.Equal(reason, One("launch_lost_control(" + burning + ", " + throttle + ", " + q + ", " + offAim + ", " + offFlow + ", " + altitude + ")"));
         }
 
         // ---- circularize ----
