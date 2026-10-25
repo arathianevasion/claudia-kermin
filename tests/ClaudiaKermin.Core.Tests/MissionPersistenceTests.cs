@@ -445,6 +445,57 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ACostLogHeldOpenByAnotherProcessPausesTheMissionInsteadOfReadingAsZeroSpend()
+        {
+            var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-priced.sse")));
+            ToMissionPlan(mission);
+            var saved = Saved(mission);
+
+            var transport = new StreamingFakeTransport();
+            var later = Control(transport);
+            using (new FileStream(Path.Combine(MissionFolder(mission), "cost-log.jsonl"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                later.Send(new MissionsRestored(_save.Path, saved));
+                Assert.Equal(MissionStage.Paused, later.View.Stage);
+                Assert.Contains("cost log", later.View.PauseReason);
+                Assert.Empty(transport.Requests);
+
+                // Still unreadable: Resume does not go ahead on a zero.
+                later.Send(new Retry());
+                Assert.Equal(MissionStage.Paused, later.View.Stage);
+            }
+
+            later.Send(new Retry());
+            Assert.Equal(MissionStage.AwaitingPlanApproval, later.View.Stage);
+            Assert.Equal(0.54m, later.View.Spent);
+        }
+
+        [Fact]
+        public void ACostLogTheGameMayNotReadPausesTheMissionInsteadOfReadingAsZeroSpend()
+        {
+            if (OperatingSystem.IsWindows()) return; // file modes are Unix's; the sharing-violation test covers Windows
+            var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-priced.sse")));
+            ToMissionPlan(mission);
+            var path = Path.Combine(MissionFolder(mission), "cost-log.jsonl");
+
+            var later = Control(new StreamingFakeTransport());
+            File.SetUnixFileMode(path, UnixFileMode.None);
+            try
+            {
+                later.Send(new MissionsRestored(_save.Path, new List<MissionSaveState>()));
+                Assert.Equal(MissionStage.Paused, later.View.Stage);
+                Assert.Contains("cost log", later.View.PauseReason);
+            }
+            finally
+            {
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+
+            later.Send(new Retry());
+            Assert.Equal(0.54m, later.View.Spent);
+        }
+
+        [Fact]
         public void ALoadDuringARequestRestoresTheSavedStateWithTheSpendIncludingThatRequest()
         {
             var plan = ScriptedResponse.Fixture("mission-plan-priced.sse");
