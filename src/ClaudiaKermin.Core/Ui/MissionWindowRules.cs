@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Andrew Watson
 
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using ClaudiaKermin.Core.Missions;
@@ -161,7 +162,7 @@ namespace ClaudiaKermin.Core.Ui
         /// <summary>The action the row fills with the accent and stretches; at most one is offered at a time.</summary>
         public static bool IsPrimary(QuickReply reply)
         {
-            return reply == QuickReply.Approve || reply == QuickReply.ConfirmApproval || reply == QuickReply.HandBack;
+            return reply == QuickReply.Approve || reply == QuickReply.HandBack;
         }
 
         /// <summary>Start Mission's label: what holds it back when a current Craft Check does.</summary>
@@ -226,6 +227,133 @@ namespace ClaudiaKermin.Core.Ui
                     return check.StartAllowed ? new StatusChip("Ready to start", ChipTone.Success) : null;
                 default: return null;
             }
+        }
+
+        // ---- The Craft Check card in the transcript ----
+
+        /// <summary>The notice before the card: "Duna Probe on the pad · Mission Goal set"; "" with no craft. In the VAB/SPH the craft is "on the floor".</summary>
+        public static string CraftNotice(CraftCheckView check, bool onPad, bool goalSet)
+        {
+            if (check.CraftName.Length == 0) return "";
+            return check.CraftName + (onPad ? " on the pad" : " on the floor") + (goalSet ? " · Mission Goal set" : "");
+        }
+
+        /// <summary>The card header: "Craft Check: Pass with Warnings".</summary>
+        public static string CardTitle(CraftCheckView check)
+        {
+            return "Craft Check: " + VerdictText(check.Verdict);
+        }
+
+        /// <summary>The one line the card collapses to in Flight, e.g. "Craft Check: Pass with Warnings (2)".</summary>
+        public static string CollapsedTitle(CraftCheckView check)
+        {
+            if (check.State == CraftCheckState.None) return "Craft Check: not checked yet";
+            if (check.State != CraftCheckState.Done) return "Craft Check";
+            return CardTitle(check)
+                + (check.Verdict == CraftVerdict.Pass ? "" : " (" + check.Findings.Count.ToString(CultureInfo.InvariantCulture) + ")")
+                + (check.Stale ? " - the craft changed since" : "");
+        }
+
+        private static string VerdictText(CraftVerdict verdict)
+        {
+            return verdict == CraftVerdict.Pass ? "Pass" : verdict == CraftVerdict.PassWithWarnings ? "Pass with Warnings" : "Fail";
+        }
+
+        /// <summary>The verdict icon's colour: amber for Pass with Warnings, red for Fail, green for Pass.</summary>
+        public static ChipTone VerdictTone(CraftVerdict verdict)
+        {
+            return verdict == CraftVerdict.PassWithWarnings ? ChipTone.Attention : verdict == CraftVerdict.Fail ? ChipTone.Danger : ChipTone.Success;
+        }
+
+        /// <summary>Claudia's line before the card: the Craft Check's summary; "" when it has none.</summary>
+        public static string ClaudiaLine(CraftCheckView check)
+        {
+            return check.Summary;
+        }
+
+        /// <summary>
+        /// The facts row as chips: the craft, its delta-v and the margin wanted, whether that is enough for the goal, and the
+        /// estimated cost of the Mission (<paramref name="estimate"/>, null when there is none).
+        /// </summary>
+        public static IList<StatusChip> Facts(CraftCheckView check, decimal? estimate)
+        {
+            var facts = new List<StatusChip>();
+            if (check.CraftName.Length > 0) facts.Add(new StatusChip(check.CraftName, ChipTone.Info));
+            if (check.CraftDeltaV.HasValue)
+            {
+                facts.Add(new StatusChip("Δv " + check.CraftDeltaV.Value.ToString("N0", CultureInfo.InvariantCulture) + " m/s", ChipTone.Info));
+                facts.Add(new StatusChip("Margin wanted " + check.MarginPercent.ToString(CultureInfo.InvariantCulture) + "%", ChipTone.Info));
+                if (check.State != CraftCheckState.Done || check.Stale) facts.Add(new StatusChip("Check the craft to judge", ChipTone.Info));
+                else if (check.DeltaVShort) facts.Add(new StatusChip("Short of the delta-v this goal needs", ChipTone.Danger));
+                else facts.Add(new StatusChip("Enough for this goal", ChipTone.Success));
+            }
+            else
+            {
+                facts.Add(new StatusChip("Δv unknown: turn on the delta-v simulator", ChipTone.Attention));
+                facts.Add(new StatusChip("Margin wanted " + check.MarginPercent.ToString(CultureInfo.InvariantCulture) + "%", ChipTone.Info));
+            }
+            if (estimate.HasValue) facts.Add(new StatusChip("est. ~$" + Dollars(estimate.Value) + " for the Mission", ChipTone.Info));
+            return facts;
+        }
+
+        /// <summary>A line of text and, when it is not plain secondary text, the tone it takes.</summary>
+        public sealed class ToneLine
+        {
+            public readonly string Text;
+            public readonly ChipTone? Tone;
+
+            public ToneLine(string text, ChipTone? tone)
+            {
+                Text = text;
+                Tone = tone;
+            }
+        }
+
+        /// <summary>The card's footer: what holds Start Mission closed, or that it is open; empty text when there is nothing to say.</summary>
+        public static ToneLine Footer(CraftCheckView check)
+        {
+            if (check.Stale) return new ToneLine("(the craft changed since; Start Mission checks again)", null);
+            if (check.Verdict == CraftVerdict.Fail) return new ToneLine("Start Mission is closed: fix every Blocker in the craft and check again.", null);
+            if (ToAcknowledge(check) > 0) return new ToneLine("Start Mission opens once every Warning is acknowledged.", null);
+            if (check.StartAllowed && check.Findings.Count > 0) return new ToneLine("All Warnings acknowledged. Start Mission is open.", ChipTone.Success);
+            return new ToneLine("", null);
+        }
+
+        /// <summary>The transcript line for a Craft Check that is not (yet) a result; "" once it is Done.</summary>
+        public static string StateLine(CraftCheckView check)
+        {
+            switch (check.State)
+            {
+                case CraftCheckState.None: return "Not checked yet. Start Mission checks the craft first, or press Check again.";
+                case CraftCheckState.Running: return "Checking the craft against the Mission Goal…";
+                case CraftCheckState.NeedsSimulator:
+                case CraftCheckState.Error: return check.Message;
+                default: return "";
+            }
+        }
+
+        /// <summary>The state's line comes with a Check again action.</summary>
+        public static bool OffersCheckAgain(CraftCheckState state)
+        {
+            return state == CraftCheckState.NeedsSimulator || state == CraftCheckState.Error;
+        }
+
+        /// <summary>"WARNING" or "BLOCKER" over a finding's box.</summary>
+        public static string FindingLabel(CraftFindingSeverity severity)
+        {
+            return severity == CraftFindingSeverity.Blocker ? "BLOCKER" : "WARNING";
+        }
+
+        /// <summary>The checkbox that ends the transcript while a typed reply awaits confirming.</summary>
+        public static string ApprovalLabel(MissionView view)
+        {
+            return view.Stage == MissionStage.AwaitingSequenceApproval ? "Yes, approve the Sequence Plan" : "Yes, approve the Mission Plan";
+        }
+
+        /// <summary>The quick replies the action row and the Capcom strip's buttons draw: confirming an Approval is a checkbox in the transcript instead.</summary>
+        public static bool InActionRow(QuickReply reply)
+        {
+            return reply != QuickReply.ConfirmApproval && reply != QuickReply.NotYet;
         }
 
         /// <summary>The Warnings of the Craft Check not yet acknowledged.</summary>
