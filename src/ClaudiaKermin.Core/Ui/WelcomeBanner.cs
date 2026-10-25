@@ -28,6 +28,8 @@ namespace ClaudiaKermin.Core.Ui
     {
         /// <summary>Bold, in the accent colour.</summary>
         Title,
+        /// <summary>The tagline: bold, in the normal text colour, the same size as the title.</summary>
+        Tagline,
         Secondary,
         Text,
     }
@@ -103,7 +105,7 @@ namespace ClaudiaKermin.Core.Ui
             var lines = new List<BannerLine>
             {
                 new BannerLine(ModInfo.Name + "  v" + version, BannerTone.Title),
-                new BannerLine(Tagline, BannerTone.Secondary),
+                new BannerLine(Tagline, BannerTone.Tagline),
             };
             if (model.Length > 0) lines.Add(new BannerLine(model + " · " + (remote ? "Remote" : "Crewed"), BannerTone.Text));
 

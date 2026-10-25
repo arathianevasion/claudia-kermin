@@ -53,11 +53,12 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
-        public void LinesAreStyledTitleSecondaryText()
+        public void LinesAreStyledTitleTaglineTextSecondary()
         {
             var lines = WelcomeBanner.Lines(new MissionView(), "m", true, BannerSite.None, false, "1.0.0");
             Assert.Equal(BannerTone.Title, lines[0].Tone);
-            Assert.Equal(BannerTone.Secondary, lines[1].Tone);
+            Assert.Equal(WelcomeBanner.Tagline, lines[1].Text);
+            Assert.Equal(BannerTone.Tagline, lines[1].Tone);
             Assert.Equal(BannerTone.Text, lines[2].Tone);
             Assert.Equal("m · Remote", lines[2].Text);
             Assert.Equal(BannerTone.Secondary, lines.Last().Tone);

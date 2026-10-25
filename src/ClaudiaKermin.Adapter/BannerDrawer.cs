@@ -16,7 +16,7 @@ namespace ClaudiaKermin.Adapter
     /// </summary>
     public sealed class BannerDrawer
     {
-        private GUIStyle _art, _title, _secondary, _text;
+        private GUIStyle _art, _title, _tagline, _secondary, _text;
         private GUISkin _stylesFor;
 
         /// <summary>
@@ -61,7 +61,9 @@ namespace ClaudiaKermin.Adapter
 
         private GUIStyle StyleOf(BannerLine line)
         {
-            return line.Tone == BannerTone.Title ? _title : line.Tone == BannerTone.Secondary ? _secondary : _text;
+            return line.Tone == BannerTone.Title ? _title
+                : line.Tone == BannerTone.Tagline ? _tagline
+                : line.Tone == BannerTone.Secondary ? _secondary : _text;
         }
 
         // One label for every row, so the half blocks meet.
@@ -98,6 +100,9 @@ namespace ClaudiaKermin.Adapter
             _art.normal.textColor = _art.hover.textColor = _art.active.textColor = ClaudiaSkin.IconGreen;
             _title = new GUIStyle(ClaudiaSkin.Body) { fontStyle = FontStyle.Bold };
             _title.normal.textColor = ClaudiaSkin.Accent;
+            // Bold at the title's size (Body, scaled) in the normal text colour: never the secondary grey.
+            _tagline = new GUIStyle(ClaudiaSkin.Body) { fontStyle = FontStyle.Bold };
+            _tagline.normal.textColor = ClaudiaSkin.Text;
             _secondary = ClaudiaSkin.Secondary;
             _text = ClaudiaSkin.Body;
         }
