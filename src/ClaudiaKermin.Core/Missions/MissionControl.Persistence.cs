@@ -134,6 +134,7 @@ namespace ClaudiaKermin.Core.Missions
                     Effort = turn.Effort,
                     UserText = turn.UserText,
                     Notice = turn.Notice,
+                    PlayerText = turn.PlayerText,
                     ScriptRewrite = turn.ScriptRewrite,
                     Waits = turn.Waits,
                     BaseMessages = mission.Conversation.Count,
@@ -464,6 +465,7 @@ namespace ClaudiaKermin.Core.Missions
                     Effort = unanswered.Effort,
                     UserText = unanswered.UserText,
                     Notice = unanswered.Notice,
+                    PlayerText = unanswered.PlayerText,
                     ScriptRewrite = unanswered.ScriptRewrite,
                     Waits = unanswered.Waits,
                 };

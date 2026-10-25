@@ -27,6 +27,8 @@ namespace ClaudiaKermin.Core.Missions
         public string Effort;
         public string UserText = "";
         public string Notice = "";
+        /// <summary>The player's own words when typed at a pending plan, so a re-sent question can still be read as a revision; null for any other turn and in older files.</summary>
+        public string PlayerText;
         /// <summary>A rewrite after a failed Script Check, so a re-sent one gets no further automatic rewrite.</summary>
         public bool ScriptRewrite;
         /// <summary>The turn waits at the Spending Cap instead of Pausing the Mission (the waiting call).</summary>
@@ -97,6 +99,7 @@ namespace ClaudiaKermin.Core.Missions
                 .Field("effort", turn.Effort)
                 .Field("user_text", turn.UserText)
                 .Field("notice", turn.Notice)
+                .Field("player_text", turn.PlayerText)
                 .Field("script_rewrite", turn.ScriptRewrite)
                 .Field("waits", turn.Waits)
                 .Field("base_messages", turn.BaseMessages)
@@ -114,6 +117,7 @@ namespace ClaudiaKermin.Core.Missions
                 Effort = JsonNode.Str(root["effort"]),
                 UserText = JsonNode.Str(root["user_text"]) ?? "",
                 Notice = JsonNode.Str(root["notice"]) ?? "",
+                PlayerText = JsonNode.Str(root["player_text"]),
                 ScriptRewrite = JsonNode.Bool(root["script_rewrite"]) ?? false,
                 Waits = JsonNode.Bool(root["waits"]) ?? false,
                 BaseMessages = (int)(JsonNode.Long(root["base_messages"]) ?? 0),
