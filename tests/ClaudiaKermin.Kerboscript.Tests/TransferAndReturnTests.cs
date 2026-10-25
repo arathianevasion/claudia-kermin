@@ -107,6 +107,26 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "round(transfer_to_synodic({0}, {1}), 6)", a, b)));
         }
 
+        // A craft in a 1960 s orbit is searched against the Mun's 138984 s: the span must reach round to the
+        // Mun's phase (#228: a span of one craft orbit, the craft's synodic period, left the Mun's phase
+        // to chance and found 1649 m/s against about 860 for a Hohmann transfer).
+        [Theory]
+        [InlineData(1960, 138984, "138984")]
+        [InlineData(138984, 1960, "138984")]
+        [InlineData(2, 3, "6")]
+        [InlineData(5, 5, "5")]
+        public void The_departure_is_searched_over_the_longer_period_or_a_synodic_period_if_that_is_longer(double a, double b, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "round(transfer_to_search_duration({0}, {1}), 6)", a, b)));
+        }
+
+        [Fact]
+        public void The_options_passed_to_rsvp_search_the_whole_phase_and_capture_at_target_pe()
+        {
+            var printed = Run("local o is transfer_to_rsvp_options(1300, 30000, 1960, 138984). print o:keys:length. print o:create_maneuver_nodes. print o:final_orbit_periapsis. print o:final_orbit_type. print o:earliest_departure. print o:search_duration. print o:haskey(\"max_time_of_flight\"). print o:haskey(\"search_interval\").");
+            Assert.Equal(new[] { "5", "first", "30000", "circular", "1300", "138984", "False", "False" }, printed);
+        }
+
         // ---- Coordinate descent ----
 
         [Fact]
