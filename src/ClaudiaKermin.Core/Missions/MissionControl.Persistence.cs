@@ -566,6 +566,9 @@ namespace ClaudiaKermin.Core.Missions
                 mission.SuppressCards = mission.LogRebuilt;
                 OfferSequencePlan(mission, mission.PendingSequence);
                 mission.SuppressCards = false;
+                // The rebuilt card had no "now" to say its Due Time is "in" so long against; the one awaiting Approval has one again.
+                var rebuilt = mission.LogRebuilt ? mission.Log.LastOrDefault(e => e.Kind == LogKind.SequencePlan) : null;
+                if (rebuilt != null) rebuilt.Text = MissionCards.SequencePlanBody(mission.PendingSequence, _ut, _config);
                 mission.DueNotified = state.DueNotified;
             }
             else if (stage == MissionStage.UnsafeScript) UnsafeScriptCard(mission, null);

@@ -184,6 +184,94 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(before, Read(later.View.Log));
         }
 
+        /// <summary>A UT well past the test's game time: a Due Time still to come.</summary>
+        private const double Due = 9000000;
+
+        /// <summary>A reply as the stream carries it: the JSON as one text block.</summary>
+        private static ScriptedResponse Reply(string json)
+        {
+            var sse = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_t\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],"
+                + "\"model\":\"claude-sonnet-5-5\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":3000,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":1}}}\n\n"
+                + "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n"
+                + "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":" + JsonSerializer.Serialize(json) + "}}\n\n"
+                + "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n"
+                + "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},"
+                + "\"usage\":{\"output_tokens\":200,\"iterations\":[{\"type\":\"message\",\"input_tokens\":3000,\"output_tokens\":200}]}}\n\n"
+                + "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n";
+            return new ScriptedResponse { Body = System.Text.Encoding.UTF8.GetBytes(sse) };
+        }
+
+        /// <summary>A Mission Plan with a manual stretch, a Due Time on its last sequence and a Total Mission time.</summary>
+        private static ScriptedResponse TimedManualPlan()
+        {
+            return Reply("{\"kind\":\"mission_plan\",\"say\":\"Mission Plan: a link check, a hop by hand, then a burn at its window.\",\"reply_intent\":null,"
+                + "\"sequence_plan\":null,\"debrief\":null,\"alert\":null,\"mission_plan\":{\"why\":\"Three legs.\",\"sequences\":["
+                + "{\"name\":\"Link check\",\"intent\":\"Prove the link.\",\"delta_v\":0,\"timing\":\"right away\",\"due_time_ut\":null,\"manual\":false},"
+                + "{\"name\":\"Hop\",\"intent\":\"You hop the craft.\",\"delta_v\":50,\"timing\":\"after the link check\",\"due_time_ut\":null,\"manual\":true},"
+                + "{\"name\":\"Burn\",\"intent\":\"Burn at the window.\",\"delta_v\":900,\"timing\":\"at the window\",\"due_time_ut\":" + Due + ",\"manual\":false}],"
+                + "\"total_delta_v\":950,\"expected_duration\":\"about a week\",\"mission_time_s\":600000}}");
+        }
+
+        private static ScriptedResponse TimedSequencePlan()
+        {
+            return Reply("{\"kind\":\"sequence_plan\",\"say\":\"Sequence Plan: link check.\",\"reply_intent\":null,\"mission_plan\":null,\"debrief\":null,\"alert\":null,"
+                + "\"sequence_plan\":{\"name\":\"Link check\",\"intent\":\"Prove the link.\",\"why\":\"First things first.\",\"target\":\"A report\","
+                + "\"tolerances\":\"none\",\"expected_delta_v\":0,\"expected_duration_s\":10,\"abort_conditions\":[\"no link\"],\"telemetry_checks\":[],\"risks\":[\"none\"],"
+                + "\"custom_script\":false,\"custom_script_reason\":\"\",\"script\":\"print \\\"go\\\".\\n\","
+                + "\"due_time_ut\":" + Due + ",\"window_closes_ut\":null,\"late_window_dv\":null,\"manual\":false}}");
+        }
+
+        private static ScriptedResponse FullDebrief()
+        {
+            return Reply("{\"kind\":\"debrief\",\"say\":\"Debrief.\",\"reply_intent\":null,\"mission_plan\":null,\"sequence_plan\":null,\"alert\":null,"
+                + "\"debrief\":{\"outcome\":\"Nominal\",\"why\":\"It went.\",\"what_happened\":\"The link held.\",\"goal_reached\":true,\"next\":\"\",\"eva_science\":\"\","
+                + "\"outcome_vs_target\":\"Report received against a report planned.\",\"plan_margin\":\"950 m/s left against 950 m/s to fly.\","
+                + "\"science\":\"None.\",\"goal_checklist\":[{\"item\":\"Prove the link\",\"done\":true},{\"item\":\"Hop\",\"done\":false}],"
+                + "\"follow_up\":\"none\",\"follow_up_text\":\"\"}}");
+        }
+
+        private static string Detail(DebriefDetail d)
+        {
+            return d == null ? "(none)" : string.Join("|", d.Rating, d.OutcomeVsTarget, d.PlanMargin, d.Science, d.FollowUp,
+                string.Join(";", d.Checklist.Select(i => i.Item + "=" + i.Done)));
+        }
+
+        [Fact]
+        public void APlanWithADueTimeAndAManualStretchAndAFullDebriefReadTheSameAfterALoad()
+        {
+            var transport = new StreamingFakeTransport(TimedManualPlan(), TimedSequencePlan(), FullDebrief());
+            var mission = Control(transport);
+            ToMissionPlan(mission);
+            var plan = mission.View.Log.Single(e => e.Kind == LogKind.MissionPlan).Text;
+            Assert.Contains("Hop [you fly this by hand]", plan);
+            Assert.Contains("; Due Time " + Ui.KerbinTime.Date(Due), plan);
+            Assert.Contains("Total Mission time " + Ui.KerbinTime.Span(600000), plan);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+
+            // A load while the Sequence Plan with a Due Time waits for Approval: the same cards, the Due Time still "in" so long.
+            var waiting = Read(mission.View.Log);
+            var later = Control(Replies());
+            later.Send(new UtAdvanced(mission.View.Ut));
+            later.Send(new MissionsRestored(_save.Path, mission.ExportStates()));
+            Assert.Equal(waiting, Read(later.View.Log));
+
+            mission.Send(new UtAdvanced(Due + 1));
+            mission.Send(new Approve());
+            var run = Assert.Single(mission.TakeCommands().OfType<StartScript>());
+            mission.Send(new KosRunEnded(Finished(), run.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+            var before = Read(mission.View.Log);
+            var detail = Detail(mission.View.Log.Last(e => e.Kind == LogKind.Debrief).Debrief);
+            Assert.Contains("Report received against a report planned.", detail);
+
+            var loaded = Control(Replies());
+            loaded.Send(new MissionsRestored(_save.Path, mission.ExportStates()));
+            Assert.Equal(before, Read(loaded.View.Log));
+            // The Debrief keeps the detail Claudia gave (#56); what the mod saw during the run (events, margin bar) isn't in the transcript.
+            Assert.Equal(detail, Detail(loaded.View.Log.Last(e => e.Kind == LogKind.Debrief).Debrief));
+        }
+
         // ---- Starting or resuming pauses the active Mission at a sequence boundary ----
 
         [Fact]

@@ -224,19 +224,11 @@ namespace ClaudiaKermin.Core.Missions
             var gate = mission.Gate ?? new DebriefGate();
             mission.Gate = null;
             var snapshot = _snapshot;
-            var detail = new DebriefDetail
-            {
-                Rating = debrief.Outcome,
-                OutcomeVsTarget = debrief.OutcomeVsTarget,
-                PlanMargin = debrief.PlanMargin,
-                RecheckSummary = gate.RecheckSummary,
-                RecheckSkipped = gate.RecheckSkipped,
-                Science = debrief.Science,
-                ScriptError = mission.ScriptError,
-                FollowUp = FollowUpOffer(debrief),
-            };
+            var detail = MissionCards.DebriefDetail(debrief);
+            detail.RecheckSummary = gate.RecheckSummary;
+            detail.RecheckSkipped = gate.RecheckSkipped;
+            detail.ScriptError = mission.ScriptError;
             detail.RecheckFindings = gate.RecheckFindings.ToList();
-            detail.Checklist = debrief.Checklist.ToList();
             detail.Events = mission.RunEvents.EventLines(mission.RunStartUt);
             detail.ScienceSeen = mission.RunEvents.ScienceLines(mission.RunStartUt);
             if (snapshot != null)
@@ -249,26 +241,6 @@ namespace ClaudiaKermin.Core.Missions
             mission.RunEvents.Clear();
             mission.ScriptError = "";
             return detail;
-        }
-
-        /// <summary>The next step as an offer, in the mod's words: a corrective sequence or revised plan, a reduced goal, or the end.</summary>
-        private static string FollowUpOffer(Debrief debrief)
-        {
-            if (debrief.GoalReached) return "Mission Goal met.";
-            var text = debrief.FollowUpText.Length > 0 ? debrief.FollowUpText : debrief.Next;
-            switch (debrief.Outcome)
-            {
-                case "Failed":
-                    return debrief.FollowUp == FollowUps.ReducedGoal && debrief.FollowUpText.Length > 0
-                        ? "The Mission Goal can't be reached as stated. Reduced goal, for your Approval: " + debrief.FollowUpText + " Approve it, or End Mission."
-                        : "The Mission Goal can't be reached as stated, and no reduced goal is on offer: the Mission ends.";
-                case "Off-Nominal":
-                    return debrief.FollowUp == FollowUps.RevisedPlan
-                        ? "Revised Mission Plan next" + (text.Length > 0 ? ": " + text : ".")
-                        : "Corrective sequence next" + (text.Length > 0 ? ": " + text : ".");
-                default:
-                    return text.Length > 0 ? "Next: " + text : "";
-            }
         }
 
         // ---- What follows ----

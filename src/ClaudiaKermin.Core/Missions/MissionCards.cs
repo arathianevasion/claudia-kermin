@@ -78,5 +78,42 @@ namespace ClaudiaKermin.Core.Missions
             return debrief.WhatHappened + (debrief.Next.Length > 0 ? "\nNext: " + debrief.Next : "")
                 + (crossings.Length > 0 ? "\nTelemetry Checks crossed: " + crossings : "");
         }
+
+        /// <summary>
+        /// The part of a Debrief card's detail that is Claudia's (rating, outcome against target, margin, science, checklist, follow-up),
+        /// so a card rebuilt from the transcript keeps it; what the mod saw during the run is added by the loop.
+        /// </summary>
+        public static DebriefDetail DebriefDetail(Debrief debrief)
+        {
+            return new DebriefDetail
+            {
+                Rating = debrief.Outcome,
+                OutcomeVsTarget = debrief.OutcomeVsTarget,
+                PlanMargin = debrief.PlanMargin,
+                Science = debrief.Science,
+                FollowUp = FollowUpOffer(debrief),
+                Checklist = debrief.Checklist.ToList(),
+            };
+        }
+
+        /// <summary>The next step as an offer, in the mod's words: a corrective sequence or revised plan, a reduced goal, or the end.</summary>
+        private static string FollowUpOffer(Debrief debrief)
+        {
+            if (debrief.GoalReached) return "Mission Goal met.";
+            var text = debrief.FollowUpText.Length > 0 ? debrief.FollowUpText : debrief.Next;
+            switch (debrief.Outcome)
+            {
+                case "Failed":
+                    return debrief.FollowUp == FollowUps.ReducedGoal && debrief.FollowUpText.Length > 0
+                        ? "The Mission Goal can't be reached as stated. Reduced goal, for your Approval: " + debrief.FollowUpText + " Approve it, or End Mission."
+                        : "The Mission Goal can't be reached as stated, and no reduced goal is on offer: the Mission ends.";
+                case "Off-Nominal":
+                    return debrief.FollowUp == FollowUps.RevisedPlan
+                        ? "Revised Mission Plan next" + (text.Length > 0 ? ": " + text : ".")
+                        : "Corrective sequence next" + (text.Length > 0 ? ": " + text : ".");
+                default:
+                    return text.Length > 0 ? "Next: " + text : "";
+            }
+        }
     }
 }

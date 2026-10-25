@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Andrew Watson
 
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Config;
@@ -105,7 +106,7 @@ namespace ClaudiaKermin.Core.Missions
                 {
                     Kind = LogKind.SequencePlan,
                     Title = sequence.Name,
-                    Text = MissionCards.SequencePlanBody(sequence, null, config),
+                    Text = MissionCards.SequencePlanBody(sequence, TurnUt(userText), config),
                     Why = sequence.Why,
                     Script = sequence.Script,
                     CustomScript = sequence.CustomScript,
@@ -117,14 +118,14 @@ namespace ClaudiaKermin.Core.Missions
 
         private static void AddDebrief(List<LogEntry> log, Debrief debrief, string userText)
         {
-            // The turn that asked for it listed the Telemetry Checks crossed; any of them rules out Nominal.
+            // The turn that asked for it listed the Telemetry Checks crossed; any of them rules out Nominal, as the loop rated it.
             var crossings = Crossings(userText);
-            var outcome = debrief.Outcome;
-            if (crossings.Length > 0 && outcome == "Nominal")
+            if (crossings.Length > 0 && debrief.Outcome == "Nominal")
             {
-                outcome = "Off-Nominal";
+                debrief.Outcome = "Off-Nominal";
                 log.Add(new LogEntry { Kind = LogKind.Notice, Text = "Rated Off-Nominal, not Nominal: a Telemetry Check was crossed during the run." });
             }
+            var outcome = debrief.Outcome;
             log.Add(new LogEntry
             {
                 Kind = LogKind.Debrief,
@@ -132,9 +133,23 @@ namespace ClaudiaKermin.Core.Missions
                 Text = MissionCards.DebriefBody(debrief, crossings),
                 Why = debrief.Why,
                 Outcome = outcome,
+                Debrief = MissionCards.DebriefDetail(debrief),
             });
             if (debrief.GoalReached) log.Add(new LogEntry { Kind = LogKind.Notice, Text = "Mission Goal met: the Mission is over." });
             else if (outcome == "Failed") log.Add(new LogEntry { Kind = LogKind.Notice, Text = "The Mission Goal can't be reached as stated: the Mission has ended." });
+        }
+
+        /// <summary>The game time the turn asking for a plan gave Claudia ("UT: 123.4 s."), which the card's Due Time was "in" so long against; null without one.</summary>
+        private static double? TurnUt(string userText)
+        {
+            const string marker = "UT: ";
+            var at = userText.StartsWith(marker, System.StringComparison.Ordinal) ? 0 : userText.IndexOf("\n" + marker, System.StringComparison.Ordinal);
+            if (at < 0) return null;
+            var start = userText.IndexOf(marker, at, System.StringComparison.Ordinal) + marker.Length;
+            var end = userText.IndexOf(" s.", start, System.StringComparison.Ordinal);
+            double ut;
+            if (end < 0 || !double.TryParse(userText.Substring(start, end - start), NumberStyles.Float, CultureInfo.InvariantCulture, out ut)) return null;
+            return ut;
         }
 
         private static string Crossings(string userText)
