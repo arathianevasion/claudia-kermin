@@ -528,7 +528,8 @@ namespace ClaudiaKermin.Core.Missions
         {
             var count = mission.Conversation.Count;
             UnansweredTurn unanswered = null;
-            if (resumeAfterQuit) unanswered = ValidUnanswered(mission);
+            // A Paused save keeps its unanswered turn through a quickload too: Retry, Retry with a note and Choose model resend it.
+            if (resumeAfterQuit || state.Stage == MissionStage.Paused) unanswered = ValidUnanswered(mission);
             else ClearUnanswered(mission);
 
             if (count > state.TranscriptMarker)
@@ -615,7 +616,7 @@ namespace ClaudiaKermin.Core.Missions
             var inFlight = paused ? state.StageBeforePause : state.Stage;
             if (inFlight == MissionStage.Planning) purpose = Purpose.MissionPlan;
             else if (inFlight == MissionStage.Sequencing) purpose = Purpose.SequencePlan;
-            // A Debrief would move the Mission on past its Pause, so a Paused one is asked again as before (#213 decides it).
+            // A Debrief would move the Mission on past its Pause, so a Paused one is asked again as before (applying it while Paused is #213's open follow-up).
             else if (inFlight == MissionStage.Debriefing && !paused) purpose = Purpose.Debrief;
             else return false;
 
@@ -659,9 +660,11 @@ namespace ClaudiaKermin.Core.Missions
             }
             mission.SuppressCards = false;
             Event(mission, "advanced", "the reply to the in-flight " + purpose + " request was already in the transcript");
-            Note(LogKind.Notice, "Claudia's last request had already been answered; her reply is offered for your Approval.");
-            if (paused)
+            if (!paused) Note(LogKind.Notice, "Claudia's last request had already been answered; her reply is offered for your Approval.");
+            else
             {
+                Note(LogKind.Notice, "Claudia's last request had already been answered; her reply is kept for when you Resume, and the Mission stays Paused"
+                    + (string.IsNullOrEmpty(state.PauseReason) ? "." : ": " + state.PauseReason));
                 // The offer moved the stage on; the Pause and its cause stand, and Resume lands on the offer.
                 mission.StageBeforePause = mission.Stage;
                 mission.Stage = MissionStage.Paused;
