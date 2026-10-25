@@ -67,6 +67,18 @@ namespace ClaudiaKermin.Adapter
             _send(new CraftRange(distance, unload, rate));
         }
 
+        /// <summary>
+        /// Call with each Game Snapshot: with the player in another vessel, the craft's link to Kerbin (Blackout), which its
+        /// own snapshots carry otherwise. CommNet keeps an unloaded vessel's connection too.
+        /// </summary>
+        public void Link(string craftId)
+        {
+            var active = FlightGlobals.ActiveVessel;
+            if (string.IsNullOrEmpty(craftId) || active == null || Id(active) == craftId) return;
+            var craft = FlightGlobals.Vessels.FirstOrDefault(v => v != null && Id(v) == craftId);
+            if (craft != null) _send(new CraftLinkSeen(craftId, SnapshotReader.LinkedHome(craft)));
+        }
+
         // Docking: both vessels still exist, so each side's parts can be named before they merge.
         private void OnPartCouple(GameEvents.FromToAction<Part, Part> action)
         {

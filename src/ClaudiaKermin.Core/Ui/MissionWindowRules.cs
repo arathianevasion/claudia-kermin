@@ -421,6 +421,13 @@ namespace ClaudiaKermin.Core.Ui
         /// </summary>
         public static StatusChip StripStatus(MissionView view)
         {
+            // In a Blackout only a Pause waits on the player; anything else waits for the link.
+            if (view.Blackout && view.Stage != MissionStage.Paused && view.Stage != MissionStage.ManualControl)
+            {
+                var flying = view.Stage == MissionStage.Running && view.CurrentSequence >= 0 && view.CurrentSequence < view.PlanSequences.Count
+                    ? " · flying " + view.PlanSequences[view.CurrentSequence] : "";
+                return new StatusChip("Blackout" + flying, ChipTone.Info);
+            }
             if (view.ConfirmPrompt != null || WaitsOnPlayer(view.Stage)) return new StatusChip("Waiting for you", ChipTone.Attention);
             if (view.Stage == MissionStage.Running)
             {
@@ -441,9 +448,23 @@ namespace ClaudiaKermin.Core.Ui
             return view.Busy ? "Claudia is " + (view.Activity.Length > 0 ? view.Activity : "thinking") + "…" : "";
         }
 
-        /// <summary>The strip's one line after "Claudia": her latest line, or what she is doing while Busy.</summary>
+        /// <summary>
+        /// Pinned above the prompt in a Blackout: no link, and what waits for it (her queued messages, the player's held
+        /// ones); "" with a link.
+        /// </summary>
+        public static string BlackoutLine(MissionView view)
+        {
+            if (!view.Blackout) return "";
+            var line = "No link to Kerbin · Claudia flies the approved Mission Plan";
+            if (view.QueuedMessages > 0) line += " · " + view.QueuedMessages.ToString(CultureInfo.InvariantCulture) + " of her messages wait for the link";
+            if (view.HeldMessages > 0) line += " · " + view.HeldMessages.ToString(CultureInfo.InvariantCulture) + " of yours held";
+            return line;
+        }
+
+        /// <summary>The strip's one line after "Claudia": her latest line, or what she is doing while Busy; in a Blackout, that there is no link.</summary>
         public static string StripLine(MissionView view)
         {
+            if (view.Blackout) return view.LatestLine;
             if (view.Busy) return BusyLine(view);
             return view.LatestLine.Length > 0 ? view.LatestLine : "Standing by.";
         }
@@ -527,6 +548,8 @@ namespace ClaudiaKermin.Core.Ui
             if (view.AbortRecommended.Length > 0) return "Claudia recommends Abort";
             if (view.CapWait.Length > 0) return "Raise cap: Claudia's request is waiting";
             if (view.Busy) return "";
+            // In a Blackout a plan, a reduced goal or an unsafe script waits for the link, not for the player.
+            if (view.Blackout && view.Stage != MissionStage.Paused) return "";
             if (view.ConfirmPrompt != null) return "Confirm your Approval";
             var replies = view.QuickReplies;
             switch (view.Stage)
