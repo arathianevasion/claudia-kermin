@@ -56,16 +56,19 @@ namespace ClaudiaKermin.Adapter
         // Where the player put the strip (its top left); unmoved, it sits under the altimeter.
         private bool _moved;
         private Vector2 _position;
-        private bool _remembered;
-        private bool _dragging;
+        private bool _memoryApplied;
+        // A press on the status row; it becomes a move once the pointer has gone past the threshold.
+        private bool _dragging, _dragMoved;
         private Vector2 _dragFromMouse, _dragFromStrip;
         // This frame's placement: the strip kept on screen, the side its tab and panel are on.
         private StripPlacement _place;
 
         // How far the segment track is scrolled, and the current segment it last scrolled to show.
         private float _scroll;
-        private string _followed, _followedMission;
+        private string _followedKey, _followedMission;
         private float _trackDragFromX, _trackDragFromScroll;
+        // The track's control while it is being dragged, 0 otherwise.
+        private int _trackDragId;
 
         public bool UiHidden;
 
@@ -131,7 +134,15 @@ namespace ClaudiaKermin.Adapter
         public void Unlock()
         {
             _dragging = false;
+            EndTrackDrag();
             _frame.Unlock();
+        }
+
+        // A track drag whose track went away (or stopped scrolling) mustn't keep the pointer captured.
+        private void EndTrackDrag()
+        {
+            if (_trackDragId != 0 && GUIUtility.hotControl == _trackDragId) GUIUtility.hotControl = 0;
+            _trackDragId = 0;
         }
 
         private void Draw(int id)
@@ -169,8 +180,8 @@ namespace ClaudiaKermin.Adapter
         // On the first draw, where the player last left it.
         private void ApplyRemembered()
         {
-            if (_remembered) return;
-            _remembered = true;
+            if (_memoryApplied) return;
+            _memoryApplied = true;
             WindowBox box;
             _moved = WindowMemory.TryGet(MemoryName, out box);
             if (_moved) _position = new Vector2(box.X, box.Y);
@@ -183,14 +194,14 @@ namespace ClaudiaKermin.Adapter
             if (!Input.GetMouseButton(0))
             {
                 _dragging = false;
-                if (delta.magnitude < DragThreshold) return;
+                if (!_dragMoved) return;
                 // Kept as placed on this screen, so a later, smaller screen doesn't remember it squeezed.
                 _position = new Vector2(_place.X, _place.Y);
                 WindowMemory.Store(MemoryName, new WindowBox(_position.x, _position.y, Width, _stripHeight));
                 return;
             }
-            if (delta.magnitude < DragThreshold) return;
-            _moved = true;
+            if (!_dragMoved && delta.magnitude < DragThreshold) return;
+            _dragMoved = _moved = true;
             _position = _dragFromStrip + delta;
         }
 
@@ -205,12 +216,14 @@ namespace ClaudiaKermin.Adapter
         // A press in the status row starts a drag; a double-click resets.
         private void HandleStatusRowInput(Rect row)
         {
+            GUI.Label(row, new GUIContent("", "Drag to move the strip; double-click to put it back under the altimeter"), GUIStyle.none);
             var e = Event.current;
             if (e.type != EventType.MouseDown || e.button != 0 || !row.Contains(e.mousePosition)) return;
             if (e.clickCount == 2) ResetPosition();
             else
             {
                 _dragging = true;
+                _dragMoved = false;
                 _dragFromMouse = GuiMouse();
                 _dragFromStrip = new Vector2(_place.X, _place.Y);
             }
@@ -229,7 +242,6 @@ namespace ClaudiaKermin.Adapter
         {
             GUILayout.BeginHorizontal();
             var portrait = GUILayoutUtility.GetRect(PortraitSize, PortraitSize, GUILayout.Width(PortraitSize), GUILayout.Height(PortraitSize));
-            GUI.Label(portrait, new GUIContent("", "Drag to move the strip; double-click to put it back under the altimeter"), GUIStyle.none);
             if (Event.current.type == EventType.Repaint)
                 GUI.DrawTexture(portrait, Portrait(), ScaleMode.ScaleAndCrop, true, 0, Color.white, 0, PortraitRadius);
             GUILayout.Space(ClaudiaSkin.Gap + 2);
@@ -288,6 +300,7 @@ namespace ClaudiaKermin.Adapter
             var id = GUIUtility.GetControlID(FocusType.Passive);
             if (segments.Count == 0)
             {
+                EndTrackDrag();
                 GUILayout.Label(MissionWindowRules.NoPlanYet, ClaudiaSkin.Secondary);
                 return;
             }
@@ -321,7 +334,7 @@ namespace ClaudiaKermin.Adapter
             for (var i = 0; i < segments.Count; i++)
                 if (segments[i].State == SegmentState.Current) current = i;
             var key = View.MissionId + "|" + segments.Count + "|" + current;
-            if (key == _followed)
+            if (key == _followedKey)
             {
                 _scroll = track.Clamp(_scroll);
                 return;
@@ -329,24 +342,23 @@ namespace ClaudiaKermin.Adapter
             // A new Mission starts its track from the left.
             if (View.MissionId != _followedMission) _scroll = 0;
             _scroll = track.ScrollToShow(_scroll, current);
-            _followed = key;
+            _followedKey = key;
             _followedMission = View.MissionId;
         }
 
         private void HandleTrackInput(int id, Rect row, SegmentTrack track)
         {
-            if (!track.Scrolls) return;
             var e = Event.current;
             var step = track.SegmentWidth + track.Gap;
             switch (e.GetTypeForControl(id))
             {
                 case EventType.MouseDown:
-                    if (e.button != 0 || !row.Contains(e.mousePosition)) return;
+                    if (!track.Scrolls || e.button != 0 || !row.Contains(e.mousePosition)) return;
                     if (_scroll > 0 && LeftArrow(row).Contains(e.mousePosition)) _scroll = track.Clamp(_scroll - step);
                     else if (_scroll < track.MaxScroll && RightArrow(row).Contains(e.mousePosition)) _scroll = track.Clamp(_scroll + step);
                     else
                     {
-                        GUIUtility.hotControl = id;
+                        GUIUtility.hotControl = _trackDragId = id;
                         _trackDragFromX = e.mousePosition.x;
                         _trackDragFromScroll = _scroll;
                     }
@@ -359,11 +371,11 @@ namespace ClaudiaKermin.Adapter
                     break;
                 case EventType.MouseUp:
                     if (GUIUtility.hotControl != id) return;
-                    GUIUtility.hotControl = 0;
+                    EndTrackDrag();
                     e.Use();
                     break;
                 case EventType.ScrollWheel:
-                    if (!row.Contains(e.mousePosition)) return;
+                    if (!track.Scrolls || !row.Contains(e.mousePosition)) return;
                     // A notch (about 3) moves about a segment; a sideways wheel or trackpad works too.
                     var delta = Mathf.Abs(e.delta.x) > Mathf.Abs(e.delta.y) ? e.delta.x : e.delta.y;
                     _scroll = track.Clamp(_scroll + delta * step / 3f);

@@ -147,6 +147,14 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ThePanelDoesNotOpenAboveIntoLessRoomThanItsFloor()
+        {
+            // 120 px below and 168 above on a 480 px screen: more above, but under the 200 px floor, so it stays below.
+            var place = CapcomStripLayout.Place(650, 200, Size, 1280, 480);
+            Assert.Equal(PanelSide.Below, place.Side);
+        }
+
+        [Fact]
         public void TheStripAndItsTabStayOnScreen()
         {
             var place = CapcomStripLayout.Place(-100, -5, Size, 1920, 1080);

@@ -118,7 +118,7 @@ namespace ClaudiaKermin.Core.Ui
         /// <summary>
         /// Places the strip the player dragged to (<paramref name="x"/>, <paramref name="y"/>, screen pixels from the top
         /// left): the strip and a tab under it are kept on screen. The panel opens below when it fits there whole, otherwise
-        /// on the side with more room, shrunk to that room but never under its floor. The side doesn't depend on whether
+        /// on the side with more room, shrunk to that room but never under its floor (and never above into less than it). The side doesn't depend on whether
         /// the panel is open, so the tab doesn't jump when it is clicked.
         /// </summary>
         public static StripPlacement Place(float x, float y, StripSize size, float screenWidth, float screenHeight)
@@ -127,7 +127,8 @@ namespace ClaudiaKermin.Core.Ui
             y = Math.Max(0, Math.Min(y, screenHeight - size.StripHeight - size.TabHeight));
             var below = screenHeight - y - size.StripHeight - size.TabHeight;
             var above = y - size.TabHeight;
-            var side = below >= size.PanelHeight || below >= above ? PanelSide.Below : PanelSide.Above;
+            // Above only with room for at least its floor: a panel taller than the room above would push the strip down.
+            var side = below >= size.PanelHeight || below >= above || above < size.MinPanelHeight ? PanelSide.Below : PanelSide.Above;
             var room = side == PanelSide.Below ? below : above;
             return new StripPlacement
             {
