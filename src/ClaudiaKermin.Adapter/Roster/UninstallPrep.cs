@@ -23,7 +23,7 @@ namespace ClaudiaKermin.Adapter.Roster
             var actions = UninstallPlanner.Plan(RosterGateway.Snapshot(roster));
             if (actions.Count == 0) return "Nothing to do: nobody in this save has the Super Intelligence role.";
 
-            foreach (var action in actions) RosterGateway.Apply(roster, action, null);
+            foreach (var action in actions) RosterGateway.Apply(roster, action, null, null);
 
             var changed = UninstallPlanner.CountChanged(actions, RosterGateway.Snapshot(roster));
             UnityEngine.Debug.Log(ModInfo.LogTag + " prepared to uninstall: " + changed + " of " + actions.Count + " Kerbal(s) set to " + UninstallPlanner.ReplacementTrait);

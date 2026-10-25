@@ -90,6 +90,12 @@ namespace ClaudiaKermin.Core.Roster
             RenameDeclined = declined;
         }
 
+        /// <summary>The rename dialog never opened (its Kerbal was gone): the prompt is no longer pending and nothing was answered, so a clash is offered again.</summary>
+        public void RenameSkipped()
+        {
+            PromptPending = false;
+        }
+
         public Dictionary<string, string> ToValues()
         {
             var values = new Dictionary<string, string>();

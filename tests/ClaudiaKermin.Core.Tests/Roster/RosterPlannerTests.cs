@@ -122,6 +122,21 @@ namespace ClaudiaKermin.Core.Tests.Roster
         }
 
         [Fact]
+        public void ASkippedRenamePromptIsNoLongerPendingAndIsOfferedAgain()
+        {
+            var state = new RosterState();
+            var kerbals = new[] { Crew("Claudia Smith") };
+            RosterPlanner.Plan(kerbals, state, Now, Timer, max => 0);
+            Assert.True(state.PromptPending);
+
+            state.RenameSkipped();
+
+            Assert.False(state.PromptPending);
+            Assert.False(state.RenameDeclined);
+            Assert.Equal(RosterActionType.PromptRename, Assert.Single(RosterPlanner.Plan(kerbals, state, Now, Timer, max => 0)).Type);
+        }
+
+        [Fact]
         public void DecliningTheRenameLeavesClaudiaInactiveAndStopsAsking()
         {
             var state = new RosterState();

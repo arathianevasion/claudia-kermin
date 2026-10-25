@@ -67,8 +67,9 @@ namespace ClaudiaKermin.Adapter.Roster
             return null;
         }
 
-        /// <summary>Applies one action; PromptRename goes to <paramref name="onPromptRename"/> since it needs the player.</summary>
-        public static void Apply(KerbalRoster roster, RosterAction action, Action<ProtoCrewMember> onPromptRename)
+        /// <summary>Applies one action; PromptRename goes to <paramref name="onPromptRename"/> since it needs the player;
+        /// <paramref name="onPromptSkipped"/> is called instead when its Kerbal is gone, so the pending prompt is cleared.</summary>
+        public static void Apply(KerbalRoster roster, RosterAction action, Action<ProtoCrewMember> onPromptRename, Action onPromptSkipped)
         {
             if (action.Type == RosterActionType.AddClaudia)
             {
@@ -80,6 +81,7 @@ namespace ClaudiaKermin.Adapter.Roster
             if (kerbal == null)
             {
                 Debug.LogWarning(ModInfo.LogTag + " skipped " + action.Type + ": no Kerbal named \"" + action.Target + "\" on the roster");
+                if (action.Type == RosterActionType.PromptRename && onPromptSkipped != null) onPromptSkipped();
                 return;
             }
 
