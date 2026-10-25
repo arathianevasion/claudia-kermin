@@ -24,6 +24,8 @@ namespace ClaudiaKermin.Core.Missions
             public List<ChildVessel> Children = new List<ChildVessel>();
             /// <summary>The Child Vessel the current run flies; "" for the craft.</summary>
             public string RunningChild = "";
+            /// <summary>The ids of vessels the mod saw leave the craft (separation or undocking), kept with the Mission and saved; only these may be named as Child Vessels by id.</summary>
+            public HashSet<string> LeftTheCraft = new HashSet<string>();
         }
 
         /// <summary>The vessels in Flight as last seen; empty outside Flight.</summary>
@@ -90,6 +92,15 @@ namespace ClaudiaKermin.Core.Missions
             UpdateChildren(mission);
         }
 
+        /// <summary>
+        /// The ids a Mission Plan names as Child Vessels that never left the craft, or empty. Only vessels the mod saw separate
+        /// or undock from the craft may be Child Vessels (existing vessels are out of scope).
+        /// </summary>
+        private static List<string> UnseparatedVesselIds(Mission mission, MissionPlan plan)
+        {
+            return plan.ChildVessels.Where(c => c.VesselId.Length > 0 && !mission.LeftTheCraft.Contains(c.VesselId)).Select(c => c.VesselId).Distinct().ToList();
+        }
+
         // ---- What the mod sees of them ----
 
         /// <summary>The vessels in Flight changed: each Child Vessel is found (a vessel other than the craft carrying its processor) or not.</summary>
@@ -132,6 +143,7 @@ namespace ClaudiaKermin.Core.Missions
             if (mission == null || !FollowsCraft(mission)) return;
             var left = MissionCraft.Added(mission.Remote, mission.ProcessorPartId, mission.VesselId, separated.First, separated.Second);
             if (left == null) return;
+            if (left.Id.Length > 0) mission.LeftTheCraft.Add(left.Id);
             var child = mission.Children.FirstOrDefault(c => c.VesselId == left.Id || left.ProcessorPartIds.Any(c.ProcessorPartIds.Contains));
             if (child == null && !separated.Undocked && !left.HasKosProcessor) return;
             if (child != null)
@@ -267,6 +279,27 @@ namespace ClaudiaKermin.Core.Missions
                 json.EndArray().EndObject();
             }
             return json.EndArray().ToString();
+        }
+
+        private static string LeftTheCraftJson(Mission mission)
+        {
+            if (mission.LeftTheCraft.Count == 0) return "";
+            var json = new JsonWriter().BeginArray();
+            foreach (var id in mission.LeftTheCraft.OrderBy(i => i, StringComparer.Ordinal)) json.String(id);
+            return json.EndArray().ToString();
+        }
+
+        private static void RestoreLeftTheCraft(Mission mission, string text)
+        {
+            mission.LeftTheCraft = new HashSet<string>();
+            if (string.IsNullOrEmpty(text)) return;
+            try
+            {
+                foreach (var id in JsonReader.Parse(text).Items.Select(JsonNode.Str).Where(i => !string.IsNullOrEmpty(i))) mission.LeftTheCraft.Add(id);
+            }
+            catch (JsonException)
+            {
+            }
         }
 
         private static void RestoreChildVessels(Mission mission, string text)

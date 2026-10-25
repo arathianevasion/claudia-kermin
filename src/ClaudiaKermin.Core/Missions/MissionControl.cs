@@ -171,6 +171,8 @@ namespace ClaudiaKermin.Core.Missions
             public string PlayerText;
             /// <summary>A rewrite after a failed Script Check: if this script fails too, there is no further automatic rewrite.</summary>
             public bool ScriptRewrite;
+            /// <summary>A correction after a Mission Plan named a vessel that never left the craft: if it does so again, the Mission Pauses.</summary>
+            public bool ChildVesselRetry;
             /// <summary>
             /// Sent while a run is live or near one (a hand-back Debrief and its revision, a late-Approval re-plan): at the
             /// Spending Cap it waits for Raise cap instead of Pausing the Mission (<see cref="WaitForCap"/>). A turn sent
@@ -1108,6 +1110,14 @@ namespace ClaudiaKermin.Core.Missions
                 }
             }
 
+            // Only a vessel that left the craft may be a Child Vessel: the player never sees a plan that names another.
+            var unseparated = PlanNamingUnseparated(mission, turn, reply, planPending);
+            if (unseparated.Count > 0)
+            {
+                ChildVesselRefused(mission, turn, unseparated);
+                return;
+            }
+
             // An Alert's verdict is her line, prefixed with the check: a carry on leaves just this log line.
             mission.LatestLine = turn.Purpose == Purpose.Alert
                 ? "Alert, " + turn.Crossing.Check.Name() + ": " + (reply.Alert.Abort ? "Abort recommended. " : "carry on. ") + reply.Say
@@ -1142,6 +1152,49 @@ namespace ClaudiaKermin.Core.Missions
                     Alerted(mission, turn, reply);
                     break;
             }
+        }
+
+        /// <summary>The ids a Mission Plan this reply would offer names as Child Vessels without their having left the craft; empty if it offers none.</summary>
+        private static List<string> PlanNamingUnseparated(Mission mission, Turn turn, MissionReply reply, bool planPending)
+        {
+            var plan = reply.MissionPlan;
+            if (plan == null) return new List<string>();
+            switch (turn.Purpose)
+            {
+                case Purpose.MissionPlan:
+                case Purpose.Settings:
+                    return UnseparatedVesselIds(mission, plan);
+                case Purpose.Reply:
+                case Purpose.Change:
+                    var approving = turn.Purpose == Purpose.Reply && (reply.Intent == ReplyIntent.Approve || reply.Intent == ReplyIntent.Unclear) && !mission.Declined;
+                    var offered = !approving && plan != null && (planPending || (mission.AwaitingApproval && ChangesGoal(reply)));
+                    return offered ? UnseparatedVesselIds(mission, plan) : new List<string>();
+                default:
+                    return new List<string>();
+            }
+        }
+
+        /// <summary>
+        /// A Mission Plan named a vessel that never left the craft. The first time it goes back to Claudia with the reason (a
+        /// billed turn) and the player sees nothing of the plan; if the correction names one too, the Mission Pauses for Retry.
+        /// </summary>
+        private void ChildVesselRefused(Mission mission, Turn turn, IList<string> ids)
+        {
+            var named = string.Join(", ", ids.ToArray());
+            if (turn.ChildVesselRetry)
+            {
+                Failed(mission, turn, "Claudia's Mission Plan still names a Child Vessel that has not left the craft (" + named + ").");
+                return;
+            }
+            Note(LogKind.Notice, "The Mission Plan names a vessel that hasn't left the craft (" + named + "); Claudia is revising it.");
+            Begin(new Turn
+            {
+                Purpose = Purpose.MissionPlan,
+                Effort = "high",
+                ChildVesselRetry = true,
+                UserText = MissionPrompts.ChildVesselNotLeft(ids),
+                Notice = MissionPrompts.ChildVesselNotice,
+            });
         }
 
         /// <summary>Claudia's line; when she declines the goal with a Mission Plan of no sequences, her <c>why</c> follows it (there is no card to carry it).</summary>

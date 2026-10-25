@@ -246,6 +246,77 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Contains(mission.View.Log, e => e.Text.Contains("Probe unloaded: it went out of range of the player's vessel"));
         }
 
+        // ---- Only vessels that left the craft (#192) ----
+
+        private const string NeverLeft = "[{\"name\":\"Bystander\",\"separation_stage\":null,\"vessel_id\":\"bystander\"}]";
+
+        private MissionControl StartedWith(StreamingFakeTransport transport)
+        {
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            CraftCheckRouter.StartChecked(mission, _background, Mothership.WithProbe(), new StartMission(Goal, 10m, Sonnet, false));
+            mission.Send(Mothership.WithProbe());
+            return mission;
+        }
+
+        [Fact]
+        public void AMissionPlanNamingAVesselThatNeverLeftTheCraftGoesBackToClaudiaWithTheReason()
+        {
+            var transport = new StreamingFakeTransport(MissionPlan(NeverLeft, "Bystander"), MissionPlan("[]", "craft"));
+            var mission = StartedWith(transport);
+            // A vessel the mod sees in Flight, but which never left the craft.
+            mission.Send(new VesselsSeen(new List<SeenVessel> { CraftSeen(), ProbeSeen(id: "bystander", name: "Bystander") }));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+
+            Assert.Equal(2, transport.Requests.Count);
+            Assert.Contains("no such vessel has left the craft", Messages(transport.Requests[1]));
+            Assert.Contains("bystander", Messages(transport.Requests[1]));
+            Assert.Empty(mission.View.ChildVessels);
+            Assert.DoesNotContain(mission.View.Log, e => e.Text.Contains("The probe flies on alone."));
+        }
+
+        [Fact]
+        public void AMissionPlanNamingAVesselThatLeftTheCraftIsOffered()
+        {
+            var revised = MissionPlan("[{\"name\":\"Probe\",\"separation_stage\":null,\"vessel_id\":\"probe\"}]");
+            var transport = new StreamingFakeTransport(MissionPlan("[]", "craft"), revised);
+            var mission = StartedWith(transport);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new VesselsSeparated(ProbeSeen(), CraftSeen(), false));
+            mission.Send(new ChangeSomething("Fly the probe."));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval && v.ChildVessels.Count == 1);
+            Assert.Equal(2, transport.Requests.Count);
+            Assert.Equal("Probe", mission.View.ChildVessels.Single().Name);
+        }
+
+        [Fact]
+        public void IfTheCorrectedMissionPlanStillNamesAVesselThatNeverLeftTheMissionPauses()
+        {
+            var transport = new StreamingFakeTransport(MissionPlan(NeverLeft, "Bystander"), MissionPlan(NeverLeft, "Bystander"));
+            var mission = StartedWith(transport);
+            DrainUntil(mission, v => v.Stage == MissionStage.Paused);
+            Assert.Equal(2, transport.Requests.Count);
+            Assert.Contains("has not left the craft", mission.View.PauseReason);
+            Assert.Empty(mission.View.ChildVessels);
+        }
+
+        [Fact]
+        public void TheIdsOfVesselsThatLeftTheCraftAreKeptWithTheMissionInTheSave()
+        {
+            var transport = new StreamingFakeTransport(MissionPlan("[]", "craft"), SequencePlan("Release", "craft"));
+            var mission = Control(transport);
+            ToFirstSequencePlan(mission);
+            mission.Send(new VesselsSeparated(ProbeSeen(id: "left-1"), CraftSeen(), false));
+            var state = Assert.Single(mission.ExportStates());
+            Assert.Equal("[\"left-1\"]", state.LeftTheCraft);
+            var saved = MissionSaveState.FromValues(state.ToValues());
+
+            var reloaded = Control(new StreamingFakeTransport());
+            reloaded.Send(new SceneChanged(GameScene.Flight));
+            reloaded.Send(new MissionsRestored(_save.Path, new List<MissionSaveState> { saved }));
+            Assert.Equal("[\"left-1\"]", Assert.Single(reloaded.ExportStates()).LeftTheCraft);
+        }
+
         // ---- Unplanned vessels ----
 
         [Fact]

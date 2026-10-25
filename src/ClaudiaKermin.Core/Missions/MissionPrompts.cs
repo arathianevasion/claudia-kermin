@@ -4,6 +4,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Kos;
 
@@ -320,6 +321,17 @@ namespace ClaudiaKermin.Core.Missions
             return "Your Mission Script failed the Script Check twice, and the player asked for a different Sequence Plan for "
                 + "this Maneuver Sequence. The Script Check last found:\n" + Problems(problems);
         }
+
+        public static string ChildVesselNotLeft(IList<string> ids)
+        {
+            return "The mod refused your Mission Plan, so the player hasn't seen it: it names " + string.Join(", ", ids.Select(Quoted).ToArray())
+                + " as a Child Vessel by vessel id, but no such vessel has left the craft. Only a vessel that separated or undocked from the craft "
+                + "during this Mission may be a Child Vessel: name its separation stage instead, or use a vessel id from a notice that said it left.";
+        }
+
+        public const string ChildVesselNotice =
+            "Reply with kind \"mission_plan\" and a corrected Mission Plan whose Child Vessels name only vessels that have left the craft, "
+            + "or none.";
 
         public const string RewriteNotice =
             "Rewrite the Sequence Plan so its Mission Script passes the Script Check: reply with kind \"sequence_plan\" and "
