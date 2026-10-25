@@ -58,7 +58,7 @@ namespace ClaudiaKermin.ScriptCheck
             }
             catch (Exception e)
             {
-                return new ScriptCheckResult(e.Message.Trim(), null);
+                return new ScriptCheckResult(WithHint(e.Message.Trim()), null);
             }
             if (parts == null) return new ScriptCheckResult("the compiler returned no code", null);
 
@@ -70,6 +70,17 @@ namespace ClaudiaKermin.ScriptCheck
                 sections.Add(part.MainCode);
             }
             return new ScriptCheckResult(null, OpcodeReader.Read(sections));
+        }
+
+        /// <summary>
+        /// A bare return(...) statement: kOS reads `return` as its return keyword, which only works in a function,
+        /// so it fails to compile with a message that doesn't say what to do. The return Building Block works
+        /// only as a value.
+        /// </summary>
+        private static string WithHint(string compileError)
+        {
+            if (compileError.IndexOf("'RETURN' command found outside a FUNCTION", StringComparison.OrdinalIgnoreCase) < 0) return compileError;
+            return compileError + "\nIf this was the return Building Block, call it as a value, not a statement: `local res is return(...).`";
         }
 
         /// <summary>The compiler only asks whether a name is a built-in; nothing is ever called.</summary>

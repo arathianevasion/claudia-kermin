@@ -225,6 +225,35 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             AssertAllowed("list engines in engs.\nfor e in engs { e:activate(). }\nengs[0]:shutdown().");
         }
 
+        // ---- A bare return(...) statement ----
+
+        [Theory]
+        [InlineData("return(lexicon(\"stage_limit\", 2)).")]
+        [InlineData("return (lexicon(\"stage_limit\", 2)).")]
+        [InlineData("if ship:altitude > 1 { return(lexicon()). }")]
+        public void ABareReturnStatementFailsTellingTheScriptToUseTheValue(string script)
+        {
+            var result = _check.Check(script);
+            Assert.False(result.Passed, "passed: " + script);
+            Assert.NotNull(result.CompileError);
+            Assert.Contains("line:1", result.CompileError);
+            Assert.Contains("local res is return(...)", result.CompileError);
+        }
+
+        [Fact]
+        public void TheReturnBuildingBlockCalledAsAValuePasses()
+        {
+            AssertAllowed("function return { parameter o. return lexicon(\"success\", true). }\n"
+                + "local res is return(lexicon(\"stage_limit\", 2)).\nprint res:success.\n"
+                + "print return(lexicon()):success.\naddons:claudia:report(return(lexicon())).");
+        }
+
+        [Fact]
+        public void ReturnStatementsInsideFunctionsPass()
+        {
+            AssertAllowed("function f { parameter x. if x > 1 { return (x - 1). } return x. }\nprint f(3).");
+        }
+
         // ---- Compiling ----
 
         [Fact]
