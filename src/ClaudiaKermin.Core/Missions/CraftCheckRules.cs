@@ -43,7 +43,8 @@ namespace ClaudiaKermin.Core.Missions
             new CraftCheckRule("no_seat_for_claudia", Blocker, "No seat for Claudia",
                 "the Mission is crewed (she flies aboard) and the craft has no free crew seat for her."),
             new CraftCheckRule("no_probe_core_or_antenna", Blocker, "No probe core or antenna reaching home",
-                "the Mission is remote (Claudia stays at Mission Control) and the craft has no probe core, or no antenna able to reach home."),
+                "the Mission is remote (Claudia stays at Mission Control) and the craft has no probe core, or no antenna able to reach home. "
+                + "The mod also raises it itself when no part is tagged probe_core, or (with CommNet on) no antenna part has a transmitter power above zero."),
             new CraftCheckRule("delta_v_short", Blocker, "Not enough delta-v",
                 "the craft's delta-v is below what the Mission Goal's route needs from the Delta-v Map plus the margin."),
             new CraftCheckRule("twr_below_one", Blocker, "Thrust-to-weight under 1.0",

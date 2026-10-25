@@ -87,6 +87,8 @@ namespace ClaudiaKermin.Core.Missions
         private bool _remote;
         /// <summary>The mod saw for itself that this crewed Mission has no seat for Claudia, so that Blocker doesn't wait on Claude.</summary>
         private bool _noSeat;
+        /// <summary>What the mod saw for itself that this remote Mission's craft lacks (probe core, antenna); "" when nothing.</summary>
+        private string _remoteMissing = "";
         /// <summary>What the checked craft's staging plan separates, so planned Child Vessels are judged on the mod's own figures.</summary>
         private StagingPlan _staging = new StagingPlan();
         private uint? _preferredProcessor;
@@ -237,6 +239,7 @@ namespace ClaudiaKermin.Core.Missions
             _goal = goal;
             _remote = remote;
             _noSeat = !remote && !snapshot.ClaudiaAboard && snapshot.FreeSeats == 0;
+            _remoteMissing = remote ? RemoteBlocker.Missing(snapshot) : "";
             _staging = ChildVessels.Staging(snapshot, remote, ProcessorFor(snapshot));
             _craftKey = CraftKey(snapshot);
             var charge = new CraftCheckCharge { Model = request.Model, Pending = worstCase };
@@ -358,6 +361,20 @@ namespace ClaudiaKermin.Core.Missions
                     Explanation = NoSeatReason,
                     Fix = "Add a crew seat, or take another Kerbal out of the crew manifest so she can have the seat. A craft with no one aboard can fly as a remote Mission.",
                 });
+            }
+            if (_remoteMissing.Length > 0)
+            {
+                var existing = _findings.FirstOrDefault(f => f.Code == RemoteBlocker.Code);
+                if (existing != null)
+                    existing.Explanation = existing.Explanation.Length > 0 ? existing.Explanation + " " + _remoteMissing : _remoteMissing;
+                else
+                {
+                    var rule = CraftCheckRules.Find(RemoteBlocker.Code);
+                    _findings.Insert(0, new CraftFinding
+                    {
+                        Code = rule.Code, Severity = rule.Severity, Title = rule.Title, Explanation = _remoteMissing, Fix = RemoteBlocker.Fix,
+                    });
+                }
             }
             JudgeChildVessels(reply.ChildVesselStages);
             foreach (var finding in _findings.Where(f => f.Severity == CraftFindingSeverity.Warning && _keptAcknowledgements.Contains(f.Code)))
