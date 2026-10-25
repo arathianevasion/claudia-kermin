@@ -2,7 +2,8 @@ Claudia Kermin bundles third-party code under its own license. The notice below 
 kept with the code and ships in GameData/ClaudiaKermin.
 
 ================================================================================
-KSLib: kerboscript/kslib/lib_lazcalc.ks (bundled unmodified)
+KSLib: kerboscript/kslib/lib_lazcalc.ks (bundled with one patch, recorded in
+kerboscript/kslib/NOTE.md)
 https://github.com/KSP-KOS/KSLib
 ================================================================================
 
@@ -27,3 +28,17 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+================================================================================
+RSVP v9: kerboscript/rsvp/ (hill_climb, lambert, maneuver, orbit, refine, search,
+transfer and validate bundled unmodified; main.ks rewritten only in how it loads
+the other files, see kerboscript/rsvp/NOTE.md)
+https://github.com/maneatingape/rsvp
+================================================================================
+
+RSVP is copyright (C) maneatingape and licensed under the GNU General Public
+License, version 3 (GPL-3.0). The full licence text is kept with the code in
+kerboscript/rsvp/LICENSE.md; it is also at https://www.gnu.org/licenses/gpl-3.0.txt.
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE.
