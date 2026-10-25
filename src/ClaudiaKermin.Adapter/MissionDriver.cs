@@ -350,7 +350,7 @@ namespace ClaudiaKermin.Adapter
         {
             if (FlightGlobals.Vessels == null) return "";
             foreach (var vessel in FlightGlobals.Vessels)
-                if (vessel != null && vessel.GetVesselCrew().Contains(kerbal)) return vessel.id.ToString();
+                if (vessel != null && vessel.GetVesselCrew().Contains(kerbal)) return vessel.id.ToString("N");
             return "";
         }
 
