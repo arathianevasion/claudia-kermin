@@ -148,6 +148,14 @@ namespace ClaudiaKermin.Core.Missions
     }
 
     /// <summary>
+    /// Clear on a finished Mission (Succeeded, Ended or Lost): it stops being the current Mission, so the window starts fresh.
+    /// The folder and transcript are kept and marked ended, so a load doesn't bring it back. Does nothing for an active Mission.
+    /// </summary>
+    public sealed class DismissMission : MissionInput
+    {
+    }
+
+    /// <summary>
     /// The Manual Control button. A running script is aborted and the craft made safe first; the controls are then
     /// the player's until <see cref="HandBack"/>. Refused without a link or other non-Tourist crew aboard.
     /// </summary>

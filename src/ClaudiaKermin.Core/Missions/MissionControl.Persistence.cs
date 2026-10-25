@@ -259,7 +259,7 @@ namespace ClaudiaKermin.Core.Missions
             _snapshot = null;
             _active = null;
 
-            var restore = Choose(restored.States, existing);
+            var restore = Choose(restored.States.Where(s => !Dismissed(s)).ToList(), existing);
             if (restore == null)
             {
                 // A Mission folder this save knows nothing of, if there is one the player hasn't finished with.

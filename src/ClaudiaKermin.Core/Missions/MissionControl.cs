@@ -86,6 +86,7 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is AcknowledgeWarning) _craftCheck.Acknowledge(((AcknowledgeWarning)input).Code);
             else if (input is ChooseProcessor) _craftCheck.Choose(((ChooseProcessor)input).PartId, _snapshot);
             else if (input is EndMission) EndRequested();
+            else if (input is DismissMission) DismissRequested();
             else if (input is Approve) Approved();
             else if (input is ConfirmApproval) Confirmed(((ConfirmApproval)input).Yes);
             else if (input is Reply) Replied(((Reply)input).Text);
