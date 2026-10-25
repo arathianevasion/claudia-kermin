@@ -442,6 +442,47 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AQuickloadOfAPausedSaveMadeDuringARequestThatHasSinceCompletedAppliesTheReplyAndStaysPausedWithItsCause()
+        {
+            var sequence = ScriptedResponse.Fixture("mission-sequence-plan.sse", 64);
+            sequence.PauseAt = 100;
+            _gates.Add(sequence);
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse"), sequence);
+            var mission = Control(transport);
+            ToMissionPlan(mission);
+            mission.Send(new Approve());
+            var saved = Saved(mission);
+            Assert.Equal(MissionStage.Sequencing, saved[0].Stage);
+            // The player's Pause landed while the Sequence Plan request was out.
+            saved[0].StageBeforePause = MissionStage.Sequencing;
+            saved[0].Stage = MissionStage.Paused;
+            saved[0].PauseCause = "Refusal";
+            saved[0].PauseReason = "Claudia declined.";
+
+            sequence.Gate.Set();
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+            Assert.Equal(2, transport.Requests.Count);
+
+            mission.Send(new MissionsRestored(_save.Path, saved));
+            DrainUntil(mission, v => !v.Busy);
+            Assert.Equal(MissionStage.Paused, mission.View.Stage);
+            Assert.Equal(2, transport.Requests.Count);
+            Assert.Single(mission.View.Log, e => e.Kind == LogKind.SequencePlan);
+            var after = Assert.Single(Saved(mission));
+            Assert.Equal(MissionStage.Paused, after.Stage);
+            Assert.Equal(MissionStage.AwaitingSequenceApproval, after.StageBeforePause);
+            Assert.Equal("Refusal", after.PauseCause);
+            Assert.Equal("Claudia declined.", after.PauseReason);
+            Assert.NotNull(after.SequencePlan);
+            Assert.Equal(1, after.SequencesProposed);
+
+            // Resume lands on the offered plan and asks nothing.
+            mission.Send(new Retry());
+            Assert.Equal(MissionStage.AwaitingSequenceApproval, mission.View.Stage);
+            Assert.Equal(2, transport.Requests.Count);
+        }
+
+        [Fact]
         public void LoadingASaveDuringARequestLetsItCompleteThenAppendsTheNotice()
         {
             var sequence = ScriptedResponse.Fixture("mission-sequence-plan.sse", 64);
