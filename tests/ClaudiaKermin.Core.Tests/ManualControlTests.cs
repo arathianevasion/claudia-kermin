@@ -513,6 +513,25 @@ namespace ClaudiaKermin.Core.Tests
         // ---- Link loss and saves ----
 
         [Fact]
+        public void ALinkDropInTheSnapshotRightAfterTheTakeoverDoesNotHandTheCraftStraightBack()
+        {
+            // The log in ticket 151: Manual Control offered while linked, the next snapshot at the same UT has no link.
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
+            var mission = Control(transport);
+            ToRunning(mission);
+            mission.Send(new TakeManualControl());
+            mission.TakeCommands();
+
+            mission.Send(Pad(s => s.HasLink = false));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut += 5; }));
+
+            Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
+            Assert.Empty(mission.TakeCommands());
+            Assert.Equal(ControlLocks.None, mission.View.Locks);
+            Assert.Equal(2, transport.Requests.Count);
+        }
+
+        [Fact]
         public void LosingTheLinkInManualControlWithNoOtherCrewTakesTheCraftBackAndMakesItSafe()
         {
             var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-manual.sse", "mission-plan.sse");
@@ -522,6 +541,7 @@ namespace ClaudiaKermin.Core.Tests
             mission.TakeCommands();
 
             mission.Send(Pad(s => s.HasLink = false));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut += 5.1; }));
 
             Assert.Contains(mission.TakeCommands(), c => c is MakeCraftSafe);
             Assert.Equal(MissionStage.Debriefing, mission.View.Stage);

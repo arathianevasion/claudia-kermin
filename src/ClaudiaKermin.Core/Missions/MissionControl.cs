@@ -364,6 +364,7 @@ namespace ClaudiaKermin.Core.Missions
             if (saveDirectory == _saveDirectory) return;
             _saveDirectory = saveDirectory;
             _snapshot = null;
+            _linkDownSince = null;
             _pendingStart = null;
             _startRefusal = "";
             _craftCheck.Reset();
@@ -377,11 +378,11 @@ namespace ClaudiaKermin.Core.Missions
             _snapshot = snapshot;
             _craftCheck.OnSnapshot(snapshot);
             if (snapshot.Ut > _ut) _ut = snapshot.Ut;
+            LinkSeen(snapshot);
             var mission = _mission;
             if (mission == null) return;
             // A plan restored from a save was never offered against a snapshot: the first one after the load is its baseline.
             if (mission.AwaitingApproval && mission.PlanBaseline == null && !mission.InFlight && _scene == GameScene.Flight) mission.PlanBaseline = snapshot;
-            if (mission.Stage == MissionStage.ManualControl && !snapshot.HasLink && !snapshot.HasOtherCrew && _scene == GameScene.Flight) LinkLostDuringManual();
         }
 
         // ---- Approval ----

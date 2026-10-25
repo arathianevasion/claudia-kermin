@@ -34,6 +34,24 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The "Manual Control isn't available" notice is repeated at most this often, in UT seconds, while keys stay held.</summary>
         private const double RefusalNoticeSeconds = 30;
 
+        /// <summary>UT of the first Game Snapshot of the current stretch without a link; null while linked.</summary>
+        private double? _linkDownSince;
+
+        /// <summary>
+        /// Keeps the link's history from each Game Snapshot, and takes the craft back once the link has been down in
+        /// Manual Control, with no other crew aboard, for longer than the grace: a link that drops for a moment, or in
+        /// the first snapshot after the takeover, doesn't hand the craft straight back.
+        /// </summary>
+        private void LinkSeen(GameSnapshot snapshot)
+        {
+            if (snapshot.HasLink) _linkDownSince = null;
+            else if (!_linkDownSince.HasValue) _linkDownSince = _ut;
+            var mission = _mission;
+            if (mission == null || mission.Stage != MissionStage.ManualControl || _scene != GameScene.Flight) return;
+            if (snapshot.HasLink || snapshot.HasOtherCrew || _ut - _linkDownSince.Value <= _config.ManualLinkGraceSeconds) return;
+            LinkLostDuringManual();
+        }
+
         /// <summary>A link to Kerbin (CommNet off counts) or another non-Tourist crew member aboard: someone could really fly the craft.</summary>
         private bool ManualAllowed
         {

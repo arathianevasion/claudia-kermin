@@ -60,6 +60,12 @@ namespace ClaudiaKermin.Core.Config
         /// <summary>How long attitude, translation or throttle input must be held, in seconds, before it starts Manual Control.</summary>
         public double ManualHoldSeconds = 1;
 
+        /// <summary>
+        /// How long, in seconds of game time, the link may be down in Manual Control (with no other crew aboard) before
+        /// Claudia takes the craft back; also how long a link must have been steady before Manual Control is offered.
+        /// </summary>
+        public double ManualLinkGraceSeconds = 5;
+
         /// <summary>How far the craft may drift from the pending plan's baseline, in percent, before Approve turns into Re-plan.</summary>
         public int ReplanTolerancePercent = 15;
 
@@ -105,6 +111,9 @@ namespace ClaudiaKermin.Core.Config
             + "late_approval_dv_tolerance = 10\n"
             + "# Seconds attitude, translation or throttle input must be held to start Manual Control.\n"
             + "manual_hold_s = 1\n"
+            + "# Seconds of game time the link may be down in Manual Control, with no other crew aboard, before Claudia takes the craft back.\n"
+            + "# Manual Control is offered only once the link has been steady this long.\n"
+            + "manual_link_grace_s = 5\n"
             + "# How far, in percent, the craft may change from a pending plan before Approve becomes Re-plan.\n"
             + "replan_tolerance = 15\n"
             + "# A script still running at this percentage of its planned duration (waits included) is stopped and made safe.\n"
@@ -173,6 +182,11 @@ namespace ClaudiaKermin.Core.Config
                         double hold;
                         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out hold) && hold > 0)
                             config.ManualHoldSeconds = hold;
+                        break;
+                    case "manual_link_grace_s":
+                        double grace;
+                        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out grace) && grace >= 0)
+                            config.ManualLinkGraceSeconds = grace;
                         break;
                     case "replan_tolerance":
                         int tolerance;
