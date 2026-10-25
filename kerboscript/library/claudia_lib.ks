@@ -587,6 +587,7 @@ function claudia_release_controls {
 
 // ---- Transfers: shared by transfer_to and return ----
 
+// "" or why a target_pe value isn't metres above 0.
 function claudia_pe_unreadable {
   parameter target_pe.
   if not target_pe:istype("Scalar") or target_pe <= 0 {
@@ -595,6 +596,7 @@ function claudia_pe_unreadable {
   return "".
 }
 
+// "" or why a window value isn't "next" or a time (UT seconds).
 function claudia_window_unreadable {
   parameter window.
   if window:istype("String") {
@@ -607,6 +609,7 @@ function claudia_window_unreadable {
   return "".
 }
 
+// "" or why a correction value isn't true or false.
 function claudia_correction_unreadable {
   parameter correction.
   if not correction:istype("Boolean") {
