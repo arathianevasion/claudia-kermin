@@ -37,6 +37,19 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Contains(CoreLibrary.Blocks, b => b.Name == "science");
         }
 
+        [Fact]
+        public void The_prompt_docs_name_every_spec_option_and_result()
+        {
+            var reentry = CoreLibrary.FullDocs(new[] { "reentry" });
+            foreach (var name in new[] { "chute_mode", "jettison_stage", "hold", "max_g", "max_temp_pct", "geo", "splashed" })
+                Assert.Contains(name, reentry);
+            var science = CoreLibrary.FullDocs(new[] { "science" });
+            foreach (var name in new[] { "experiments", "all_useful", "transmit", "min_ec_pct", "results", "Sandbox" })
+                Assert.Contains(name, science);
+            Assert.Contains("reentry(options)", CoreLibrary.Summaries());
+            Assert.Contains("science(options)", CoreLibrary.Summaries());
+        }
+
         // ---- reentry: options ----
 
         [Fact]

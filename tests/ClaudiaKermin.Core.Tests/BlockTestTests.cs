@@ -53,6 +53,15 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ASpecWithAPeriapsisStartsOnAnEccentricOrbitFromItsApoapsis()
+        {
+            Assert.Null(BlockTestSpec.Parse("a", Spec).OrbitPeriapsis);
+            var hop = BlockTestSpec.Parse("hop", "block = reentry\norbit_altitude = 100000\norbit_pe = -200000\n");
+            Assert.Equal(-200000.0, hop.OrbitPeriapsis);
+            Assert.Equal(100000.0, hop.OrbitAltitude);
+        }
+
+        [Fact]
         public void ARunWithinEveryContractRangePasses()
         {
             var result = BlockTestSpec.Parse("exec_node", Spec).Judge(Finished(Report(true, 0.12, 300000)));
