@@ -152,6 +152,31 @@ function claudia_stage_action {
   return "stage".
 }
 
+// True if a stage fires straight on into the next one. fired_engines: the stage just fired held
+// engines; next_engines: the next stage holds engines; had_thrust: some engine gave thrust before
+// firing; next_unsafe: as for claudia_stage_action. A decoupler-only stage with no thrust left
+// would otherwise leave the craft coasting for a tick or more before its engines light.
+function claudia_stage_on {
+  parameter stage_number, stage_limit, fired_engines, next_engines, had_thrust, next_unsafe.
+  if fired_engines or had_thrust or next_unsafe or not next_engines {
+    return false.
+  }
+  return stage_number > stage_limit and stage_number > 0.
+}
+
+// True if stage n holds an engine.
+function claudia_stage_has_engine {
+  parameter n.
+  local engs is list().
+  list engines in engs.
+  for e in engs {
+    if e:stage = n {
+      return true.
+    }
+  }
+  return false.
+}
+
 // True if staging into stage n would fire a parachute or separate a heat shield.
 function claudia_stage_unsafe {
   parameter n.
@@ -213,7 +238,17 @@ function claudia_autostage {
     return "out of fuel: the next stage would fire parachutes or separate a heat shield".
   }
   if action = "stage" {
+    local had_thrust is ship:availablethrust > 0.
+    local fired is stage:number - 1.
+    local fired_engines is claudia_stage_has_engine(fired).
     stage.
+    // A decoupler-only stage that leaves no thrust: stage on into the engines at once.
+    until not claudia_stage_on(fired, ctx:opt:stage_limit, fired_engines, claudia_stage_has_engine(fired - 1), had_thrust, claudia_stage_unsafe(fired - 1)) {
+      wait until stage:ready.
+      stage.
+      set fired to fired - 1.
+      set fired_engines to claudia_stage_has_engine(fired).
+    }
     // Let decoupled parts leave before counting what the craft should still have.
     wait 0.5.
     set ctx:parts to ship:parts:length.
