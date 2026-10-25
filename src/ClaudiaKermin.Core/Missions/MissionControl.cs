@@ -117,7 +117,7 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is VesselsDocked) Docked((VesselsDocked)input);
             else if (input is VesselsSeparated) Separated((VesselsSeparated)input);
             else if (input is CraftRange) RangeSeen((CraftRange)input);
-            else if (input is CraftSafingUnreached) SafingUnreached(((CraftSafingUnreached)input).Reason);
+            else if (input is CraftSafingUnreached) SafingUnreached((CraftSafingUnreached)input);
             else if (input is VesselUnloaded) Unloaded(((VesselUnloaded)input).VesselId);
             else if (input is FarSwitchConfirmed) FarSwitched(((FarSwitchConfirmed)input).VesselName);
             else if (input is RunEventSeen) EventSeen((RunEventSeen)input);
@@ -532,6 +532,8 @@ namespace ClaudiaKermin.Core.Missions
             if (plan.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
             mission.RunningProcessor = processor.Value;
             mission.RunId = ++_lastRunId;
+            // A new run means the craft was reachable; an owed make-safe must not cut it off later.
+            mission.SafePending = "";
             StartRunawayTimer(mission, plan);
             RunStarting(mission);
             StartLive(mission, plan);

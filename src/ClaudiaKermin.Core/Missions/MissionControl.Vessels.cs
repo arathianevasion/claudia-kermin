@@ -97,9 +97,11 @@ namespace ClaudiaKermin.Core.Missions
         // ---- Which vessel is the craft ----
 
         /// <summary>The adapter couldn't make the unloaded craft safe: remember it until the craft is seen loaded (#207).</summary>
-        private void SafingUnreached(string reason)
+        private void SafingUnreached(CraftSafingUnreached unreached)
         {
-            if (_mission != null) _mission.SafePending = string.IsNullOrEmpty(reason) ? "the craft was left unsafe" : reason;
+            var mission = _mission;
+            if (mission == null || unreached.VesselId != mission.VesselId) return;
+            mission.SafePending = string.IsNullOrEmpty(unreached.Reason) ? "the craft was left unsafe" : unreached.Reason;
         }
 
         /// <summary>The craft is loaded now: make it safe as owed, once. If it still can't be reached the adapter says so again.</summary>
@@ -111,7 +113,7 @@ namespace ClaudiaKermin.Core.Missions
                 if (vessel.Id != mission.VesselId || !vessel.Loaded) continue;
                 var reason = mission.SafePending;
                 mission.SafePending = "";
-                _commands.Add(new MakeCraftSafe(reason + " (applied when the craft loaded)", mission.VesselId, mission.ProcessorPartId));
+                _commands.Add(new MakeCraftSafe(reason,mission.VesselId, mission.ProcessorPartId));
                 return;
             }
         }

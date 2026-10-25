@@ -259,7 +259,9 @@ namespace ClaudiaKermin.Core.Tests
             mission.TakeCommands();
 
             // The adapter found the craft unloaded: nothing owed is re-issued while it stays unloaded.
-            mission.Send(new CraftSafingUnreached("a Failed Debrief"));
+            mission.Send(new CraftSafingUnreached("some other vessel", "another-vessel"));
+            Assert.Equal("", mission.ExportStates()[0].SafePending);
+            mission.Send(new CraftSafingUnreached("a Failed Debrief", CraftId));
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(new VesselsSeen(new[] { new SeenVessel { Id = CraftId, Loaded = false } }));
             Assert.Empty(mission.TakeCommands().OfType<MakeCraftSafe>());
@@ -274,7 +276,7 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(new VesselsSeen(new[] { new SeenVessel { Id = CraftId, Loaded = true } }));
             var safe = mission.TakeCommands().OfType<MakeCraftSafe>().Single();
             Assert.Equal(CraftId, safe.VesselId);
-            Assert.Contains("a Failed Debrief", safe.Reason);
+            Assert.Equal("a Failed Debrief", safe.Reason);
             mission.Send(new VesselsSeen(new[] { new SeenVessel { Id = CraftId, Loaded = true } }));
             Assert.Empty(mission.TakeCommands().OfType<MakeCraftSafe>());
             Assert.Equal("", mission.ExportStates()[0].SafePending);

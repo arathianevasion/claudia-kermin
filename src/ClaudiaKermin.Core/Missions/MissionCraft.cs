@@ -183,7 +183,12 @@ namespace ClaudiaKermin.Core.Missions
     public sealed class CraftSafingUnreached : MissionInput
     {
         public readonly string Reason;
-        public CraftSafingUnreached(string reason) { Reason = reason ?? ""; }
+        public readonly string VesselId;
+        public CraftSafingUnreached(string reason, string vesselId)
+        {
+            Reason = reason ?? "";
+            VesselId = vesselId ?? "";
+        }
     }
 
     /// <summary>The vessel with this id unloaded (it went out of physics range).</summary>
