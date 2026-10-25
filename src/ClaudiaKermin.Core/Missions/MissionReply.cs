@@ -410,7 +410,7 @@ namespace ClaudiaKermin.Core.Missions
             return items;
         }
 
-        /// <summary>A UT, delta-v, duration or stage: null when absent, null (saved plans) or the -1 sentinel (any negative).</summary>
+        /// <summary>A UT, delta-v or duration: null when absent, null (saved plans) or the -1 sentinel (any negative).</summary>
         private static double? NonNegative(JsonNode node)
         {
             var value = JsonNode.Double(node);

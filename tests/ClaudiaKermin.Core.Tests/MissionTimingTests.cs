@@ -618,7 +618,7 @@ namespace ClaudiaKermin.Core.Tests
         public void AReplyWithoutTheNewTimingFieldsStillParses()
         {
             // Earlier replies and saves have none of the Due Time fields.
-            var plans = "{\"kind\":\"sequence_plan\",\"say\":\"x\",\"reply_intent\":\"none\",\"mission_plan\":null,\"sequence_plan\":{\"name\":\"n\",\"intent\":\"i\",\"why\":\"w\","
+            var plans = "{\"kind\":\"sequence_plan\",\"say\":\"x\",\"reply_intent\":null,\"mission_plan\":null,\"sequence_plan\":{\"name\":\"n\",\"intent\":\"i\",\"why\":\"w\","
                 + "\"target\":\"t\",\"tolerances\":\"t\",\"expected_delta_v\":1,\"expected_duration_s\":2,\"abort_conditions\":[],\"risks\":[],\"custom_script\":false,\"custom_script_reason\":\"\",\"script\":\"s\"},\"debrief\":null}";
             var state = MissionSaveState.FromValues(new Dictionary<string, string> { { "id", "m1" }, { "plans", plans.Replace("\\", "\\\\").Replace("/", "\\s").Replace("{", "\\o").Replace("}", "\\c") } });
             Assert.Null(state.SequencePlan.DueTimeUt);
