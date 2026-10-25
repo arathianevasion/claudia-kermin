@@ -85,14 +85,9 @@ function exec_node {
   set extra:residual to extra:node_dv.
 
   // A craft whose engines aren't lit yet stages into them (within stage_limit).
-  if ship:availablethrust <= 0 {
-    local staged is claudia_autostage(ctx).
-    if staged <> "" {
-      return claudia_finish(ctx, false, staged, extra).
-    }
-  }
-  if ship:availablethrust <= 0 {
-    return claudia_finish(ctx, false, "no thrust", extra).
+  local lit is claudia_stage_into_engines(ctx).
+  if lit <> "" {
+    return claudia_finish(ctx, false, lit, extra).
   }
 
   local timing is exec_node_timing(nd:deltav:mag, ship:mass, ship:availablethrust, claudia_engine_isp(), nd:eta, opt:lead).
@@ -156,9 +151,7 @@ function exec_node {
 
   local residual is nd:deltav:mag.
   set extra:residual to round(residual, 3).
-  set ship:control:pilotmainthrottle to 0.
-  unlock throttle.
-  unlock steering.
+  claudia_release_controls().
   if residual > opt:max_residual {
     return claudia_finish(ctx, false, "residual " + round(residual, 2) + " m/s is over max_residual " + opt:max_residual + " m/s", extra).
   }

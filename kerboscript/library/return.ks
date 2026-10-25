@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Andrew Watson
 //
 // Building Block return: flies home from orbit around a moon of Kerbin to a Kerbin periapsis in the
-// atmosphere. Built on claudia_lib.ks, exec_node.ks and transfer_to.ks's patch, descent and mid-course
-// correction helpers; block-only helpers are prefixed return_. kOS lets a function be named return
+// atmosphere. Built on claudia_lib.ks (its patch, descent and mid-course correction helpers) and
+// exec_node.ks; block-only helpers are prefixed return_. kOS lets a function be named return
 // when it is called as a value. The "//|" lines are Claudia's docs for it; the first is its summary.
 
 @lazyglobal off.
@@ -45,15 +45,15 @@ function return_defaults {
 // "" or why an option value isn't one the block can use.
 function return_unreadable {
   parameter opt.
-  local pe is transfer_to_pe_unreadable(opt:target_pe).
+  local pe is claudia_pe_unreadable(opt:target_pe).
   if pe <> "" {
     return pe.
   }
-  local window is transfer_to_window_unreadable(opt:window).
+  local window is claudia_window_unreadable(opt:window).
   if window <> "" {
     return window.
   }
-  return transfer_to_correction_unreadable(opt:correction).
+  return claudia_correction_unreadable(opt:correction).
 }
 
 // The ejection from a circular orbit of radius r0 (m) around a moon (gravitational parameter
@@ -94,7 +94,7 @@ function return_time_to_pe {
 // above the atmosphere).
 function return_reentry_ut {
   parameter orb.
-  local pe_ut is transfer_to_rsvp():time_at_periapsis(orb).
+  local pe_ut is claudia_rsvp():time_at_periapsis(orb).
   local top is orb:body:radius + orb:body:atm:height.
   return pe_ut - return_time_to_pe(orb:semimajoraxis, orb:eccentricity, orb:body:mu, top).
 }
@@ -153,7 +153,7 @@ function return {
     return claudia_finish(ctx, false, "a maneuver node is already planned: remove it first", extra).
   }
 
-  local earliest is transfer_to_earliest(time:seconds, opt:window).
+  local earliest is claudia_earliest(time:seconds, opt:window).
   // The burn point comes round once an orbit.
   local latest is earliest + ship:orbit:period.
 
@@ -162,18 +162,18 @@ function return {
   local seed_ut is return_ejection_time(moon, seed:eject_angle, earliest, latest).
   local nd is node(seed_ut, 0, 0, seed:dv).
   add nd.
-  local found is transfer_to_descend({
+  local found is claudia_descend({
     parameter x.
     if x[0] < earliest or x[0] > latest {
       return 1e13.
     }
     set nd:eta to x[0] - time:seconds.
     set nd:prograde to x[1].
-    return abs(transfer_to_pe_error(nd:orbit, planet, opt:target_pe)).
+    return abs(claudia_pe_error(nd:orbit, planet, opt:target_pe)).
   }, list(seed_ut, seed:dv), list(10, 2), 10, 100).
   set nd:eta to found:x[0] - time:seconds.
   set nd:prograde to found:x[1].
-  local planned is transfer_to_patch(nd:orbit, planet).
+  local planned is claudia_patch(nd:orbit, planet).
   if planned:istype("String") {
     remove nd.
     return claudia_finish(ctx, false, "found no ejection that returns to Kerbin", extra).
@@ -182,11 +182,11 @@ function return {
     set opt:max_duration to return_reentry_ut(planned:orbit) - ctx:start_ut + 900.
   }
 
-  local ejected is transfer_to_burn(ctx, nd).
+  local ejected is claudia_burn(ctx, nd).
   if not ejected:success {
     return claudia_finish(ctx, false, ejected:reason, extra).
   }
-  local home is transfer_to_patch(ship:orbit, planet).
+  local home is claudia_patch(ship:orbit, planet).
   if home:istype("String") {
     return claudia_finish(ctx, false, "no return to Kerbin after the ejection burn", extra).
   }
@@ -197,11 +197,11 @@ function return {
       claudia_make_safe().
       return claudia_finish(ctx, false, ticked, extra).
     }
-    local fixed is transfer_to_correct(ctx, planet, opt:target_pe, return_reentry_ut(home:orbit)).
+    local fixed is claudia_correct(ctx, planet, opt:target_pe, return_reentry_ut(home:orbit)).
     if fixed:reason <> "" {
       return claudia_finish(ctx, false, fixed:reason, extra).
     }
-    set home to transfer_to_patch(ship:orbit, planet).
+    set home to claudia_patch(ship:orbit, planet).
     if home:istype("String") {
       return claudia_finish(ctx, false, "no return to Kerbin after the correction", extra).
     }

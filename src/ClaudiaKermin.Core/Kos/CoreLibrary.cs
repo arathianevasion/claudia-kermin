@@ -76,7 +76,7 @@ namespace ClaudiaKermin.Core.Kos
 
         /// <summary>
         /// RSVP v9's files (<c>kerboscript/rsvp/</c>), by name. Not Building Blocks: <c>transfer_to</c> loads
-        /// them through <c>transfer_to_rsvp()</c>; see <c>kerboscript/rsvp/NOTE.md</c>.
+        /// them through <c>claudia_rsvp()</c>; see <c>kerboscript/rsvp/NOTE.md</c>.
         /// </summary>
         public static IList<LibraryFile> Rsvp
         {
@@ -104,7 +104,7 @@ namespace ClaudiaKermin.Core.Kos
                 }
             }
             // RSVP's files are programs of their own (parameter export., file-level locals), so each
-            // becomes the body of one function, called by transfer_to_rsvp() (kerboscript/rsvp/NOTE.md).
+            // becomes the body of one function, called by claudia_rsvp() (kerboscript/rsvp/NOTE.md).
             text.Append("// ---- RSVP v9 (GPL-3.0, https://github.com/maneatingape/rsvp), bundled by Claudia Kermin ----\n");
             foreach (var file in Rsvp)
             {

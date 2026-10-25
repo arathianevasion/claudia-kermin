@@ -466,14 +466,9 @@ function land {
   }
 
   // A craft whose engines aren't lit yet stages into them (within stage_limit).
-  if ship:availablethrust <= 0 {
-    local staged is claudia_autostage(ctx).
-    if staged <> "" {
-      return claudia_finish(ctx, false, staged, extra).
-    }
-  }
-  if ship:availablethrust <= 0 {
-    return claudia_finish(ctx, false, "no thrust", extra).
+  local lit is claudia_stage_into_engines(ctx).
+  if lit <> "" {
+    return claudia_finish(ctx, false, lit, extra).
   }
 
   local approach is 3000.
