@@ -212,7 +212,6 @@ namespace ClaudiaKermin.Core.Ui
             {
                 // A stale result that failed keeps Start Mission closed until the check runs again.
                 if (check.Verdict == CraftVerdict.Fail) return "Start Mission · fix the Blockers";
-                if (check.Stale) return "Start Mission";
                 var open = ToAcknowledge(check);
                 if (open > 0) return "Start Mission · " + open.ToString(CultureInfo.InvariantCulture) + " to acknowledge";
             }
