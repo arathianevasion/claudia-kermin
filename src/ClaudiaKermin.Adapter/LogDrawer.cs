@@ -176,7 +176,7 @@ namespace ClaudiaKermin.Adapter
         }
 
         // The Mission Script as formatted for reading (display only; the entry's script is untouched), in a box that
-        // scrolls both ways. The text area is read-only in effect: what it returns is dropped.
+        // scrolls both ways. The text area stays selectable for copying; what it returns is dropped, so edits don't stick.
         private void DrawScript(LogEntry entry)
         {
             string text;
@@ -184,9 +184,10 @@ namespace ClaudiaKermin.Adapter
             Vector2 scroll;
             _scriptScroll.TryGetValue(entry, out scroll);
             var size = _script.CalcSize(new GUIContent(text));
-            var height = Mathf.Min(size.y + _script.padding.vertical, ClaudiaSkin.Scaled(240));
-            scroll = GUILayout.BeginScrollView(scroll, true, true, GUILayout.Height(height + GUI.skin.horizontalScrollbar.fixedHeight + 4));
-            GUILayout.TextArea(text, _script, GUILayout.MinWidth(size.x + _script.padding.horizontal));
+            // CalcSize already includes the style's padding; the extra is room for the horizontal scrollbar.
+            var height = Mathf.Min(size.y + 20, ClaudiaSkin.Scaled(240));
+            scroll = GUILayout.BeginScrollView(scroll, true, true, GUILayout.Height(height));
+            GUILayout.TextArea(text, _script, GUILayout.MinWidth(size.x));
             GUILayout.EndScrollView();
             _scriptScroll[entry] = scroll;
         }

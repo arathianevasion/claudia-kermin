@@ -45,6 +45,12 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void CrlfLineEndingsAreKeptAndDecimalPointsAreNotStatementEnds()
+        {
+            Assert.Equal("wait 0.5. print 1.".Replace(". print", ".\r\nprint") + "\r\n", ScriptFormatter.Format("wait 0.5. print 1.\r\n"));
+        }
+
+        [Fact]
         public void AMalformedScriptFallsBackToTheRawText()
         {
             Assert.Equal("if x { print 1.", ScriptFormatter.Format("if x { print 1."));
