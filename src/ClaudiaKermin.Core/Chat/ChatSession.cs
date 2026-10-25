@@ -232,7 +232,7 @@ namespace ClaudiaKermin.Core.Chat
             if (!answered)
             {
                 Unanswered(pending, message.StopReason == StopReason.ModelContextWindowExceeded
-                    ? "This chat has grown too long for Claudia to read. Restart KSP to clear it."
+                    ? "This chat has grown too long for Claudia to read. Clear it to start a new conversation."
                     : "Claudia gave no answer (" + (message.RawStopReason ?? "no stop reason") + ").");
                 return;
             }

@@ -30,7 +30,6 @@ namespace ClaudiaKermin.Adapter
         private GUIStyle _lineStyle;
         private readonly BannerDrawer _banner = new BannerDrawer();
         // The banner's view of "no Mission": the basic chat has none.
-        private readonly MissionView _noMission = new MissionView();
 
         public bool Visible;
 
@@ -77,7 +76,7 @@ namespace ClaudiaKermin.Adapter
             if (_lineStyle == null) _lineStyle = new GUIStyle(GUI.skin.label) { richText = false, wordWrap = true };
             _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.ExpandHeight(true));
             // An empty session, fresh or cleared, starts with the banner.
-            if (_chat.Lines.Count == 0) _banner.Draw(_noMission, _frame.Rect.width - 2 * ClaudiaSkin.Padding, _chat.Model, false, false);
+            if (_chat.Lines.Count == 0) _banner.DrawChat(_frame.Rect.width - 2 * ClaudiaSkin.Padding, _chat.Model);
             foreach (var line in _chat.Lines)
                 GUILayout.Label(Format(line), _lineStyle);
             GUILayout.EndScrollView();
