@@ -257,6 +257,97 @@ namespace ClaudiaKermin.Core.Tests
             Assert.DoesNotContain("earlier save", Notices(transport.Requests[1]));
         }
 
+        // ---- The docking recheck and the cannot-fly Pause (#177) ----
+
+        private static SeenVessel Seen(string id, string name, bool claudia = false, bool eva = false, params uint[] processors)
+        {
+            var vessel = new SeenVessel { Id = id, Name = name, ClaudiaAboard = claudia, Eva = eva, HasKosProcessor = processors.Length > 0 };
+            vessel.ProcessorPartIds.AddRange(processors);
+            return vessel;
+        }
+
+        private static GameSnapshot CraftSnapshot()
+        {
+            var snapshot = OnPad();
+            snapshot.Craft.VesselId = "craft";
+            return snapshot;
+        }
+
+        [Fact]
+        public void TheDockingRecheckNoticeAndCannotFlyPauseRoundTripAndOldSavesLoadWithNoneSet()
+        {
+            var state = new MissionSaveState
+            {
+                Id = "m1",
+                Recheck = "docked with Tanker",
+                RecheckSince = 4,
+                PendingNotice = "Docked with Tanker.\n\nAnother {line}",
+                PausedCannotFly = true,
+            };
+            var again = MissionSaveState.FromValues(state.ToValues());
+            Assert.Equal("docked with Tanker", again.Recheck);
+            Assert.Equal(4, again.RecheckSince);
+            Assert.Equal("Docked with Tanker.\n\nAnother {line}", again.PendingNotice);
+            Assert.True(again.PausedCannotFly);
+
+            var old = MissionSaveState.FromValues(new Dictionary<string, string> { { "id", "m1" }, { "stage", "AwaitingSequenceApproval" } });
+            Assert.Equal("", old.Recheck);
+            Assert.Equal(0, old.RecheckSince);
+            Assert.Equal("", old.PendingNotice);
+            Assert.False(old.PausedCannotFly);
+        }
+
+        [Fact]
+        public void ADockedPlanStillNeedsReplanAndClaudiaStillGetsTheDockingNoticeAfterALoad()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport);
+            ToSequencePlan(mission);
+            mission.Send(CraftSnapshot());
+            var tanker = Seen("tanker", "Tanker");
+            tanker.PartTitles.Add("FL-T400 Fuel Tank");
+            mission.Send(new VesselsDocked(Seen("craft", "Craft", claudia: true), tanker));
+            Assert.Equal("docked with Tanker", mission.View.PlanStale);
+
+            // A quit and a load: the plan is offered again, and it is still stale.
+            var saved = Saved(mission);
+            var resumed = Control(transport);
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Equal(MissionStage.AwaitingSequenceApproval, resumed.View.Stage);
+            Assert.Equal("docked with Tanker", resumed.View.PlanStale);
+            Assert.Equal(QuickReply.Replan, resumed.View.QuickReplies[0]);
+
+            resumed.Send(new Replan());
+            DrainUntil(resumed, v => v.Stage == MissionStage.AwaitingSequenceApproval && !v.Busy);
+            Assert.Equal(3, transport.Requests.Count);
+            Assert.Contains("FL-T400 Fuel Tank", Notices(transport.Requests[2]));
+            Assert.Equal("", resumed.View.PlanStale);
+        }
+
+        [Fact]
+        public void ACannotFlyPauseStillOffersResumeAfterALoad()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport);
+            ToSequencePlan(mission);
+            mission.Send(CraftSnapshot());
+            mission.Send(new VesselsSeen(new[] { Seen("craft", "Craft", processors: 7), Seen("eva", "Claudia Kermin", claudia: true, eva: true) }));
+            Assert.Equal(MissionStage.Paused, mission.View.Stage);
+            Assert.Equal(new[] { QuickReply.Resume }, mission.View.QuickReplies);
+
+            var saved = Saved(mission);
+            Assert.True(saved[0].PausedCannotFly);
+            var resumed = Control(new StreamingFakeTransport());
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Equal(MissionStage.Paused, resumed.View.Stage);
+            Assert.Equal(new[] { QuickReply.Resume }, resumed.View.QuickReplies);
+        }
+
         private static int RawMessagesCount(string transcript)
         {
             using (var doc = JsonDocument.Parse(transcript))
