@@ -18,7 +18,7 @@ namespace ClaudiaKermin.Adapter
         private const float Width = 620;
         private const float PortraitSize = 56;
         private const float DrawerHeight = 280;
-        private const string PortraitUrl = "ClaudiaKermin/Icons/SuperIntelligence";
+        private const string PortraitUrl = "ClaudiaKermin/Icons/ClaudiaPortrait";
 
         private readonly MissionWindow _window;
         private readonly LogDrawer _log = new LogDrawer();
@@ -115,7 +115,7 @@ namespace ClaudiaKermin.Adapter
             return text.ToString();
         }
 
-        // Claudia's trait icon from GameData when it loaded; otherwise a plain blue tile.
+        // The Winged glare portrait from GameData when it loaded; otherwise a plain blue tile.
         private Texture2D Portrait()
         {
             if (_portrait != null) return _portrait;

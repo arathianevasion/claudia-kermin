@@ -22,7 +22,7 @@ namespace ClaudiaKermin.Adapter
     {
         private const string KeyControl = "ClaudiaSettingsKey";
         private const string CapControl = "ClaudiaSettingsCap";
-        private const string PortraitUrl = "ClaudiaKermin/Icons/SuperIntelligence";
+        private const string PortraitUrl = "ClaudiaKermin/Icons/ClaudiaPortrait";
 
         private static readonly string[] TimeChoices = { "Fastest", "Balanced", "Most efficient" };
         private static readonly string[] TypeChoices = { "Crewed", "Remote" };
@@ -594,7 +594,7 @@ namespace ClaudiaKermin.Adapter
             _radioOff = ClaudiaSkin.Box(ClaudiaSkin.InputBackground, ClaudiaSkin.BorderStrong, 7);
         }
 
-        // Claudia's trait icon until the Winged glare portrait lands; a plain Claudia-blue tile if it didn't load.
+        // The Winged glare portrait; a plain Claudia-blue tile if it didn't load.
         private Texture2D Portrait()
         {
             if (_portrait != null) return _portrait;

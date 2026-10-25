@@ -21,27 +21,24 @@ namespace ClaudiaKermin.Adapter
     [KSPAddon(KSPAddon.Startup.Instantly, true)]
     public class Loader : MonoBehaviour
     {
-        // Settings: the Space Center, the VAB/SPH and Flight (map view counts as Flight); not the main
-        // menu, the Tracking Station or other KSC buildings.
-        private const ApplicationLauncher.AppScenes SettingsScenes =
+        // The one toolbar button: the Space Center, the VAB/SPH and Flight (map view counts as Flight); not the
+        // main menu, the Tracking Station or other KSC buildings.
+        private const ApplicationLauncher.AppScenes ButtonScenes =
             ApplicationLauncher.AppScenes.SPACECENTER | ApplicationLauncher.AppScenes.FLIGHT
             | ApplicationLauncher.AppScenes.MAPVIEW | ApplicationLauncher.AppScenes.VAB
             | ApplicationLauncher.AppScenes.SPH;
 
-        private const ApplicationLauncher.AppScenes ChatScenes =
-            ApplicationLauncher.AppScenes.FLIGHT | ApplicationLauncher.AppScenes.MAPVIEW
-            | ApplicationLauncher.AppScenes.VAB | ApplicationLauncher.AppScenes.SPH;
+        private const string IconUrl = "ClaudiaKermin/Icons/ClaudiaIcon";
+        private const string AttentionIconUrl = "ClaudiaKermin/Icons/ClaudiaIconAttention";
 
         private readonly Background _background = new Background(Debug.LogException);
         private SettingsWindow _window;
         private ChatWindow _chatWindow;
         private MissionDriver _missions;
         private ApplicationLauncherButton _button;
-        private ApplicationLauncherButton _chatButton;
-        private ApplicationLauncherButton _missionButton;
-        private Texture2D _missionIcon;
-        private Texture2D _missionIconBright;
-        private bool _missionBright;
+        private Texture2D _icon;
+        private Texture2D _iconAttention;
+        private bool _attentionShown;
 
         private void Awake()
         {
@@ -103,27 +100,40 @@ namespace ClaudiaKermin.Adapter
 
             if (_button != null)
             {
-                // Settings is also opened from the Mission window and closed by its own Cancel and Apply.
+                // A window can be opened or closed from elsewhere (Raise cap, Change something, Settings' Cancel
+                // and Apply): keep the button's pressed state in step with whatever it toggles in this scene.
+                var open = Toggled;
                 var pressed = _button.toggleButton.CurrentState == KSP.UI.UIRadioButton.State.True;
-                if (_window.Visible && !pressed) _button.SetTrue(false);
-                else if (!_window.Visible && pressed) _button.SetFalse(false);
-            }
+                if (open && !pressed) _button.SetTrue(false);
+                else if (!open && pressed) _button.SetFalse(false);
 
-            if (_missionButton != null)
-            {
-                // The window can be opened from elsewhere (Raise cap, Change something): keep its button in step.
-                var pressed = _missionButton.toggleButton.CurrentState == KSP.UI.UIRadioButton.State.True;
-                if (_missions.Window.Visible && !pressed) _missionButton.SetTrue(false);
-                else if (!_missions.Window.Visible && pressed) _missionButton.SetFalse(false);
-
-                // Claudia needs the player and the window is closed: the button flashes between its two tiles.
-                var bright = _missions.Flashing && Mathf.FloorToInt(Time.realtimeSinceStartup * 2f) % 2 == 0;
-                if (bright != _missionBright)
+                // Claudia needs the player and the window is closed: the button flashes between its two frames.
+                var attention = _missions.Flashing && Mathf.FloorToInt(Time.realtimeSinceStartup * 2f) % 2 == 0;
+                if (attention != _attentionShown)
                 {
-                    _missionBright = bright;
-                    _missionButton.SetTexture(bright ? _missionIconBright : _missionIcon);
+                    _attentionShown = attention;
+                    _button.SetTexture(attention ? _iconAttention : _icon);
                 }
             }
+        }
+
+        // The Space Center button toggles Settings (in its Space Center context); the VAB/SPH and Flight/Map
+        // toggle the Mission window.
+        private bool Toggled
+        {
+            get { return HighLogic.LoadedScene == GameScenes.SPACECENTER ? _window.Visible : _missions.Window.Visible; }
+        }
+
+        private void ButtonOn()
+        {
+            if (HighLogic.LoadedScene == GameScenes.SPACECENTER) _window.Visible = true;
+            else _missions.Window.Visible = true;
+        }
+
+        private void ButtonOff()
+        {
+            if (HighLogic.LoadedScene == GameScenes.SPACECENTER) _window.Visible = false;
+            else _missions.Window.Visible = false;
         }
 
         private void OnGUI()
@@ -188,49 +198,31 @@ namespace ClaudiaKermin.Adapter
         private void AddButtons()
         {
             RemoveButtons();
-            if (SettingsSceneLoaded())
+            if (!SettingsSceneLoaded()) return;
+            if (_icon == null)
             {
-                _button = ApplicationLauncher.Instance.AddModApplication(
-                    () => _window.Visible = true, () => _window.Visible = false,
-                    null, null, null, null, SettingsScenes, MakeIcon(new Color(0.85f, 0.45f, 0.2f, 1f)));
+                _icon = LoadIcon(IconUrl, ClaudiaSkin.IconGreen);
+                _iconAttention = LoadIcon(AttentionIconUrl, ClaudiaSkin.Attention);
             }
-            if (ChatSceneLoaded())
-            {
-                _chatButton = ApplicationLauncher.Instance.AddModApplication(
-                    () => _chatWindow.Visible = true, () => _chatWindow.Visible = false,
-                    null, null, null, null, ChatScenes, MakeIcon(new Color(0.25f, 0.6f, 0.85f, 1f)));
-                if (_chatWindow.Visible) _chatButton.SetTrue(false);
-            }
-            if (ChatSceneLoaded())
-            {
-                var window = _missions.Window;
-                if (_missionIcon == null)
-                {
-                    _missionIcon = MakeIcon(new Color(0.3f, 0.75f, 0.35f, 1f));
-                    _missionIconBright = MakeIcon(new Color(1f, 0.9f, 0.2f, 1f));
-                }
-                _missionBright = false;
-                _missionButton = ApplicationLauncher.Instance.AddModApplication(
-                    () => window.Visible = true, () => window.Visible = false,
-                    null, null, null, null, ChatScenes, _missionIcon);
-                if (window.Visible) _missionButton.SetTrue(false);
-            }
+            _attentionShown = false;
+            _button = ApplicationLauncher.Instance.AddModApplication(
+                ButtonOn, ButtonOff, null, null, null, null, ButtonScenes, _icon);
+            if (Toggled) _button.SetTrue(false);
         }
 
         private void RemoveButtons()
         {
-            if (ApplicationLauncher.Instance != null)
-            {
-                if (_button != null) ApplicationLauncher.Instance.RemoveModApplication(_button);
-                if (_chatButton != null) ApplicationLauncher.Instance.RemoveModApplication(_chatButton);
-                if (_missionButton != null) ApplicationLauncher.Instance.RemoveModApplication(_missionButton);
-            }
+            if (ApplicationLauncher.Instance != null && _button != null) ApplicationLauncher.Instance.RemoveModApplication(_button);
             _button = null;
-            _chatButton = null;
-            _missionButton = null;
         }
 
-        // Plain placeholder tiles (orange: settings, blue: chat, green: Mission); real artwork is a later ticket.
+        // The Winged glare artwork from GameData; a plain tile in the icon colour if the PNG didn't load.
+        private static Texture2D LoadIcon(string url, Color fallback)
+        {
+            var icon = GameDatabase.Instance != null ? GameDatabase.Instance.GetTexture(url, false) : null;
+            return icon != null ? icon : MakeIcon(fallback);
+        }
+
         private static Texture2D MakeIcon(Color color)
         {
             var icon = new Texture2D(38, 38, TextureFormat.ARGB32, false);
