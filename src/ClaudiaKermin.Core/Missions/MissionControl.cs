@@ -1212,13 +1212,17 @@ namespace ClaudiaKermin.Core.Missions
                 return;
             }
             Note(LogKind.Notice, "The Mission Plan names a vessel that hasn't left the craft (" + named + "); Claudia is revising it.");
+            // The correction is the refused turn asked again: its own Purpose (so the reply is read, and the plan offered, as it
+            // would have been) and its own wait at the Spending Cap, through the same Begin as any other turn.
+            var typed = turn.Purpose == Purpose.Reply || turn.Purpose == Purpose.Change;
             Begin(new Turn
             {
-                Purpose = Purpose.MissionPlan,
+                Purpose = turn.Purpose,
                 Effort = "high",
                 ChildVesselRetry = true,
+                Waits = turn.Waits,
                 UserText = MissionPrompts.ChildVesselNotLeft(ids),
-                Notice = MissionPrompts.ChildVesselNotice,
+                Notice = MissionPrompts.ChildVesselNotice + (typed ? MissionPrompts.ChildVesselTypedNotice : ""),
             });
         }
 

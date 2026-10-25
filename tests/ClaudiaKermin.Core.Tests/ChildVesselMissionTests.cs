@@ -276,6 +276,39 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void TheCorrectionOfARefusedMissionPlanIsAskedAsAMissionPlanNotAsTheRevisionOfATypedWord()
+        {
+            var transport = new StreamingFakeTransport(MissionPlan(NeverLeft, "Bystander"), MissionPlan("[]", "craft"));
+            var mission = StartedWith(transport);
+            mission.Send(new VesselsSeen(new List<SeenVessel> { CraftSeen(), ProbeSeen(id: "bystander", name: "Bystander") }));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+
+            Assert.Contains("corrected Mission Plan", Messages(transport.Requests[1]));
+            Assert.DoesNotContain("still the player's revision", Messages(transport.Requests[1]));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void ARefusedReplyOrChangeRePlanIsCorrectedAsThatSameRevisionAndOfferedForApproval(bool typedReply)
+        {
+            var transport = new StreamingFakeTransport(MissionPlan("[]", "craft"), MissionPlan(NeverLeft, "Bystander"), MissionPlan("[]", "craft"));
+            var mission = StartedWith(transport);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new VesselsSeen(new List<SeenVessel> { CraftSeen(), ProbeSeen(id: "bystander", name: "Bystander") }));
+
+            if (typedReply) mission.Send(new Reply("Use the other vessel."));
+            else mission.Send(new ChangeSomething("Use the other vessel."));
+            DrainUntil(mission, v => transport.Requests.Count == 3 && v.Stage == MissionStage.AwaitingPlanApproval);
+
+            var correction = Messages(transport.Requests[2]);
+            Assert.Contains("no such vessel has left the craft", correction);
+            Assert.Contains("still the player's revision", correction);
+            Assert.Contains(mission.View.Log, e => e.Text.Contains("Claudia is revising it"));
+            Assert.Empty(mission.View.ChildVessels);
+        }
+
+        [Fact]
         public void AMissionPlanNamingAVesselThatLeftTheCraftIsOffered()
         {
             var revised = MissionPlan("[{\"name\":\"Probe\",\"separation_stage\":null,\"vessel_id\":\"probe\"}]");
