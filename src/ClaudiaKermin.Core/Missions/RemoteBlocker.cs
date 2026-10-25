@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Andrew Watson
 
+using System.Collections.Generic;
 using System.Linq;
 
 namespace ClaudiaKermin.Core.Missions
@@ -20,7 +21,7 @@ namespace ClaudiaKermin.Core.Missions
         public static string Missing(GameSnapshot snapshot)
         {
             var parts = snapshot.Craft.Parts;
-            var lacks = new System.Collections.Generic.List<string>();
+            var lacks = new List<string>();
             if (!parts.Any(p => p.Tags.Contains("probe_core"))) lacks.Add("no probe core");
             // With CommNet off every craft counts as linked, so no antenna is needed to reach home.
             if (snapshot.CommNetEnabled && !parts.Any(p => p.Tags.Contains("antenna") && p.AntennaPower > 0))
