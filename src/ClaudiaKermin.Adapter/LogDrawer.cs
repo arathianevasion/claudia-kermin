@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using ClaudiaKermin.Core.Kos;
 using ClaudiaKermin.Core.Missions;
 using ClaudiaKermin.Core.Ui;
 using UnityEngine;
@@ -29,6 +30,9 @@ namespace ClaudiaKermin.Adapter
         // Expanded "why" and "Show script" per log entry.
         private readonly HashSet<LogEntry> _showWhy = new HashSet<LogEntry>();
         private readonly HashSet<LogEntry> _showScript = new HashSet<LogEntry>();
+        // The formatted text and the scroll position of each shown script; formatting runs once per entry, not per frame.
+        private readonly Dictionary<LogEntry, string> _formatted = new Dictionary<LogEntry, string>();
+        private readonly Dictionary<LogEntry, Vector2> _scriptScroll = new Dictionary<LogEntry, Vector2>();
 
         // The Craft Check: a new result (a different set of findings) brings the transcript back to the top, where it is.
         private string _seenCheckResult = "";
@@ -99,8 +103,8 @@ namespace ClaudiaKermin.Adapter
             if (_bold != null && ReferenceEquals(_stylesFor, HighLogic.Skin)) return;
             _stylesFor = HighLogic.Skin;
             _bold = new GUIStyle(ClaudiaSkin.Body) { fontStyle = FontStyle.Bold };
-            // Scripts wrap to the card instead of running off the right edge; the transcript scrolls them.
-            _script = new GUIStyle(ClaudiaSkin.TextField) { wordWrap = true, font = ClaudiaSkin.Mono.font, fontSize = ClaudiaSkin.Scaled(12) };
+            // Scripts keep their lines and scroll both ways in their own box.
+            _script = new GUIStyle(ClaudiaSkin.TextField) { wordWrap = false, font = ClaudiaSkin.Mono.font, fontSize = ClaudiaSkin.Scaled(12) };
         }
 
         private void DrawEntry(LogEntry entry, double now, float width)
@@ -167,8 +171,25 @@ namespace ClaudiaKermin.Adapter
                 GUILayout.EndHorizontal();
             }
             if (showWhy) GUILayout.Label("Why: " + entry.Why, ClaudiaSkin.Secondary);
-            if (showScript) GUILayout.TextArea(entry.Script, _script);
+            if (showScript) DrawScript(entry);
             ClaudiaSkin.EndCard();
+        }
+
+        // The Mission Script as formatted for reading (display only; the entry's script is untouched), in a box that
+        // scrolls both ways. The text area stays selectable for copying; what it returns is dropped, so edits don't stick.
+        private void DrawScript(LogEntry entry)
+        {
+            string text;
+            if (!_formatted.TryGetValue(entry, out text)) _formatted[entry] = text = ScriptFormatter.Format(entry.Script);
+            Vector2 scroll;
+            _scriptScroll.TryGetValue(entry, out scroll);
+            var size = _script.CalcSize(new GUIContent(text));
+            // CalcSize already includes the style's padding; the extra is room for the horizontal scrollbar.
+            var height = Mathf.Min(size.y + 20, ClaudiaSkin.Scaled(240));
+            scroll = GUILayout.BeginScrollView(scroll, true, true, GUILayout.Height(height));
+            GUILayout.TextArea(text, _script, GUILayout.MinWidth(size.x));
+            GUILayout.EndScrollView();
+            _scriptScroll[entry] = scroll;
         }
 
         private static string KindText(LogKind kind)
