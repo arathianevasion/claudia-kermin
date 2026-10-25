@@ -119,13 +119,15 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>
         /// The player's chosen processor as this craft numbers its parts: launch may reassign part <c>persistentId</c>s, so the
-        /// choice is found again by <c>craftID</c> and then follows the new id. Without a match the id is left as it was.
+        /// choice is found again by <c>craftID</c> and then follows the new id. With no craftID to go by the id is used as it is.
         /// </summary>
         private uint? ResolvePreferred(GameSnapshot snapshot)
         {
             if (!_preferredProcessor.HasValue || snapshot == null || _preferredCraftId == 0) return _preferredProcessor;
             var part = snapshot.Craft.Parts.FirstOrDefault(p => p.CraftId == _preferredCraftId && p.HasKosProcessor);
-            if (part != null) _preferredProcessor = part.Id;
+            // A known craftID with no processor behind it means the choice is gone; its old id may now be another part's.
+            if (part == null) _preferredCraftId = 0;
+            _preferredProcessor = part == null ? null : (uint?)part.Id;
             return _preferredProcessor;
         }
 
