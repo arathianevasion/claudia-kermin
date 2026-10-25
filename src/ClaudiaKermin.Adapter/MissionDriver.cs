@@ -62,7 +62,10 @@ namespace ClaudiaKermin.Adapter
         public void AcknowledgeFlash()
         {
             Flashing = false;
+            _pending = null;
         }
+        // The alert behind the flash, until the player opens the window; the strip's amber tab reads it too.
+        private Attention _pending;
 
         /// <summary>The player can read Claudia now: the floating window or the docked panel is up and not hidden by F2.</summary>
         private bool Watching
@@ -305,7 +308,8 @@ namespace ClaudiaKermin.Adapter
         /// <summary>The new moment Claudia needs the player in the latest view, if the window is closed for it; null otherwise.</summary>
         private Attention WatchAttention()
         {
-            if (Watching) Flashing = false;
+            if (Watching) { Flashing = false; _pending = null; }
+            Strip.Pending = _pending;
             var view = _mission.View;
             if (view.Version == _watchedVersion) return null;
             _watchedVersion = view.Version;
@@ -318,6 +322,8 @@ namespace ClaudiaKermin.Adapter
         private void NotifyPlayer(Attention attention)
         {
             Flashing = true;
+            _pending = attention;
+            Strip.Pending = attention;
             if (attention.Kind == AttentionKind.Abort) PanelOpen = true;
             ScreenMessages.PostScreenMessage(attention.Text, 6f, ScreenMessageStyle.UPPER_CENTER);
             // Cancelling the warp-to too: KSP's warp-to (a script's in-script warp) would otherwise raise the rate again.

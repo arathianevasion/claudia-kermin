@@ -166,6 +166,28 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AnArrivedDebriefLightsTheTabEvenWhileClaudiaIsBusy()
+        {
+            var view = During(MissionStage.Debriefing);
+            view.Busy = true;
+            var debrief = new Attention(AttentionKind.Debrief, "Claudia's Debrief is ready.");
+            Assert.Equal("", MissionWindowRules.NeedsYou(view));
+            Assert.Equal("Debrief ready", MissionWindowRules.TabNeeds(view, debrief));
+            Assert.Equal("Debrief ready", MissionWindowRules.ExpandTab(view, false, debrief));
+            Assert.Equal("Collapse", MissionWindowRules.ExpandTab(view, true, debrief));
+            Assert.Equal("Chat", MissionWindowRules.ExpandTab(view, false, null));
+        }
+
+        [Fact]
+        public void WhatTheStageAsksOutranksThePendingAlert()
+        {
+            var plan = During(MissionStage.AwaitingPlanApproval);
+            plan.QuickReplies = new List<QuickReply> { QuickReply.Approve };
+            var debrief = new Attention(AttentionKind.Debrief, "x");
+            Assert.Equal("Approve the Mission Plan?", MissionWindowRules.ExpandTab(plan, false, debrief));
+        }
+
+        [Fact]
         public void APlanAwaitingApprovalSaysWhichPlan()
         {
             var plan = During(MissionStage.AwaitingPlanApproval);

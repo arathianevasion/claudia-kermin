@@ -560,9 +560,33 @@ namespace ClaudiaKermin.Core.Ui
         /// <summary>The tab under the strip: "Collapse" when the panel is open, otherwise what Claudia needs or "Chat".</summary>
         public static string ExpandTab(MissionView view, bool expanded)
         {
+            return ExpandTab(view, expanded, null);
+        }
+
+        /// <summary>
+        /// The same, lit by the toolbar flash's signal too: a moment <see cref="AttentionWatch"/> reported (a Debrief) that the
+        /// player hasn't looked at yet keeps the tab amber even when the stage itself asks nothing, such as while Claudia is busy.
+        /// </summary>
+        public static string ExpandTab(MissionView view, bool expanded, Attention pending)
+        {
             if (expanded) return "Collapse";
-            var needs = NeedsYou(view);
+            var needs = TabNeeds(view, pending);
             return needs.Length > 0 ? needs : "Chat";
+        }
+
+        /// <summary>What lights the amber tab: <see cref="NeedsYou"/>, else the pending alert's short form; "" when neither.</summary>
+        public static string TabNeeds(MissionView view, Attention pending)
+        {
+            var needs = NeedsYou(view);
+            if (needs.Length > 0 || pending == null) return needs;
+            switch (pending.Kind)
+            {
+                case AttentionKind.Debrief: return "Debrief ready";
+                case AttentionKind.Abort: return "Claudia recommends Abort";
+                case AttentionKind.Pause: return "Paused";
+                case AttentionKind.Approval: return "Plan awaiting Approval";
+                default: return pending.Text;
+            }
         }
 
         /// <summary>
