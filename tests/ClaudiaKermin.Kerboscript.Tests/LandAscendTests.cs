@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Andrew Watson
 
+using System.Globalization;
 using System.Linq;
 using ClaudiaKermin.Core.Kos;
 using Xunit;
@@ -132,6 +133,46 @@ namespace ClaudiaKermin.Kerboscript.Tests
         public void Land_starts_braking_at_the_stopping_distance_with_margin()
         {
             Assert.Equal("27500", One("round(land_stop_distance(500, 5, 1.1), 3)"));
+        }
+
+        [Fact]
+        public void Land_works_out_the_time_to_impact_from_height_and_downward_speed()
+        {
+            // Dropped from 100 m at 1.62 m/s^2: sqrt(2 * 100 / 1.62).
+            Assert.Equal("11.111", One("round(land_fall_eta(100, 0, 1.62), 3)"));
+            // Already moving down: 100 = 20 t + 0.81 t^2.
+            Assert.Equal("4.264", One("round(land_fall_eta(100, 20, 1.62), 3)"));
+            // Climbing away still comes back down, later.
+            Assert.Equal("True", One("land_fall_eta(100, -10, 1.62) > land_fall_eta(100, 0, 1.62)"));
+            Assert.Equal("0", One("land_fall_eta(0, 5, 1.62)"));
+            Assert.Equal("0", One("land_fall_eta(-5, 5, 1.62)"));
+        }
+
+        [Theory]
+        // Nominal coast: shallow descent, ground far off.
+        [InlineData(80, 20, "False")]
+        // Over-burned deorbit: 200 m/s down needs 55 s to stop (with margin), ground in 25 s.
+        [InlineData(25, 200, "True")]
+        // Same fall, but the ground is further than the braking time plus the pad.
+        [InlineData(120, 200, "False")]
+        // Rising: nothing to stop, but the pad still applies.
+        [InlineData(5, -10, "True")]
+        [InlineData(0, 0, "True")]
+        public void Land_ends_the_coast_when_the_ground_comes_inside_the_braking_time(double eta, double down, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "land_brake_now({0}, {1}, 4, 1.1)", eta, down)));
+        }
+
+        [Fact]
+        public void Land_fails_after_the_deorbit_burn_when_periapsis_ends_well_under_the_plan()
+        {
+            // Planned 3200 m; 1500 m of slack.
+            Assert.Equal("True", One("land_periapsis_ok(3100, 3200)"));
+            Assert.Equal("True", One("land_periapsis_ok(1700, 3200)"));
+            Assert.Equal("False", One("land_periapsis_ok(1600, 3200)"));
+            Assert.Equal("False", One("land_periapsis_ok(-4000, 3200)"));
+            // Higher than planned is fine for this check.
+            Assert.Equal("True", One("land_periapsis_ok(9000, 3200)"));
         }
 
         [Fact]
