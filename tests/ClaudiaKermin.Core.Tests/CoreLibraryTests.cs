@@ -53,5 +53,37 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Contains("max_residual [0.5]", CoreLibrary.FullDocs(new[] { "exec_node" }));
             Assert.Equal("", CoreLibrary.FullDocs(new[] { "land" }));
         }
+
+        [Fact]
+        public void LaunchAndCircularizeAreSummarisedAndDocumentTheirContractOptionsAndResults()
+        {
+            var summaries = CoreLibrary.Summaries();
+            Assert.Contains("\n- launch(options): flies from the ground of a body with an atmosphere to a coast out of it; then circularize.", summaries);
+            Assert.Contains("\n- circularize(options): makes the orbit circular at apoapsis, periapsis or an altitude in one burn.", summaries);
+            var launch = CoreLibrary.FullDocs(new[] { "launch" });
+            foreach (var option in new[] { "launch_at [\"now\"]", "target_ap [\"auto\"]", "target_inc [0]", "heading [\"lib_lazcalc\"]", "turn_start_speed [60]", "turn_shape [0.45]", "max_aoa [5]", "throttle_max_q [\"none\"]", "g, atm_height, surface_pressure [\"body\"]", "ap_error", "max_q", "coast_ap" })
+                Assert.Contains(option, launch);
+            var circularize = CoreLibrary.FullDocs(new[] { "circularize" });
+            foreach (var option in new[] { "at [\"ap\"]", "tolerance [0.01]", "ecc" })
+                Assert.Contains(option, circularize);
+        }
+
+        [Fact]
+        public void EveryShippedBlockTestSpecParses()
+        {
+            var dir = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory);
+            while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "ClaudiaKermin.sln"))) dir = dir.Parent;
+            Assert.NotNull(dir);
+            var specs = System.IO.Directory.GetFiles(System.IO.Path.Combine(dir.FullName, "tests", "blocks"), "test.cfg", System.IO.SearchOption.AllDirectories);
+            Assert.NotEmpty(specs);
+            foreach (var path in specs)
+            {
+                var folder = System.IO.Path.GetDirectoryName(path);
+                var spec = BlockTestSpec.Parse(System.IO.Path.GetFileName(folder), System.IO.File.ReadAllText(path));
+                Assert.True(System.IO.File.Exists(System.IO.Path.Combine(folder, spec.Craft)), path + ": no " + spec.Craft);
+                Assert.True(System.IO.File.Exists(System.IO.Path.Combine(folder, "scenario.sfs")), path + ": no scenario.sfs");
+                Assert.True(System.IO.File.Exists(System.IO.Path.Combine(folder, "test.ks")), path + ": no test.ks");
+            }
+        }
     }
 }

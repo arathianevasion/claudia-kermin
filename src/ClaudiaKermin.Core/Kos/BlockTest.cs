@@ -10,7 +10,7 @@ namespace ClaudiaKermin.Core.Kos
 {
     /// <summary>
     /// One debug block test (spec, Testing: seam 3), read from its <c>test.cfg</c>: which block, the
-    /// reference craft and the orbit to fly it from, how long it may take, and the contract ranges its
+    /// reference craft and the orbit (or launch pad) to fly it from, how long it may take, and the contract ranges its
     /// Script Result must meet. Format: <c>name = value</c> lines, <c>#</c> comments; each
     /// <c>check = field op value</c> compares one result field (dotted for nested lexicons, e.g.
     /// <c>orbit.ap</c>) with <c>==</c>, <c>!=</c>, <c>&lt;</c>, <c>&lt;=</c>, <c>&gt;</c> or <c>&gt;=</c>.
@@ -22,6 +22,10 @@ namespace ClaudiaKermin.Core.Kos
         public string Name { get; private set; }
         public string Block { get; private set; }
         public string Craft { get; private set; }
+
+        /// <summary>Where the craft starts: in orbit (the default) or on Kerbin's launch pad (<c>start = launchpad</c>), where the orbit settings don't apply.</summary>
+        public BlockTestStart Start { get; private set; }
+
         public string OrbitBody { get; private set; }
         public double OrbitAltitude { get; private set; }
         public double OrbitInclination { get; private set; }
@@ -62,6 +66,11 @@ namespace ClaudiaKermin.Core.Kos
                 {
                     case "block": spec.Block = value; break;
                     case "craft": spec.Craft = value; break;
+                    case "start":
+                        if (value == "orbit") spec.Start = BlockTestStart.Orbit;
+                        else if (value == "launchpad") spec.Start = BlockTestStart.LaunchPad;
+                        else throw new FormatException(name + ": start must be 'orbit' or 'launchpad', not '" + value + "'");
+                        break;
                     case "orbit_body": spec.OrbitBody = value; break;
                     case "orbit_altitude": spec.OrbitAltitude = Number(name, value); break;
                     case "orbit_inclination": spec.OrbitInclination = Number(name, value); break;
@@ -181,6 +190,12 @@ namespace ClaudiaKermin.Core.Kos
         {
             return value == null ? "" : Convert.ToString(value, CultureInfo.InvariantCulture);
         }
+    }
+
+    public enum BlockTestStart
+    {
+        Orbit,
+        LaunchPad,
     }
 
     public sealed class BlockTestResult
