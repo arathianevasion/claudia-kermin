@@ -547,7 +547,7 @@ namespace ClaudiaKermin.Core.Tests
                 later = Control(Replies());
                 var entry = Entry(later, id);
                 Assert.True(entry.CostUnknown);
-                Assert.Equal("Cost unknown of $10.00", MissionListRules.Cost(entry));
+                Assert.Equal("Cost unknown, cap $10.00", MissionListRules.Cost(entry));
             }
 
             // Once the log reads again the cost is back, without a reload.

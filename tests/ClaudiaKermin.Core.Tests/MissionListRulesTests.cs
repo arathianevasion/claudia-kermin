@@ -32,7 +32,7 @@ namespace ClaudiaKermin.Core.Tests
         public void AnUnreadableCostReadsAsUnknownNotZero()
         {
             var text = MissionListRules.Cost(new MissionListEntry { Cost = 0m, CostUnknown = true, SpendingCap = 10m });
-            Assert.Equal("Cost unknown of $10.00", text);
+            Assert.Equal("Cost unknown, cap $10.00", text);
             Assert.DoesNotContain("$0.00", text);
         }
 

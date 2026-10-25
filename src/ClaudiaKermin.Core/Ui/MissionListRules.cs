@@ -24,7 +24,7 @@ namespace ClaudiaKermin.Core.Ui
         /// <summary>"$1.23 of $10.00", the cost against the Spending Cap; "Cost unknown" when the cost log can't be read.</summary>
         public static string Cost(MissionListEntry entry)
         {
-            if (entry.CostUnknown) return "Cost unknown of $" + entry.SpendingCap.ToString("0.00", CultureInfo.InvariantCulture);
+            if (entry.CostUnknown) return "Cost unknown, cap $" + entry.SpendingCap.ToString("0.00", CultureInfo.InvariantCulture);
             return "$" + entry.Cost.ToString("0.00", CultureInfo.InvariantCulture) + " of $" + entry.SpendingCap.ToString("0.00", CultureInfo.InvariantCulture);
         }
 
