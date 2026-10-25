@@ -364,8 +364,6 @@ namespace ClaudiaKermin.Core.Missions
             if (saveDirectory == _saveDirectory) return;
             _saveDirectory = saveDirectory;
             _snapshot = null;
-            _linkDownSince = null;
-            _linkBackAt = double.NegativeInfinity;
             _pendingStart = null;
             _startRefusal = "";
             _craftCheck.Reset();
@@ -376,10 +374,11 @@ namespace ClaudiaKermin.Core.Missions
 
         private void Snapshot(GameSnapshot snapshot)
         {
+            var previous = _snapshot;
             _snapshot = snapshot;
             _craftCheck.OnSnapshot(snapshot);
             if (snapshot.Ut > _ut) _ut = snapshot.Ut;
-            LinkSeen(snapshot);
+            LinkSeen(previous, snapshot);
             var mission = _mission;
             if (mission == null) return;
             // A plan restored from a save was never offered against a snapshot: the first one after the load is its baseline.

@@ -561,7 +561,7 @@ namespace ClaudiaKermin.Core.Tests
         // ---- Link loss and saves ----
 
         [Fact]
-        public void ALinkDropInTheSnapshotRightAfterTheTakeoverDoesNotHandTheCraftStraightBack()
+        public void ALinkDropInTheSnapshotRightAfterTakingManualControlDoesNotHandTheCraftStraightBack()
         {
             // The log in ticket 151: Manual Control offered while linked, the next snapshot at the same UT has no link.
             var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
@@ -605,6 +605,57 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Single(mission.View.Log, e => e.Kind == LogKind.Player && e.Text.StartsWith("Hand back"));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             Assert.Empty(mission.TakeCommands().OfType<MakeCraftSafe>());
+        }
+
+        [Fact]
+        public void TheGraceStartsAgainAfterAQuickloadAVesselSwitchOrLeavingFlight()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
+            var mission = Control(transport);
+            ToRunning(mission);
+            mission.Send(new TakeManualControl());
+            var ut = Pad().Ut;
+
+            // Down for a while, then a quickload to an earlier moment: the old drop is not this game's.
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 100; }));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 104; }));
+            mission.Send(new UtAdvanced(ut + 50));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 50; }));
+            Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
+            Assert.Equal(5, mission.View.LinkLossTakeBackIn);
+
+            // Another vessel: its link has its own history.
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 54; s.Craft.VesselId = "other"; }));
+            Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
+            Assert.Equal(5, mission.View.LinkLossTakeBackIn);
+
+            // Away from Flight and back, still unlinked: the first snapshot back starts the grace.
+            mission.Send(new SceneChanged(GameScene.Other));
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 300; s.Craft.VesselId = "other"; }));
+            Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
+            Assert.Empty(mission.TakeCommands().OfType<MakeCraftSafe>());
+        }
+
+        [Fact]
+        public void TheGraceStartsWhenTheLastOtherCrewMemberLeavesWithTheLinkAlreadyDown()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
+            var mission = Control(transport);
+            ToRunning(mission);
+            mission.Send(new TakeManualControl());
+            var ut = Pad().Ut;
+
+            mission.Send(Pad(s =>
+            {
+                s.HasLink = false;
+                s.Ut = ut + 1;
+                s.Crew.Add(new SnapshotCrewMember { Name = "Jebediah Kerman", Trait = "Pilot" });
+            }));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 60; }));
+
+            Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
+            Assert.Equal(5, mission.View.LinkLossTakeBackIn);
         }
 
         [Fact]

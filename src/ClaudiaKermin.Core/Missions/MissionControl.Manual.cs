@@ -34,34 +34,42 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The "Manual Control isn't available" notice is repeated at most this often, in UT seconds, while keys stay held.</summary>
         private const double RefusalNoticeSeconds = 30;
 
-        /// <summary>UT of the first Game Snapshot of the current stretch without a link; null while linked.</summary>
-        private double? _linkDownSince;
+        /// <summary>UT since which the craft has had no link and no other crew aboard (nobody could fly it); null otherwise.</summary>
+        private double? _strandedSince;
         /// <summary>UT the link last came back after a drop; until the grace has passed since, the link is unsteady.</summary>
         private double _linkBackAt = double.NegativeInfinity;
 
         /// <summary>
-        /// Keeps the link's history from each Game Snapshot, and takes the craft back once the link has been down in
-        /// Manual Control, with no other crew aboard, for longer than the grace: a link that drops for a moment, or in
-        /// the first snapshot after the takeover, doesn't hand the craft straight back.
+        /// Keeps the link's history from each Game Snapshot, and takes the craft back once the craft has been without a
+        /// link or other crew in Manual Control for longer than the grace: a link that drops for a moment, or in the
+        /// first snapshot after the player took Manual Control, doesn't hand the craft straight back. The history starts
+        /// again on another vessel, on the first snapshot after a load or back in Flight, and when time runs backwards
+        /// (a quickload).
         /// </summary>
-        private void LinkSeen(GameSnapshot snapshot)
+        private void LinkSeen(GameSnapshot previous, GameSnapshot snapshot)
         {
-            if (snapshot.HasLink && _linkDownSince.HasValue) _linkBackAt = _ut;
-            if (snapshot.HasLink) _linkDownSince = null;
-            else if (!_linkDownSince.HasValue) _linkDownSince = _ut;
-            var mission = _mission;
-            if (mission == null || mission.Stage != MissionStage.ManualControl || _scene != GameScene.Flight) return;
-            if (snapshot.HasLink || snapshot.HasOtherCrew || _ut - _linkDownSince.Value <= _config.ManualLinkGraceSeconds) return;
-            LinkLostDuringManual();
+            if (previous == null || previous.Craft.VesselId != snapshot.Craft.VesselId || snapshot.Ut < previous.Ut)
+            {
+                _strandedSince = null;
+                _linkBackAt = double.NegativeInfinity;
+            }
+            else if (snapshot.HasLink && !previous.HasLink) _linkBackAt = _ut;
+            if (snapshot.HasLink || snapshot.HasOtherCrew) _strandedSince = null;
+            else if (!_strandedSince.HasValue) _strandedSince = _ut;
+            if (InFlightManual && _ut - _strandedSince > _config.ManualLinkGraceSeconds) LinkLostDuringManual();
         }
 
-        /// <summary>In Manual Control with the link down and no other crew aboard: game seconds until Claudia takes the craft back.</summary>
+        /// <summary>The Mission is in Manual Control, in Flight.</summary>
+        private bool InFlightManual
+        {
+            get { return _mission != null && _mission.Stage == MissionStage.ManualControl && _scene == GameScene.Flight; }
+        }
+
+        /// <summary>In Manual Control with no link and no other crew aboard: game seconds until Claudia takes the craft back.</summary>
         private double? LinkLossTakeBackIn()
         {
-            var mission = _mission;
-            if (mission == null || mission.Stage != MissionStage.ManualControl || _scene != GameScene.Flight) return null;
-            if (!_linkDownSince.HasValue || _snapshot == null || _snapshot.HasOtherCrew) return null;
-            return Math.Max(0, _linkDownSince.Value + _config.ManualLinkGraceSeconds - _ut);
+            if (!InFlightManual || !_strandedSince.HasValue) return null;
+            return Math.Max(0, _strandedSince.Value + _config.ManualLinkGraceSeconds - _ut);
         }
 
         /// <summary>
@@ -219,7 +227,7 @@ namespace ClaudiaKermin.Core.Missions
             // Off warp first, so the make-safe's throttle and steering apply to a craft off rails.
             _commands.Add(new DropWarp());
             _commands.Add(new MakeCraftSafe("the link dropped during Manual Control with no other crew aboard"));
-            _commands.Add(new PostScreenMessage(text, true));
+            _commands.Add(new PostScreenMessage(text, always: true));
             mission.ManualOrigin += "; then the link dropped with no other crew aboard, so you took the craft back and the mod made it safe";
             HandedBack("");
         }
