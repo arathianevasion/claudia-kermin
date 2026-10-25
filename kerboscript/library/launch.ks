@@ -125,12 +125,6 @@ function launch_throttle_floor {
   return min(1, mass_t * g / thrust_kn).
 }
 
-// Degrees wrapped into [0, 360).
-function launch_wrap {
-  parameter deg.
-  return deg - 360 * floor(deg / 360).
-}
-
 // How long until a launch site at latitude lat (degrees) and celestial longitude site_lng
 // (degrees: its longitude plus the body's rotation angle) next passes under the plane of an orbit of
 // inclination inc and longitude of ascending node lan, on a body turning once in period s.
@@ -146,8 +140,8 @@ function launch_plane_wait {
     return lexicon("wait", -1, "north", true).
   }
   local offset is arcsin(x).
-  local north_wait is launch_wrap(lan + offset - site_lng) / 360 * period.
-  local south_wait is launch_wrap(lan + 180 - offset - site_lng) / 360 * period.
+  local north_wait is claudia_wrap_angle(lan + offset - site_lng) / 360 * period.
+  local south_wait is claudia_wrap_angle(lan + 180 - offset - site_lng) / 360 * period.
   if north_wait <= south_wait {
     return lexicon("wait", north_wait, "north", true).
   }
@@ -332,16 +326,10 @@ function launch {
   lock throttle to tset.
   local aim is ship:up:vector.
   lock steering to aim.
-  if ship:availablethrust <= 0 {
-    local staged is claudia_autostage(ctx).
-    if staged <> "" {
-      claudia_make_safe().
-      return claudia_finish(ctx, false, staged, extra).
-    }
-  }
-  if ship:availablethrust <= 0 {
+  local lit is claudia_stage_into_engines(ctx).
+  if lit <> "" {
     claudia_make_safe().
-    return claudia_finish(ctx, false, "no thrust", extra).
+    return claudia_finish(ctx, false, lit, extra).
   }
   launch_release_clamps(ctx).
 
@@ -453,8 +441,6 @@ function launch {
     return claudia_finish(ctx, false, reason, extra).
   }
   set tset to 0.
-  set ship:control:pilotmainthrottle to 0.
-  unlock throttle.
-  unlock steering.
+  claudia_release_controls().
   return claudia_finish(ctx, true, "", extra).
 }

@@ -73,7 +73,7 @@ function circularize_anomaly {
 function circularize_time_to {
   parameter now_deg, target_deg, ecc, period.
   local diff is circularize_mean_anomaly(target_deg, ecc) - circularize_mean_anomaly(now_deg, ecc).
-  return (diff - 360 * floor(diff / 360)) / 360 * period.
+  return claudia_wrap_angle(diff) / 360 * period.
 }
 
 // The mean anomaly (degrees) at true anomaly nu (degrees) on an elliptical orbit of ecc.

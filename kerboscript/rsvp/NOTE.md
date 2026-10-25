@@ -39,7 +39,7 @@ So, and only so:
    `parameter export.` becomes that function's parameter, its file-level locals and functions become
    the function's, and kOS closures keep them alive as RSVP's file scopes did. `rsvp_file_main()`
    declares the global `rsvp` and imports the rest.
-3. `transfer_to_rsvp()` (in `transfer_to.ks`) calls `rsvp_file_main()` the first time a block needs RSVP,
+3. `claudia_rsvp()` (in `transfer_to.ks`) calls `rsvp_file_main()` the first time a block needs RSVP,
    because a bundled file's top-level statements would only run after the Mission Script ends.
 
 RSVP's planning code itself is untouched. While running it prints (with `verbose`, which `transfer_to`

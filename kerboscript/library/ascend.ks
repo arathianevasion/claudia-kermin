@@ -139,14 +139,9 @@ function ascend {
   set opt:target_alt to goal.
 
   // A craft whose engines aren't lit yet stages into them (within stage_limit).
-  if ship:availablethrust <= 0 {
-    local staged is claudia_autostage(ctx).
-    if staged <> "" {
-      return claudia_finish(ctx, false, staged, extra).
-    }
-  }
-  if ship:availablethrust <= 0 {
-    return claudia_finish(ctx, false, "no thrust", extra).
+  local lit is claudia_stage_into_engines(ctx).
+  if lit <> "" {
+    return claudia_finish(ctx, false, lit, extra).
   }
   local mu is body:mu.
   local g0 is mu / (body:radius + altitude) ^ 2.
@@ -185,9 +180,7 @@ function ascend {
     wait 0.
   }
   set tset to 0.
-  set ship:control:pilotmainthrottle to 0.
-  unlock throttle.
-  unlock steering.
+  claudia_release_controls().
 
   // Circularize at apoapsis.
   local nd is node(time:seconds + eta:apoapsis, 0, 0, ascend_circularize_dv(mu, body:radius + ship:apoapsis, ship:orbit:semimajoraxis)).
