@@ -33,6 +33,7 @@ namespace ClaudiaKermin.KOS
             AddSuffix("BLOCKSTART", new OneArgsSuffix<StringValue>(BlockStart, "A Building Block began"));
             AddSuffix("BLOCKRESULT", new TwoArgsSuffix<StringValue, Lexicon>(BlockResult, "A Building Block returned its result"));
             AddTerrainSuffixes();
+            AddHeatSuffixes();
             if (shared.KSPPart != null) ByPart[shared.KSPPart.persistentId] = this;
         }
 
