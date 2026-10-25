@@ -29,9 +29,24 @@ namespace ClaudiaKermin.Core.Tests
             return _mission.Send(request);
         }
 
+        /// <summary>Every Craft Check request so far: the start check, then each Debrief's margin recheck.</summary>
+        public System.Collections.Generic.List<HttpRequestSpec> CheckRequests
+        {
+            get { return _checks.Requests; }
+        }
+
+        /// <summary>When set, the margin recheck of a Debrief gets this response instead of a Pass.</summary>
+        public ScriptedResponse Recheck;
+
         public IHttpStream Open(HttpRequestSpec request, CancellationToken cancel)
         {
-            return request.Body.Contains("\"required\":[\"summary\",\"findings\"]") ? _checks.Open(request, cancel) : _mission.Open(request, cancel);
+            if (!request.Body.Contains("\"required\":[\"summary\",\"findings\"]")) return _mission.Open(request, cancel);
+            if (Recheck != null && request.Body.Contains("Margin recheck after a Maneuver Sequence"))
+            {
+                lock (_checks) _checks.Requests.Add(request);
+                return new ScriptedStream(Recheck);
+            }
+            return _checks.Open(request, cancel);
         }
 
         /// <summary>
