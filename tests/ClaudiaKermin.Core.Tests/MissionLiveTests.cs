@@ -155,7 +155,292 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(4, transport.Requests.Count);
         }
 
+        // ---- Telemetry Checks at Approval ----
+
+        [Fact]
+        public void ApprovalShowsClaudiasTelemetryChecksWithTheConfigDefaultsFillingTheGaps()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), AltitudeCheck(5000)));
+            var mission = Control(transport, new PlayerConfig { CheckElectricChargePercent = 20 });
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+
+            var card = mission.View.Log.Last(e => e.Kind == LogKind.SequencePlan).Text;
+            // Claudia's own; no delta-v default (the plan expects 0 m/s); 150% of 5 s; the config's electric charge; the fuel margin.
+            Assert.Contains("Telemetry Checks: altitude over 5,000 m; time elapsed over 8 s (default); ElectricCharge under 20% (default); "
+                + "needed-fuel margin under -10% (default)", card);
+        }
+
+        [Fact]
+        public void TheDeltaVDefaultIs120PercentOfThePlanAndAQuantityClaudiaSetKeepsHers()
+        {
+            var plan = new SequencePlan { ExpectedDeltaV = 1000, ExpectedDurationSeconds = 600 };
+            var defaults = TelemetryDefaults.Fill(plan, new PlayerConfig());
+            Assert.Equal(new[] { "delta-v used over 1,200 m/s", "time elapsed over 900 s", "ElectricCharge under 10%", "needed-fuel margin under -10%" },
+                defaults.Select(c => c.Describe()));
+
+            plan.TelemetryChecks.Add(new TelemetryCheck { Quantity = TelemetryQuantity.DeltaVUsed, Threshold = 1100 });
+            var filled = TelemetryDefaults.Fill(plan, new PlayerConfig());
+            Assert.Equal("delta-v used over 1,100 m/s", filled.Single(c => c.Quantity == TelemetryQuantity.DeltaVUsed).Describe());
+            Assert.False(filled.First().Default);
+        }
+
+        [Fact]
+        public void APlansTelemetryChecksSurviveASave()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), AltitudeCheck(5000)));
+            var mission = Control(transport);
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+
+            var saved = MissionSaveState.FromValues(mission.ExportStates().Single().ToValues());
+            var check = saved.SequencePlan.TelemetryChecks.Single();
+            Assert.Equal("altitude over 5,000 m", check.Describe());
+            Assert.Equal("Too high for a pad test.", check.Why);
+        }
+
+        // ---- A normal run ----
+
+        [Fact]
+        public void ANormalRunMakesNoClaudeCallsAndTheStripShowsTheBlockProgressAndKeyNumbers()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission, 10m);
+
+            mission.Send(new KosBlockStarted("exec_node", start.RunId));
+            mission.Send(new UtAdvanced(1203.48 + 2));
+            mission.Send(Snapshot(s => { s.Altitude = 80; s.Stages[0].DeltaVVac = 3190; }));
+
+            var progress = mission.View.RunProgress;
+            Assert.True(progress.Running);
+            Assert.Equal("Link check", progress.Sequence);
+            Assert.Equal("exec_node", progress.Block);
+            Assert.Equal(2, progress.ElapsedSeconds, 1);
+            Assert.Equal(5, progress.PlannedSeconds);
+            Assert.Equal(0.4, progress.Fraction, 2);
+            Assert.Equal(10, progress.DeltaVUsed);
+            Assert.Equal(80, progress.Altitude);
+            Assert.Equal(100, progress.ElectricChargePercent);
+
+            // Each block result adds a log row; a block from another run is ignored.
+            var result = new Dictionary<string, object> { { "success", true }, { "reason", "" }, { "dv_used", 9.6 }, { "duration", 2.2 } };
+            mission.Send(new KosBlockEnded("exec_node", result, start.RunId));
+            mission.Send(new KosBlockEnded("exec_node", result, start.RunId + 1));
+            Assert.Single(mission.View.Log, e => e.Kind == LogKind.Notice && e.Text == "Block exec_node: done, 10 m/s used, 2 s.");
+            Assert.Equal(1, mission.View.RunProgress.BlocksDone);
+            Assert.Equal("", mission.View.RunProgress.Block);
+
+            _background.Drain();
+            Assert.Equal(2, transport.Requests.Count);
+            Assert.False(mission.View.Busy);
+
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            Assert.False(mission.View.RunProgress.Running);
+        }
+
+        // ---- Alerts ----
+
+        [Fact]
+        public void ACrossedCheckSendsOneAlertAndAnAbortRecommendationDropsWarpAndThePlayerAbortsToAnOffNominalDebrief()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), DeltaVCheck(50)),
+                ScriptedResponse.Fixture("mission-alert-abort.sse"),
+                ScriptedResponse.Fixture("mission-debrief.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission, 10m);
+
+            // 100 m/s used against a 50 m/s check.
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            Assert.Contains(mission.View.Log, e => e.Kind == LogKind.Notice && e.Text.StartsWith("Telemetry Check crossed: delta-v used 100 m/s over 50 m/s"));
+            // It fires once: more snapshots past it send nothing more.
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3000));
+            DrainUntil(mission, v => v.AbortRecommended.Length > 0);
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 2900));
+            _background.Drain();
+            Assert.Equal(3, transport.Requests.Count);
+
+            var alert = LastUserText(transport.Requests[2]);
+            Assert.Contains("Alert: a Telemetry Check was crossed", alert);
+            Assert.Contains("Craft now (compact, JSON data):", alert);
+            Assert.Equal("low", Effort(transport.Requests[2]));
+
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+            Assert.Contains("The burn is overrunning.", mission.View.AbortRecommended);
+            Assert.Equal(QuickReply.Abort, mission.View.QuickReplies.First());
+            var commands = mission.TakeCommands();
+            Assert.Contains(commands, c => c is DropWarp);
+            Assert.Contains(commands.OfType<PostScreenMessage>(), m => m.Always && m.Text.StartsWith("Claudia recommends Abort"));
+            // Claudia never aborts herself.
+            Assert.DoesNotContain(commands, c => c is AbortScript);
+
+            mission.Send(new AbortSequence());
+            var abort = mission.TakeCommands().OfType<AbortScript>().Single();
+            Assert.Equal(start.RunId, abort.RunId);
+            Assert.Equal("the player pressed Abort", abort.Reason);
+            Assert.Equal("", mission.View.AbortRecommended);
+            Assert.DoesNotContain(QuickReply.Abort, mission.View.QuickReplies);
+
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Aborted, null, "Program aborted.", "the player pressed Abort", true), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+            var report = LastUserText(transport.Requests[3]);
+            Assert.Contains("kOS run ended: Aborted (aborted by the player).", report);
+            Assert.Contains("Telemetry Checks crossed during the run, with your mid-run verdicts: delta-v used 100 m/s over 50 m/s: Abort recommended (The burn is overrunning.)", report);
+
+            // Claudia rated it Nominal; a crossing rules that out.
+            var debrief = mission.View.Log.Last(e => e.Kind == LogKind.Debrief);
+            Assert.Equal("Off-Nominal", debrief.Outcome);
+            Assert.Equal("Debrief: Off-Nominal (aborted by the player)", debrief.Title);
+            Assert.Contains("Telemetry Checks crossed: delta-v used 100 m/s over 50 m/s: Abort recommended", debrief.Text);
+        }
+
+        [Fact]
+        public void ACarryOnLeavesALogLineAndItsFollowUpThresholdFiresOnceMore()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), AltitudeCheck(100)),
+                ScriptedResponse.Fixture("mission-alert-carry-on.sse"),
+                ScriptedResponse.Fixture("mission-alert-carry-on-plain.sse"),
+                ScriptedResponse.Fixture("mission-debrief.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission, 10m);
+            mission.TakeCommands();
+
+            mission.Send(Snapshot(s => s.Altitude = 500));
+            DrainUntil(mission, v => !v.Busy && v.LatestLine.StartsWith("Alert, altitude: carry on."));
+            Assert.Equal("", mission.View.AbortRecommended);
+            var commands = mission.TakeCommands();
+            Assert.DoesNotContain(commands, c => c is DropWarp);
+            Assert.DoesNotContain(commands, c => c is PostScreenMessage);
+
+            // Below the follow-up threshold Claudia gave (1000 m): nothing.
+            mission.Send(Snapshot(s => s.Altitude = 800));
+            _background.Drain();
+            Assert.Equal(3, transport.Requests.Count);
+
+            mission.Send(Snapshot(s => s.Altitude = 1200));
+            DrainUntil(mission, v => !v.Busy && v.LatestLine == "Alert, altitude: carry on. Still fine.");
+            Assert.Contains("altitude 1,200 m over 1,000 m (follow-up threshold)", LastUserText(transport.Requests[3]));
+
+            // Each check fires at most once per run, and once at its follow-up.
+            mission.Send(Snapshot(s => s.Altitude = 5000));
+            _background.Drain();
+            Assert.Equal(4, transport.Requests.Count);
+
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+            var debrief = mission.View.Log.Last(e => e.Kind == LogKind.Debrief);
+            Assert.Equal("Off-Nominal", debrief.Outcome);
+            Assert.Contains("altitude 500 m over 100 m: carry on (Within margins.); altitude 1,200 m over 1,000 m (follow-up threshold): carry on (Still within margins.)", debrief.Text);
+        }
+
+        [Fact]
+        public void AnAlertGoesAheadOfAQuestionWaitingInTheQueue()
+        {
+            var held = ScriptedResponse.Fixture("mission-answer.sse");
+            held.PauseAt = 10;
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), AltitudeCheck(100)),
+                held,
+                ScriptedResponse.Fixture("mission-alert-carry-on-plain.sse"),
+                ScriptedResponse.Fixture("mission-answer.sse"));
+            var mission = Control(transport);
+            ToRunning(mission, 10m);
+
+            mission.Send(new AskQuestion("First question?"));
+            mission.Send(new AskQuestion("Second question?"));
+            mission.Send(Snapshot(s => s.Altitude = 500));
+            held.Gate.Set();
+
+            DrainUntil(mission, v => !v.Busy && transport.Requests.Count == 5);
+            Assert.Contains("First question?", LastUserText(transport.Requests[2]));
+            Assert.Contains("Alert: a Telemetry Check was crossed", LastUserText(transport.Requests[3]));
+            Assert.Contains("Second question?", LastUserText(transport.Requests[4]));
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+        }
+
+        [Fact]
+        public void AnAlertThatWouldPassTheCapWaitsAndTheRunCarriesOn()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan-priced.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan-priced.sse"), AltitudeCheck(100)),
+                ScriptedResponse.Fixture("mission-alert-carry-on-plain.sse"));
+            var mission = Control(transport);
+            ToRunning(mission, 1.20m);
+            mission.TakeCommands();
+
+            mission.Send(Snapshot(s => s.Altitude = 500));
+
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+            Assert.Contains("The sequence carries on without her", mission.View.CapWait);
+            Assert.Contains(mission.TakeCommands().OfType<PostScreenMessage>(), m => m.Always && m.Text.Contains("Spending Cap"));
+            Assert.Equal(new[] { QuickReply.Abort, QuickReply.AskQuestion, QuickReply.RaiseCap }, mission.View.QuickReplies.Where(r => r != QuickReply.ManualControl));
+
+            mission.Send(new RaiseCap(10m));
+            DrainUntil(mission, v => v.LatestLine == "Alert, altitude: carry on. Still fine.");
+            Assert.Equal(3, transport.Requests.Count);
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+        }
+
+        [Fact]
+        public void AnAlertStillQueuedWhenTheRunEndsIsDroppedAndTheDebriefSaysItWasNeverJudged()
+        {
+            var held = ScriptedResponse.Fixture("mission-answer.sse");
+            held.PauseAt = 10;
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), AltitudeCheck(100)),
+                held,
+                ScriptedResponse.Fixture("mission-debrief.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission, 10m);
+
+            mission.Send(new AskQuestion("First question?"));
+            mission.Send(Snapshot(s => s.Altitude = 500));
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            held.Gate.Set();
+
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+            Assert.Equal(4, transport.Requests.Count);
+            Assert.Contains("altitude 500 m over 100 m: not judged: the run ended first", LastUserText(transport.Requests[3]));
+        }
+
         // ---- Helpers ----
+
+        private static string DeltaVCheck(double threshold)
+        {
+            return "\"telemetry_checks\":[{\"quantity\":\"delta_v_used\",\"resource\":\"\",\"direction\":\"above\",\"threshold\":" + threshold
+                + ",\"why\":\"Nothing should burn.\"}],";
+        }
+
+        private static string AltitudeCheck(double threshold)
+        {
+            return "\"telemetry_checks\":[{\"quantity\":\"altitude\",\"resource\":\"\",\"direction\":\"above\",\"threshold\":" + threshold
+                + ",\"why\":\"Too high for a pad test.\"}],";
+        }
+
+        /// <summary>The on-pad Game Snapshot, changed.</summary>
+        private static GameSnapshot Snapshot(Action<GameSnapshot> change)
+        {
+            var snapshot = OnPad();
+            change(snapshot);
+            return snapshot;
+        }
 
         /// <summary>A Sequence Plan stream with extra fields put in before its <c>"script"</c>.</summary>
         private static ScriptedResponse WithSequenceFields(ScriptedResponse response, string fields)
