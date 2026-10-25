@@ -98,7 +98,7 @@ namespace ClaudiaKermin.Adapter
         /// Draws the panel in the current layout area, <paramref name="width"/> wide. <paramref name="docked"/> draws the
         /// docked panel's control bar (Settings, Undock, End Mission; the spend meter is in the strip); the floating
         /// window's has the spend meter and, in Flight, Dock. <paramref name="rightRoom"/> pads the control bar's right
-        /// edge (room for a resize grip).
+        /// edge.
         /// </summary>
         public void Draw(MissionView view, float width, bool docked, int rightRoom)
         {

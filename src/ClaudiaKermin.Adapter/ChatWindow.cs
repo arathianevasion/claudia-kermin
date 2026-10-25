@@ -107,7 +107,7 @@ namespace ClaudiaKermin.Adapter
                 if (_dumping) GUILayout.Label("To " + _dumpFolder);
             }
 
-            _frame.DrawGrip();
+            _frame.DrawResizeZones();
             GUI.DragWindow();
         }
 

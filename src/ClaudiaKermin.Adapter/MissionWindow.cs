@@ -14,8 +14,6 @@ namespace ClaudiaKermin.Adapter
     public class MissionWindow
     {
         private const string LockId = "ClaudiaKerminMission";
-        // The resize grip sits in the bottom-right corner, over the control bar's right edge.
-        private const int GripRoom = 24;
 
         private readonly MissionPanel _panel;
         private readonly WindowFrame _frame =
@@ -57,8 +55,8 @@ namespace ClaudiaKermin.Adapter
         private void Draw(int id)
         {
             DrawTitleBar();
-            _panel.Draw(View, _frame.Rect.width, false, GripRoom);
-            _frame.DrawGrip();
+            _panel.Draw(View, _frame.Rect.width, false, ClaudiaSkin.Padding);
+            _frame.DrawResizeZones();
             WindowFrame.DrawTooltip();
             GUI.DragWindow();
         }

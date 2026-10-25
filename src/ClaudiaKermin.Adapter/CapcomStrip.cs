@@ -17,11 +17,13 @@ namespace ClaudiaKermin.Adapter
     /// <see cref="MissionPanel"/> (and turns amber with what Claudia needs from the player). The tab and the panel are
     /// below the strip, or above it when the panel has no room below (<see cref="CapcomStripLayout"/>). Undocked, the tab
     /// opens the floating Mission window instead. One <see cref="WindowFrame"/> covers the strip, the panel and the tab,
-    /// so the input locks hold over all of them.
+    /// so the input locks hold over all of them. The docked panel resizes from its left, right and far edge and the
+    /// corners there; its size (the width is the strip's too) is kept as <c>flight.panel</c>.
     /// </summary>
     public class CapcomStrip
     {
-        private const float Width = 740;
+        private const float DefaultWidth = 740;
+        private static readonly float MinWidth = ClaudiaSkin.Scaled(520);
         private const float Top = 70;
         private const string MemoryName = "capcom";
         private static readonly float PortraitSize = ClaudiaSkin.Scaled(44);
@@ -32,7 +34,8 @@ namespace ClaudiaKermin.Adapter
         // A drag shorter than this was a click (the first of a double-click), not a move.
         private const float DragThreshold = 3;
         private static readonly float MeterWidth = ClaudiaSkin.Scaled(72);
-        private const float PanelHeight = 640;
+        private const float DefaultPanelHeight = 640;
+        private const string PanelMemoryName = "panel";
         // Below this the prompt and the control bar leave the transcript no room; only a very short screen gets there.
         private const float MinPanelHeight = 200;
         private const int TabRadius = 6;
@@ -40,7 +43,7 @@ namespace ClaudiaKermin.Adapter
 
         private readonly MissionPanel _panel;
         private readonly WindowFrame _frame =
-            new WindowFrame(0x434B04, "", "ClaudiaKerminCapcom", new Rect(0, Top, Width, 0), Vector2.zero, false);
+            new WindowFrame(0x434B04, "", "ClaudiaKerminCapcom", new Rect(0, Top, DefaultWidth, 0), new Vector2(MinWidth, MinPanelHeight), false);
         private Texture2D _portrait;
 
         // Built from ClaudiaSkin's styles, so they follow its font sizes; rebuilt when it rebuilds.
@@ -62,6 +65,12 @@ namespace ClaudiaKermin.Adapter
         private Vector2 _dragFromMouse, _dragFromStrip;
         // This frame's placement: the strip kept on screen, the side its tab and panel are on.
         private StripPlacement _place;
+
+        // The size the player gave the docked panel: its width is the whole window's (strip, panel and tab), and its height
+        // is what it asks for, which the screen may cut short. _width is this frame's width, kept within the screen.
+        private float _wantWidth = DefaultWidth, _wantPanelHeight = DefaultPanelHeight, _width = DefaultWidth;
+        // The panel's rect in the window last Repaint (empty when it isn't open), where a press starts a resize.
+        private Rect _panelArea;
 
         // How far the segment track is scrolled, and the current segment it last scrolled to show.
         private float _scroll;
@@ -113,19 +122,24 @@ namespace ClaudiaKermin.Adapter
             ApplyRemembered();
             if (_dragging) Drag();
             var expanded = PanelShowing;
+            if (!expanded) EndResize();
+            else StepResize();
+            _width = Mathf.Min(_wantWidth, Screen.width);
             // Placed every frame from where the player left it, so a smaller screen re-clamps it and a larger one gives it back.
-            var at = _moved ? _position : new Vector2((Screen.width - Width) / 2f, Top);
-            _place = CapcomStripLayout.Place(at.x, at.y, new StripSize(Width, _stripHeight, TabHeight(), PanelHeight, MinPanelHeight), Screen.width, Screen.height);
+            var at = _moved ? _position : new Vector2((Screen.width - _width) / 2f, Top);
+            _place = CapcomStripLayout.Place(at.x, at.y, new StripSize(_width, _stripHeight, TabHeight(), _wantPanelHeight, MinPanelHeight), Screen.width, Screen.height);
             var above = _place.Side == PanelSide.Above;
 
-            var shape = expanded + "|" + _place.Side + "|" + (View.PlanSequences.Count > 0) + "|" + MissionWindowRules.LockLine(View) + "|" + Screen.height;
+            // The size is in the shape, so the window re-fits to it every frame of a resize (it only grows on its own).
+            var shape = expanded + "|" + _place.Side + "|" + (View.PlanSequences.Count > 0) + "|" + MissionWindowRules.LockLine(View) + "|" + Screen.height
+                + "|" + Mathf.RoundToInt(_width) + "|" + Mathf.RoundToInt(_place.PanelHeight);
             // It grows to fit; with the tab (and panel) above, the window starts above the strip.
             var height = shape == _shape ? _frame.Rect.height : 0;
             _shape = shape;
             var y = above ? _place.Y - TabHeight() - (expanded ? _place.PanelHeight : 0) : _place.Y;
-            _frame.Rect = new Rect(_place.X, y, Width, height);
+            _frame.Rect = new Rect(_place.X, y, _width, height);
             _frame.Style = _window;
-            _frame.Show(Draw, GUILayout.Width(Width));
+            _frame.Show(Draw, GUILayout.Width(_width));
             // Keys typed into the docked prompt must not stage, throttle or rotate the craft.
             _frame.SetTyping(expanded && MissionPanel.Typing);
         }
@@ -134,6 +148,7 @@ namespace ClaudiaKermin.Adapter
         public void Unlock()
         {
             _dragging = false;
+            _panelArea = default(Rect);
             EndTrackDrag();
             _frame.Unlock();
         }
@@ -149,6 +164,9 @@ namespace ClaudiaKermin.Adapter
         {
             var expanded = PanelShowing;
             var above = _place.Side == PanelSide.Above;
+            // Away from the strip the panel's edges resize it; first, so a control at the edge can't take the press.
+            var resizeEdges = ResizeZone.Left | ResizeZone.Right | (above ? ResizeZone.Top : ResizeZone.Bottom);
+            if (expanded) _frame.HandleResize(_panelArea, resizeEdges);
             var tabRow = above ? TabRow() : default(Rect);
             if (above && expanded) DrawPanel();
 
@@ -162,6 +180,7 @@ namespace ClaudiaKermin.Adapter
 
             if (!above && expanded) DrawPanel();
             if (!above) tabRow = TabRow();
+            if (expanded) _frame.DrawResizeHint(_panelArea, resizeEdges);
             // Drawn last, over the edge of what it joins.
             DrawTab(tabRow, expanded, above);
             WindowFrame.DrawTooltip();
@@ -171,8 +190,47 @@ namespace ClaudiaKermin.Adapter
         private void DrawPanel()
         {
             GUILayout.BeginVertical(_panelBox, GUILayout.Height(_place.PanelHeight));
-            _panel.Draw(View, Width - 2, true, ClaudiaSkin.Padding);
+            _panel.Draw(View, _width - 2, true, ClaudiaSkin.Padding);
             GUILayout.EndVertical();
+            if (Event.current.type == EventType.Repaint) _panelArea = GUILayoutUtility.GetLastRect();
+        }
+
+        // ---- Resizing the docked panel ----
+
+        // While a resize is under way the panel follows the pointer: its width is the window's, so the left edge moves the
+        // strip too; its height is what it asks for. Let go, it is kept.
+        private void StepResize()
+        {
+            var was = _frame.Resizing;
+            Rect area;
+            if (_frame.TryResize(out area))
+            {
+                _wantWidth = area.width;
+                _wantPanelHeight = area.height;
+                _moved = true;
+                _position = new Vector2(area.x, _place.Y);
+            }
+            else if (was) StoreResize();
+        }
+
+        // The panel is closing (or the strip going) mid-resize.
+        private void EndResize()
+        {
+            _panelArea = default(Rect);
+            if (!_frame.Resizing) return;
+            _frame.Unlock();
+            StoreResize();
+        }
+
+        // Kept as it shows on this screen, so a pull past the room doesn't come back when the strip is moved. The box's
+        // position is the strip's; only its size is read back.
+        private void StoreResize()
+        {
+            _wantWidth = _width;
+            _wantPanelHeight = _place.PanelHeight;
+            _position = new Vector2(_place.X, _place.Y);
+            WindowMemory.Store(PanelMemoryName, new WindowBox(_position.x, _position.y, _wantWidth, _wantPanelHeight));
+            WindowMemory.Store(MemoryName, new WindowBox(_position.x, _position.y, _wantWidth, _stripHeight));
         }
 
         // ---- Moving the strip ----
@@ -185,6 +243,11 @@ namespace ClaudiaKermin.Adapter
             WindowBox box;
             _moved = WindowMemory.TryGet(MemoryName, out box);
             if (_moved) _position = new Vector2(box.X, box.Y);
+            if (WindowMemory.TryGet(PanelMemoryName, out box))
+            {
+                _wantWidth = Mathf.Max(box.Width, MinWidth);
+                _wantPanelHeight = Mathf.Max(box.Height, MinPanelHeight);
+            }
         }
 
         // Follows the pointer while the button is held; saved once it is let go, if it moved.
@@ -197,7 +260,7 @@ namespace ClaudiaKermin.Adapter
                 if (!_dragMoved) return;
                 // Kept as placed on this screen, so a later, smaller screen doesn't remember it squeezed.
                 _position = new Vector2(_place.X, _place.Y);
-                WindowMemory.Store(MemoryName, new WindowBox(_position.x, _position.y, Width, _stripHeight));
+                WindowMemory.Store(MemoryName, new WindowBox(_position.x, _position.y, _width, _stripHeight));
                 return;
             }
             if (!_dragMoved && delta.magnitude < DragThreshold) return;
@@ -468,7 +531,7 @@ namespace ClaudiaKermin.Adapter
         private Rect TabRow()
         {
             var height = TabHeight();
-            return GUILayoutUtility.GetRect(Width, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
+            return GUILayoutUtility.GetRect(_width, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
         }
 
         // A tab centred on the strip's (or the panel's) edge, joined to it: a chevron pointing the way the panel opens and
@@ -478,7 +541,7 @@ namespace ClaudiaKermin.Adapter
             var needs = !expanded && MissionWindowRules.NeedsYou(View).Length > 0;
             var text = MissionWindowRules.ExpandTab(View, expanded);
             var textStyle = needs ? _tabTextAttention : _tabText;
-            var textWidth = Mathf.Min(textStyle.CalcSize(new GUIContent(text)).x, Width - 120);
+            var textWidth = Mathf.Min(textStyle.CalcSize(new GUIContent(text)).x, _width - 120);
             var tabWidth = textWidth + 14 + 6 + 2 * ClaudiaSkin.Padding;
 
             var tab = new Rect(row.x + (row.width - tabWidth) / 2f, row.y, tabWidth, row.height);
