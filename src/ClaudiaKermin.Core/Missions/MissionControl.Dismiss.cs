@@ -17,6 +17,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             var mission = _mission;
             if (mission == null || !MissionOver) return;
+            if (mission.InFlight) mission.Pending.Cancel.Cancel();
             if (mission.PendingSequence != null && mission.PendingSequence.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
             try
             {

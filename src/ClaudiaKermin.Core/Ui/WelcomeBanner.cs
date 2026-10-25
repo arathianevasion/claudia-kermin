@@ -72,7 +72,7 @@ namespace ClaudiaKermin.Core.Ui
    ▄   ▀▀▀   ▀█▀    ▀▀  ▄";
 
         /// <summary>
-        /// Whether a transcript starts with the banner. The transcript is never cleared, so the banner is its first item
+        /// Whether a transcript starts with the banner. Clear never removes it (it hides entries or dismisses a finished Mission), so the banner is the first item
         /// whether there is no Mission yet (a fresh window, or after End Mission) or a Mission is under way, where it stays
         /// above the Craft Check and is not repeated.
         /// </summary>
