@@ -847,16 +847,18 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(MissionStage.Debriefing, saved.Stage);
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
 
-            var second = Replies("mission-debrief-manual.sse", "mission-plan.sse");
+            // The Debrief reply is in the transcript, so the load applies it (still a hand back) rather than asking again.
+            var second = Replies("mission-plan.sse");
             var resumed = Control(second);
             resumed.Send(new SceneChanged(GameScene.Flight));
             resumed.Send(new MissionsRestored(_save.Path, new List<MissionSaveState> { MissionSaveState.FromValues(saved.ToValues()) }));
             resumed.Send(Pad());
             DrainUntil(resumed, v => v.Stage == MissionStage.AwaitingPlanApproval);
 
-            Assert.Contains("took Manual Control", AllText(second.Requests[0]));
-            Assert.Contains("by hand", AllText(second.Requests[0]));
-            Assert.Contains("Revise the Mission Plan", AllText(second.Requests[1]));
+            Assert.Single(second.Requests);
+            Assert.Contains("took Manual Control", AllText(transport.Requests[2]));
+            Assert.Contains("by hand", AllText(transport.Requests[2]));
+            Assert.Contains("Revise the Mission Plan", AllText(second.Requests[0]));
         }
     }
 }
