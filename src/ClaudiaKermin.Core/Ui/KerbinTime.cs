@@ -27,9 +27,14 @@ namespace ClaudiaKermin.Core.Ui
             return delta > 0 ? "in " + text : text + " ago";
         }
 
-        /// <summary>A length of time as "2d 3h 10m"; under a minute is "0m".</summary>
+        /// <summary>
+        /// A length of time as "2d 3h 10m"; under a minute is whole seconds rounded up ("30s"), so a wait that
+        /// still refuses Approve never reads "0m". Exactly zero is "0m".
+        /// </summary>
         public static string Span(double seconds)
         {
+            if (seconds > 0 && seconds < SecondsPerMinute)
+                return Math.Ceiling(seconds).ToString(CultureInfo.InvariantCulture) + "s";
             var total = (long)Math.Floor(Math.Max(0, seconds));
             var days = total / SecondsPerDay;
             var hours = total % SecondsPerDay / SecondsPerHour;

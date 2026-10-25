@@ -201,6 +201,21 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ApprovalRefusedSecondsEarlySaysSecondsNotZeroMinutes()
+        {
+            var transport = new StreamingFakeTransport(TimedMissionPlan(), SequencePlan(Due));
+            var mission = Control(transport);
+            ToSequencePlan(mission);
+            mission.TakeCommands();
+
+            mission.Send(new UtAdvanced(Due - 5));
+            mission.Send(new Approve());
+
+            Assert.Contains(mission.View.Log, e => e.Kind == LogKind.Notice && e.Text.Contains("(in 5s)"));
+            Assert.DoesNotContain(mission.View.Log, e => e.Text.Contains("(in 0m)"));
+        }
+
+        [Fact]
         public void WarpToDueTimeAsksTheAdapterToWarpThereAndAtTheDueTimeWarpDropsAndTheSequenceCanStart()
         {
             var transport = new StreamingFakeTransport(TimedMissionPlan(), SequencePlan(Due));

@@ -79,9 +79,18 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
-        public void SpanOfUnderAMinuteIsZeroMinutes()
+        public void SpanOfUnderAMinuteIsSecondsRoundedUp()
         {
-            Assert.Equal("0m", KerbinTime.Span(30));
+            Assert.Equal("30s", KerbinTime.Span(30));
+            Assert.Equal("1s", KerbinTime.Span(0.2));
+            Assert.Equal("59s", KerbinTime.Span(58.5));
+        }
+
+        [Fact]
+        public void SpanOfZeroIsZeroMinutesAndAMinuteIsOneMinute()
+        {
+            Assert.Equal("0m", KerbinTime.Span(0));
+            Assert.Equal("1m", KerbinTime.Span(60));
         }
     }
 }
