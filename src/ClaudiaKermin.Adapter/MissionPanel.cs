@@ -64,8 +64,11 @@ namespace ClaudiaKermin.Adapter
         /// <summary>Opens the Settings window; set by the owner.</summary>
         public Action OpenSettings;
 
-        /// <summary>Switches Flight between the docked panel and the floating window (Undock / Dock); set by the owner.</summary>
-        public Action ToggleDock;
+        /// <summary>Docks (true) or undocks (false) the panel in Flight; set by the owner.</summary>
+        public Action<bool> SetDocked;
+
+        /// <summary>The floating window offers Dock: in Flight, undocked, with a Mission the strip shows; set by the owner.</summary>
+        public bool OfferDock;
 
         public MissionPanel(Action<MissionInput> send, MissionSetup setup, bool debugTools)
         {
@@ -432,7 +435,7 @@ namespace ClaudiaKermin.Adapter
             if (docked)
             {
                 // The Capcom strip above already carries the spend meter.
-                if (ToggleDock != null && ClaudiaSkin.IconButton(ClaudiaSkin.IconShape.ExternalLink, "Undock", GUILayout.ExpandWidth(false))) ToggleDock();
+                if (SetDocked != null && ClaudiaSkin.IconButton(ClaudiaSkin.IconShape.ExternalLink, "Undock", GUILayout.ExpandWidth(false))) SetDocked(false);
                 GUILayout.FlexibleSpace();
             }
             else
@@ -440,7 +443,7 @@ namespace ClaudiaKermin.Adapter
                 if (_view.CanEndMission) DrawSpendMeter();
                 else if (settingUp) DrawSummary(MissionWindowRules.SetupSummary(_view, _setup.Remote, _setup.ModelFor(_view.StartForm)));
                 else GUILayout.FlexibleSpace();
-                if (HighLogic.LoadedSceneIsFlight && ToggleDock != null && ClaudiaSkin.IconButton(ClaudiaSkin.IconShape.Dock, "Dock", GUILayout.ExpandWidth(false))) ToggleDock();
+                if (OfferDock && SetDocked != null && ClaudiaSkin.IconButton(ClaudiaSkin.IconShape.Dock, "Dock", GUILayout.ExpandWidth(false))) SetDocked(true);
             }
 
             if (_debugTools)

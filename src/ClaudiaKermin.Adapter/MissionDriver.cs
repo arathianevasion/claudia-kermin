@@ -86,9 +86,9 @@ namespace ClaudiaKermin.Adapter
         }
 
         // Undock shows the panel as the floating window; Dock puts it back under the strip. It was open to be clicked, so it stays open.
-        private void ToggleDock()
+        private void SetDocked(bool docked)
         {
-            Undocked = !Undocked;
+            Undocked = !docked;
             Strip.Expanded = false;
             Window.Visible = false;
             PanelOpen = true;
@@ -129,7 +129,7 @@ namespace ClaudiaKermin.Adapter
         {
             Current = this;
             _mission = mission;
-            Panel = new MissionPanel(Send, Setup, debugTools) { ToggleDock = ToggleDock };
+            Panel = new MissionPanel(Send, Setup, debugTools) { SetDocked = SetDocked };
             Window = new MissionWindow(Panel);
             Strip = new CapcomStrip(Panel) { TabClicked = () => PanelOpen = !PanelOpen };
             GameEvents.onKerbalStatusChange.Add(OnKerbalStatusChange);
@@ -205,6 +205,7 @@ namespace ClaudiaKermin.Adapter
             Strip.View = _mission.View;
             HandOver();
             Strip.Docked = !Undocked;
+            Panel.OfferDock = Undocked && HighLogic.LoadedSceneIsFlight && _mission.View.Stage != MissionStage.None;
             Window.OnGUI();
             if (HighLogic.LoadedScene == GameScenes.FLIGHT) Strip.OnGUI();
             else Strip.Unlock();

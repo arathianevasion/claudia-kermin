@@ -415,14 +415,12 @@ namespace ClaudiaKermin.Core.Ui
         /// </summary>
         public static StatusChip StripStatus(MissionView view)
         {
+            if (view.ConfirmPrompt != null || WaitsOnPlayer(view.Stage)) return new StatusChip("Waiting for you", ChipTone.Attention);
             if (view.Stage == MissionStage.Running)
             {
                 var current = view.CurrentSequence >= 0 && view.CurrentSequence < view.PlanSequences.Count ? view.PlanSequences[view.CurrentSequence] : "";
                 return new StatusChip(current.Length > 0 ? "Flying · " + current : "Flying", ChipTone.Info);
             }
-            if (view.ConfirmPrompt != null || view.Stage == MissionStage.AwaitingPlanApproval || view.Stage == MissionStage.AwaitingSequenceApproval
-                || view.Stage == MissionStage.Paused || view.Stage == MissionStage.UnsafeScript)
-                return new StatusChip("Waiting for you", ChipTone.Attention);
             if (view.Stage == MissionStage.ManualControl) return new StatusChip("Manual Control · you fly", ChipTone.Attention);
             var chip = StageChip(view);
             return chip == null ? null : new StatusChip(chip.Text, ChipTone.Info);
@@ -460,16 +458,16 @@ namespace ClaudiaKermin.Core.Ui
 
         private static SegmentBar CurrentBar(MissionView view)
         {
-            switch (view.Stage)
-            {
-                case MissionStage.Running: return SegmentBar.Claudia;
-                case MissionStage.ManualControl: return SegmentBar.AttentionFill;
-                case MissionStage.AwaitingPlanApproval:
-                case MissionStage.AwaitingSequenceApproval:
-                case MissionStage.Paused:
-                case MissionStage.UnsafeScript: return SegmentBar.AttentionOutline;
-                default: return SegmentBar.ClaudiaOutline;
-            }
+            if (view.Stage == MissionStage.Running) return SegmentBar.Claudia;
+            if (view.Stage == MissionStage.ManualControl) return SegmentBar.AttentionFill;
+            return WaitsOnPlayer(view.Stage) ? SegmentBar.AttentionOutline : SegmentBar.ClaudiaOutline;
+        }
+
+        // The stages in which the Mission waits on the player: an Approval, a Pause or an unsafe script.
+        private static bool WaitsOnPlayer(MissionStage stage)
+        {
+            return stage == MissionStage.AwaitingPlanApproval || stage == MissionStage.AwaitingSequenceApproval
+                || stage == MissionStage.Paused || stage == MissionStage.UnsafeScript;
         }
 
         /// <summary>
@@ -519,7 +517,9 @@ namespace ClaudiaKermin.Core.Ui
             if (view.Locks == ControlLocks.None) return "";
             if (view.ManualControlUnavailable.Length > 0) return "Manual Control unavailable: " + view.ManualControlUnavailable;
             if (view.Stage == MissionStage.Running) return "Staging, action groups, SAS, RCS, gear and brakes locked while Claudia flies";
-            return "Controls stay locked until you approve or take the controls";
+            if (view.Stage == MissionStage.AwaitingPlanApproval || view.Stage == MissionStage.AwaitingSequenceApproval)
+                return "Controls stay locked until you approve or take the controls";
+            return "Staging, action groups, SAS, RCS, gear and brakes locked while Claudia has the craft";
         }
 
         private static StatusChip StageChip(MissionView view)

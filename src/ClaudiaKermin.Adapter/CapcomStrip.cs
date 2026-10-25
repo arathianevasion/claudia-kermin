@@ -26,7 +26,8 @@ namespace ClaudiaKermin.Adapter
         private const float SegmentBarHeight = 6;
         private const float MeterWidth = 72;
         private const float PanelHeight = 640;
-        private const float MinPanelHeight = 320;
+        // Below this the prompt and the control bar leave the transcript no room; only a very short screen gets there.
+        private const float MinPanelHeight = 200;
         private const int TabRadius = 6;
         private const string PortraitUrl = "ClaudiaKermin/Icons/ClaudiaPortrait";
 

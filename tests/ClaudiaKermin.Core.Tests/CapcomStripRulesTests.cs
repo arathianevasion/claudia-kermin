@@ -245,6 +245,25 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("Controls stay locked until you approve or take the controls", MissionWindowRules.LockLine(view));
         }
 
+        [Theory]
+        [InlineData(MissionStage.Planning)]
+        [InlineData(MissionStage.Debriefing)]
+        [InlineData(MissionStage.Paused)]
+        public void WithNothingToApproveTheLockLineSaysClaudiaHasTheCraft(MissionStage stage)
+        {
+            var view = During(stage);
+            view.Locks = ControlLocks.Craft;
+            Assert.Equal("Staging, action groups, SAS, RCS, gear and brakes locked while Claudia has the craft", MissionWindowRules.LockLine(view));
+        }
+
+        [Fact]
+        public void AConfirmPromptIsWaitingForYouWhateverTheStage()
+        {
+            var view = During(MissionStage.Running, 0, "Launch");
+            view.ConfirmPrompt = "Approve?";
+            Assert.Equal("Waiting for you", MissionWindowRules.StripStatus(view).Text);
+        }
+
         [Fact]
         public void ManualControlUnavailableSaysWhy()
         {
