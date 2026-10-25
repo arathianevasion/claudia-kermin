@@ -62,6 +62,14 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ASpecCanStartTheCraftTumbling()
+        {
+            Assert.Equal(0.0, BlockTestSpec.Parse("a", Spec).TumbleRate);
+            Assert.Equal(40.0, BlockTestSpec.Parse("t", "block = reentry\ntumble_rate = 40\n").TumbleRate);
+            Assert.Throws<System.FormatException>(() => BlockTestSpec.Parse("t", "block = reentry\ntumble_rate = fast\n"));
+        }
+
+        [Fact]
         public void ARunWithinEveryContractRangePasses()
         {
             var result = BlockTestSpec.Parse("exec_node", Spec).Judge(Finished(Report(true, 0.12, 300000)));

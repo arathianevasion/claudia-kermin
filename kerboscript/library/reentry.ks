@@ -12,9 +12,10 @@
 //| the heat shield once the worst of the heating is over, opens the parachutes only when it is safe
 //| (never staged, never fired by hand) and ends once the craft is landed or splashed.
 //| Options:
-//|   chute_mode ["safe"]: "safe" opens each parachute when the air is thick enough and the speed low
-//|     enough for it to hold (under 250 m/s, over 0.04 atm), or at the latest 1500 m above the ground;
-//|     "none" never opens them (for a craft that lands another way).
+//|   chute_mode ["safe"]: "safe" opens the parachutes in two stages: drogue chutes first (under 500 m/s,
+//|     over 0.02 atm, or at the latest 3000 m above the ground), then the main parachutes once the drogues
+//|     are out (under 250 m/s, over 0.04 atm, or at the latest 1500 m above the ground); a craft with no
+//|     drogues opens its mains alone. "none" never opens them (for a craft that lands another way).
 //|   jettison_stage ["auto"]: the stage number whose decouplers drop the heat shield, "auto" for the
 //|     decoupler on or beside the heat shield (just above the capsule), or "none" to keep it.
 //|     The decouplers are fired by themselves; other parts of that stage are not staged.
@@ -30,12 +31,23 @@
 //| Fly it after a return or a de-orbit burn, with the orbit's periapsis inside the atmosphere. It does
 //| not plan or burn anything. Example: `local res is reentry(). addons:claudia:report(res).`
 
-// Parachutes: the most speed (m/s) and least air pressure (atm) at which opening is safe, and the
-// height above the ground (m) by which they open regardless.
+// Main parachutes: the most speed (m/s) and least air pressure (atm) at which opening is safe, and the
+// height above the ground (m) by which they open regardless. That last resort is not speed-aware on
+// purpose: below 1500 m there is no time left to slow down, and an unopened chute is certain death where
+// an early one is only a risk. The drogues are staged before the mains, so by then the craft has been
+// slowing on them since 3000 m.
 function reentry_chute_max_speed { return 250. }
 function reentry_chute_min_pressure { return 0.04. }
 function reentry_chute_last_agl { return 1500. }
-// The heat shield goes at or below this speed (m/s), or by this height above the ground (m).
+// Drogue chutes are built for the fast part of the descent: higher speed limit, thinner air, and the
+// height by which they open whatever the speed (the one chute that can take it, so the cheapest last resort).
+function reentry_drogue_max_speed { return 500. }
+function reentry_drogue_min_pressure { return 0.02. }
+function reentry_drogue_last_agl { return 3000. }
+// The heat shield goes at or below this speed (m/s), or by this height above the ground (m). The height
+// is not speed-aware on purpose: at 3000 m the air is thick enough that a falling capsule is well under
+// the speed at which it heats, so the shield is only dead weight over the chutes, and waiting on a speed
+// that never comes would keep it on to the ground.
 function reentry_shield_speed { return 400. }
 function reentry_shield_last_agl { return 3000. }
 // Touchdown faster than this (m/s) fails the block.
@@ -77,6 +89,47 @@ function reentry_chute_action {
     return "deploy".
   }
   return "wait".
+}
+
+// What to do about the drogue chutes now: "deploy" or "wait". Same arguments as reentry_chute_action.
+function reentry_drogue_action {
+  parameter mode, out, speed, agl, pressure.
+  if mode = "none" or out {
+    return "wait".
+  }
+  if agl <= reentry_drogue_last_agl() {
+    return "deploy".
+  }
+  if speed <= reentry_drogue_max_speed() and pressure >= reentry_drogue_min_pressure() {
+    return "deploy".
+  }
+  return "wait".
+}
+
+// Which parachutes to open now: "drogues", "mains" or "wait". Drogues go before mains: the mains wait
+// for the drogues to be out (or for there to be none). has_drogues: the craft carries drogue chutes;
+// drogues_out and mains_out: those are already open.
+function reentry_chute_stage {
+  parameter mode, has_drogues, drogues_out, mains_out, speed, agl, pressure.
+  if mode = "none" or mains_out {
+    return "wait".
+  }
+  if has_drogues and not drogues_out {
+    if reentry_drogue_action(mode, drogues_out, speed, agl, pressure) = "deploy" {
+      return "drogues".
+    }
+    return "wait".
+  }
+  if reentry_chute_action(mode, mains_out, speed, agl, pressure) = "deploy" {
+    return "mains".
+  }
+  return "wait".
+}
+
+// True if a parachute part named name is a drogue chute.
+function reentry_is_drogue {
+  parameter name.
+  return name:tolower:contains("drogue").
 }
 
 // True if the heat shield should drop now. gone: it has already been dropped (or there is none).
@@ -196,11 +249,22 @@ function reentry_shield_beside {
   return false.
 }
 
-// Opens every stowed parachute. Returns how many it opened.
+// True if the craft carries a drogue chute.
+function reentry_has_drogues {
+  for p in ship:parts {
+    if p:hasmodule("ModuleParachute") and reentry_is_drogue(p:name) {
+      return true.
+    }
+  }
+  return false.
+}
+
+// Opens every stowed parachute of one kind: drogues (true) or mains (false). Returns how many it opened.
 function reentry_open_chutes {
+  parameter drogues.
   local opened is 0.
   for p in ship:parts {
-    if p:hasmodule("ModuleParachute") {
+    if p:hasmodule("ModuleParachute") and reentry_is_drogue(p:name) = drogues {
       local m is p:getmodule("ModuleParachute").
       if m:hasevent("deploy chute") {
         m:doevent("deploy chute").
@@ -229,8 +293,12 @@ function reentry_abort {
   parameter opt.
   if ship:body:atm:exists and not claudia_on_ground() {
     local pressure is ship:body:atm:altitudepressure(ship:altitude).
-    if reentry_chute_action(opt:chute_mode, false, ship:velocity:surface:mag, reentry_agl(), pressure) = "deploy" {
-      reentry_open_chutes().
+    local speed is ship:velocity:surface:mag.
+    if reentry_drogue_action(opt:chute_mode, false, speed, reentry_agl(), pressure) = "deploy" {
+      reentry_open_chutes(true).
+    }
+    if reentry_chute_action(opt:chute_mode, false, speed, reentry_agl(), pressure) = "deploy" {
+      reentry_open_chutes(false).
     }
   }
   claudia_make_safe().
@@ -279,7 +347,9 @@ function reentry {
     }
   }
 
-  local chutes_out is false.
+  local has_drogues is reentry_has_drogues().
+  local drogues_out is false.
+  local mains_out is false.
   local last_speed is ship:velocity:surface:mag.
   local sample_ut is time:seconds.
   local sample_v is ship:velocity:orbit.
@@ -306,10 +376,15 @@ function reentry {
       wait 0.5.
       set ctx:parts to ship:parts:length.
     }
-    if reentry_chute_action(opt:chute_mode, chutes_out, last_speed, agl, pressure) = "deploy" {
-      reentry_open_chutes().
-      set chutes_out to true.
+    local chute_plan is reentry_chute_stage(opt:chute_mode, has_drogues, drogues_out, mains_out, last_speed, agl, pressure).
+    if chute_plan = "drogues" {
+      reentry_open_chutes(true).
+      set drogues_out to true.
       // Open parachutes steer the craft themselves.
+      unlock steering.
+    } else if chute_plan = "mains" {
+      reentry_open_chutes(false).
+      set mains_out to true.
       unlock steering.
     }
 
