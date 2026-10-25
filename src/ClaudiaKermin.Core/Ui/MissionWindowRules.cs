@@ -208,8 +208,9 @@ namespace ClaudiaKermin.Core.Ui
         public static string StartLabel(MissionView view)
         {
             var check = view.CraftCheck;
-            if (check.State == CraftCheckState.Done && !check.Stale && !check.StartAllowed)
+            if (check.State == CraftCheckState.Done && !check.StartAllowed)
             {
+                // A stale result that failed keeps Start Mission closed until the check runs again.
                 if (check.Verdict == CraftVerdict.Fail) return "Start Mission · fix the Blockers";
                 var open = ToAcknowledge(check);
                 if (open > 0) return "Start Mission · " + open.ToString(CultureInfo.InvariantCulture) + " to acknowledge";
@@ -323,7 +324,8 @@ namespace ClaudiaKermin.Core.Ui
                 facts.Add(new StatusChip("Δv " + check.CraftDeltaV.Value.ToString("N0", CultureInfo.InvariantCulture) + " m/s", ChipTone.Info));
                 facts.Add(new StatusChip("Margin wanted " + check.MarginPercent.ToString(CultureInfo.InvariantCulture) + "%", ChipTone.Info));
                 if (check.State != CraftCheckState.Done || check.Stale) facts.Add(new StatusChip("Check the craft to judge", ChipTone.Info));
-                else if (check.DeltaVShort) facts.Add(new StatusChip("Short of the delta-v this goal needs", ChipTone.Danger));
+                // Red only where it is a Blocker that closes Start Mission; nothing red sits next to an open one.
+                else if (check.DeltaVShort) facts.Add(new StatusChip("Short of the delta-v this goal needs", check.Verdict == CraftVerdict.Fail ? ChipTone.Danger : ChipTone.Attention));
                 else facts.Add(new StatusChip("Enough for this goal", ChipTone.Success));
             }
             else
@@ -351,6 +353,7 @@ namespace ClaudiaKermin.Core.Ui
         /// <summary>The card's footer: what holds Start Mission closed, or that it is open; empty text when there is nothing to say.</summary>
         public static ToneLine Footer(CraftCheckView check)
         {
+            if (check.Stale && check.Verdict == CraftVerdict.Fail) return new ToneLine("(the craft changed since; Start Mission stays closed until you check again)", null);
             if (check.Stale) return new ToneLine("(the craft changed since; Start Mission checks again)", null);
             if (check.Verdict == CraftVerdict.Fail) return new ToneLine("Start Mission is closed: fix every Blocker in the craft and check again.", null);
             if (ToAcknowledge(check) > 0) return new ToneLine("Start Mission opens once every Warning is acknowledged.", null);

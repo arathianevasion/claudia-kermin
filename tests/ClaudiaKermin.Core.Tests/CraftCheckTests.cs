@@ -349,6 +349,32 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ADeltaVShortfallIsABlockerThatClosesStartMission()
+        {
+            var mission = Checked(Replies("craft-check-fail.sse"));
+            var check = mission.View.CraftCheck;
+            var blocker = check.Findings.Single(f => f.Code == "delta_v_short");
+            Assert.Equal(CraftFindingSeverity.Blocker, blocker.Severity);
+            Assert.Equal("Not enough delta-v", blocker.Title);
+            Assert.NotEqual("", blocker.Fix);
+            Assert.True(check.DeltaVShort);
+            Assert.Equal(CraftVerdict.Fail, check.Verdict);
+            Assert.False(check.StartAllowed);
+        }
+
+        [Fact]
+        public void AStaleResultThatHadBlockersKeepsStartMissionClosedUntilTheCheckRunsAgain()
+        {
+            var mission = Checked(Replies("craft-check-fail.sse"));
+            var edited = Craft();
+            edited.Craft.Parts.RemoveAt(3);
+            mission.Send(edited);
+
+            Assert.True(mission.View.CraftCheck.Stale);
+            Assert.False(mission.View.CraftCheck.StartAllowed);
+        }
+
+        [Fact]
         public void ChangingTheMissionGoalMakesTheResultStaleToo()
         {
             var transport = Replies("craft-check-pass.sse", "craft-check-pass.sse");

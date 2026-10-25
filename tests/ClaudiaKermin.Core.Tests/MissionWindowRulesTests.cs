@@ -233,6 +233,63 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void WheneverTheCardHasADangerItemStartMissionIsClosedWithTheBlockersLabel()
+        {
+            var states = new[] { CraftCheckState.None, CraftCheckState.Running, CraftCheckState.NeedsSimulator, CraftCheckState.Error, CraftCheckState.Done };
+            var verdicts = new[] { CraftVerdict.None, CraftVerdict.Pass, CraftVerdict.PassWithWarnings, CraftVerdict.Fail };
+            var bools = new[] { false, true };
+            var danger = 0;
+            foreach (var state in states)
+            foreach (var verdict in verdicts)
+            foreach (var stale in bools)
+            foreach (var deltaVShort in bools)
+            foreach (var hasDeltaV in bools)
+            {
+                var findings = verdict == CraftVerdict.Fail ? new[] { new CraftFinding { Code = "delta_v_short", Severity = CraftFindingSeverity.Blocker } } : new CraftFinding[0];
+                var view = SettingUp(state, verdict, findings);
+                var check = view.CraftCheck;
+                check.Stale = stale;
+                check.DeltaVShort = deltaVShort;
+                check.CraftDeltaV = hasDeltaV ? 900 : (double?)null;
+                // What the core says about Start Mission for this result: closed on a Blocker, current or stale.
+                check.StartAllowed = verdict != CraftVerdict.Fail;
+
+                var tones = new List<ChipTone> { MissionWindowRules.VerdictTone(check.Verdict) };
+                var status = MissionWindowRules.Status(view);
+                if (status != null) tones.Add(status.Tone);
+                tones.AddRange(MissionWindowRules.Facts(check, null).Select(f => f.Tone));
+                var footer = MissionWindowRules.Footer(check);
+                if (footer.Tone.HasValue) tones.Add(footer.Tone.Value);
+
+                // Verdict None is no result: the verdict icon is not drawn then.
+                if (state != CraftCheckState.Done) tones.RemoveAt(0);
+                var message = state + "/" + verdict + " stale=" + stale + " short=" + deltaVShort + " dv=" + hasDeltaV;
+                if (!tones.Contains(ChipTone.Danger)) continue;
+                danger++;
+                Assert.False(check.StartAllowed, message);
+                Assert.Equal("Start Mission · fix the Blockers", MissionWindowRules.StartLabel(view));
+            }
+            Assert.True(danger > 0);
+        }
+
+        [Fact]
+        public void TheShortfallChipIsRedOnlyWhereTheCardIsAFailedCheck()
+        {
+            var check = Checked(CraftVerdict.Pass);
+            check.CraftDeltaV = 900;
+            check.DeltaVShort = true;
+            Assert.NotEqual(ChipTone.Danger, MissionWindowRules.Facts(check, null)[3].Tone);
+        }
+
+        [Fact]
+        public void AStaleFailedResultStillSaysFixTheBlockers()
+        {
+            var view = SettingUp(CraftCheckState.Done, CraftVerdict.Fail, new CraftFinding { Severity = CraftFindingSeverity.Blocker });
+            view.CraftCheck.Stale = true;
+            Assert.Equal("Start Mission · fix the Blockers", MissionWindowRules.StartLabel(view));
+        }
+
+        [Fact]
         public void TheSetupSummaryNamesTypeModelAndEstimate()
         {
             var view = SettingUp();
