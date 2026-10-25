@@ -151,7 +151,7 @@ namespace ClaudiaKermin.Core.Ui
 
         private static string Unavailable(MissionView view)
         {
-            if (view.Busy) return "Claudia is " + (view.Activity.Length > 0 ? view.Activity : "thinking") + "…";
+            if (view.Busy) return BusyLine(view);
             switch (view.Stage)
             {
                 case MissionStage.WaitingForFlight: return "Claudia plans once the craft is in Flight";
@@ -430,10 +430,19 @@ namespace ClaudiaKermin.Core.Ui
             return chip == null ? null : new StatusChip(chip.Text, ChipTone.Info);
         }
 
+        /// <summary>
+        /// "Claudia is thinking…" (or the current Activity) while a request is in flight, for the line pinned above the
+        /// Mission window's prompt and the strip's status; "" when none is.
+        /// </summary>
+        public static string BusyLine(MissionView view)
+        {
+            return view.Busy ? "Claudia is " + (view.Activity.Length > 0 ? view.Activity : "thinking") + "…" : "";
+        }
+
         /// <summary>The strip's one line after "Claudia": her latest line, or what she is doing while Busy.</summary>
         public static string StripLine(MissionView view)
         {
-            if (view.Busy) return "Claudia is " + (view.Activity.Length > 0 ? view.Activity : "thinking") + "…";
+            if (view.Busy) return BusyLine(view);
             return view.LatestLine.Length > 0 ? view.LatestLine : "Standing by.";
         }
 

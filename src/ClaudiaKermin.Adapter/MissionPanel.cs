@@ -12,7 +12,7 @@ namespace ClaudiaKermin.Adapter
     /// <summary>
     /// The Mission window's body, drawn by the floating <see cref="MissionWindow"/> and by the <see cref="CapcomStrip"/>
     /// when it is docked and expanded, so both show the same thing. Top to bottom: the pinned Mission Goal, the transcript
-    /// (the Craft Check card, the Mission log, the approval checkbox, the Busy line), the prompt (which grows from 1 to 7
+    /// (the Craft Check card, the Mission log, the approval checkbox), the Busy line pinned above the prompt, the prompt (which grows from 1 to 7
     /// lines and takes that height from the transcript), the action row of quick replies, and the control bar. Before a
     /// Mission the prompt writes the Mission Goal; type, model, Spending Cap and Mission Settings come from the
     /// <see cref="MissionSetup"/>, which the Settings window edits. It only draws <see cref="MissionView"/> and turns
@@ -124,6 +124,7 @@ namespace ClaudiaKermin.Adapter
             GUILayout.Space(ClaudiaSkin.Padding / 2f);
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
+            DrawBusyLine();
             DrawPrompt(prompt);
             DrawActions(settingUp, prompt.For);
             DrawControlBar(settingUp, docked);
@@ -220,6 +221,16 @@ namespace ClaudiaKermin.Adapter
             else GUILayout.Label(_showAllGoal ? goal : clamped, ClaudiaSkin.Body);
             GUILayout.EndVertical();
             ClaudiaSkin.Divider();
+        }
+
+        // ---- Busy line ----
+
+        // Pinned directly above the prompt, outside the scrolling transcript, so it is in view whatever is scrolled.
+        private void DrawBusyLine()
+        {
+            var line = MissionWindowRules.BusyLine(_view);
+            if (line.Length == 0) return;
+            GUILayout.Label(line, ClaudiaSkin.Muted);
         }
 
         // ---- Prompt ----
