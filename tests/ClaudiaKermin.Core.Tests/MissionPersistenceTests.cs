@@ -354,6 +354,11 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("Claudia declined.", after.PauseReason);
             Assert.NotNull(after.SequencePlan);
             Assert.Equal(1, after.SequencesProposed);
+
+            // Resume lands on the offered plan and asks nothing.
+            mission.Send(new Retry());
+            Assert.Equal(MissionStage.AwaitingSequenceApproval, mission.View.Stage);
+            Assert.Equal(2, transport.Requests.Count);
         }
 
         [Fact]
