@@ -682,6 +682,83 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Empty(Started(resumed));
         }
 
+        private static ScriptedResponse Answer(string intent)
+        {
+            var text = JsonSerializer.Serialize("{\"kind\":\"answer\",\"say\":\"Noted.\",\"reply_intent\":" + intent + ",\"mission_plan\":null,\"sequence_plan\":null,\"debrief\":null}");
+            var sse = "event: message_start\n"
+                + "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_t\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-sonnet-5-5\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":3000,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":1}}}\n\n"
+                + "event: content_block_start\n"
+                + "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n"
+                + "event: content_block_delta\n"
+                + "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":" + text + "}}\n\n"
+                + "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n"
+                + "event: message_delta\n"
+                + "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":200,\"iterations\":[{\"type\":\"message\",\"input_tokens\":3000,\"output_tokens\":200}]}}\n\n"
+                + "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n";
+            return new ScriptedResponse { Body = System.Text.Encoding.UTF8.GetBytes(sse) };
+        }
+
+        /// <summary>A question typed at the pending Mission Plan and left unanswered by a quit; returns the folder and the save.</summary>
+        private string QuestionInFlightAtPlan(out IList<MissionSaveState> saved)
+        {
+            var held = Answer("\"revise\"");
+            held.PauseAt = 100;
+            _gates.Add(held);
+            var before = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse"), held);
+            var crashed = Crashable(before);
+            crashed.Send(new SceneChanged(GameScene.Flight));
+            crashed.Send(OnPad());
+            StartChecked(crashed, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (crashed.View.Stage != MissionStage.AwaitingPlanApproval && DateTime.UtcNow < deadline)
+            {
+                _crashable[crashed].Drain();
+                Thread.Sleep(2);
+            }
+            Assert.Equal(MissionStage.AwaitingPlanApproval, crashed.View.Stage);
+            crashed.Send(new AskQuestion("revise to land at night"));
+            Assert.True(crashed.View.Busy);
+            saved = Saved(crashed);
+            return MissionFolder(crashed);
+        }
+
+        [Fact]
+        public void AQuestionLeftUnansweredByAQuitIsResentWithTheWordsAndStillTriggersARevisedPlanRequest()
+        {
+            IList<MissionSaveState> saved;
+            QuestionInFlightAtPlan(out saved);
+
+            var after = new StreamingFakeTransport(Answer("\"revise\""), ScriptedResponse.Fixture("mission-plan.sse"));
+            var resumed = Control(after);
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            DrainUntil(resumed, v => !v.Busy && after.Requests.Count == 2);
+
+            var asked = Text(Messages(after.Requests[1]).Last(m => m.GetProperty("role").GetString() == "user"));
+            Assert.Contains("wants a change", asked);
+            Assert.Contains("revise to land at night", asked);
+        }
+
+        [Fact]
+        public void AnUnansweredTurnFileFromBeforeTheWordsWereKeptStillLoadsAndResendsTheQuestion()
+        {
+            IList<MissionSaveState> saved;
+            var folder = QuestionInFlightAtPlan(out saved);
+            var path = Path.Combine(folder, "unanswered-turn.json");
+            var json = File.ReadAllText(path);
+            Assert.Contains("\"player_text\"", json);
+            File.WriteAllText(path, System.Text.RegularExpressions.Regex.Replace(json, "\"player_text\":\"[^\"]*\",?", ""));
+            Assert.DoesNotContain("player_text", File.ReadAllText(path));
+
+            var after = new StreamingFakeTransport(Answer("\"revise\""));
+            var resumed = Control(after);
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            DrainUntil(resumed, v => !v.Busy && after.Requests.Count >= 1);
+
+            // Answered as before, but without the words nothing asks for a revised plan.
+            Assert.Single(after.Requests);
+            Assert.Equal(MissionStage.AwaitingPlanApproval, resumed.View.Stage);
+        }
+
         [Fact]
         public void ACrashAfterTheLastSaveStillResendsATurnTheSaveNeverSawBecauseTheTranscriptHoldsIt()
         {
