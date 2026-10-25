@@ -143,6 +143,17 @@ namespace ClaudiaKermin.Core.Tests
                 Assert.Contains(option, circularize);
         }
 
+        // #214: positionat(ship, t) is the craft at t around its body where the body is NOW, while
+        // positionat(body, t) is where the body will be at t, so their difference is off by how far the
+        // body moves before t (hundreds of km at the Mun). land's deorbit burn was ~230 m/s, not ~17, and
+        // the lander hit the ground. The craft's position from its body at t is positionat(ship, t) - body:position.
+        [Fact]
+        public void NoLibraryFileTakesTheCraftsFuturePositionFromTheBodysFuturePosition()
+        {
+            var bad = Regex.Matches(CoreLibrary.Bundle(Script), @"positionat\(\s*ship\s*,[^)]*\)\s*-\s*positionat\(", RegexOptions.IgnoreCase);
+            Assert.True(bad.Count == 0, string.Join("\n", bad.Cast<Match>().Select(m => m.Value)));
+        }
+
         [Fact]
         public void EveryShippedBlockTestSpecParses()
         {

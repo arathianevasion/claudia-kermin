@@ -176,34 +176,7 @@ function reentry_g_felt {
 // -1 if the orbit never gets that low.
 function reentry_entry_eta {
   parameter ecc, sma, mu, r_entry, ta.
-  if ecc >= 1 or sma <= 0 {
-    return -1.
-  }
-  local semi_latus is sma * (1 - ecc * ecc).
-  local r_now is semi_latus / (1 + ecc * cos(ta)).
-  if r_now <= r_entry {
-    return 0.
-  }
-  if ecc <= 0 {
-    return -1.
-  }
-  local cos_entry is (semi_latus / r_entry - 1) / ecc.
-  if cos_entry > 1 {
-    return -1.
-  }
-  // On the way down the true anomaly is the negative of the one on the way up.
-  local ta_entry is 360 - arccos(max(-1, cos_entry)).
-  local m_entry is reentry_mean_anomaly(ecc, ta_entry).
-  local m_now is reentry_mean_anomaly(ecc, ta).
-  local ahead is mod(mod(m_entry - m_now, 360) + 360, 360).
-  return ahead / 360 * 2 * 3.141592653589793 * sqrt(sma ^ 3 / mu).
-}
-
-// The mean anomaly in degrees for a true anomaly ta in degrees.
-function reentry_mean_anomaly {
-  parameter ecc, ta.
-  local ecc_anomaly is 2 * arctan2(sqrt(1 - ecc) * sin(ta / 2), sqrt(1 + ecc) * cos(ta / 2)).
-  return ecc_anomaly - ecc * sin(ecc_anomaly) * 57.29577951308232.
+  return claudia_fall_eta(ecc, sma, mu, r_entry, ta).
 }
 
 // The heat-shield decoupler modules chosen by jettison ("auto", "none" or a stage number).

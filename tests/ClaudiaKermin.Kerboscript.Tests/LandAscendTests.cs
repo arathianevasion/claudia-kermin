@@ -105,6 +105,27 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal("583.856", One("round(land_periapsis_speed(" + MunMu + ", 230000, 203000), 3)"));
         }
 
+        // #214: land reports when the orbit after its deorbit burn meets the ground, so the block test
+        // can check braking starts before it. From the apoapsis of the 230 km by 203 km descent orbit:
+        // the ground at 201 km is never reached; 210 km comes before periapsis, half the 1240 s orbit away.
+        [Fact]
+        public void The_fall_time_to_a_radius_is_shared_and_is_none_for_ground_under_periapsis()
+        {
+            const string Descent = "0.06235565819861432, 216500, " + MunMu;
+            Assert.Equal("-1", One("claudia_fall_eta(" + Descent + ", 201000, 180)"));
+            var eta = double.Parse(One("claudia_fall_eta(" + Descent + ", 210000, 180)"), System.Globalization.CultureInfo.InvariantCulture);
+            Assert.InRange(eta, 800, 1239);
+            Assert.Equal(One("reentry_entry_eta(" + Descent + ", 210000, 180)"), One("claudia_fall_eta(" + Descent + ", 210000, 180)"));
+        }
+
+        [Fact]
+        public void Land_documents_its_burn_start_and_impact_times()
+        {
+            var land = CoreLibrary.FullDocs(new[] { "land" });
+            Assert.Contains("burn_start_ut", land);
+            Assert.Contains("impact_ut", land);
+        }
+
         // ---- land: descent guidance ----
 
         [Fact]

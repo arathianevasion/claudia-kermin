@@ -372,6 +372,43 @@ function claudia_wait_until {
   return claudia_warp_to(ctx, ut, 30).
 }
 
+// ---- Orbits ----
+
+// Seconds until an orbit (ecc, sma in m, true anomaly ta in degrees) next falls to radius r_fall from
+// above, around a body of gravitational parameter mu: an atmosphere's edge, or the ground. 0 if it
+// is at or under r_fall now; -1 if the orbit never gets that low. Pure.
+function claudia_fall_eta {
+  parameter ecc, sma, mu, r_fall, ta.
+  if ecc >= 1 or sma <= 0 {
+    return -1.
+  }
+  local semi_latus is sma * (1 - ecc * ecc).
+  local r_now is semi_latus / (1 + ecc * cos(ta)).
+  if r_now <= r_fall {
+    return 0.
+  }
+  if ecc <= 0 {
+    return -1.
+  }
+  local cos_fall is (semi_latus / r_fall - 1) / ecc.
+  if cos_fall > 1 {
+    return -1.
+  }
+  // On the way down the true anomaly is the negative of the one on the way up.
+  local ta_fall is 360 - arccos(max(-1, cos_fall)).
+  local m_fall is claudia_mean_anomaly(ecc, ta_fall).
+  local m_now is claudia_mean_anomaly(ecc, ta).
+  local ahead is mod(mod(m_fall - m_now, 360) + 360, 360).
+  return ahead / 360 * 2 * 3.141592653589793 * sqrt(sma ^ 3 / mu).
+}
+
+// The mean anomaly in degrees for a true anomaly ta in degrees. Pure.
+function claudia_mean_anomaly {
+  parameter ecc, ta.
+  local ecc_anomaly is 2 * arctan2(sqrt(1 - ecc) * sin(ta / 2), sqrt(1 + ecc) * cos(ta / 2)).
+  return ecc_anomaly - ecc * sin(ecc_anomaly) * 57.29577951308232.
+}
+
 // ---- Burns ----
 
 // Seconds to burn dv (m/s) from mass (t) at thrust (kN) and isp (s); -1 with no thrust.
