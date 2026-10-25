@@ -33,8 +33,9 @@ namespace ClaudiaKermin.Core.Ui
         /// </summary>
         public static string Span(double seconds)
         {
-            if (seconds > 0 && seconds < SecondsPerMinute)
+            if (seconds > 0 && Math.Ceiling(seconds) < SecondsPerMinute)
                 return Math.Ceiling(seconds).ToString(CultureInfo.InvariantCulture) + "s";
+            if (seconds > 0 && seconds < SecondsPerMinute) seconds = SecondsPerMinute;
             var total = (long)Math.Floor(Math.Max(0, seconds));
             var days = total / SecondsPerDay;
             var hours = total % SecondsPerDay / SecondsPerHour;

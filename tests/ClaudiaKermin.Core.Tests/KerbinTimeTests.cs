@@ -84,6 +84,9 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("30s", KerbinTime.Span(30));
             Assert.Equal("1s", KerbinTime.Span(0.2));
             Assert.Equal("59s", KerbinTime.Span(58.5));
+            Assert.Equal("1m", KerbinTime.Span(59.5));
+            Assert.Equal("1m", KerbinTime.Span(59.999));
+            Assert.Equal("now", KerbinTime.FromNow(30, 0));
         }
 
         [Fact]
