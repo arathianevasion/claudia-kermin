@@ -16,5 +16,7 @@
     <EmbeddedResource Include="$(RepoRoot)kerboscript/library/*.ks" LogicalName="ClaudiaKermin.Core.library.%(Filename).ks" />
     <!-- RSVP v9 (GPL-3.0), which transfer_to plans with; bundled as described in kerboscript/rsvp/NOTE.md. -->
     <EmbeddedResource Include="$(RepoRoot)kerboscript/rsvp/*.ks" LogicalName="ClaudiaKermin.Core.rsvp.%(Filename).ks" />
+    <!-- Third-party scripts bundled as they are (KSLib, MIT): in the compile unit, not Building Blocks. -->
+    <EmbeddedResource Include="$(RepoRoot)kerboscript/kslib/*.ks" LogicalName="ClaudiaKermin.Core.kslib.%(Filename).ks" />
   </ItemGroup>
 </Project>

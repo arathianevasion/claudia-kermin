@@ -87,15 +87,17 @@ namespace ClaudiaKermin.Kerboscript.Tests
 
         // ---- launch: heading and the plane ----
 
-        [Theory]
-        [InlineData(0, 0, "90")]
-        [InlineData(90, 0, "355.6")]
-        [InlineData(-90, 0, "184.4")]
-        [InlineData(45, 0, "41.7")]
-        [InlineData(0, 10, "90")]
-        public void The_heading_flies_into_the_target_inclination_allowing_for_the_ground_turning_under_the_craft(double inc, double lat, string heading)
+        // The heading itself is KSLib's LAZcalc, which reads the ship; it is checked in game (launch_orbit).
+        [Fact]
+        public void The_heading_comes_from_the_bundled_lib_lazcalc_which_is_not_a_Building_Block()
         {
-            Assert.Equal(heading, One("round(launch_azimuth(" + inc + ", " + lat + ", 2279, 174.9), 1)"));
+            var bundle = CoreLibrary.Bundle("", 1, 10800);
+            Assert.Contains("FUNCTION LAZcalc_init {", bundle);
+            Assert.DoesNotContain("@CLOBBERBUILTINS", bundle);
+            Assert.DoesNotContain("function launch_azimuth", bundle);
+            Assert.Contains("LAZcalc(laz)", CoreLibrary.Files.Single(f => f.Name == "launch").Source);
+            Assert.DoesNotContain(CoreLibrary.Blocks, b => b.Name.StartsWith("lib_lazcalc"));
+            Assert.DoesNotContain("LAZcalc", CoreLibrary.FullDocs() + CoreLibrary.Summaries());
         }
 
         [Theory]

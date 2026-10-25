@@ -49,14 +49,25 @@ namespace ClaudiaKermin.Core.Kos
         public const string SharedFile = "claudia_lib";
         private const string ResourcePrefix = "ClaudiaKermin.Core.library.";
         private const string RsvpResourcePrefix = "ClaudiaKermin.Core.rsvp.";
+        private const string VendoredPrefix = "ClaudiaKermin.Core.kslib.";
 
         private static readonly Lazy<IList<LibraryFile>> LoadedFiles = new Lazy<IList<LibraryFile>>(Load);
         private static readonly Lazy<IList<LibraryFile>> LoadedRsvp = new Lazy<IList<LibraryFile>>(LoadRsvp);
+        private static readonly Lazy<IList<LibraryFile>> LoadedVendored = new Lazy<IList<LibraryFile>>(LoadVendored);
 
         /// <summary>The shared helpers first, then every block by name.</summary>
         public static IList<LibraryFile> Files
         {
             get { return LoadedFiles.Value; }
+        }
+
+        /// <summary>
+        /// Third-party scripts (<c>kerboscript/kslib/</c>) bundled as they are: part of the compile unit,
+        /// but not Building Blocks, so they are not in <see cref="Files"/> and add nothing to the docs.
+        /// </summary>
+        public static IList<LibraryFile> Vendored
+        {
+            get { return LoadedVendored.Value; }
         }
 
         public static IEnumerable<LibraryFile> Blocks
@@ -78,18 +89,18 @@ namespace ClaudiaKermin.Core.Kos
         /// Claudia wrote), then the Core Library, then RSVP (each file as a function
         /// <c>rsvp_file_&lt;name&gt;</c>), then <c>claudia_config()</c> with the player's wait
         /// caps. kOS hoists file-level functions, so the script can call blocks defined after it. The
-        /// library's own <c>@lazyglobal</c> lines are dropped: kOS allows the directive only at the top.
+        /// library's own <c>@lazyglobal</c> and <c>@clobberbuiltins</c> lines are dropped: kOS allows the directive only at the top.
         /// </summary>
         public static string Bundle(string missionScript, double waitCapOrbits, double waitCapGroundSeconds)
         {
             var text = new StringBuilder();
             text.Append((missionScript ?? "").Replace("\r\n", "\n").TrimEnd('\n')).Append("\n\n");
             text.Append("// ---- The Core Library, bundled by Claudia Kermin ----\n");
-            foreach (var file in Files)
+            foreach (var file in Files.Concat(Vendored))
             {
                 foreach (var line in file.Source.Split('\n'))
                 {
-                    if (line.TrimStart().StartsWith("@lazyglobal", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (IsDirective(line)) continue;
                     text.Append(line).Append('\n');
                 }
             }
@@ -133,6 +144,13 @@ namespace ClaudiaKermin.Core.Kos
                 .ToArray());
         }
 
+        private static bool IsDirective(string line)
+        {
+            var trimmed = line.TrimStart();
+            return trimmed.StartsWith("@lazyglobal", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("@clobberbuiltins", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static string Number(double value)
         {
             return value.ToString("0.###", CultureInfo.InvariantCulture);
@@ -149,6 +167,11 @@ namespace ClaudiaKermin.Core.Kos
         private static IList<LibraryFile> LoadRsvp()
         {
             return Resources(RsvpResourcePrefix).OrderBy(f => f.Name, StringComparer.Ordinal).ToList();
+        }
+
+        private static IList<LibraryFile> LoadVendored()
+        {
+            return Resources(VendoredPrefix).OrderBy(f => f.Name, StringComparer.Ordinal).ToList();
         }
 
         private static List<LibraryFile> Resources(string prefix)
