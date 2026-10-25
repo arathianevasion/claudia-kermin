@@ -410,7 +410,7 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
-        public void AFailedDebriefEndsTheMissionAndAsksForNoFurtherSequence()
+        public void AFailedDebriefWaitsForTheEndAndAsksForNoFurtherSequence()
         {
             var transport = new StreamingFakeTransport(
                 ScriptedResponse.Fixture("mission-plan.sse"),
@@ -427,10 +427,12 @@ namespace ClaudiaKermin.Core.Tests
             var lostStart = Assert.Single(Started(mission));
 
             mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Interrupted, null, "", "the kOS processor was lost", false), lostStart.RunId));
-            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingReducedGoal && !v.Busy);
             Assert.Contains("Interrupted (the kOS processor was lost)", Text(Messages(transport.Requests[2]).Where(m => m.GetProperty("role").GetString() == "user").Last()));
             Assert.Equal("Failed", mission.View.Log.Last(e => e.Kind == LogKind.Debrief).Outcome);
             Assert.Equal(3, transport.Requests.Count);
+            Assert.False(mission.View.StartForm.CanStart);
+            mission.Send(new EndMission());
             Assert.True(mission.View.StartForm.CanStart);
         }
 
@@ -607,30 +609,6 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(new KosRunEnded(Finished(), second.RunId));
             DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
             Assert.Equal(3, transport.Requests.Count);
-        }
-
-        [Fact]
-        public void EndingAFinishedMissionDoesNothing()
-        {
-            var transport = new StreamingFakeTransport(
-                ScriptedResponse.Fixture("mission-plan.sse"),
-                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
-                ScriptedResponse.Fixture("mission-debrief-failed.sse"));
-            var mission = Control(transport);
-            mission.Send(new SceneChanged(GameScene.Flight));
-            mission.Send(OnPad());
-            StartChecked(mission, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
-            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
-            mission.Send(new Approve());
-            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
-            mission.Send(new Approve());
-            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Interrupted, null, "", "lost", false), Started(mission).Single().RunId));
-            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
-            Assert.False(mission.View.CanEndMission);
-            mission.TakeCommands();
-            mission.Send(new EndMission());
-            Assert.Equal(MissionStage.Ended, mission.View.Stage);
-            Assert.False(File.Exists(Path.Combine(MissionFolder(mission), "ended.json")));
         }
 
         [Fact]

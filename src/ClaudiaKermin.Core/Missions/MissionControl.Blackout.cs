@@ -66,14 +66,6 @@ namespace ClaudiaKermin.Core.Missions
             var dark = !MissionOver && FollowsCraft(mission) && _craftLink == false;
             if (dark && !mission.Blackout) BlackoutBegins(mission);
             else if (!dark && mission.Blackout && _craftLink != false) BlackoutEnds(mission);
-            // A Failed Debrief with no reduced goal waited for the link (also across a load): with the link seen, the Mission ends.
-            if (_craftLink == true && mission.Stage == MissionStage.AwaitingReducedGoal && mission.ReducedGoal.Length == 0 && !mission.InFlight)
-            {
-                mission.Stage = MissionStage.Ended;
-                Note(LogKind.Notice, "The Mission Goal can't be reached as stated: the Mission has ended.");
-                RecordFinished(mission);
-                return;
-            }
             FlyInBlackout(mission);
         }
 

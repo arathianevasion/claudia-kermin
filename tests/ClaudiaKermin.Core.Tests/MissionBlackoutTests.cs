@@ -314,7 +314,7 @@ namespace ClaudiaKermin.Core.Tests
         // ---- A Failed Debrief ----
 
         [Fact]
-        public void AFailedDebriefMakesTheCraftSafeAndEndsTheMissionWithALink()
+        public void AFailedDebriefMakesTheCraftSafeAndWaitsForThePlayerWithALink()
         {
             var transport = new StreamingFakeTransport(
                 ScriptedResponse.Fixture("mission-plan.sse"),
@@ -324,7 +324,7 @@ namespace ClaudiaKermin.Core.Tests
             var start = ToRunning(mission);
 
             mission.Send(new KosRunEnded(Finished(), start.RunId));
-            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingReducedGoal && !v.Busy);
             var safe = mission.TakeCommands().OfType<MakeCraftSafe>().Single();
             // Aimed at the Mission's craft, so it holds with the player in another vessel (#191).
             Assert.Equal(CraftId, safe.VesselId);
@@ -358,8 +358,10 @@ namespace ClaudiaKermin.Core.Tests
             Assert.DoesNotContain(mission.View.Log, e => e.Kind == LogKind.Debrief);
             Assert.DoesNotContain(QuickReply.AcceptReducedGoal, mission.View.QuickReplies);
 
+            // With the link back it still waits on the player, with End Mission and Retry with a note.
             mission.Send(Snapshot(s => s.HasLink = true));
-            Assert.Equal(MissionStage.Ended, mission.View.Stage);
+            Assert.Equal(MissionStage.AwaitingReducedGoal, mission.View.Stage);
+            Assert.Equal(new[] { QuickReply.RetryWithNote, QuickReply.EndMission }, mission.View.QuickReplies);
             Assert.Equal("Failed", mission.View.Log.Single(e => e.Kind == LogKind.Debrief).Outcome);
         }
 
@@ -387,7 +389,8 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(MissionStage.AwaitingReducedGoal, loaded.View.Stage);
 
             loaded.Send(Snapshot(s => s.HasLink = true));
-            Assert.Equal(MissionStage.Ended, loaded.View.Stage);
+            Assert.Equal(MissionStage.AwaitingReducedGoal, loaded.View.Stage);
+            Assert.Contains(QuickReply.EndMission, loaded.View.QuickReplies);
         }
 
         // ---- Custom Scripts ----

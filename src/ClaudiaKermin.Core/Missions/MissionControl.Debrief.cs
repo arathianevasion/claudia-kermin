@@ -282,8 +282,8 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>
         /// A Failed Debrief makes the craft safe (throttle 0, SAS on, steering let go), in a Blackout or not. With a reduced
-        /// goal on offer the Mission waits for Approval of it; otherwise the Mission ends, but never in a Blackout: there it
-        /// waits for the link, and ends once the link is back (MissionControl.Blackout.cs).
+        /// goal on offer the Mission waits for Approval of it; otherwise it waits on the player with End Mission and Retry with
+        /// a note (asking Claudia for a reduced goal), and in a Blackout it waits for the link first (MissionControl.Blackout.cs).
         /// </summary>
         private void FailedDebrief(Mission mission, Debrief debrief)
         {
@@ -296,16 +296,34 @@ namespace ClaudiaKermin.Core.Missions
                     + (mission.Blackout ? " It waits for the link." : ""));
                 return;
             }
-            if (mission.Blackout)
+            mission.ReducedGoal = "";
+            mission.Stage = MissionStage.AwaitingReducedGoal;
+            Note(LogKind.Notice, "The Mission Goal can't be reached as stated, and Claudia offers no reduced goal. The craft is made safe: End Mission, or Retry with a note asking her for a reduced goal."
+                + (mission.Blackout ? " The Mission waits for the link." : ""));
+        }
+
+        /// <summary>Retry with a note after a Failed Debrief with no reduced goal: Claudia is asked again, with the player's note, for a reduced goal.</summary>
+        private bool ReducedGoalAsked(string note)
+        {
+            var mission = _mission;
+            if (mission == null || mission.Stage != MissionStage.AwaitingReducedGoal || mission.ReducedGoal.Length > 0) return false;
+            note = (note ?? "").Trim();
+            if (note.Length == 0 || mission.InFlight) return true;
+            Note(LogKind.Player, "Retry with a note: " + note);
+            mission.Stage = MissionStage.Debriefing;
+            // The margin recheck and the run's facts went with the first Debrief: this one is not charged for them again.
+            var turn = new Turn
             {
-                mission.ReducedGoal = "";
-                mission.Stage = MissionStage.AwaitingReducedGoal;
-                Note(LogKind.Notice, "Failed Debrief in a Blackout: the craft is made safe, and the Mission waits for the link.");
-                return;
-            }
-            mission.Stage = MissionStage.Ended;
-            Note(LogKind.Notice, "The Mission Goal can't be reached as stated: the Mission has ended.");
-            RecordFinished(mission);
+                Purpose = Purpose.Debrief,
+                Effort = "high",
+                UserText = "The Failed Debrief offered no reduced Mission Goal. The player asks you to offer one, with this note (quoted data): " + MissionPrompts.Quoted(note)
+                    + ".\n" + MissionPrompts.Facts(_ut, _snapshot),
+                Notice = DebriefPrompts.ReducedGoalRetryNotice,
+                Gate = new DebriefGate { Done = true, RecheckSkipped = "not repeated for a retry" },
+            };
+            mission.Gate = turn.Gate;
+            Begin(turn);
+            return true;
         }
 
         /// <summary>Approve reduced goal: the goal changes, and Claudia revises the Mission Plan for it, which needs Approval in turn.</summary>
@@ -361,6 +379,11 @@ namespace ClaudiaKermin.Core.Missions
         public const string ReducedGoalNotice =
             "The player has approved your reduced Mission Goal. Revise the Mission Plan for it now: reply with kind \"mission_plan\" and "
             + "mission_plan filled in, with the sequences already flown first, then those still to fly. The player must approve it before anything runs.";
+
+        public const string ReducedGoalRetryNotice =
+            "The Failed Debrief offered no reduced Mission Goal and the player asks for one. Reply with kind \"debrief\" and debrief filled in "
+            + "again, outcome Failed: follow_up reduced_goal with follow_up_text the reduced Mission Goal (the player must approve it), or "
+            + "end_mission if no reduced goal is within reach.";
 
         public const string RevisedPlanAfterOffNominal =
             "The Debrief was Off-Nominal and you proposed a revised Mission Plan. Write it now: reply with kind \"mission_plan\" and "

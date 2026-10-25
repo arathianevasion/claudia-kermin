@@ -495,7 +495,7 @@ namespace ClaudiaKermin.Core.Tests
             // The processor she used went with the other half; hers has its own.
             mission.Send(new VesselsSeen(new[] { Vessel("probe", "Probe", processors: Processor), Vessel("undocked", "Craft", claudia: true, processors: 4001) }));
             mission.Send(new KosRunEnded(Finished(), start.RunId));
-            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingReducedGoal && !v.Busy);
 
             var safe = mission.TakeCommands().OfType<MakeCraftSafe>().Single();
             Assert.Equal("undocked", safe.VesselId);
@@ -510,7 +510,7 @@ namespace ClaudiaKermin.Core.Tests
 
             mission.Send(new VesselsSeen(new[] { Vessel("docked", "Probe + Tug", claudia: false, processors: new uint[] { 4001, Processor }) }));
             mission.Send(new KosRunEnded(Finished(), start.RunId));
-            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingReducedGoal && !v.Busy);
 
             Assert.Equal(Processor, mission.TakeCommands().OfType<MakeCraftSafe>().Single().ProcessorPartId);
         }
