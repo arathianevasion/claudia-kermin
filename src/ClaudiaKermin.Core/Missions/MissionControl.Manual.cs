@@ -55,6 +55,15 @@ namespace ClaudiaKermin.Core.Missions
             LinkLostDuringManual();
         }
 
+        /// <summary>In Manual Control with the link down and no other crew aboard: game seconds until Claudia takes the craft back.</summary>
+        private double? LinkLossTakeBackIn()
+        {
+            var mission = _mission;
+            if (mission == null || mission.Stage != MissionStage.ManualControl || _scene != GameScene.Flight) return null;
+            if (!_linkDownSince.HasValue || _snapshot == null || _snapshot.HasOtherCrew) return null;
+            return Math.Max(0, _linkDownSince.Value + _config.ManualLinkGraceSeconds - _ut);
+        }
+
         /// <summary>
         /// A steady link to Kerbin (CommNet off counts) or another non-Tourist crew member aboard: someone could really fly
         /// the craft. A link that came back less than the grace ago doesn't count, so the button isn't offered just before
@@ -199,13 +208,17 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>
         /// The link dropped during Manual Control with no other crew aboard (story 104): Claudia takes the craft back,
-        /// the mod makes it safe, and the stretch is Debriefed as a hand back with no message.
+        /// the mod makes it safe once, warp drops, the player is told on screen why the controls went dead, and the stretch
+        /// is Debriefed as a hand back with no message.
         /// </summary>
         private void LinkLostDuringManual()
         {
             var mission = _mission;
-            Note(LogKind.Notice, "The link dropped and no other crew is aboard: Claudia takes the craft back and the mod makes it safe.");
+            const string text = "No link to Kerbin and no other crew: Claudia has the craft back and the controls are locked.";
+            Note(LogKind.Notice, text);
             _commands.Add(new MakeCraftSafe("the link dropped during Manual Control with no other crew aboard"));
+            _commands.Add(new DropWarp());
+            _commands.Add(new PostScreenMessage(text, true));
             mission.ManualOrigin += "; then the link dropped with no other crew aboard, so you took the craft back and the mod made it safe";
             HandedBack("");
         }

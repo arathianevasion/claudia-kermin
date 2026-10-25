@@ -76,6 +76,9 @@ namespace ClaudiaKermin.Core.Missions
     public sealed class PostScreenMessage : AdapterCommand
     {
         public readonly string Text;
+        /// <summary>Shown even with the Mission window open or another alert firing (Claudia took the craft back).</summary>
+        public readonly bool Always;
         public PostScreenMessage(string text) { Text = text; }
+        public PostScreenMessage(string text, bool always) : this(text) { Always = always; }
     }
 }

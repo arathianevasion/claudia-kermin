@@ -301,6 +301,8 @@ namespace ClaudiaKermin.Core.Missions
         public bool ManualControlAllowed;
         /// <summary>Why Manual Control isn't allowed (no link and no other crew aboard, or a link that only just came back); "" when it is.</summary>
         public string ManualControlUnavailable = "";
+        /// <summary>In Manual Control with the link down and no other crew aboard: seconds of game time until Claudia takes the craft back; null otherwise.</summary>
+        public double? LinkLossTakeBackIn;
         /// <summary>The craft has changed beyond the pending plan's tolerances, so Approve is replaced by Re-plan; "" otherwise.</summary>
         public string PlanStale = "";
 

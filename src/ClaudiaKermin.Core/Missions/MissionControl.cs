@@ -1538,6 +1538,7 @@ namespace ClaudiaKermin.Core.Missions
                 view.Locks = LocksNow();
                 view.ManualControlAllowed = ManualAllowed;
                 view.ManualControlUnavailable = ManualUnavailableBecause();
+                view.LinkLossTakeBackIn = LinkLossTakeBackIn();
                 view.PlanStale = StaleBecause(mission);
                 if (mission.Stage == MissionStage.ManualControl)
                     view.QuickReplies = new List<QuickReply> { QuickReply.HandBack };

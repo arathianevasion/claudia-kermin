@@ -608,6 +608,25 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void WhileTheLinkIsDownInManualControlTheViewCountsDownToClaudiaTakingTheCraftBack()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
+            var mission = Control(transport);
+            ToRunning(mission);
+            mission.Send(new TakeManualControl());
+            var ut = Pad().Ut;
+            Assert.Null(mission.View.LinkLossTakeBackIn);
+
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 1; }));
+            Assert.Equal(5, mission.View.LinkLossTakeBackIn);
+            mission.Send(new UtAdvanced(ut + 4));
+            Assert.Equal(2, mission.View.LinkLossTakeBackIn);
+
+            mission.Send(Pad(s => s.Ut = ut + 5));
+            Assert.Null(mission.View.LinkLossTakeBackIn);
+        }
+
+        [Fact]
         public void LosingTheLinkInManualControlWithNoOtherCrewTakesTheCraftBackAndMakesItSafe()
         {
             var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-manual.sse", "mission-plan.sse");
@@ -619,7 +638,15 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(Pad(s => s.HasLink = false));
             mission.Send(Pad(s => { s.HasLink = false; s.Ut += 5.1; }));
 
-            Assert.Contains(mission.TakeCommands(), c => c is MakeCraftSafe);
+            var commands = mission.TakeCommands();
+            Assert.Single(commands.OfType<MakeCraftSafe>());
+            Assert.Single(commands.OfType<DropWarp>());
+            const string told = "No link to Kerbin and no other crew: Claudia has the craft back and the controls are locked.";
+            var message = Assert.Single(commands.OfType<PostScreenMessage>());
+            Assert.Equal(told, message.Text);
+            // Said on screen even with the Mission window open: the controls just went dead under the player's hands.
+            Assert.True(message.Always);
+            Assert.Contains(mission.View.Log, e => e.Kind == LogKind.Notice && e.Text == told);
             Assert.Equal(MissionStage.Debriefing, mission.View.Stage);
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             Assert.Contains("link dropped", AllText(transport.Requests[2]));
