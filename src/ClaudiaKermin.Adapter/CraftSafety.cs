@@ -45,6 +45,30 @@ namespace ClaudiaKermin.Adapter
             MakeSafe(craft);
         }
 
+        /// <summary>The Mission's craft (by id), loaded or not: SAS off, so it can't fight kOS steering on the next run.</summary>
+        public static void SasOff(TurnSasOff command)
+        {
+            var active = FlightGlobals.ActiveVessel;
+            var id = command.Target(active != null ? active.id.ToString("N") : null);
+            if (id == null || FlightGlobals.Vessels == null) return;
+            foreach (var vessel in FlightGlobals.Vessels)
+                if (vessel != null && vessel.id.ToString("N") == id)
+                {
+                    SasOff(vessel, "hand back");
+                    return;
+                }
+            Debug.Log(ModInfo.LogTag + " couldn't turn SAS off (hand back): vessel " + id + " not found");
+        }
+
+        /// <summary>SAS off, logged. Every run starts this way: SAS and kOS cooked steering pull against each other.</summary>
+        public static void SasOff(Vessel vessel, string why)
+        {
+            if (vessel == null || !vessel.loaded) return;
+            var was = vessel.ActionGroups[KSPActionGroup.SAS];
+            vessel.ActionGroups.SetGroup(KSPActionGroup.SAS, false);
+            Debug.Log(ModInfo.LogTag + " SAS turned off on '" + vessel.vesselName + "' (" + why + "), was " + (was ? "on" : "off"));
+        }
+
         public static void MakeSafe(Vessel vessel)
         {
             if (vessel == null) return;
