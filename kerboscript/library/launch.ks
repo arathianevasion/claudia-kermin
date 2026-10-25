@@ -31,12 +31,14 @@
 //|   max_duration ["auto"]: the wait on the pad plus 900 s.
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block.
 //| In thick air (over a tenth of surface pressure) the throttle never drops below the weight of the
-//| craft until cutoff, and the craft never steers more than max_aoa off the airflow, so a craft with
-//| no fins doesn't flip. Engines are staged into from the pad, and launch clamps released.
+//| craft until cutoff, and the craft never steers more than max_aoa off the airflow. With no thrust (a
+//| hop's coast, between stages) only fins and reaction wheels hold it: a craft with neither tumbles in
+//| thick air. Engines are staged into from the pad, and launch clamps released.
 //| Extra results: ap_error (m, apoapsis minus target_ap when the block ended; a hop's shows drag
 //| loss), max_q (Pa, highest dynamic pressure), coast_ap (m, apoapsis at first engine cutoff).
 //| Fails with "launch starts on the ground", "no atmosphere on <body>: use ascend", "no thrust", a
-//| launch_at it can't use, a wait over the cap, "lost control: ...", "fell back into the
+//| launch_at it can't use, a wait over the cap, "lost control: ..." (saying whether it was burning or
+//| coasting, the throttle, q and the nose's angle off the airflow), "fell back into the
 //| atmosphere: ...", out of fuel, or an abort.
 //| Example: `local res is launch(lexicon("target_ap", 80000)). if res:success { set res to circularize(lexicon("at", "ap")). }
 //| addons:claudia:report(res).`
@@ -191,6 +193,32 @@ function launch_limit_aoa {
   return flow:normalized * cos(max_aoa) + side:normalized * sin(max_aoa).
 }
 
+// The inclination to hand LAZcalc_init for inc (degrees, negative southward) from latitude lat: its
+// size kept 0.001 degrees inside abs(lat) .. 180 - abs(lat), so LAZcalc_init (which reads the
+// latitude again) never clamps it with a red HUD message; the sign kept.
+function launch_laz_inc {
+  parameter inc, lat.
+  local margin is 0.001.
+  local inc_size is min(180 - abs(lat) - margin, max(abs(lat) + margin, abs(inc))).
+  if inc < 0 {
+    return -inc_size.
+  }
+  return inc_size.
+}
+
+// Why the block stopped for lost control: burning is whether an engine gave thrust (not what the
+// throttle asked: between stages it asks with none), tset the throttle (0..1), q_pa the dynamic
+// pressure (Pa), off_aim and off_flow the nose's degrees off the aim and off the airflow
+// (srfprograde), alt_m the altitude (m).
+function launch_lost_control {
+  parameter burning, tset, q_pa, off_aim, off_flow, alt_m.
+  local doing is "coasting".
+  if burning {
+    set doing to "burning".
+  }
+  return "lost control: " + round(off_aim) + " degrees off the ascent path at " + round(alt_m) + " m, " + doing + " at " + round(100 * tset) + "% throttle, q " + round(q_pa) + " Pa, " + round(off_flow) + " degrees off the airflow".
+}
+
 // When to launch and into what inclination: lexicon("error", "" or why not, "wait", s, "inc", degrees).
 // options are the ones given (to tell whether target_inc was).
 function launch_when {
@@ -294,7 +322,7 @@ function launch {
   local laz is list().
   local laz_on is hdg:istype("String").
   if laz_on {
-    set laz to LAZcalc_init(target_ap, go:inc).
+    set laz to LAZcalc_init(target_ap, launch_laz_inc(go:inc, ship:latitude)).
     set hdg to LAZcalc(laz).
     if not hdg:istype("Scalar") {
       set hdg to 90.
@@ -405,11 +433,13 @@ function launch {
     set aim to want.
 
     // A craft far off its steering for 3 s in the air has lost control: stop rather than tumble on.
-    if vang(ship:facing:forevector, aim) > 30 and q_pa > launch_aero_q() {
+    local off_aim is vang(ship:facing:forevector, aim).
+    if off_aim > 30 and q_pa > launch_aero_q() {
       if off_since < 0 {
         set off_since to time:seconds.
       } else if time:seconds - off_since > 3 {
-        set reason to "lost control: " + round(vang(ship:facing:forevector, aim)) + " degrees off the ascent path at " + round(altitude) + " m".
+        local off_flow is vang(ship:facing:forevector, ship:srfprograde:vector).
+        set reason to launch_lost_control(ship:thrust > 0, tset, q_pa, off_aim, off_flow, altitude).
         break.
       }
     } else {
