@@ -54,8 +54,10 @@ namespace ClaudiaKermin.Core.Missions
         Warp = 64,
         /// <summary>Attitude, translation and throttle input: locked only when Manual Control isn't allowed (no link, no other crew).</summary>
         Attitude = 128,
+        /// <summary>The throttle keys (up, down, cut-off, full): locked with the rest of the craft, released in Manual Control. <see cref="Attitude"/> also locks the throttle axis and the wheels.</summary>
+        Throttle = 256,
         /// <summary>Everything Claudia's hold on the craft locks outside Running.</summary>
-        Craft = Staging | ActionGroups | Sas | Rcs | Gear | Brakes,
+        Craft = Staging | ActionGroups | Sas | Rcs | Gear | Brakes | Throttle,
     }
 
     public enum QuickReply

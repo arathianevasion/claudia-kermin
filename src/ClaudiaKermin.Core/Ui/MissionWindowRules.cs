@@ -519,10 +519,10 @@ namespace ClaudiaKermin.Core.Ui
                     + System.Math.Ceiling(view.LinkLossTakeBackIn.Value).ToString("0", CultureInfo.InvariantCulture) + " s unless it returns";
             if (view.Locks == ControlLocks.None) return "";
             if (view.ManualControlUnavailable.Length > 0) return "Manual Control unavailable: " + view.ManualControlUnavailable;
-            if (view.Stage == MissionStage.Running) return "Staging, action groups, SAS, RCS, gear and brakes locked while Claudia flies";
+            if (view.Stage == MissionStage.Running) return "Staging, action groups, SAS, RCS, gear, brakes and throttle locked while Claudia flies";
             if (view.Stage == MissionStage.AwaitingPlanApproval || view.Stage == MissionStage.AwaitingSequenceApproval)
                 return "Controls stay locked until you approve or take the controls";
-            return "Staging, action groups, SAS, RCS, gear and brakes locked while Claudia has the craft";
+            return "Staging, action groups, SAS, RCS, gear, brakes and throttle locked while Claudia has the craft";
         }
 
         private static StatusChip StageChip(MissionView view)
