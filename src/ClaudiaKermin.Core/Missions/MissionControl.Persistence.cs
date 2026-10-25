@@ -408,6 +408,8 @@ namespace ClaudiaKermin.Core.Missions
             mission.Spent = cost.Spent;
             mission.Held = cost.Held;
             mission.Requests = cost.Requests;
+            // Nor is the cap: it only ever rises, and a raise is logged, so a cap raised after the save wins.
+            if (cost.Cap.HasValue && cost.Cap.Value > mission.SpendingCap) mission.SpendingCap = cost.Cap.Value;
             mission.Warned = mission.Committed >= mission.SpendingCap * 0.8m;
             _mission = mission;
 

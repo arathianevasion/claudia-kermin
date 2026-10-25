@@ -41,6 +41,8 @@ namespace ClaudiaKermin.Core.Missions
         public decimal Spent;
         public decimal Held;
         public int Requests;
+        /// <summary>The Spending Cap the last log line recorded; null when there is no log or the line has none (an older log).</summary>
+        public decimal? Cap;
     }
 
     /// <summary>The transcript as read back from the Mission folder: the frozen system layers and every message.</summary>
@@ -234,6 +236,8 @@ namespace ClaudiaKermin.Core.Missions
                 totals.Spent = spent;
                 totals.Held = held;
                 totals.Requests = (int)(JsonNode.Long(line["request"]) ?? 0);
+                decimal cap;
+                if (TryDecimal(line["cap"], out cap)) totals.Cap = cap;
                 if (JsonNode.Str(line["event"]) == "pending" && TryDecimal(line["amount"], out amount)) totals.Held += amount;
                 return totals;
             }
