@@ -306,6 +306,39 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("", mission.View.StartForm.Refusal);
         }
 
+        [Theory]
+        [InlineData("Available")]
+        [InlineData("Assigned")]
+        public void ACrewedMissionStartedInFlightIsRefusedWhenClaudiaIsNotAboardTheActiveVessel(string standing)
+        {
+            var transport = Replies();
+            var mission = Direct(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(Snapshot(s => { s.Crew.Clear(); s.Crew.Add(Kerbal("Valentina Kerman")); s.ClaudiaStanding = standing; }));
+            Commands(mission);
+
+            mission.Send(new StartMission(Goal, 10m, Sonnet));
+
+            Assert.Equal(MissionStage.None, mission.View.Stage);
+            Assert.Contains("Claudia isn't aboard and every crew seat on the craft is taken", mission.View.StartForm.Refusal);
+            Assert.Contains("Claudia isn't aboard", Assert.Single(Commands(mission).OfType<PostScreenMessage>()).Text);
+            Assert.Empty(transport.Requests);
+        }
+
+        [Fact]
+        public void ACrewedMissionStartedInFlightGoesAheadWhenClaudiaIsAboard()
+        {
+            var mission = Direct(Replies("craft-check-pass.sse"));
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(Snapshot(s => { s.Crew.Clear(); s.Crew.Add(new SnapshotCrewMember { Name = "Claudia Kermin", Trait = "SuperIntelligence" }); }));
+
+            mission.Send(new StartMission(Goal, 10m, Sonnet));
+            DrainUntil(mission, v => v.CraftCheck.State != CraftCheckState.Running);
+
+            Assert.Equal("", mission.View.StartForm.Refusal);
+            Assert.NotEqual(MissionStage.None, mission.View.Stage);
+        }
+
         [Fact]
         public void ACrewedMissionStartsAgainOnceClaudiaIsBack()
         {
