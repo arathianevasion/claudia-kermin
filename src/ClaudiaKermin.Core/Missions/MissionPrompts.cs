@@ -335,6 +335,10 @@ namespace ClaudiaKermin.Core.Missions
             "Reply with kind \"mission_plan\" and a corrected Mission Plan whose Child Vessels name only vessels that have left the craft, "
             + "or none.";
 
+        /// <summary>Added when the refused turn was the player's typed Reply or Change: the correction is still a revision of the plan.</summary>
+        public const string ChildVesselTypedNotice =
+            " This is still the player's revision: set reply_intent to \"revise\" and new_goal as you did before.";
+
         public const string RewriteNotice =
             "Rewrite the Sequence Plan so its Mission Script passes the Script Check: reply with kind \"sequence_plan\" and "
             + "sequence_plan filled in, with the complete rewritten script using nothing on the forbidden list. The mod runs "
