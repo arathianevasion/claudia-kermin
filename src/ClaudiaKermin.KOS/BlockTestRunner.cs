@@ -167,7 +167,7 @@ namespace ClaudiaKermin.KOS
         {
             if (HighLogic.LoadedScene != GameScenes.SPACECENTER || ++_sceneFrames < 30) return;
             var proto = CraftSpawner.IntoOrbit(Path.Combine(SaveDirectory, "Ships/VAB/" + _spec.Craft),
-                _spec.OrbitBody, _spec.OrbitAltitude, _spec.OrbitInclination);
+                _spec.OrbitBody, _spec.OrbitAltitude, _spec.OrbitInclination, _spec.OrbitPeriapsis);
             _vesselId = proto.persistentId;
             Note("spawned '" + proto.vesselName + "' in a " + _spec.OrbitAltitude + " m orbit of " + _spec.OrbitBody + "; going to Flight");
             GamePersistence.SaveGame("persistent", SaveFolder, SaveMode.OVERWRITE);

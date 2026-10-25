@@ -26,6 +26,13 @@ namespace ClaudiaKermin.Core.Kos
         public double OrbitAltitude { get; private set; }
         public double OrbitInclination { get; private set; }
 
+        /// <summary>
+        /// Periapsis altitude in m, for a test that starts on an eccentric orbit (a suborbital hop has one
+        /// below the ground). Null: circular at <c>orbit_altitude</c>. Otherwise <c>orbit_altitude</c> is the
+        /// apoapsis and the craft starts there.
+        /// </summary>
+        public double? OrbitPeriapsis { get; private set; }
+
         /// <summary>Real seconds the run may take, warp included, before it is aborted and fails.</summary>
         public double TimeoutSeconds { get; private set; }
 
@@ -58,6 +65,7 @@ namespace ClaudiaKermin.Core.Kos
                     case "orbit_body": spec.OrbitBody = value; break;
                     case "orbit_altitude": spec.OrbitAltitude = Number(name, value); break;
                     case "orbit_inclination": spec.OrbitInclination = Number(name, value); break;
+                    case "orbit_pe": spec.OrbitPeriapsis = Number(name, value); break;
                     case "timeout_s": spec.TimeoutSeconds = Number(name, value); break;
                     case "check":
                         Split(name, value);

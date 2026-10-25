@@ -15,7 +15,7 @@ namespace ClaudiaKermin.KOS
     /// </summary>
     internal static class CraftSpawner
     {
-        public static ProtoVessel IntoOrbit(string craftPath, string bodyName, double altitude, double inclination)
+        public static ProtoVessel IntoOrbit(string craftPath, string bodyName, double altitude, double inclination, double? periapsis = null)
         {
             var game = HighLogic.CurrentGame;
             var body = FlightGlobals.Bodies.FirstOrDefault(b => b.bodyName == bodyName);
@@ -51,7 +51,12 @@ namespace ClaudiaKermin.KOS
             foreach (var part in ship.parts) UnityEngine.Object.Destroy(part.gameObject);
             UnityEngine.Object.Destroy(holder);
 
-            var orbit = new Orbit(inclination, 0, body.Radius + altitude, 0, 0, 0, Planetarium.GetUniversalTime(), body);
+            // Circular at altitude; or, with a periapsis, an orbit whose apoapsis is altitude, started at the apoapsis.
+            var apRadius = body.Radius + altitude;
+            var peRadius = periapsis.HasValue ? body.Radius + periapsis.Value : apRadius;
+            var orbit = periapsis.HasValue
+                ? new Orbit(inclination, (apRadius - peRadius) / (apRadius + peRadius), (apRadius + peRadius) / 2, 0, 0, Math.PI, Planetarium.GetUniversalTime(), body)
+                : new Orbit(inclination, 0, apRadius, 0, 0, 0, Planetarium.GetUniversalTime(), body);
             var discovery = ProtoVessel.CreateDiscoveryNode(DiscoveryLevels.Owned, UntrackedObjectClass.A, double.PositiveInfinity, double.PositiveInfinity);
             var vesselNode = ProtoVessel.CreateVesselNode(ship.shipName, VesselType.Probe, orbit, 0, partNodes, discovery);
             return game.AddVessel(vesselNode);
