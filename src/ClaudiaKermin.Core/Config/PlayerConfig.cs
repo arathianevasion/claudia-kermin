@@ -72,6 +72,17 @@ namespace ClaudiaKermin.Core.Config
         /// <summary>The runaway hard stop, as a multiple of a Sequence Plan's planned duration (waits included); 3 is 300%.</summary>
         public double RunawayMultiplier = 3;
 
+        // ---- Telemetry Check defaults: they fill the gaps Claudia leaves in a Sequence Plan ----
+
+        /// <summary>Delta-v used over this percent of the plan's expected delta-v crosses the default check.</summary>
+        public int CheckDeltaVUsedPercent = 120;
+        /// <summary>Time elapsed over this percent of the plan's expected duration crosses the default check.</summary>
+        public int CheckDurationPercent = 150;
+        /// <summary>Electric charge under this percent of capacity crosses the default check.</summary>
+        public int CheckElectricChargePercent = 10;
+        /// <summary>The delta-v left under what the Mission Plan still needs, less this percent, crosses the default check.</summary>
+        public int CheckFuelMarginPercent = 10;
+
         public string DefaultModel
         {
             get { return Models[0]; }
@@ -117,7 +128,14 @@ namespace ClaudiaKermin.Core.Config
             + "# How far, in percent, the craft may change from a pending plan before Approve becomes Re-plan.\n"
             + "replan_tolerance = 15\n"
             + "# A script still running at this percentage of its planned duration (waits included) is stopped and made safe.\n"
-            + "runaway_multiplier = 300%\n";
+            + "runaway_multiplier = 300%\n"
+            + "# Telemetry Check defaults, for what a Sequence Plan leaves unchecked: delta-v used over this percent of the plan,\n"
+            + "# time elapsed over this percent of the plan, electric charge under this percent, and delta-v left under what the\n"
+            + "# Mission Plan still needs less this percent.\n"
+            + "check_dv_used = 120%\n"
+            + "check_duration = 150%\n"
+            + "check_ec = 10%\n"
+            + "check_fuel_margin = 10%\n";
 
         /// <summary>Loads the file, writing it with defaults first if it does not exist.</summary>
         public static PlayerConfig LoadOrCreate(string directory)
@@ -213,6 +231,18 @@ namespace ClaudiaKermin.Core.Config
                         if (int.TryParse(value.TrimEnd('%'), NumberStyles.Integer, CultureInfo.InvariantCulture, out lateTolerance) && lateTolerance >= 0 && lateTolerance <= 200)
                             config.LateApprovalToleranceDvPercent = lateTolerance;
                         break;
+                    case "check_dv_used":
+                        config.CheckDeltaVUsedPercent = Percent(value, 100, 1000, config.CheckDeltaVUsedPercent);
+                        break;
+                    case "check_duration":
+                        config.CheckDurationPercent = Percent(value, 100, 1000, config.CheckDurationPercent);
+                        break;
+                    case "check_ec":
+                        config.CheckElectricChargePercent = Percent(value, 0, 100, config.CheckElectricChargePercent);
+                        break;
+                    case "check_fuel_margin":
+                        config.CheckFuelMarginPercent = Percent(value, 0, 100, config.CheckFuelMarginPercent);
+                        break;
                     case "runaway_multiplier":
                         // "300%" or "3". Below 100% would stop a script before its own plan says it ends.
                         double multiplier;
@@ -225,6 +255,14 @@ namespace ClaudiaKermin.Core.Config
                 }
             }
             return config;
+        }
+
+        /// <summary>A whole percent ("120%" or "120") from <paramref name="min"/> to <paramref name="max"/>; otherwise <paramref name="current"/>.</summary>
+        private static int Percent(string value, int min, int max, int current)
+        {
+            int percent;
+            return int.TryParse(value.TrimEnd('%').Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out percent) && percent >= min && percent <= max
+                ? percent : current;
         }
 
         /// <summary>Makes an offered model the default by moving it to the front of <see cref="Models"/>; a model not offered is ignored.</summary>

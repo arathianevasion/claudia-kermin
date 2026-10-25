@@ -29,6 +29,9 @@ namespace ClaudiaKermin.KOS
         {
             AddSuffix("REPORT", new OneArgsSuffix<Lexicon>(Report, "Report a Claudia script's result"));
             AddSuffix("SCIENCE", new OneArgsSuffix<Lexicon, PartValue>(Science, "What an experiment part can still earn here: lexicon experiment, available, tracked, left, situation, biome"));
+            // The Core Library's claudia_begin and claudia_finish call these, so the Capcom strip can show progress with no Claude call.
+            AddSuffix("BLOCKSTART", new OneArgsSuffix<StringValue>(BlockStart, "A Building Block began"));
+            AddSuffix("BLOCKRESULT", new TwoArgsSuffix<StringValue, Lexicon>(BlockResult, "A Building Block returned its result"));
             if (shared.KSPPart != null) ByPart[shared.KSPPart.persistentId] = this;
         }
 
@@ -92,6 +95,18 @@ namespace ClaudiaKermin.KOS
             if (shared.KSPPart == null) return;
             var bridge = KosBridge.Instance;
             if (bridge != null) bridge.OnReport(shared.KSPPart.persistentId, KosValues.ToDictionary(result));
+        }
+
+        private void BlockStart(StringValue block)
+        {
+            var bridge = KosBridge.Instance;
+            if (shared.KSPPart != null && bridge != null) bridge.OnBlock(shared.KSPPart.persistentId, block.ToString(), null);
+        }
+
+        private void BlockResult(StringValue block, Lexicon result)
+        {
+            var bridge = KosBridge.Instance;
+            if (shared.KSPPart != null && bridge != null) bridge.OnBlock(shared.KSPPart.persistentId, block.ToString(), KosValues.ToDictionary(result));
         }
     }
 }

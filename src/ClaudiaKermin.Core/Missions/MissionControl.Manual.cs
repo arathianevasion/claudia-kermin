@@ -147,6 +147,7 @@ namespace ClaudiaKermin.Core.Missions
                 if (mission.RunningProcessor.HasValue) _commands.Add(new AbortScript(mission.RunningProcessor.Value, "the player took Manual Control"));
                 mission.RunId = null;
                 mission.RunningProcessor = null;
+                EndLive(mission);
             }
             else mission.ManualOrigin = "while a plan waited for the player's Approval";
             Entered(mission, how, "Manual Control: you have the controls and Claudia only advises. Hand back to Claudia when you are done.");
@@ -196,8 +197,9 @@ namespace ClaudiaKermin.Core.Missions
                 Purpose = Purpose.Debrief,
                 Effort = "high",
                 UserText = MissionPrompts.HandBackReport(plan, mission.ManualPlanned, mission.ManualOrigin, mission.HandBackMessage)
-                    + "\n" + MissionPrompts.Facts(_ut, _snapshot),
+                    + MissionPrompts.CrossedChecks(CrossingsText(mission)) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.HandBackDebriefNotice(mission.ManualPlanned),
+                Waits = true,
             };
         }
 
@@ -211,6 +213,7 @@ namespace ClaudiaKermin.Core.Missions
                 Effort = "high",
                 UserText = "Revise the Mission Plan.\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.RevisedPlanNotice,
+                Waits = true,
             });
         }
 

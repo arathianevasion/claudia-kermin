@@ -191,6 +191,8 @@ namespace ClaudiaKermin.Core.Tests
 
         private MissionControl InFlight(StreamingFakeTransport transport, PlayerConfig config)
         {
+            // These runs are about the hard stop: the default duration Telemetry Check (150%) would send an Alert first.
+            config.CheckDurationPercent = 1000;
             var client = new ClaudeClient(new CraftCheckRouter(transport), () => "sk-ant-test", l => { });
             client.Timing.Wait = (d, c) => { };
             var mission = new MissionControl(client, _background, config, () => true, new PassingScriptCheck());

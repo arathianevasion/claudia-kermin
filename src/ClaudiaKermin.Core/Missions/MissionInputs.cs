@@ -165,6 +165,14 @@ namespace ClaudiaKermin.Core.Missions
         public HandBack(string message) { Message = message; }
     }
 
+    /// <summary>
+    /// The Abort button while Running: the script is stopped and the craft made safe through the abort path, and the
+    /// mod records that the player aborted it (the run's Debrief says so). Claudia may recommend it; she never does it.
+    /// </summary>
+    public sealed class AbortSequence : MissionInput
+    {
+    }
+
     /// <summary>The debug capture button: writes the latest Game Snapshot to the save's <c>ClaudiaKermin/snapshots</c> folder.</summary>
     public sealed class CaptureSnapshot : MissionInput
     {
@@ -227,6 +235,30 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The <see cref="StartScript.RunId"/> this answers.</summary>
         public readonly int RunId;
         public KosRunEnded(RunOutcome outcome, int runId) { Outcome = outcome; RunId = runId; }
+    }
+
+    /// <summary>A Building Block began in the run (<c>ADDONS:CLAUDIA:BLOCKSTART</c>, from the Core Library's <c>claudia_begin</c>).</summary>
+    public sealed class KosBlockStarted : MissionInput
+    {
+        public readonly string Block;
+        /// <summary>The <see cref="StartScript.RunId"/> this answers.</summary>
+        public readonly int RunId;
+        public KosBlockStarted(string block, int runId) { Block = block; RunId = runId; }
+    }
+
+    /// <summary>A Building Block returned its result lexicon (<c>ADDONS:CLAUDIA:BLOCKRESULT</c>, from <c>claudia_finish</c>); not the Script Result.</summary>
+    public sealed class KosBlockEnded : MissionInput
+    {
+        public readonly string Block;
+        public readonly System.Collections.Generic.IDictionary<string, object> Result;
+        /// <summary>The <see cref="StartScript.RunId"/> this answers.</summary>
+        public readonly int RunId;
+        public KosBlockEnded(string block, System.Collections.Generic.IDictionary<string, object> result, int runId)
+        {
+            Block = block;
+            Result = result;
+            RunId = runId;
+        }
     }
 
     /// <summary>

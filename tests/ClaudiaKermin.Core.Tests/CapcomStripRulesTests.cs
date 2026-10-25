@@ -289,5 +289,42 @@ namespace ClaudiaKermin.Core.Tests
             view.PlanStale = "a stage was removed";
             Assert.Equal("The craft has changed (a stage was removed): Re-plan", MissionWindowRules.LockLine(view));
         }
+
+        // ---- Live progress ----
+
+        [Fact]
+        public void WhileRunningTheProgressLineShowsTheBlockTimeAndKeyNumbers()
+        {
+            var view = During(MissionStage.Running, 0, "Launch");
+            view.RunProgress = new RunProgressView
+            {
+                Running = true, Sequence = "Launch", Block = "launch", ElapsedSeconds = 63.4, PlannedSeconds = 240, Fraction = 63.4 / 240,
+                DeltaVUsed = 1210, PlannedDeltaV = 3400, Apoapsis = 41250, Periapsis = -540000, Altitude = 12000, ElectricChargePercent = 96,
+            };
+            Assert.Equal("launch · 63 s of 240 s · Δv 1,210 of 3,400 m/s · Alt 12.0 km · Ap 41.3 km · Pe -540.0 km · EC 96%",
+                MissionWindowRules.ProgressLine(view));
+
+            // Between blocks, with no simulator and no orbit: only what is known.
+            view.RunProgress = new RunProgressView { Running = true, Sequence = "Launch", ElapsedSeconds = 5, ChecksCrossed = 1 };
+            Assert.Equal("5 s · 1 Telemetry Check crossed", MissionWindowRules.ProgressLine(view));
+
+            Assert.Equal("", MissionWindowRules.ProgressLine(During(MissionStage.AwaitingSequenceApproval, 0, "Launch")));
+        }
+
+        [Fact]
+        public void AnAbortRecommendationOrAWaitingCallNeedsThePlayerEvenWhileRunning()
+        {
+            var view = During(MissionStage.Running, 0, "Launch");
+            Assert.Equal("", MissionWindowRules.NeedsYou(view));
+
+            view.CapWait = "Claudia's next request waits.";
+            Assert.Equal("Raise cap: Claudia's request is waiting", MissionWindowRules.NeedsYou(view));
+
+            // An Abort recommendation comes first, even while she answers something else.
+            view.AbortRecommended = "Claudia recommends Abort: delta-v used 100 m/s over 50 m/s.";
+            view.Busy = true;
+            Assert.Equal("Claudia recommends Abort", MissionWindowRules.NeedsYou(view));
+            Assert.Equal("Abort", MissionWindowRules.Label(QuickReply.Abort, view));
+        }
     }
 }

@@ -174,6 +174,7 @@ namespace ClaudiaKermin.Adapter
             DrawStatusRow();
             GUILayout.Space(ClaudiaSkin.Gap);
             DrawTrack();
+            DrawProgress();
             DrawLockLine();
             GUILayout.EndVertical();
             if (Event.current.type == EventType.Repaint) _stripHeight = GUILayoutUtility.GetLastRect().height;
@@ -502,6 +503,22 @@ namespace ClaudiaKermin.Adapter
             var labelWidth = Mathf.Min(style.CalcSize(new GUIContent(label)).x, rect.xMax - x - youWidth);
             style.Draw(new Rect(x, rect.y, labelWidth, rect.height), new GUIContent(label), false, false, false, false);
             if (segment.You) _you.Draw(new Rect(x + labelWidth, rect.y, youWidth, rect.height), you, false, false, false, false);
+        }
+
+        // ---- Live progress ----
+
+        // While Running: the block, time and key numbers over a thin bar of time elapsed against the plan. No Claude call is behind it.
+        private void DrawProgress()
+        {
+            var text = MissionWindowRules.ProgressLine(View);
+            if (text.Length == 0) return;
+            GUILayout.Space(ClaudiaSkin.Gap / 2);
+            GUILayout.Label(text, ClaudiaSkin.Secondary, GUILayout.MinWidth(0));
+            var bar = GUILayoutUtility.GetRect(0, 3, GUILayout.ExpandWidth(true), GUILayout.Height(3));
+            if (Event.current.type != EventType.Repaint) return;
+            GUI.DrawTexture(bar, ClaudiaSkin.Solid(ClaudiaSkin.Border));
+            var fraction = Mathf.Clamp01((float)View.RunProgress.Fraction);
+            GUI.DrawTexture(new Rect(bar.x, bar.y, bar.width * fraction, bar.height), ClaudiaSkin.Solid(ClaudiaSkin.Claudia));
         }
 
         // ---- Lock line ----

@@ -133,6 +133,9 @@ namespace ClaudiaKermin.Adapter
             Window = new MissionWindow(Panel);
             Strip = new CapcomStrip(Panel) { TabClicked = () => PanelOpen = !PanelOpen };
             GameEvents.onKerbalStatusChange.Add(OnKerbalStatusChange);
+            // Building Block progress, for the strip and the log, with no Claude call behind it.
+            ScriptRunner.BlockReported = (runId, block, result) =>
+                Send(result == null ? (MissionInput)new KosBlockStarted(block, runId) : new KosBlockEnded(block, result, runId));
         }
 
         public void Send(MissionInput input)
@@ -293,9 +296,11 @@ namespace ClaudiaKermin.Adapter
         }
 
         // Closed window: flash the toolbar button, say it on screen, and drop to 1x so the player isn't warped past it.
+        // An Abort recommendation also brings the Mission panel up, with its Abort button.
         private void NotifyPlayer(Attention attention)
         {
             Flashing = true;
+            if (attention.Kind == AttentionKind.Abort) PanelOpen = true;
             ScreenMessages.PostScreenMessage(attention.Text, 6f, ScreenMessageStyle.UPPER_CENTER);
             if (TimeWarp.fetch != null && TimeWarp.CurrentRateIndex > 0) TimeWarp.SetRate(0, true);
         }

@@ -27,6 +27,8 @@ namespace ClaudiaKermin.Adapter
                 Ut = Planetarium.GetUniversalTime(),
                 Situation = vessel.situation.ToString(),
                 Body = vessel.mainBody != null ? vessel.mainBody.bodyName : "",
+                Altitude = vessel.altitude,
+                VerticalSpeed = vessel.verticalSpeed,
             };
             snapshot.Craft.Name = vessel.vesselName ?? "";
             snapshot.Craft.VesselId = vessel.id.ToString("N");
