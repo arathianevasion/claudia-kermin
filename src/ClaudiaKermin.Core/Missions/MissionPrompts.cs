@@ -133,16 +133,18 @@ namespace ClaudiaKermin.Core.Missions
         /// The timing rules and the Mission Settings as they stood when the Mission started: a system layer,
         /// frozen with the others. Later edits arrive as a notice (<see cref="SettingsChanged"/>), which supersedes it.
         /// </summary>
-        public static string TimingLayer(MissionSettingsValues settings, double waitCapOrbits, double waitCapGroundSeconds)
+        public static string TimingLayer(MissionSettingsValues settings)
         {
-            return "Timing. A wait inside a Maneuver Sequence is capped at "
-                + waitCapOrbits.ToString("0.##", CultureInfo.InvariantCulture) + " orbit(s) in orbit, or "
-                + waitCapGroundSeconds.ToString("0", CultureInfo.InvariantCulture) + " s on the ground; the Core Library enforces it. "
-                + "A longer wait does not go inside the script: it becomes the Due Time of the next Maneuver Sequence, the earliest UT "
-                + "(seconds) that sequence may start. Put it in due_time_ut in the Mission Plan's sequence and in the Sequence Plan "
-                + "(null when the sequence can start right away), and give the Mission Plan's mission_time_s as the total Mission time "
-                + "including those waits. The mod sets an alarm and offers the player a Warp to Due Time button; it never warps between "
-                + "sequences itself. If a sequence depends on a window, set window_closes_ut to the UT after which that window is missed "
+            return "Timing. Wait for a time-based event (a transfer window, daylight at the landing site, a surface alignment, "
+                + "a phase angle, a hold of a few orbits) inside the Mission Script, however long: the Building Blocks warp on rails "
+                + "to the time and drop to 1x at least 30 s before any burn, and coast(lexicon(\"until\", ut)) holds a script until "
+                + "a UT the same way. The player's Approval of the sequence approves its wait. Count every wait in "
+                + "expected_duration_s, since the mod stops a script still running at 300% of it. A Due Time is only for a wait "
+                + "between sequences that needs the player, e.g. \"come back when you've docked\" or an EVA they must make; it is "
+                + "the earliest UT (seconds) the next Maneuver Sequence may start. Put it in due_time_ut in the Mission Plan's sequence "
+                + "and in the Sequence Plan (null otherwise, which is almost always), and give the Mission Plan's mission_time_s as the "
+                + "total Mission time including every wait. For a Due Time the mod sets an alarm and offers the player a Warp to Due "
+                + "Time button; it never warps between sequences itself. If a sequence depends on a window, set window_closes_ut to the UT after which that window is missed "
                 + "and late_window_dv to the delta-v (m/s) of the next window; when the player approves after the window has closed, "
                 + "the mod lets the script take the next window if late_window_dv is within tolerance of expected_delta_v, and "
                 + "otherwise asks you to re-plan. A Due Time the player has missed just waits; revise the Sequence Plan only if its "
@@ -155,7 +157,7 @@ namespace ClaudiaKermin.Core.Missions
             var time = settings.TimeVersusDeltaV == TimeVersusDeltaV.Fastest
                 ? "Fastest: never wait for a better window; take the next one."
                 : settings.TimeVersusDeltaV == TimeVersusDeltaV.MostEfficient
-                    ? "Most efficient: wait for the cheapest window, however long (a long wait becomes a Due Time)."
+                    ? "Most efficient: wait for the cheapest window, however long (the script warps there)."
                     : "Balanced: wait up to 6 h to save delta-v; do not wait longer than that for a better window.";
             return "Mission Settings. Daylight landing: " + (settings.DaylightLanding
                     ? "on. Set the land block's daylight option to true and prefer a daylight landing."
@@ -171,7 +173,7 @@ namespace ClaudiaKermin.Core.Missions
 
         public const string SettingsNotice =
             "Revise the Mission Plan for the new Mission Settings: reply with kind \"mission_plan\" and mission_plan filled in, "
-            + "with the Due Times and total Mission time they imply. The player must approve it again.";
+            + "with the waits, any Due Times and the total Mission time they imply. The player must approve it again.";
 
         public static string LateApprovalReplan(double ut, double plannedDv, double? lateDv)
         {
@@ -183,7 +185,7 @@ namespace ClaudiaKermin.Core.Missions
 
         public const string LateReplanNotice =
             "Revise the Sequence Plan for the current time: reply with kind \"sequence_plan\" and sequence_plan filled in, including "
-            + "its complete Mission Script and a new Due Time if the next window is far off. The mod runs it only after the player's Approval.";
+            + "its complete Mission Script, which waits for the next window itself, however far off. The mod runs it only after the player's Approval.";
 
         public const string PlanNotice =
             "The craft is in Flight. Propose the Mission Plan now: reply with kind \"mission_plan\" and mission_plan filled in.";

@@ -18,7 +18,7 @@
 //| Extra results: ecc (the eccentricity when the block ended). Succeeds at once, with no burn, if the
 //| orbit is already within tolerance. Fails with "no apoapsis" on an escape orbit (use "pe"), an
 //| altitude the orbit doesn't pass, a burn point inside the atmosphere or below the surface, the
-//| reasons exec_node gives (no thrust, a wait over the cap, out of fuel, an abort), or "eccentricity
+//| reasons exec_node gives (no thrust, out of fuel, an abort), or "eccentricity
 //| <e> is over tolerance <t>"; on failure the node is left in place.
 //| Example: `local res is launch(lexicon("target_ap", 80000)). if res:success { set res to circularize(). }
 //| addons:claudia:report(res).`

@@ -101,6 +101,10 @@ namespace ClaudiaKermin.Core.Kos
                         return "physics warp (warp mode PHYSICS)";
                     if (suffix == "WARP" && call.PhysicsWarpMode && call.WarpRateIndex > 0)
                         return "physics warp (warp " + call.WarpRateIndex + ")";
+                    // KSP's warp-to warps in whatever mode is set, never changing it (issue #133): in physics
+                    // mode it would physics-warp past the WARP gate, so it is refused there. Rails mode is fine.
+                    if (suffix == "WARPTO" && call.PhysicsWarpMode)
+                        return "physics warp (WARPTO in warp mode PHYSICS)";
                     return null;
                 case GateTarget.Archive:
                     return "Archive " + suffix.ToLowerInvariant() + " (0:/)";

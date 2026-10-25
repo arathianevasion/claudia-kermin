@@ -367,8 +367,7 @@ namespace ClaudiaKermin.Core.Missions
             {
                 mission.System.Add(MissionPrompts.BaseLayer);
                 mission.System.Add(MissionPrompts.MissionLayer(state.Id));
-                mission.System.Add(MissionPrompts.TimingLayer(MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config)),
-                    _config.WaitCapOrbits, _config.WaitCapGroundSeconds));
+                mission.System.Add(MissionPrompts.TimingLayer(MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config))));
             }
             if (_config.DebugTools) mission.Dump = new FileStreamDump(Path.Combine(mission.Folder, "stream-dumps"));
 

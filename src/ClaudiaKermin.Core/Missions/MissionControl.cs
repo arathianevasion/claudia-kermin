@@ -117,7 +117,9 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is FarSwitchConfirmed) FarSwitched(((FarSwitchConfirmed)input).VesselName);
             else if (input is RunEventSeen) EventSeen((RunEventSeen)input);
             else if (input is AcceptReducedGoal) ReducedGoalAccepted();
+            else if (input is StockAlarmFired) StockAlarmWentOff();
             CheckDue();
+            CheckScriptWarp();
             CheckRunaway();
             CheckTelemetry();
             CheckFlyable();
@@ -314,7 +316,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.System.Add(MissionPrompts.MissionLayer(id));
             var settings = start.Settings != null ? start.Settings.Copy() : MissionSettingsValues.Defaults(_config);
             settings.WriteTo(mission.Settings);
-            mission.System.Add(MissionPrompts.TimingLayer(settings, _config.WaitCapOrbits, _config.WaitCapGroundSeconds));
+            mission.System.Add(MissionPrompts.TimingLayer(settings));
             // Raw stream dumps are a debug tool: on with debug_tools = true in the player config.
             if (_config.DebugTools) mission.Dump = new FileStreamDump(Path.Combine(mission.Folder, "stream-dumps"));
             _mission = mission;
@@ -1180,10 +1182,10 @@ namespace ClaudiaKermin.Core.Missions
             card.CustomScriptReason = plan.CustomScriptReason;
         }
 
-        /// <summary>What actually runs: the plan's script bundled with the Core Library and the player's wait caps.</summary>
+        /// <summary>What actually runs: the plan's script bundled with the Core Library.</summary>
         private string Bundle(SequencePlan plan)
         {
-            return CoreLibrary.Bundle(plan.Script, _config.WaitCapOrbits, _config.WaitCapGroundSeconds);
+            return CoreLibrary.Bundle(plan.Script);
         }
 
         /// <summary>The Script Check over what would run (<see cref="Bundle"/>): the script comes first in it, so the line numbers are the script's.</summary>

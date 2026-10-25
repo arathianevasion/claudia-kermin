@@ -325,7 +325,7 @@ namespace ClaudiaKermin.ScriptCheck.Tests
         {
             // The block test's Mission Script: it stages, warps on rails and flies a maneuver node through exec_node.
             var script = File.ReadAllText(Path.Combine(RepoRoot(), "tests", "blocks", "exec_node", "test.ks"));
-            AssertAllowed(CoreLibrary.Bundle(script, 1, 10800));
+            AssertAllowed(CoreLibrary.Bundle(script));
         }
 
         [Theory]
@@ -335,13 +335,13 @@ namespace ClaudiaKermin.ScriptCheck.Tests
         {
             // transfer_to plans with the bundled RSVP; return calls the block kOS lets be named return.
             var script = File.ReadAllText(Path.Combine(RepoRoot(), "tests", "blocks", test, "test.ks"));
-            AssertAllowed(CoreLibrary.Bundle(script, 1, 10800));
+            AssertAllowed(CoreLibrary.Bundle(script));
         }
 
         [Fact]
         public void AForbiddenCallInABundledScriptFailsOnTheScriptsOwnLine()
         {
-            var result = _check.Check(CoreLibrary.Bundle("print \"hello\".\nkuniverse:quicksave().", 1, 10800));
+            var result = _check.Check(CoreLibrary.Bundle("print \"hello\".\nkuniverse:quicksave()."));
             Assert.False(result.Passed);
             Assert.Contains("line 2: :QUICKSAVE (quicksave)", result.Forbidden);
         }

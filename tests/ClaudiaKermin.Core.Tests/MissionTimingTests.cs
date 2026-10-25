@@ -428,8 +428,13 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(3, layers.Length);
             Assert.Contains("Daylight landing: off", layers[2]);
             Assert.Contains("Most efficient: wait for the cheapest window", layers[2]);
-            Assert.Contains("1 orbit(s)", layers[2]);
             Assert.Contains("due_time_ut", layers[2]);
+            // ADR 0004: waits warp inside the script, and a Due Time is only for a wait between sequences that needs the player.
+            Assert.DoesNotContain("capped", layers[2]);
+            Assert.Contains("inside the Mission Script, however long", layers[2]);
+            Assert.Contains("warp on rails", layers[2]);
+            Assert.Contains("A Due Time is only for a wait between sequences that needs the player", layers[2]);
+            Assert.Contains("Count every wait in expected_duration_s", layers[2]);
 
             var state = Assert.Single(mission.ExportStates());
             Assert.Equal("false", state.Settings[MissionSettingsValues.DaylightKey]);

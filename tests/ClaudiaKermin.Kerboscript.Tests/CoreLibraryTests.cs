@@ -17,7 +17,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
     {
         private static string[] Run(string missionScript)
         {
-            return KosHarness.Run(CoreLibrary.Bundle(missionScript, 1, 10800)).ToArray();
+            return KosHarness.Run(CoreLibrary.Bundle(missionScript)).ToArray();
         }
 
         private static string One(string expression)
@@ -37,7 +37,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
         {
             Assert.Contains(CoreLibrary.Files, f => f.Name == "claudia_lib");
             Assert.Contains(CoreLibrary.Blocks, b => b.Name == "exec_node");
-            Assert.Null(KosHarness.CompileError(CoreLibrary.Bundle("@lazyglobal off.\nprint 1.", 1, 10800)));
+            Assert.Null(KosHarness.CompileError(CoreLibrary.Bundle("@lazyglobal off.\nprint 1.")));
         }
 
         [Fact]
@@ -49,14 +49,13 @@ namespace ClaudiaKermin.Kerboscript.Tests
             var scripts = System.IO.Directory.GetFiles(System.IO.Path.Combine(dir.FullName, "tests", "blocks"), "test.ks", System.IO.SearchOption.AllDirectories);
             Assert.NotEmpty(scripts);
             foreach (var script in scripts)
-                Assert.True(KosHarness.CompileError(CoreLibrary.Bundle(System.IO.File.ReadAllText(script), 1, 10800)) == null, script);
+                Assert.True(KosHarness.CompileError(CoreLibrary.Bundle(System.IO.File.ReadAllText(script))) == null, script);
         }
 
         [Fact]
-        public void A_mission_script_can_call_the_library_and_read_the_wait_caps()
+        public void A_mission_script_can_call_the_library()
         {
-            var bundle = CoreLibrary.Bundle("@lazyglobal off.\nprint claudia_config():wait_cap_orbits.\nprint claudia_config():wait_cap_ground_s.", 1.5, 7200);
-            Assert.Equal(new[] { "1.5", "7200" }, KosHarness.Run(bundle));
+            Assert.Equal(new[] { "5370" }, KosHarness.Run(CoreLibrary.Bundle("@lazyglobal off.\nprint claudia_warp_end(5400, 30).")));
         }
 
         // ---- Options ----
@@ -150,14 +149,67 @@ namespace ClaudiaKermin.Kerboscript.Tests
 
         // ---- Waits ----
 
+        // ADR 0004: no wait cap; a wait warps on rails and is back at 1x at least 30 s before what follows.
+
         [Theory]
-        [InlineData(false, 1800, 1, 10800, "1800")]
-        [InlineData(false, 1800, 2, 10800, "3600")]
-        [InlineData(true, 1800, 1, 10800, "10800")]
-        [InlineData(false, 0, 1, 10800, "10800")]
-        public void Waits_are_capped_at_one_orbit_or_three_hours_on_the_ground(bool onGround, double period, double orbits, double ground, string expected)
+        [InlineData(5400, 30, "5370")]
+        [InlineData(5400, 10, "5370")]
+        [InlineData(5400, 120, "5280")]
+        public void Warp_ends_the_lead_before_the_wait_ends_and_never_under_30_s(double ut, double lead, string expected)
         {
-            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_wait_cap({0}, {1}, {2}, {3})", Bool(onGround), period, orbits, ground)));
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_warp_end({0}, {1})", ut, lead)));
+        }
+
+        [Theory]
+        // Asked for once, at the start of the wait.
+        [InlineData(0, 1, false, true, "warp")]
+        // Warping: carry on.
+        [InlineData(3000, 100, false, false, "none")]
+        // At the warp's end: drop to 1x before the burn.
+        [InlineData(5370, 100, false, false, "drop")]
+        [InlineData(5380, 1, false, false, "none")]
+        // The player cancelled warp: never overridden.
+        [InlineData(3000, 1, false, false, "none")]
+        // The mod holds warp at 1x (the Mission needs the player): drop, and don't warp while held.
+        [InlineData(3000, 100, true, false, "drop")]
+        [InlineData(3000, 1, true, true, "none")]
+        // After the hold: warp again.
+        [InlineData(3100, 1, false, true, "warp")]
+        // Too close to the end to be worth warping.
+        [InlineData(5366, 1, false, true, "none")]
+        public void A_wait_warps_once_drops_to_1x_before_the_burn_and_warps_again_after_a_hold(double now, double rate, bool held, bool want, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_warp_step({0}, 5370, {1}, {2}, {3})", now, rate, Bool(held), Bool(want))));
+        }
+
+        [Fact]
+        public void A_three_orbit_hold_warps_by_itself_and_is_at_1x_30_s_before_the_burn()
+        {
+            // claudia_warp_to's loop over a 3-orbit wait (a 1800 s orbit), with a stand-in for KSP's warp:
+            // WARPTO raises the rate to 1000x until the rate is cancelled. Longer than one orbit, and no Due Time.
+            var printed = Run(
+                "local ut is 3 * 1800. local warp_end is claudia_warp_end(ut, 30). local rate is 1. local want is true.\n"
+                + "local warps is 0. local dropped_at is -1. local t is 0.\n"
+                + "until t >= ut {\n"
+                + "  local action is claudia_warp_step(t, warp_end, rate, false, want).\n"
+                + "  if action = \"warp\" { set rate to 1000. set want to false. set warps to warps + 1. }\n"
+                + "  if action = \"drop\" { set rate to 1. set dropped_at to t. }\n"
+                + "  set t to t + 10.\n"
+                + "}\n"
+                + "print warps. print dropped_at. print ut - dropped_at >= 30. print rate.");
+            Assert.Equal(new[] { "1", "5370", "True", "1" }, printed);
+        }
+
+        // ---- coast ----
+
+        [Fact]
+        public void Coast_needs_a_ut_and_takes_a_lead_in_seconds()
+        {
+            Assert.Equal("until is required", One("coast_unreadable(claudia_options(lexicon(), coast_defaults(), \"auto\"):opt)"));
+            Assert.Equal("until must be a UT in seconds", One("coast_unreadable(claudia_options(lexicon(\"until\", \"soon\"), coast_defaults(), \"auto\"):opt)"));
+            Assert.Equal("lead must be seconds", One("coast_unreadable(claudia_options(lexicon(\"until\", 100, \"lead\", -5), coast_defaults(), \"auto\"):opt)"));
+            Assert.Equal("", One("coast_unreadable(claudia_options(lexicon(\"until\", 100000, \"lead\", 60), coast_defaults(), \"auto\"):opt)"));
+            Assert.Equal("30", One("claudia_options(lexicon(\"until\", 100), coast_defaults(), \"auto\"):opt:lead"));
         }
 
         // ---- Burns ----

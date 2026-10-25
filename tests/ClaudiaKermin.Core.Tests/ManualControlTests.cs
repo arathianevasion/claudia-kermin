@@ -209,8 +209,12 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(new TakeManualControl());
 
             Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
-            var abort = Assert.IsType<AbortScript>(Assert.Single(mission.TakeCommands()));
+            var commands = mission.TakeCommands();
+            var abort = Assert.Single(commands.OfType<AbortScript>());
             Assert.Equal(3102u, abort.ProcessorPartId);
+            // A script warping through a wait drops to 1x for the player (ADR 0004).
+            Assert.Single(commands.OfType<DropWarp>());
+            Assert.Equal(3, commands.Count);
             Assert.Equal(new[] { QuickReply.HandBack }, mission.View.QuickReplies);
             Assert.False(mission.View.LeavingFlightNeedsConfirmation);
             Assert.NotEqual(MissionStage.Paused, mission.View.Stage);
@@ -231,7 +235,7 @@ namespace ClaudiaKermin.Core.Tests
 
             mission.Send(new ManualInputHeld(1.01));
             Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
-            Assert.IsType<AbortScript>(Assert.Single(mission.TakeCommands()));
+            Assert.Single(mission.TakeCommands().OfType<AbortScript>());
         }
 
         [Fact]
@@ -280,6 +284,8 @@ namespace ClaudiaKermin.Core.Tests
                 s.HasLink = link;
                 foreach (var trait in otherCrew) s.Crew.Add(new SnapshotCrewMember { Name = "Kerbal " + trait, Trait = trait });
             }));
+            // A lost link drops the script's warp to 1x (ADR 0004); what follows is about Manual Control.
+            mission.TakeCommands();
 
             Assert.Equal(allowed, mission.View.ManualControlAllowed);
             // Flight controls (attitude, translation, throttle) are locked only when nobody could really fly it.
@@ -310,6 +316,8 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("", mission.View.ManualControlUnavailable);
 
             mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 1; }));
+            // The lost link drops the script's warp to 1x (ADR 0004).
+            mission.TakeCommands();
             Assert.DoesNotContain(QuickReply.ManualControl, mission.View.QuickReplies);
             Assert.Equal("no link to Kerbin and no other crew aboard", mission.View.ManualControlUnavailable);
 

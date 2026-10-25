@@ -19,7 +19,8 @@
 //|   target_pe [required]: periapsis altitude at the target, m.
 //|   window ["next"]: "next" departs in the next transfer window from 5 minutes ahead (RSVP's
 //|     cheapest departure within one synodic period); a time (UT seconds) departs in the first
-//|     window from that time. A window past the wait cap fails, naming its UT: plan a Due Time.
+//|     window from that time. The block warps on rails to the window however far off it is: no Due
+//|     Time is needed for it.
 //|   correction [true]: false leaves out the mid-course correction.
 //|   max_duration ["auto"]: the time to the planned arrival plus 900 s.
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block; each burn gets them too.
@@ -29,12 +30,12 @@
 //| or correction is false).
 //| Fails with "target is required", "target_pe is required", an option value it can't read, "no body
 //| named <x>", a target that doesn't orbit the craft's body, "not in orbit", "a maneuver node is
-//| already planned: remove it first", "rsvp found no transfer: <why>", "the next window departs at
-//| UT <t>, beyond the wait cap: plan a Due Time before it", a wait over the cap, "no encounter with
+//| already planned: remove it first", "rsvp found no transfer: <why>", "no encounter with
 //| <target> after the ejection burn" (or "after the correction"), an exec_node failure (that burn's
 //| node is left in place), or an abort. The craft must be the active vessel (RSVP checks).
 //| Capture is not part of transfer_to: once inside the target's sphere of influence, fly
-//| `circularize(lexicon("at", "pe"))`, in a sequence with its Due Time at encounter_ut.
+//| `circularize(lexicon("at", "pe"))`: in the same sequence or the next, after
+//| `coast(lexicon("until", res:encounter_ut + 60))` (no Due Time needed).
 //| Example: `local res is transfer_to(lexicon("target", "Mun", "target_pe", 30000)). addons:claudia:report(res).`
 
 // The block's own options and defaults ("required" means the Mission Script must give it).
@@ -116,16 +117,6 @@ function transfer_to_synodic {
     return max(period_a, period_b).
   }
   return 1 / beat.
-}
-
-// "" if the departure at ut can be waited for now, else the reason the block fails: the window is
-// past the wait cap, so the sequence needs a Due Time before it.
-function transfer_to_departure_wait {
-  parameter ut.
-  if claudia_check_wait(ut - time:seconds) = "" {
-    return "".
-  }
-  return "the next window departs at UT " + round(ut) + ", beyond the wait cap: plan a Due Time before it".
 }
 
 // Coordinate descent: lowers cost(x) over the list of numbers x, one coordinate at a time, starting
@@ -244,7 +235,7 @@ function transfer_to_burn {
 
 // The mid-course correction: a node halfway between now and arrive_ut, aimed at target_pe at dest,
 // flown with exec_node. A sphere-of-influence change before halfway (leaving a moon on the way home)
-// is waited out first, so the wait to the node is capped by the orbit it is on. Nothing is burned
+// is waited out first (on rails, however long), so the node is placed on the orbit it will be on. Nothing is burned
 // when the prediction is already within 1 km of target_pe or the fix is under 0.1 m/s.
 // Returns lexicon("reason", "" or why the block fails, "dv", m/s burned).
 function transfer_to_correct {
@@ -255,11 +246,6 @@ function transfer_to_correct {
     local soi_ut is time:seconds + ship:orbit:nextpatcheta.
     if soi_ut < mid - 120 {
       local after is soi_ut + 30.
-      local waiting is claudia_check_wait(after - time:seconds).
-      if waiting <> "" {
-        set done:reason to waiting.
-        return done.
-      }
       local waited is claudia_wait_until(ctx, after).
       if waited <> "" {
         claudia_make_safe().
@@ -327,10 +313,6 @@ function transfer_to {
   }
 
   local earliest is transfer_to_earliest(time:seconds, opt:window).
-  local too_far is claudia_check_wait(earliest - time:seconds).
-  if too_far <> "" {
-    return claudia_finish(ctx, false, too_far, extra).
-  }
 
   // RSVP searches one synodic period, so it finds the next window, and adds the ejection node; on
   // failure it removes every node.
@@ -342,12 +324,8 @@ function transfer_to {
   if not planned:success or not hasnode {
     return claudia_finish(ctx, false, transfer_to_rsvp_reason(planned), extra).
   }
-  local departing is transfer_to_departure_wait(time:seconds + nextnode:eta).
-  if departing <> "" {
-    local ejection is nextnode.
-    remove ejection.
-    return claudia_finish(ctx, false, departing, extra).
-  }
+  // The ejection burn may be far off (window "next" can be more than an orbit away, a UT window
+  // further): exec_node warps there on rails, with no cap (ADR 0004).
   if opt:max_duration:istype("String") {
     set opt:max_duration to planned:predicted:arrival:time - ctx:start_ut + 900.
   }

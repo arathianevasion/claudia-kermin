@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using ClaudiaKermin.Adapter;
 using kOS;
 using kOS.AddOns;
 using kOS.Module;
@@ -32,6 +33,8 @@ namespace ClaudiaKermin.KOS
             // The Core Library's claudia_begin and claudia_finish call these, so the Capcom strip can show progress with no Claude call.
             AddSuffix("BLOCKSTART", new OneArgsSuffix<StringValue>(BlockStart, "A Building Block began"));
             AddSuffix("BLOCKRESULT", new TwoArgsSuffix<StringValue, Lexicon>(BlockResult, "A Building Block returned its result"));
+            // The Core Library's waits read this: true holds in-script warp at 1x while the Mission needs the player (ADR 0004).
+            AddSuffix("WARPHOLD", new Suffix<BooleanValue>(() => ScriptWarpHold.Held, "In-script warp is held at 1x while the Mission needs the player"));
             AddTerrainSuffixes();
             AddHeatSuffixes();
             if (shared.KSPPart != null) ByPart[shared.KSPPart.persistentId] = this;

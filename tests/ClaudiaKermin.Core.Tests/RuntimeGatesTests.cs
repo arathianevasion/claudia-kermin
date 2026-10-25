@@ -123,6 +123,20 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Null(RuntimeGates.Refuses(warp));
         }
 
+        [Fact]
+        public void WarpToIsRefusedInPhysicsModeAndAllowedOnRails()
+        {
+            // Issue #133: kOS's TIMEWARP:WARPTO and WARPTO() call KSP's TimeWarp.WarpTo, which warps in the mode
+            // already set without calling the WARP setter; in physics mode that would be physics warp past the gate.
+            var warpTo = Call(GateTarget.TimeWarp, "WARPTO");
+            warpTo.PhysicsWarpMode = true;
+            Assert.Equal("physics warp (WARPTO in warp mode PHYSICS)", RuntimeGates.Refuses(warpTo));
+
+            // The Core Library sets the mode to RAILS first, so its in-script warp (ADR 0004) is allowed.
+            warpTo.PhysicsWarpMode = false;
+            Assert.Null(RuntimeGates.Refuses(warpTo));
+        }
+
         // ---- Other-vessel mutators (triage case 2: vessels found by iterating a list) ----
 
         [Fact]

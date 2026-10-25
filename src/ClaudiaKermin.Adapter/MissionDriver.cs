@@ -138,6 +138,8 @@ namespace ClaudiaKermin.Adapter
             GameEvents.onKerbalStatusChange.Add(OnKerbalStatusChange);
             _vessels = new VesselWatch(Send);
             _events = new RunEventWatcher(Send, () => _mission.View.Stage == MissionStage.Running);
+            // Any stock alarm drops a running script's in-script warp (ADR 0004); the core ignores it when nothing runs.
+            GameEvents.onAlarmTriggered.Add(alarm => Send(new StockAlarmFired()));
             // Building Block progress, for the strip and the log, with no Claude call behind it.
             ScriptRunner.BlockReported = (runId, block, result) =>
                 Send(result == null ? (MissionInput)new KosBlockStarted(block, runId) : new KosBlockEnded(block, result, runId));
@@ -284,6 +286,7 @@ namespace ClaudiaKermin.Adapter
                 else if (command is ClearDueTimeAlarm) DueTimeActions.ClearAlarm(((ClearDueTimeAlarm)command).MissionId);
                 else if (command is WarpToUt) DueTimeActions.WarpTo(((WarpToUt)command).Ut);
                 else if (command is DropWarp) DueTimeActions.DropWarp();
+                else if (command is HoldScriptWarp) ScriptWarpHold.Apply((HoldScriptWarp)command);
                 else if (command is SwitchToVessel) DueTimeActions.GoToVessel(((SwitchToVessel)command).VesselId);
                 var message = command as PostScreenMessage;
                 // The alert below says it better when it fires for the same moment, unless the message must be seen.
@@ -311,7 +314,8 @@ namespace ClaudiaKermin.Adapter
             Flashing = true;
             if (attention.Kind == AttentionKind.Abort) PanelOpen = true;
             ScreenMessages.PostScreenMessage(attention.Text, 6f, ScreenMessageStyle.UPPER_CENTER);
-            if (TimeWarp.fetch != null && TimeWarp.CurrentRateIndex > 0) TimeWarp.SetRate(0, true);
+            // Cancelling the warp-to too: KSP's warp-to (a script's in-script warp) would otherwise raise the rate again.
+            if (TimeWarp.fetch != null && TimeWarp.CurrentRateIndex > 0) DueTimeActions.DropWarp();
         }
 
         /// <summary>A crewed Mission started in the editor with her not aboard: she takes a free seat.</summary>

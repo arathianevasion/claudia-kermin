@@ -7,7 +7,7 @@ kOS has no sandbox: a script can revert or overwrite saves, switch vessels, use 
 - KUNIVERSE save, load, revert, switch and launch: `QUICKSAVE`, `QUICKLOAD`, `QUICKSAVETO`, `QUICKLOADFROM`, `REVERTTOLAUNCH`, `REVERTTOEDITOR`, `REVERTTO`, `FORCESETACTIVEVESSEL`/`FORCEACTIVE`, `LAUNCHCRAFT*`, and setting `ACTIVEVESSEL`.
 - Archive writes and deletes, however they are reached (`copypath`, `deletepath`, `log`, `writejson`, `compile`...).
 - Every `CONFIG` setter (`IPU` included).
-- Physics warp: setting the warp mode to `PHYSICS`, or a warp rate above 1× while in physics mode, through `WARP`, `WARPMODE` or any `TIMEWARP` structure.
+- Physics warp: setting the warp mode to `PHYSICS`, or a warp rate above 1× while in physics mode, through `WARP`, `WARPMODE` or any `TIMEWARP` structure; and `TIMEWARP:WARPTO` or `WARPTO()` while in physics mode, since KSP's warp-to warps in the mode already set (#133, [ADR 0004](0004-in-script-warp-replaces-wait-cap.md)). On-rails warp, `WARPTO` included, is allowed.
 - `debugfreezegame`.
 - Other-vessel mutators: any suffix set, and the calls that act (`DOEVENT`, `DOACTION`, `SETFIELD`, engine, docking-port, science and part calls), on a vessel, part or part module that isn't on the running processor's vessel.
 - Other processors (decided in triage): `DOEVENT`, `DOACTION`, `SETFIELD`, `ACTIVATE`, `DEACTIVATE` and any suffix set on a **kOS processor module other than the one running the program**, on the craft itself as well as on other vessels, so a script can't cut Claudia off from a Child Vessel's processor. A script may act on its own processor; if it turns itself off it just ends without a Script Result, like any script that fails.

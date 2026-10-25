@@ -17,7 +17,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
     {
         private static string[] Run(string missionScript)
         {
-            return KosHarness.Run(CoreLibrary.Bundle(missionScript, 1, 10800)).ToArray();
+            return KosHarness.Run(CoreLibrary.Bundle(missionScript)).ToArray();
         }
 
         private static string One(string expression)

@@ -57,7 +57,7 @@ The ordered list of Maneuver Sequences Claudia intends to fly to reach a Mission
 _Avoid_: flight plan, roadmap
 
 **Due Time**:
-The earliest time a Maneuver Sequence may start, set in its Sequence Plan when a wait is too long to sit inside the sequence; the player may fly elsewhere until then.
+The earliest time a Maneuver Sequence may start, set in its Sequence Plan only when the wait before it needs the player (e.g. "come back when you've docked"); the player may fly elsewhere until then. A wait for a window, daylight or a hold is not a Due Time: the Mission Script warps through it (ADR 0004).
 _Avoid_: window (which is a transfer window), scheduled time
 
 **Sequence Plan**:
