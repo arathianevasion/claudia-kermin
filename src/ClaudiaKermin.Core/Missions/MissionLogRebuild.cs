@@ -19,6 +19,7 @@ namespace ClaudiaKermin.Core.Missions
         private const string Replied = "The player replied (quoted data): ";
         private const string Changed = "The player wants a change (quoted data): ";
         private const string Asked = "The player asks (quoted data): ";
+        private const string RunEndedMarker = "\nkOS run ended: ";
         private const string CrossingsMarker = "Telemetry Checks crossed during the run, with your mid-run verdicts: ";
 
         /// <param name="craftName">The Mission's craft, so the plan cards mark what flies a Child Vessel as the loop's did.</param>
@@ -130,7 +131,7 @@ namespace ClaudiaKermin.Core.Missions
             log.Add(new LogEntry
             {
                 Kind = LogKind.Debrief,
-                Title = "Debrief: " + outcome,
+                Title = "Debrief: " + outcome + StopReason(userText),
                 Text = MissionCards.DebriefBody(debrief, crossings),
                 Why = debrief.Why,
                 Outcome = outcome,
@@ -138,6 +139,25 @@ namespace ClaudiaKermin.Core.Missions
             });
             if (debrief.GoalReached) log.Add(new LogEntry { Kind = LogKind.Notice, Text = "Mission Goal met: the Mission is over." });
             else if (outcome == "Failed") log.Add(new LogEntry { Kind = LogKind.Notice, Text = "The Mission Goal can't be reached as stated: the Mission has ended." });
+        }
+
+        /// <summary>
+        /// " (blocked: …)", " (timed out)", " (aborted by the player)" or "": the reason the mod stopped the run, which the
+        /// turn asking for the Debrief carried in its "kOS run ended: Aborted (reason)." line. Any other reason on that line
+        /// (the game was loaded, Manual Control) is not the mod stopping the run and never reached the live title.
+        /// </summary>
+        private static string StopReason(string userText)
+        {
+            var at = userText.IndexOf(RunEndedMarker, System.StringComparison.Ordinal);
+            if (at < 0) return "";
+            var start = at + RunEndedMarker.Length;
+            var end = userText.IndexOf('\n', start);
+            var line = end < 0 ? userText.Substring(start) : userText.Substring(start, end - start);
+            var open = line.IndexOf(" (", System.StringComparison.Ordinal);
+            if (open < 0 || !line.EndsWith(").", System.StringComparison.Ordinal)) return "";
+            var reason = line.Substring(open + 2, line.Length - open - 4);
+            var stop = reason == "timed out" || reason == "aborted by the player" || reason.StartsWith("blocked: ", System.StringComparison.Ordinal);
+            return stop ? " (" + reason + ")" : "";
         }
 
         /// <summary>The game time the turn asking for a plan gave Claudia ("UT: 123.4 s."), which the card's Due Time was "in" so long against; null without one.</summary>
