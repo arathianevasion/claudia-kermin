@@ -177,7 +177,7 @@ namespace ClaudiaKermin.Adapter
             GUILayout.EndScrollView();
 
             DrawFooter();
-            _frame.DrawGrip();
+            _frame.DrawResizeZones();
             GUI.DragWindow();
         }
 
