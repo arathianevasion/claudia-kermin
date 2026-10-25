@@ -17,8 +17,9 @@
 //|   max_duration ["auto"]: the wait to the burn plus twice the burn time plus 300 s.
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block.
 //| Extra results: node_dv (m/s the node asked for before the burn), residual (m/s the node still
-//| needed when the block ended), burn_time (s the engines burned). Fails with "no maneuver node", "no thrust", a node or lead it can't read, "residual
-//| <x> m/s is over max_residual", out of fuel, or an abort; on failure the node is left in place.
+//| needed when the block ended), burn_time (s the engines burned). Fails with "no maneuver node",
+//| "no thrust", a node or lead it can't read, "residual <x> m/s is over max_residual", out of fuel,
+//| or an abort; on failure the node is left in place.
 //| Plan the node yourself first (ADD NODE(time, radial, normal, prograde)); the node must be far
 //| enough ahead to turn and start the burn (lead plus about 30 s).
 //| Example: `add node(time:seconds + 600, 0, 0, 120). local res is exec_node(). addons:claudia:report(res).`

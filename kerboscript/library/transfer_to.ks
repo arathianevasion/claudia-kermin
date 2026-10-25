@@ -31,7 +31,7 @@
 //| ejection_node_dv (m/s the ejection node asked for: RSVP's choice), ejection_dv_used (m/s the
 //| ejection burn used) and ejection_burn_time (s the engines burned): a dv_used well above the node
 //| means the burn wasted thrust; a node well above the delta-v a Hohmann transfer needs means RSVP
-//| chose it. All -1 when the block failed before the burn.
+//| chose it. All -1 when the block failed before the ejection burn was flown.
 //| Fails with "target is required", "target_pe is required", an option value it can't read, "no body
 //| named <x>", a target that doesn't orbit the craft's body, "not in orbit", "a maneuver node is
 //| already planned: remove it first", "rsvp found no transfer: <why>", "no encounter with
@@ -335,8 +335,8 @@ function transfer_to {
     set opt:max_duration to planned:predicted:arrival:time - ctx:start_ut + 900.
   }
 
-  set extra:ejection_node_dv to round(nextnode:deltav:mag, 1).
   local ejected is transfer_to_burn(ctx, nextnode).
+  set extra:ejection_node_dv to ejected:node_dv.
   set extra:ejection_dv_used to round(ejected:dv_used, 1).
   set extra:ejection_burn_time to ejected:burn_time.
   if not ejected:success {
