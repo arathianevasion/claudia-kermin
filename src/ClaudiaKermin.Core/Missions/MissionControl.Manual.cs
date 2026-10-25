@@ -216,8 +216,9 @@ namespace ClaudiaKermin.Core.Missions
             var mission = _mission;
             const string text = "No link to Kerbin and no other crew: Claudia has the craft back and the controls are locked.";
             Note(LogKind.Notice, text);
-            _commands.Add(new MakeCraftSafe("the link dropped during Manual Control with no other crew aboard"));
+            // Off warp first, so the make-safe's throttle and steering apply to a craft off rails.
             _commands.Add(new DropWarp());
+            _commands.Add(new MakeCraftSafe("the link dropped during Manual Control with no other crew aboard"));
             _commands.Add(new PostScreenMessage(text, true));
             mission.ManualOrigin += "; then the link dropped with no other crew aboard, so you took the craft back and the mod made it safe";
             HandedBack("");
