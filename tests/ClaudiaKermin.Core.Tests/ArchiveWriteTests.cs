@@ -21,10 +21,11 @@ namespace ClaudiaKermin.Core.Tests
         private static readonly Regex[] Verbs =
         {
             new Regex(@"\blog\b", RegexOptions.IgnoreCase),
-            new Regex(@"(^|[^:\w])(copypath|copy|movepath|move|rename|renamepath|writejson|create|createdir|deletepath|delete|edit)\b", RegexOptions.IgnoreCase),
+            new Regex(@"(^|[^:\w])(copypath|copy|movepath|move|rename|renamepath|writejson|create|createdir|deletepath|delete|edit|compile|open)\b", RegexOptions.IgnoreCase),
             new Regex(@"\bswitch\s+to\b", RegexOptions.IgnoreCase),
             new Regex(@"\bprint\b[^.]*\bto\b\s+\w", RegexOptions.IgnoreCase),
             new Regex(@"\b(volume|archive)\b", RegexOptions.IgnoreCase),
+            new Regex(@":\s*(write|writeln|clear)\b", RegexOptions.IgnoreCase),
         };
 
         // A string literal naming the Archive volume: "0:" or "0:/...".
