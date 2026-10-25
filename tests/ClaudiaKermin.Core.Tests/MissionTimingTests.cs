@@ -488,6 +488,34 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AMissionLostWithADueTimeAlarmPendingClearsTheAlarm()
+        {
+            var transport = new StreamingFakeTransport(TimedMissionPlan(), SequencePlan(Due));
+            var mission = Control(transport);
+            ToSequencePlan(mission, "craft");
+            mission.TakeCommands();
+
+            mission.Send(new ClaudiaKilled("craft"));
+
+            Assert.Equal(MissionStage.Lost, mission.View.Stage);
+            Assert.Single(Of<ClearDueTimeAlarm>(mission.TakeCommands()));
+        }
+
+        [Fact]
+        public void HerDeathAboardAnotherCraftLeavesTheMissionAndItsAlarmAlone()
+        {
+            var transport = new StreamingFakeTransport(TimedMissionPlan(), SequencePlan(Due));
+            var mission = Control(transport);
+            ToSequencePlan(mission, "craft");
+            mission.TakeCommands();
+
+            mission.Send(new ClaudiaKilled("some other vessel"));
+
+            Assert.Equal(MissionStage.AwaitingSequenceApproval, mission.View.Stage);
+            Assert.Empty(Of<ClearDueTimeAlarm>(mission.TakeCommands()));
+        }
+
+        [Fact]
         public void EditingSettingsWhileASequencePlanAwaitsApprovalDropsItAndReplans()
         {
             var transport = new StreamingFakeTransport(TimedMissionPlan(), SequencePlan(Due), TimedMissionPlan(null, 20000), SequencePlan(null));

@@ -229,10 +229,13 @@ namespace ClaudiaKermin.Core.Missions
 
     /// <summary>
     /// Claudia was killed. Only a crewed Mission cares (she was aboard the craft): it ends as Lost. A remote
-    /// Mission goes on, since she was never aboard.
+    /// Mission goes on, since she was never aboard. A crewed Mission is Lost only if she died aboard its craft:
+    /// <see cref="VesselId"/> names the vessel she was on ("" when the adapter could not tell, which counts as aboard).
     /// </summary>
     public sealed class ClaudiaKilled : MissionInput
     {
+        public readonly string VesselId;
+        public ClaudiaKilled(string vesselId = "") { VesselId = vesselId ?? ""; }
     }
 
     // ---- kOS run events ----
