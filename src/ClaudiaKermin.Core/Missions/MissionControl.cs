@@ -109,6 +109,8 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is KosBlockStarted) BlockStarted((KosBlockStarted)input);
             else if (input is KosBlockEnded) BlockEnded((KosBlockEnded)input);
             else if (input is AbortSequence) AbortPressed();
+            else if (input is RunEventSeen) EventSeen((RunEventSeen)input);
+            else if (input is AcceptReducedGoal) ReducedGoalAccepted();
             CheckDue();
             CheckRunaway();
             CheckTelemetry();
@@ -131,6 +133,8 @@ namespace ClaudiaKermin.Core.Missions
             Settings,
             /// <summary>A Telemetry Check was crossed while Running: Claudia judges it (MissionControl.Live.cs).</summary>
             Alert,
+            /// <summary>The margin recheck of a Debrief (MissionControl.Debrief.cs); only ever the stand-in for its charge.</summary>
+            Margin,
         }
 
         /// <summary>
@@ -154,6 +158,8 @@ namespace ClaudiaKermin.Core.Missions
             public bool Waits;
             /// <summary>An Alert's crossed Telemetry Check, which its verdict is recorded on; null for other turns.</summary>
             public Crossing Crossing;
+            /// <summary>A Debrief's extras from the mod: its events, the rest of the plan and the margin recheck (MissionControl.Debrief.cs); null before it begins.</summary>
+            public DebriefGate Gate;
             public List<Message> Messages;
             public CancellationTokenSource Cancel;
         }
@@ -485,6 +491,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.RunningProcessor = processor.Value;
             mission.RunId = ++_lastRunId;
             StartRunawayTimer(mission, plan);
+            RunStarting(mission);
             StartLive(mission, plan);
             _commands.Add(new StartScript(processor.Value, "claudia:" + mission.Id + ":" + plan.Name, bundle, mission.RunId.Value));
         }
@@ -703,6 +710,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.RunDeadlineUt = null;
             EndLive(mission);
             var outcome = StoppedOutcome(mission, ended.Outcome);
+            NoteRunOutcome(mission, outcome);
             Note(LogKind.Notice, "The script ended: " + outcome.Summary + ".");
             var turn = new Turn
             {
@@ -820,6 +828,7 @@ namespace ClaudiaKermin.Core.Missions
                 Enqueue(mission, turn);
                 return;
             }
+            if (turn.Purpose == Purpose.Debrief && PrepareDebrief(mission, turn)) return;
             mission.Pending = turn;
             RecordUnanswered(mission, turn);
             Send(mission, turn);
@@ -1288,6 +1297,7 @@ namespace ClaudiaKermin.Core.Missions
                 debrief.WhatHappened + (debrief.Next.Length > 0 ? "\nNext: " + debrief.Next : "")
                 + (crossings.Length > 0 ? "\nTelemetry Checks crossed: " + crossings : ""), debrief.Why);
             entry.Outcome = debrief.Outcome;
+            entry.Debrief = DetailOf(mission, debrief);
             NeedsPlayer("Claudia's Debrief: " + debrief.Outcome + ".");
             if (debrief.GoalReached)
             {
@@ -1298,10 +1308,7 @@ namespace ClaudiaKermin.Core.Missions
             }
             if (debrief.Outcome == "Failed")
             {
-                // A reduced goal for Approval is a later ticket; for now a Failed Debrief ends the Mission.
-                mission.Stage = MissionStage.Ended;
-                Note(LogKind.Notice, "The Mission Goal can't be reached as stated: the Mission has ended.");
-                RecordFinished(mission);
+                FailedDebrief(mission, debrief);
                 return;
             }
             if (handedBack)
@@ -1320,13 +1327,7 @@ namespace ClaudiaKermin.Core.Missions
                 Pause(mission, EvaPauseReason(debrief.EvaScience));
                 return;
             }
-            Begin(new Turn
-            {
-                Purpose = Purpose.SequencePlan,
-                Effort = "high",
-                UserText = "Continue the Mission.\n" + MissionPrompts.Facts(_ut, _snapshot),
-                Notice = MissionPrompts.SequenceNotice,
-            });
+            BeginAfterDebrief(mission, debrief);
         }
 
         private static string EvaPauseReason(string eva)
@@ -1448,6 +1449,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             if (message.StopReason == StopReason.Refusal) return "refused";
             if (message.StopReason == StopReason.MaxTokens) return "cut_off";
+            if (turn.Purpose == Purpose.Margin) return CraftCheckReply.Parse(message.Text) == null ? "off_schema" : "completed";
             var reply = MissionReply.Parse(message.Text);
             return reply == null || Mismatch(turn.Purpose, reply) != null ? "off_schema" : "completed";
         }
@@ -1612,7 +1614,8 @@ namespace ClaudiaKermin.Core.Missions
                 view.AbortRecommended = mission.AbortRecommendation;
                 // While Running a question queues behind whatever is in hand, so typing stays open.
                 view.CanType = (!mission.InFlight || mission.Stage == MissionStage.Running) && mission.Stage != MissionStage.Paused
-                    && mission.Stage != MissionStage.WaitingForFlight && mission.Stage != MissionStage.Lost;
+                    && mission.Stage != MissionStage.WaitingForFlight && mission.Stage != MissionStage.Lost
+                    && mission.Stage != MissionStage.AwaitingReducedGoal;
 
                 view.LeavingFlightNeedsConfirmation = IsRunning(mission);
                 view.Settings = MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config));
@@ -1652,6 +1655,8 @@ namespace ClaudiaKermin.Core.Missions
                         : new List<QuickReply> { mission.AwaitingResume || mission.EvaScience.Length > 0 ? QuickReply.Resume : QuickReply.Retry };
                 else if (mission.Stage == MissionStage.UnsafeScript && !mission.InFlight)
                     view.QuickReplies = new List<QuickReply> { QuickReply.Retry, QuickReply.RetryWithNote, QuickReply.Replan };
+                else if (mission.Stage == MissionStage.AwaitingReducedGoal && !mission.InFlight)
+                    view.QuickReplies = new List<QuickReply> { QuickReply.AcceptReducedGoal, QuickReply.EndMission };
                 else if (mission.Declined && !mission.InFlight)
                     view.QuickReplies = new List<QuickReply> { QuickReply.ChangeSomething, QuickReply.EndMission };
                 else if (mission.AwaitingApproval && !mission.InFlight && view.PlanStale.Length > 0)

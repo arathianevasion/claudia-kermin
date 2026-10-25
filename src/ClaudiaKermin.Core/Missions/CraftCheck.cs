@@ -56,7 +56,7 @@ namespace ClaudiaKermin.Core.Missions
     /// It is a request of its own, outside any Mission (the Mission does not exist until the check lets it start),
     /// and it never changes the craft. <see cref="MissionControl"/> owns one and routes its inputs here.
     /// </summary>
-    internal sealed class CraftCheckFlow
+    internal sealed partial class CraftCheckFlow
     {
         /// <summary>The body whose system the Delta-v Map covers.</summary>
         public const string HomeBody = DeltaVMap.DefaultHome;

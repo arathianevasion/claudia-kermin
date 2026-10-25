@@ -70,6 +70,7 @@ namespace ClaudiaKermin.Core.Missions
                 HandBack = mission.HandBack,
                 HandBackMessage = mission.HandBackMessage,
                 StopReason = mission.StopReason,
+                ReducedGoal = mission.ReducedGoal,
                 MissionPlan = mission.Plan,
                 SequencePlan = mission.PendingSequence,
             };
@@ -212,6 +213,7 @@ namespace ClaudiaKermin.Core.Missions
             if (mission.Owed == Owed.Debrief && mission.Stage == MissionStage.Debriefing)
             {
                 var plan = mission.PendingSequence ?? new SequencePlan { Name = "(unknown)" };
+                NoteRunOutcome(mission, mission.OwedOutcome);
                 turn = mission.HandBack ? HandBackTurn(mission) : new Turn
                 {
                     Purpose = Purpose.Debrief,
@@ -337,6 +339,7 @@ namespace ClaudiaKermin.Core.Missions
                 ManualOrigin = state.ManualOrigin,
                 HandBack = state.HandBack,
                 HandBackMessage = state.HandBackMessage,
+                ReducedGoal = state.ReducedGoal ?? "",
             };
             foreach (var setting in state.Settings) mission.Settings[setting.Key] = setting.Value;
 
@@ -524,6 +527,7 @@ namespace ClaudiaKermin.Core.Missions
             }
             else if (stage == MissionStage.UnsafeScript) UnsafeScriptCard(mission, null);
             else if (stage == MissionStage.Lost) LostDebrief(mission, "");
+            else if (stage == MissionStage.AwaitingReducedGoal) Note(LogKind.Notice, "Claudia offered a reduced goal for your Approval: " + mission.ReducedGoal);
             mission.SequencesProposed = state.SequencesProposed;
             mission.LatestLine = state.LatestLine;
         }
@@ -558,6 +562,7 @@ namespace ClaudiaKermin.Core.Missions
                 case MissionStage.ManualControl: return "Manual Control: the player flying the craft";
                 case MissionStage.Succeeded: return "the Mission Goal met";
                 case MissionStage.Ended: return "ended";
+                case MissionStage.AwaitingReducedGoal: return "waiting for your Approval of a reduced goal";
                 case MissionStage.Lost: return "Lost (Claudia was killed aboard)";
                 default: return "planning";
             }
