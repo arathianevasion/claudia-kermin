@@ -262,7 +262,8 @@ namespace ClaudiaKermin.Core.Tests
 
             var paused = During(MissionStage.Paused);
             paused.PauseReason = "the API is overloaded";
-            Assert.Equal("Paused: the API is overloaded", MissionWindowRules.NeedsYou(paused));
+            // The reason is in the transcript as a Notice (and the rebuilt log); the status line doesn't say it again.
+            Assert.Equal("Paused", MissionWindowRules.NeedsYou(paused));
 
             Assert.Equal("Couldn't produce a safe script", MissionWindowRules.NeedsYou(During(MissionStage.UnsafeScript)));
         }
