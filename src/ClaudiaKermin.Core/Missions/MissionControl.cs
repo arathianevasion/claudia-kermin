@@ -151,6 +151,8 @@ namespace ClaudiaKermin.Core.Missions
             public string Effort;
             public string UserText;
             public string Notice;
+            /// <summary>The player's words of a question asked with a plan pending, which may turn out to be a revision (MissionControl.TypedReply.cs); null otherwise.</summary>
+            public string PlayerText;
             /// <summary>A rewrite after a failed Script Check: if this script fails too, there is no further automatic rewrite.</summary>
             public bool ScriptRewrite;
             /// <summary>
@@ -447,13 +449,16 @@ namespace ClaudiaKermin.Core.Missions
             if (mission.Stage == MissionStage.AwaitingPlanApproval)
             {
                 Note(LogKind.Notice, "Mission Plan approved.");
+                var newGoal = ApplyGoalChange(mission);
                 mission.Stage = MissionStage.Sequencing;
                 mission.SequenceCounted = false;
                 Begin(new Turn
                 {
                     Purpose = Purpose.SequencePlan,
                     Effort = "high",
-                    UserText = "The player approved the Mission Plan.\n" + MissionPrompts.Facts(_ut, _snapshot),
+                    UserText = "The player approved the Mission Plan.\n"
+                        + (newGoal != null ? "The Mission Goal is now (quoted data): " + MissionPrompts.Quoted(newGoal) + "\n" : "")
+                        + MissionPrompts.Facts(_ut, _snapshot),
                     Notice = MissionPrompts.SequenceNotice,
                 });
                 return;
@@ -545,7 +550,8 @@ namespace ClaudiaKermin.Core.Missions
                 Effort = "low",
                 // While Running it carries a compact craft snapshot; it never touches the run.
                 UserText = "The player asks (quoted data): " + MissionPrompts.Quoted(text) + (running ? "\n" + CompactFacts(mission) : ""),
-                Notice = MissionPrompts.QuestionNotice,
+                Notice = mission.AwaitingApproval ? MissionPrompts.QuestionWithPlanPendingNotice : MissionPrompts.QuestionNotice,
+                PlayerText = mission.AwaitingApproval ? text : null,
                 Waits = running,
             });
         }
@@ -1093,6 +1099,9 @@ namespace ClaudiaKermin.Core.Missions
                 case Purpose.Change:
                     Revised(mission, reply, planPending);
                     break;
+                case Purpose.Question:
+                    QuestionAnswered(mission, turn, reply);
+                    break;
                 case Purpose.Alert:
                     Alerted(mission, turn, reply);
                     break;
@@ -1209,7 +1218,12 @@ namespace ClaudiaKermin.Core.Missions
 
         private void Revised(Mission mission, MissionReply reply, bool planPending)
         {
-            if (planPending && reply.MissionPlan != null) OfferMissionPlan(mission, reply.MissionPlan);
+            if (reply.MissionPlan != null && (planPending || (mission.AwaitingApproval && ChangesGoal(reply))))
+            {
+                // A new goal makes the pending Sequence Plan, if that is what waited, moot.
+                mission.PendingSequence = null;
+                OfferMissionPlan(mission, reply.MissionPlan);
+            }
             else if (!planPending && reply.SequencePlan != null && (reply.SequencePlan.Manual || reply.SequencePlan.Script.Trim().Length > 0)) OfferSequencePlan(mission, reply.SequencePlan);
         }
 

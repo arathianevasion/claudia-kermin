@@ -54,6 +54,8 @@ namespace ClaudiaKermin.Adapter
         // The prompt.
         private string _typed = "";
         private PromptFor _promptFor = PromptFor.Reply;
+        /// <summary>A plan awaited Approval when the prompt was last settled (<see cref="MissionWindowRules.ChosenForPlan"/>).</summary>
+        private bool _wasAwaiting;
         private bool _focusPrompt;
         // Enter was taken as Send; the newline character that follows it in its own event is swallowed too.
         private bool _swallowNewline;
@@ -113,6 +115,8 @@ namespace ClaudiaKermin.Adapter
                 _editingGoal = false;
             }
             var settingUp = _view.StartForm.CanStart;
+            _promptFor = MissionWindowRules.ChosenForPlan(_wasAwaiting, _view, _promptFor);
+            _wasAwaiting = _view.Stage == MissionStage.AwaitingPlanApproval || _view.Stage == MissionStage.AwaitingSequenceApproval;
             var prompt = MissionWindowRules.Prompt(_view, _promptFor, _goal.Length > 0 && !_editingGoal);
 
             DrawGoal(settingUp);

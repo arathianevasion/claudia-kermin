@@ -215,6 +215,18 @@ namespace ClaudiaKermin.Core.Missions
         public const string QuestionNotice =
             "Answer the player's question: reply with kind \"answer\". Change nothing else; any pending plan stays as it is.";
 
+        /// <summary>
+        /// A question sent while a plan awaits Approval may really be a typed approval or revision. Claudia says so in
+        /// reply_intent, and the mod acts on it (a revision is asked for in a request of its own).
+        /// </summary>
+        public const string QuestionWithPlanPendingNotice =
+            QuestionNotice + " The player's words may really be a reply to the pending plan: set reply_intent to \"approve\" only if they "
+            + "clearly approve it as it stands, \"revise\" if they want it changed (or want a different Mission Goal), and \"question\" "
+            + "for a plain question. Do not revise the plan in this reply; if it is a revision, say a short line and the mod will ask for it.";
+
+        private const string GoalHint =
+            " If the player asks to change the Mission Goal itself, set new_goal to the new goal in their words and plan for it; otherwise new_goal is null.";
+
         public static string ReplyNotice(bool missionPlan)
         {
             var plan = missionPlan ? "Mission Plan" : "Sequence Plan";
@@ -223,7 +235,7 @@ namespace ClaudiaKermin.Core.Missions
                 + "it clearly approves the " + plan + " as it stands, \"revise\" if they want something changed, \"question\" "
                 + "if they ask something, and \"unclear\" if you can't tell. For \"revise\", reply with kind \"" + kind
                 + "\" and the revised " + plan + ". Otherwise reply with kind \"answer\" and say a short line (answering any question)."
-                + ManualHint(missionPlan);
+                + ManualHint(missionPlan) + (missionPlan ? GoalHint : "");
         }
 
         public static string ChangeNotice(bool missionPlan)
@@ -232,7 +244,7 @@ namespace ClaudiaKermin.Core.Missions
             var kind = missionPlan ? MissionReply.MissionPlanKind : MissionReply.SequencePlanKind;
             return "The player wants a change to your pending " + plan + ". Revise it: reply with kind \"" + kind
                 + "\" and the revised " + plan + ". If the change can't be done, reply with kind \"answer\" and say why."
-                + ManualHint(missionPlan);
+                + ManualHint(missionPlan) + (missionPlan ? GoalHint : "");
         }
 
         private static string ManualHint(bool missionPlan)

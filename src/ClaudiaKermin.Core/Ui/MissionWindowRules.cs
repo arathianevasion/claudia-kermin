@@ -149,6 +149,16 @@ namespace ClaudiaKermin.Core.Ui
             };
         }
 
+        /// <summary>
+        /// What the prompt has picked once the view changed: when a plan has just started to await Approval the prompt goes
+        /// back to Reply, so words typed at it are a reply to the plan and not a question left over from Ask.
+        /// </summary>
+        public static PromptFor ChosenForPlan(bool wasAwaiting, MissionView view, PromptFor chosen)
+        {
+            var awaiting = view.Stage == MissionStage.AwaitingPlanApproval || view.Stage == MissionStage.AwaitingSequenceApproval;
+            return awaiting && !wasAwaiting ? PromptFor.Reply : chosen;
+        }
+
         private static string Unavailable(MissionView view)
         {
             if (view.Busy) return BusyLine(view);
