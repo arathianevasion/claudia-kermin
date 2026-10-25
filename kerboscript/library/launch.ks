@@ -23,6 +23,7 @@
 //|   turn_shape [0.45]: the turn's pitch is 90 * (1 - f^turn_shape), f the fraction of the way from
 //|     the turn start to the atmosphere top (or target_ap if lower); smaller turns over sooner.
 //|   max_aoa [5]: most degrees the nose may be off the airflow while the air is thick enough to matter
+//|     (scaled down in proportion above 8000 Pa of dynamic pressure)
 //|     (over 500 Pa dynamic pressure), all the way up and through the coast.
 //|   throttle_max_q ["none"]: Pa of dynamic pressure to throttle back at (to 5% at most; in thick
 //|     air never below the craft's weight).
@@ -157,6 +158,22 @@ function launch_plane_wait {
 // Dynamic pressure (Pa) above which the air pushes hard enough on the craft for max_aoa to apply.
 function launch_aero_q {
   return 500.
+}
+
+// Dynamic pressure (Pa) up to which the full max_aoa is allowed; above it the allowed angle falls in
+// proportion, so a craft with weak aerodynamic stability is held nearer the airflow where q is highest.
+function launch_aoa_q_ref {
+  return 8000.
+}
+
+// Degrees the nose may be off the airflow at dynamic pressure q_pa: max_aoa up to q_ref, then
+// max_aoa * q_ref / q_pa, never less than a tenth of max_aoa.
+function launch_allowed_aoa {
+  parameter max_aoa, q_pa, q_ref.
+  if q_pa <= q_ref {
+    return max_aoa.
+  }
+  return max(max_aoa * 0.1, max_aoa * q_ref / q_pa).
 }
 
 // The body's values, each option's own or, for "body", the game's: lexicon("g", m/s^2,
@@ -417,7 +434,7 @@ function launch {
       }
     }
     if q_pa > launch_aero_q() and spd > 30 {
-      set want to launch_limit_aoa(want, ship:srfprograde:vector, opt:max_aoa).
+      set want to launch_limit_aoa(want, ship:srfprograde:vector, launch_allowed_aoa(opt:max_aoa, q_pa, launch_aoa_q_ref())).
     }
     set aim to want.
 

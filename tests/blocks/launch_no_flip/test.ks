@@ -15,6 +15,27 @@ local p0 is ship:body:atm:altitudepressure(0).
 local worst_aoa is 0.
 local min_twr is 100.
 local watching is true.
+// test_aoa_track: one sample per 500 m of climb, "alt m t s aoa deg off-vertical deg q Pa thrust %"
+// joined by "; ", and test_stagings: the altitude of each staging, for #224's control-loss diagnosis.
+local aoa_track is "".
+local stagings is "".
+local next_sample is 0.
+local last_stage is stage:number.
+when true then {
+  if altitude >= next_sample {
+    set aoa_track to aoa_track + round(altitude) + " m " + round(missiontime) + " s "
+      + round(vang(ship:facing:forevector, ship:srfprograde:vector), 1) + " aoa "
+      + round(vang(ship:facing:forevector, ship:up:vector), 1) + " vert "
+      + round(ship:q * constant:atmtokpa * 1000) + " Pa "
+      + round(ship:thrust / max(ship:availablethrust, 0.001) * 100) + " %; ".
+    set next_sample to next_sample + 500.
+  }
+  if stage:number <> last_stage {
+    set stagings to stagings + "stage " + stage:number + " at " + round(altitude) + " m; ".
+    set last_stage to stage:number.
+  }
+  return watching.
+}
 when true then {
   if ship:q * constant:atmtokpa * 1000 > 500 and ship:velocity:surface:mag > 30 {
     set worst_aoa to max(worst_aoa, vang(ship:facing:forevector, ship:srfprograde:vector)).
@@ -28,5 +49,8 @@ local result is launch(lexicon("target_ap", 60000, "throttle_max_q", 12000, "sta
 set watching to false.
 set result["test_max_aoa"] to round(worst_aoa, 2).
 set result["test_min_twr"] to round(min_twr, 3).
+set result["test_aoa_track"] to aoa_track.
+set result["test_stagings"] to stagings.
+print "stagings: " + stagings.
 print "launch no-flip test: success " + result:success + ", worst aoa " + result:test_max_aoa + ", min twr " + result:test_min_twr + ", " + result:reason.
 addons:claudia:report(result).

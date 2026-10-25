@@ -145,6 +145,20 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(clamped, One("round(launch_laz_inc(" + inc + ", " + lat + "), 4)"));
         }
 
+        // ---- launch: angle off the airflow ----
+
+        [Theory]
+        [InlineData(5, 100, 8000, "5")]
+        [InlineData(5, 8000, 8000, "5")]
+        [InlineData(5, 16000, 8000, "2.5")]
+        [InlineData(5, 32000, 8000, "1.25")]
+        [InlineData(5, 400000, 8000, "0.5")]
+        [InlineData(0, 16000, 8000, "0")]
+        public void The_allowed_angle_off_the_airflow_falls_with_dynamic_pressure_above_the_reference(double maxAoa, double q, double qRef, string allowed)
+        {
+            Assert.Equal(allowed, One("round(launch_allowed_aoa(" + maxAoa + ", " + q + ", " + qRef + "), 3)"));
+        }
+
         // ---- launch: losing control ----
 
         [Theory]
