@@ -234,7 +234,7 @@ namespace ClaudiaKermin.Core.Tests
         {
             var view = During(MissionStage.Running);
             view.Locks = ControlLocks.Craft | ControlLocks.Warp;
-            Assert.Equal("Staging, action groups, SAS, RCS, gear and brakes locked while Claudia flies", MissionWindowRules.LockLine(view));
+            Assert.Equal("Staging, action groups, SAS, RCS, gear, brakes and throttle locked while Claudia flies", MissionWindowRules.LockLine(view));
         }
 
         [Fact]
@@ -253,7 +253,7 @@ namespace ClaudiaKermin.Core.Tests
         {
             var view = During(stage);
             view.Locks = ControlLocks.Craft;
-            Assert.Equal("Staging, action groups, SAS, RCS, gear and brakes locked while Claudia has the craft", MissionWindowRules.LockLine(view));
+            Assert.Equal("Staging, action groups, SAS, RCS, gear, brakes and throttle locked while Claudia has the craft", MissionWindowRules.LockLine(view));
         }
 
         [Fact]

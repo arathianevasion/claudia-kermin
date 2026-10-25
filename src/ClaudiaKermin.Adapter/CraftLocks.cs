@@ -6,11 +6,11 @@ using ClaudiaKermin.Core.Missions;
 namespace ClaudiaKermin.Adapter
 {
     /// <summary>
-    /// The KSP control locks while Claudia has the craft: staging, action groups, SAS, RCS, gear and brakes, and the
+    /// The KSP control locks while Claudia has the craft: staging, action groups, SAS, RCS, gear, brakes and the throttle keys, and the
     /// time-warp keys while a sequence is Running. The core says what is locked (<see cref="MissionView.Locks"/>); this
     /// applies it as one lock owner, the same way the windows apply theirs (<see cref="WindowFrame"/>), and
-    /// <see cref="Release"/> lets everything go when the Mission, the scene or the mod goes away. Attitude, translation
-    /// and throttle stay free: input held on them over a second is how the player takes Manual Control.
+    /// <see cref="Release"/> lets everything go when the Mission, the scene or the mod goes away. Attitude and translation
+    /// stay free, and the watcher reads the raw key state, so Shift or Ctrl held over a second still takes Manual Control.
     /// </summary>
     public sealed class CraftLocks
     {
@@ -43,6 +43,8 @@ namespace ClaudiaKermin.Adapter
             if ((locks & ControlLocks.Rcs) != 0) types |= ControlTypes.RCS;
             if ((locks & ControlLocks.Gear) != 0) types |= ControlTypes.GROUP_GEARS;
             if ((locks & ControlLocks.Brakes) != 0) types |= ControlTypes.GROUP_BRAKES;
+            // THROTTLE_CUT_MAX is the X cut-off and Z full keys. kOS drives the throttle through fly-by-wire, which these don't touch.
+            if ((locks & ControlLocks.Throttle) != 0) types |= ControlTypes.THROTTLE | ControlTypes.THROTTLE_CUT_MAX;
             if ((locks & ControlLocks.Warp) != 0) types |= ControlTypes.TIMEWARP;
             if ((locks & ControlLocks.Attitude) != 0)
                 types |= ControlTypes.PITCH | ControlTypes.YAW | ControlTypes.ROLL | ControlTypes.THROTTLE | ControlTypes.LINEAR

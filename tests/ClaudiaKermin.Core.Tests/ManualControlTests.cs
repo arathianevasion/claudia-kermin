@@ -121,7 +121,7 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(ControlLocks.None, mission.View.Locks);
 
             ToSequencePlan(mission);
-            var craft = ControlLocks.Staging | ControlLocks.ActionGroups | ControlLocks.Sas | ControlLocks.Rcs | ControlLocks.Gear | ControlLocks.Brakes;
+            var craft = ControlLocks.Staging | ControlLocks.ActionGroups | ControlLocks.Sas | ControlLocks.Rcs | ControlLocks.Gear | ControlLocks.Brakes | ControlLocks.Throttle;
             Assert.Equal(craft, mission.View.Locks);
             Assert.Equal(ControlLocks.None, mission.View.Locks & ControlLocks.Warp);
 
@@ -132,6 +132,47 @@ namespace ClaudiaKermin.Core.Tests
             // Out of Flight nothing is locked: the locks are for the craft in Flight.
             mission.Send(new SceneChanged(GameScene.Other));
             Assert.Equal(ControlLocks.None, mission.View.Locks);
+        }
+
+        [Fact]
+        public void TheThrottleIsLockedWhilePlanningAwaitingApprovalAndRunningAndFreeInManualControlAndOnceTheMissionIsOver()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief.sse");
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(Pad());
+            CraftCheckRouter.StartChecked(mission, _background, Pad(), new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            Assert.Equal(MissionStage.Planning, mission.View.Stage);
+            Assert.NotEqual(ControlLocks.None, mission.View.Locks & ControlLocks.Throttle);
+
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            Assert.NotEqual(ControlLocks.None, mission.View.Locks & ControlLocks.Throttle);
+
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+            Assert.NotEqual(ControlLocks.None, mission.View.Locks & ControlLocks.Throttle);
+
+            mission.TakeCommands();
+            mission.Send(new Approve());
+            var start = mission.TakeCommands().OfType<StartScript>().Single();
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+            Assert.NotEqual(ControlLocks.None, mission.View.Locks & ControlLocks.Throttle);
+
+            var report = new Dictionary<string, object> { { "success", true }, { "reason", "done" } };
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Finished, report, "", "", false), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+            Assert.Equal(ControlLocks.None, mission.View.Locks & ControlLocks.Throttle);
+        }
+
+        [Fact]
+        public void TheThrottleIsFreeInManualControl()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-manual.sse");
+            var mission = Control(transport);
+            ToRunning(mission);
+            mission.Send(new TakeManualControl());
+            Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
+            Assert.Equal(ControlLocks.None, mission.View.Locks & ControlLocks.Throttle);
         }
 
         [Fact]
