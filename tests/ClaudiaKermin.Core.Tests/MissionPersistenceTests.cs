@@ -675,6 +675,49 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ARunsTelemetryCrossingsAndVerdictsSurviveAQuitSoItsDebriefListsThemAndCantBeNominal()
+        {
+            var plan = ScriptedResponse.Fixture("mission-sequence-plan.sse");
+            var text = System.Text.Encoding.UTF8.GetString(plan.Body);
+            var check = "\"telemetry_checks\":[{\"quantity\":\"altitude\",\"resource\":\"\",\"direction\":\"above\",\"threshold\":100,\"why\":\"Too high for a pad test.\"}],";
+            var withCheck = text.Replace("\\\"script\\\":", check.Replace("\"", "\\\"") + "\\\"script\\\":");
+            Assert.NotEqual(text, withCheck);
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                new ScriptedResponse { Body = System.Text.Encoding.UTF8.GetBytes(withCheck), ChunkSize = 4096 },
+                ScriptedResponse.Fixture("mission-alert-abort.sse"));
+            var mission = Control(transport);
+            ToRunning(mission);
+            var high = OnPad();
+            high.Altitude = 500;
+            mission.Send(high);
+            DrainUntil(mission, v => v.AbortRecommended.Length > 0);
+            var saved = Saved(mission);
+            Assert.NotEmpty(saved[0].Crossings);
+
+            // The save file carries them as plain values, and a save from before this existed has none.
+            var values = saved[0].ToValues();
+            Assert.Equal(saved[0].Crossings, MissionSaveState.FromValues(values).Crossings);
+            values.Remove("crossings");
+            Assert.Equal("", MissionSaveState.FromValues(values).Crossings);
+
+            var after = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-debrief.sse"));
+            var resumed = Control(after);
+            resumed.Send(new MissionsRestored(_save.Path, new[] { MissionSaveState.FromValues(saved[0].ToValues()) }));
+            resumed.Send(new SceneChanged(GameScene.Flight));
+            resumed.Send(OnPad());
+            DrainUntil(resumed, v => v.Stage == MissionStage.Succeeded);
+
+            var turn = Messages(after.Requests[0]).Where(m => m.GetProperty("role").GetString() == "user").Select(Text).Last();
+            Assert.Contains("Telemetry Checks crossed during the run", turn);
+            Assert.Contains("altitude 500 m over 100 m: Abort recommended", turn);
+            // The fixture's Debrief says Nominal; a crossing rules that out.
+            Assert.StartsWith("Debrief: Off-Nominal", resumed.View.Log.Last(e => e.Kind == LogKind.Debrief).Title);
+            // The Debrief used them up.
+            Assert.Equal("", Saved(resumed)[0].Crossings);
+        }
+
+        [Fact]
         public void AQuickloadToARunningSaveInterruptsTheSequenceToo()
         {
             var transport = new StreamingFakeTransport(

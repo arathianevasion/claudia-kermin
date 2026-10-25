@@ -82,6 +82,7 @@ namespace ClaudiaKermin.Core.Missions
                 ReducedGoal = mission.ReducedGoal,
                 ChildVessels = ChildVesselsJson(mission),
                 LeftTheCraft = LeftTheCraftJson(mission),
+                Crossings = CrossingsJson(mission),
                 MissionPlan = mission.Plan,
                 SequencePlan = mission.PendingSequence,
             };
@@ -384,6 +385,7 @@ namespace ClaudiaKermin.Core.Missions
             foreach (var setting in state.Settings) mission.Settings[setting.Key] = setting.Value;
             RestoreChildVessels(mission, state.ChildVessels);
             RestoreLeftTheCraft(mission, state.LeftTheCraft);
+            RestoreCrossings(mission, state.Crossings);
 
             // The conversation is the transcript's, whole: turns past the save's marker are kept.
             var transcript = MissionStore.ReadTranscript(mission.Folder);

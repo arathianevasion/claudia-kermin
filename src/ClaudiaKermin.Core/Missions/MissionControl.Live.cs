@@ -353,6 +353,56 @@ namespace ClaudiaKermin.Core.Missions
                 + (c.Why.Length > 0 ? " (" + c.Why + ")" : "")).ToArray());
         }
 
+        /// <summary>The crossings for the save file, enough for the Debrief to list them and rule out Nominal; "" when none.</summary>
+        private static string CrossingsJson(Mission mission)
+        {
+            if (mission.Crossings.Count == 0) return "";
+            var json = new JsonWriter().BeginArray();
+            foreach (var c in mission.Crossings)
+                json.BeginObject().Field("quantity", TelemetryCheck.Key(c.Check.Quantity)).Field("resource", c.Check.Resource)
+                    .Field("below", c.Check.Below).Field("default", c.Check.Default).Field("check_why", c.Check.Why)
+                    .Field("threshold", c.Threshold).Field("value", c.Value).Field("elapsed_s", c.ElapsedSeconds)
+                    .Field("follow_up", c.FollowUp).Field("verdict", c.Verdict).Field("why", c.Why).EndObject();
+            return json.EndArray().ToString();
+        }
+
+        private static void RestoreCrossings(Mission mission, string text)
+        {
+            mission.Crossings.Clear();
+            if (string.IsNullOrEmpty(text)) return;
+            JsonNode root;
+            try
+            {
+                root = JsonReader.Parse(text);
+            }
+            catch (JsonException)
+            {
+                return;
+            }
+            foreach (var node in root.Items.Where(n => n.Kind == JsonKind.Object))
+            {
+                var quantity = TelemetryCheck.Parse(JsonNode.Str(node["quantity"]) ?? "");
+                if (!quantity.HasValue) continue;
+                mission.Crossings.Add(new Crossing
+                {
+                    Check = new TelemetryCheck
+                    {
+                        Quantity = quantity.Value,
+                        Resource = JsonNode.Str(node["resource"]) ?? "",
+                        Below = JsonNode.Bool(node["below"]) ?? false,
+                        Default = JsonNode.Bool(node["default"]) ?? false,
+                        Why = JsonNode.Str(node["check_why"]) ?? "",
+                    },
+                    Threshold = JsonNode.Double(node["threshold"]) ?? 0,
+                    Value = JsonNode.Double(node["value"]) ?? 0,
+                    ElapsedSeconds = JsonNode.Double(node["elapsed_s"]) ?? 0,
+                    FollowUp = JsonNode.Bool(node["follow_up"]) ?? false,
+                    Verdict = JsonNode.Str(node["verdict"]) ?? "",
+                    Why = JsonNode.Str(node["why"]) ?? "",
+                });
+            }
+        }
+
         /// <summary>The strip's live progress while Running: no Claude call is needed for it.</summary>
         private RunProgressView Progress(Mission mission)
         {
