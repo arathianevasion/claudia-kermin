@@ -93,7 +93,10 @@ namespace ClaudiaKermin.Core.Missions
                 PausedCannotFly = mission.PausedCannotFly,
                 MissionPlan = mission.Plan,
                 SequencePlan = mission.PendingSequence,
+                QueuedEntries = mission.Log.Count(e => e.Queued),
             };
+            state.BlackoutRevisions.AddRange(mission.BlackoutRevisions);
+            state.HeldWords.AddRange(mission.HeldWords);
             if (mission.UnsafeProblems != null) state.UnsafeProblems.AddRange(mission.UnsafeProblems);
             foreach (var setting in mission.Settings) state.Settings[setting.Key] = setting.Value;
             return state;
@@ -435,6 +438,7 @@ namespace ClaudiaKermin.Core.Missions
                 mission.System.Add(MissionPrompts.MissionLayer(state.Id, state.Goal));
                 mission.System.Add(MissionPrompts.TimingLayer(MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config))));
             }
+            RestoreBlackout(mission, state);
             if (_config.DebugTools) mission.Dump = new FileStreamDump(Path.Combine(mission.Folder, "stream-dumps"));
 
             // Spend is never the save's: the cost log is never rewound, so a load cannot refund anything.
@@ -457,6 +461,32 @@ namespace ClaudiaKermin.Core.Missions
 
             if (restore.NoSnapshot) NoSnapshotMission(mission);
             else Reconcile(mission, state, resumeAfterQuit);
+        }
+
+        /// <summary>
+        /// A Blackout that was running at the save: the revisions, the player's held words and Claudia's queued messages come
+        /// back with it, so the link-back summary and held words survive. The link is not known after a load, so the Blackout
+        /// waits for the next link fact to end (or go on). A Mission that is over has no Blackout.
+        /// </summary>
+        private static void RestoreBlackout(Mission mission, MissionSaveState state)
+        {
+            if (Finished(state.Stage)) return;
+            mission.BlackoutRevisions.AddRange(state.BlackoutRevisions);
+            mission.HeldWords.AddRange(state.HeldWords);
+            // Her entries in a Blackout are the log's latest ones of hers (the Mission log is rebuilt from the transcript).
+            var left = state.QueuedEntries;
+            for (var i = mission.Log.Count - 1; i >= 0 && left > 0; i--)
+            {
+                var kind = mission.Log[i].Kind;
+                if (kind == LogKind.Notice || kind == LogKind.Player) continue;
+                mission.Log[i].Queued = true;
+                left--;
+            }
+            if (mission.BlackoutRevisions.Count > 0 || mission.HeldWords.Count > 0 || mission.Log.Any(e => e.Queued))
+            {
+                mission.Blackout = true;
+                mission.BlackoutRestored = true;
+            }
         }
 
         private const string CostLogUnreadableReason = "The Mission's cost log can't be read, so what it has spent isn't known. "

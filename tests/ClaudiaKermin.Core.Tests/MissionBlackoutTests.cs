@@ -201,6 +201,92 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(0, mission.View.HeldMessages);
         }
 
+        // ---- A save made in a Blackout (story 101) ----
+
+        [Fact]
+        public void ABlackoutsRevisionsHeldWordsAndQueuedMessagesSurviveALoadAndShowWhenTheLinkReturns()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                DebriefGoalNotMet(),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport);
+            ToSequencePlan(mission);
+            mission.TakeCommands();
+            mission.Send(Snapshot(s => s.HasLink = false));
+            var first = mission.TakeCommands().OfType<StartScript>().Single();
+            mission.Send(new KosRunEnded(Finished(), first.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Running);
+            mission.Send(new AskQuestion("Are we still on course?"));
+            Assert.Equal(4, mission.View.QueuedMessages);
+            Assert.Equal(1, mission.View.HeldMessages);
+
+            var saved = mission.ExportStates();
+            Assert.Equal(4, saved[0].QueuedEntries);
+            Assert.Equal(2, saved[0].BlackoutRevisions.Count);
+            Assert.Equal(new[] { "Are we still on course?" }, saved[0].HeldWords);
+
+            // The save file is plain values; the load is a game started over the same save.
+            var after = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-debrief.sse"), ScriptedResponse.Fixture("mission-answer.sse"), ScriptedResponse.Fixture("mission-answer.sse"));
+            var resumed = Control(after);
+            resumed.Send(new MissionsRestored(_save.Path, new[] { MissionSaveState.FromValues(saved[0].ToValues()) }));
+            Assert.Equal(4, resumed.View.QueuedMessages);
+            Assert.Equal(1, resumed.View.HeldMessages);
+            Assert.DoesNotContain(resumed.View.Log, e => e.Kind == LogKind.Debrief);
+
+            // The link is still down when seen again: still the one Blackout, nothing shown early.
+            resumed.Send(Snapshot(s => s.HasLink = false));
+            Assert.True(resumed.View.Blackout);
+            Assert.Equal(4, resumed.View.QueuedMessages);
+            Assert.DoesNotContain(resumed.View.Log, e => e.Kind == LogKind.Notice && e.Text.StartsWith("No link to Kerbin: Blackout"));
+
+            resumed.Send(Snapshot(s => s.HasLink = true));
+            Assert.False(resumed.View.Blackout);
+            Assert.Equal(0, resumed.View.QueuedMessages);
+            Assert.Contains(resumed.View.Log, e => e.Kind == LogKind.Debrief);
+            var revisions = resumed.View.Log.Single(e => e.Title == "While there was no link");
+            Assert.Equal(2, revisions.Text.Split('\n').Count(l => l.StartsWith("- Sequence Plan \"Link check\" flown without Approval: ")));
+            DrainUntil(resumed, v => !v.Busy);
+            Assert.Equal(0, resumed.View.HeldMessages);
+            Assert.Contains(after.Requests, r => AllText(r).Contains("While the link to Kerbin was down the player said (quoted data): \\\"Are we still on course?\\\""));
+        }
+
+        [Fact]
+        public void ALoadedBlackoutWaitsForTheLinkToBeSeenBeforeItEnds()
+        {
+            var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse"), ScriptedResponse.Fixture("mission-sequence-plan.sse")));
+            ToRunning(mission);
+            mission.Send(Snapshot(s => s.HasLink = false));
+            mission.Send(new AskQuestion("Hello?"));
+            var saved = mission.ExportStates();
+
+            var resumed = Control(new StreamingFakeTransport());
+            resumed.Send(new MissionsRestored(_save.Path, new[] { MissionSaveState.FromValues(saved[0].ToValues()) }));
+            resumed.Send(new UtAdvanced(OnPad().Ut + 1));
+            Assert.Equal(1, resumed.View.HeldMessages);
+            Assert.True(resumed.View.Blackout);
+        }
+
+        [Fact]
+        public void ASaveFromBeforeBlackoutsWerePersistedLoadsWithNoneAndSavesNoneWithoutABlackout()
+        {
+            var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse"), ScriptedResponse.Fixture("mission-sequence-plan.sse")));
+            ToRunning(mission);
+            var values = mission.ExportStates()[0].ToValues();
+            Assert.DoesNotContain(values.Keys, k => k == "queuedEntries" || k.StartsWith("blackoutRevision.") || k.StartsWith("heldWord."));
+
+            var old = MissionSaveState.FromValues(values);
+            Assert.Equal(0, old.QueuedEntries);
+            Assert.Empty(old.BlackoutRevisions);
+            Assert.Empty(old.HeldWords);
+            var resumed = Control(new StreamingFakeTransport());
+            resumed.Send(new MissionsRestored(_save.Path, new[] { old }));
+            Assert.False(resumed.View.Blackout);
+            Assert.Equal(0, resumed.View.QueuedMessages);
+            Assert.Equal(0, resumed.View.HeldMessages);
+        }
+
         // ---- The Spending Cap ----
 
         [Fact]
