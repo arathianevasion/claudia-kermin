@@ -1,8 +1,8 @@
 ship = Claudia reentry test
 version = 1.12.5
-description = Block test craft for reentry: OKTO2 probe core, kOS KR-2042, Z-200 battery, Mk16 chute and an Heat Shield (1.25m) with its built-in decoupler. Stock parts plus kOS, KSP 1.12.5.
+description = Block test craft for reentry: OKTO2 probe core, kOS KR-2042, Z-200 battery, a Small Inline Reaction Wheel under the chute (the OKTO2 has none, and the craft has to hold the heat shield forward without thrust), Mk16 chute and an Heat Shield (1.25m) with its built-in decoupler. Stock parts plus kOS, KSP 1.12.5.
 type = VAB
-size = 3.10077381,6.70414734,3.5804646
+size = 3.10077381,6.88636914,3.5804646
 steamPublishedFileId = 0
 persistentId = 3089373779
 rot = 0,0,0,0
@@ -39,9 +39,9 @@ PART
 	modMass = 0
 	modSize = 0,0,0
 	link = kOSMachine1m_4294597990
-	link = parachuteSingle_4294627422
+	link = sasModule_4294700001
 	attN = bottom,kOSMachine1m_4294597990_0|-0.0610621013|0_0|-1|0_0|-0.0610621013|0_0|-1|0
-	attN = top,parachuteSingle_4294627422_0|0.0610621013|0_0|1|0_0|0.0610621013|0_0|1|0
+	attN = top,sasModule_4294700001_0|0.0610621013|0_0|1|0_0|0.0610621013|0_0|1|0
 	EVENTS
 	{
 	}
@@ -393,12 +393,120 @@ PART
 }
 PART
 {
+	part = sasModule_4294700001
+	partName = Part
+	persistentId = 2622052600
+	pos = 0,15.152173,0
+	attPos = 0,0,0
+	attPos0 = 0,0.152173042,0
+	rot = 0,0,0,1
+	attRot = 0,0,0,1
+	attRot0 = 0,0,0,1
+	mir = 1,1,1
+	symMethod = Radial
+	autostrutMode = Off
+	rigidAttachment = False
+	istg = -1
+	resPri = 0
+	dstg = 0
+	sidx = -1
+	sqor = -1
+	sepI = -1
+	attm = 0
+	sameVesselCollision = False
+	modCost = 0
+	modMass = 0
+	modSize = 0,0,0
+	link = parachuteSingle_4294627422
+	attN = bottom,probeCoreOcto2.v2_4294601898_0|-0.0911109|0_0|-1|0_0|-0.0911109|0_0|-1|0
+	attN = top,parachuteSingle_4294627422_0|0.0911109|0_0|1|0_0|0.0911109|0_0|1|0
+	EVENTS
+	{
+	}
+	ACTIONS
+	{
+		ToggleSameVesselInteraction
+		{
+			actionGroup = None
+		}
+		SetSameVesselInteraction
+		{
+			actionGroup = None
+		}
+		RemoveSameVesselInteraction
+		{
+			actionGroup = None
+		}
+	}
+	PARTDATA
+	{
+	}
+	MODULE
+	{
+		name = ModuleReactionWheel
+		isEnabled = True
+		actuatorModeCycle = 0
+		authorityLimiter = 100
+		stateString = Active
+		stagingEnabled = True
+		WheelState = Active
+		EVENTS
+		{
+		}
+		ACTIONS
+		{
+			CycleAction
+			{
+				actionGroup = None
+				wasActiveBeforePartWasAdjusted = False
+			}
+			Activate
+			{
+				actionGroup = None
+				wasActiveBeforePartWasAdjusted = False
+			}
+			Deactivate
+			{
+				actionGroup = None
+				wasActiveBeforePartWasAdjusted = False
+			}
+			Toggle
+			{
+				actionGroup = None
+				wasActiveBeforePartWasAdjusted = False
+			}
+		}
+		UPGRADESAPPLIED
+		{
+		}
+	}
+	MODULE
+	{
+		name = ModuleCargoPart
+		isEnabled = True
+		beingAttached = False
+		beingSettled = False
+		reinitResourcesOnStoreInVessel = False
+		stagingEnabled = True
+		EVENTS
+		{
+		}
+		ACTIONS
+		{
+		}
+		UPGRADESAPPLIED
+		{
+		}
+	}
+}
+PART
+{
 	part = parachuteSingle_4294627422
 	partName = Part
 	persistentId = 3681508042
-	pos = 0,15.0761433,0
+	pos = 0,15.2583652,0
 	attPos = 0,0,0
-	attPos0 = 0,0.0761432648,0
+	attPos0 = 0,0.106192025,0
 	rot = 0,0,0,1
 	attRot = 0,0,0,1
 	attRot0 = 0,0,0,1
@@ -417,7 +525,7 @@ PART
 	modCost = 0
 	modMass = 0
 	modSize = 0,0,0
-	attN = bottom,probeCoreOcto2.v2_4294601898_0|-0.0150811253|0_0|-0.125|0_0|-0.0150811253|0_0|-0.125|0
+	attN = bottom,sasModule_4294700001_0|-0.0150811253|0_0|-0.125|0_0|-0.0150811253|0_0|-0.125|0
 	EVENTS
 	{
 	}
