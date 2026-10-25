@@ -502,6 +502,19 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(4001u, safe.ProcessorPartId);
         }
 
+        [Fact]
+        public void ARemoteMissionKeepsItsOriginalProcessorAcrossADocking()
+        {
+            var mission = Control(Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-failed.sse"));
+            var start = ToRunning(mission, remote: true);
+
+            mission.Send(new VesselsSeen(new[] { Vessel("docked", "Probe + Tug", claudia: false, processors: new uint[] { 4001, Processor }) }));
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
+
+            Assert.Equal(Processor, mission.TakeCommands().OfType<MakeCraftSafe>().Single().ProcessorPartId);
+        }
+
         // ---- Resume needs the craft (#124) ----
 
         [Fact]
