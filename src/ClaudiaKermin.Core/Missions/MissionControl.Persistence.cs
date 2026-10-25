@@ -486,6 +486,8 @@ namespace ClaudiaKermin.Core.Missions
                 return;
             }
 
+            if (unanswered == null && state.Stage != MissionStage.Paused && AdvanceFromTranscript(mission, state)) return;
+
             if (state.Stage == MissionStage.Paused)
             {
                 mission.StageBeforePause = Settle(mission, state.StageBeforePause);
@@ -495,6 +497,50 @@ namespace ClaudiaKermin.Core.Missions
             var stage = Settle(mission, state.Stage);
             OfferCards(mission, stage, state);
             mission.Stage = stage;
+        }
+
+        /// <summary>
+        /// The save was made while a Mission Plan or Sequence Plan request was out, and the request has since completed:
+        /// its reply is the transcript's last message. Offer that plan for Approval instead of asking again. A reply that
+        /// doesn't fit the request, or a script that no longer passes the Script Check, leaves the usual re-ask.
+        /// </summary>
+        private bool AdvanceFromTranscript(Mission mission, MissionSaveState state)
+        {
+            Purpose purpose;
+            if (state.Stage == MissionStage.Planning) purpose = Purpose.MissionPlan;
+            else if (state.Stage == MissionStage.Sequencing) purpose = Purpose.SequencePlan;
+            else return false;
+
+            // The turn (at least its message and the reply) came after the save: the reply is past the marker.
+            var messages = mission.Conversation;
+            if (messages.Count < state.TranscriptMarker + 2) return false;
+            var last = messages[messages.Count - 1];
+            if (last.Role != Role.Assistant) return false;
+            var reply = MissionReply.Parse(string.Concat(last.Content.OfType<TextBlock>().Select(b => b.Text)));
+            if (reply == null || Mismatch(purpose, reply) != null) return false;
+            if (purpose == Purpose.SequencePlan && !reply.SequencePlan.Manual && !CheckScript(reply.SequencePlan).Passed) return false;
+
+            mission.Owed = Owed.None;
+            mission.LatestLine = SayWithWhy(purpose, reply);
+            // A log rebuilt from the transcript already holds Claudia's line and the plan's card.
+            mission.SuppressCards = mission.LogRebuilt;
+            if (purpose == Purpose.MissionPlan)
+            {
+                OfferMissionPlan(mission, reply.MissionPlan);
+                mission.SequencesProposed = state.SequencesProposed;
+            }
+            else
+            {
+                mission.SequenceCounted = state.SequenceCounted;
+                mission.SequencesProposed = state.SequencesProposed;
+                OfferSequencePlan(mission, reply.SequencePlan);
+                var rebuilt = mission.LogRebuilt ? mission.Log.LastOrDefault(e => e.Kind == LogKind.SequencePlan) : null;
+                if (rebuilt != null) rebuilt.Text = MissionCards.SequencePlanBody(reply.SequencePlan, mission.VesselName, _ut, _config);
+            }
+            mission.SuppressCards = false;
+            Event(mission, "advanced", "the reply to the in-flight " + purpose + " request was already in the transcript");
+            Note(LogKind.Notice, "Claudia's last request had already been answered; her reply is offered for your Approval.");
+            return true;
         }
 
         /// <summary>

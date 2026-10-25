@@ -294,6 +294,33 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AQuickloadOfASaveMadeDuringARequestThatHasSinceCompletedOffersItsReplyInsteadOfAskingAgain()
+        {
+            var sequence = ScriptedResponse.Fixture("mission-sequence-plan.sse", 64);
+            sequence.PauseAt = 100;
+            _gates.Add(sequence);
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse"), sequence);
+            var mission = Control(transport);
+            ToMissionPlan(mission);
+            mission.Send(new Approve());
+            Assert.True(mission.View.Busy);
+            var saved = Saved(mission);
+            Assert.Equal(MissionStage.Sequencing, saved[0].Stage);
+
+            sequence.Gate.Set();
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+            Assert.Equal(2, transport.Requests.Count);
+
+            mission.Send(new MissionsRestored(_save.Path, saved));
+            DrainUntil(mission, v => !v.Busy);
+            Assert.Equal(MissionStage.AwaitingSequenceApproval, mission.View.Stage);
+            Assert.Equal(2, transport.Requests.Count);
+            Assert.Single(mission.View.Log, e => e.Kind == LogKind.SequencePlan);
+            Assert.Equal(1, Assert.Single(Saved(mission)).SequencesProposed);
+            Assert.NotNull(Saved(mission)[0].SequencePlan);
+        }
+
+        [Fact]
         public void LoadingASaveDuringARequestLetsItCompleteThenAppendsTheNotice()
         {
             var sequence = ScriptedResponse.Fixture("mission-sequence-plan.sse", 64);
