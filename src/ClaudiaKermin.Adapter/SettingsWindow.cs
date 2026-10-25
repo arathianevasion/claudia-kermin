@@ -346,7 +346,7 @@ namespace ClaudiaKermin.Adapter
             if (processors.Count == 0) return;
             GUILayout.Space(ClaudiaSkin.Gap);
             GUILayout.Label("Claudia's kOS processor", _label);
-            if (DrawRadioRow("Nearest the root (default)", ClaudiaSkin.Body, "", "", _processorPicked && _processor == null))
+            if (DrawRadioRow("Nearest the root (default)", ClaudiaSkin.Body, "", "", _processorPicked ? _processor == null : !_view.CraftCheck.ChosenExplicitly))
             {
                 _processorPicked = true;
                 _processor = null;

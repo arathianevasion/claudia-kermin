@@ -363,6 +363,7 @@ namespace ClaudiaKermin.Core.Missions
 
             var chosen = ProcessorFor(snapshot);
             view.ChosenProcessor = chosen;
+            view.ChosenExplicitly = chosen.HasValue && chosen == _preferredProcessor;
             if (snapshot != null)
             {
                 view.Processors = snapshot.Craft.Parts.Where(p => p.HasKosProcessor).Select(p => new ProcessorOption

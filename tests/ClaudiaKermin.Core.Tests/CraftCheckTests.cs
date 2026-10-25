@@ -397,12 +397,14 @@ namespace ClaudiaKermin.Core.Tests
 
             var check = mission.View.CraftCheck;
             Assert.Equal(3102u, check.ChosenProcessor);
+            Assert.False(check.ChosenExplicitly);
             Assert.Equal(new uint[] { 3102, 3105 }, check.Processors.Select(p => p.PartId).ToArray());
             Assert.Equal(new[] { true, false }, check.Processors.Select(p => p.Chosen).ToArray());
             Assert.Contains("\"chosen_processor\":{\"id\":3102", UserFacts(transport.Requests[0]).Replace(" ", ""));
 
             mission.Send(new ChooseProcessor(3105));
             Assert.Equal(3105u, mission.View.CraftCheck.ChosenProcessor);
+            Assert.True(mission.View.CraftCheck.ChosenExplicitly);
             // The choice changes what is checked, so the old result is stale.
             Assert.True(mission.View.CraftCheck.Stale);
             mission.Send(new RunCraftCheck(Goal, Cap, Model));
@@ -416,6 +418,7 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(3105u, mission.View.CraftCheck.ChosenProcessor);
             mission.Send(new ChooseProcessor(null));
             Assert.Equal(3102u, mission.View.CraftCheck.ChosenProcessor);
+            Assert.False(mission.View.CraftCheck.ChosenExplicitly);
         }
 
         [Fact]
