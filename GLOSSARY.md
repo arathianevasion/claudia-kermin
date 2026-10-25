@@ -133,7 +133,7 @@ The fixed set of Building Blocks that ships with Claudia Kermin and is the same 
 _Avoid_: primitives, stdlib, script bundle
 
 **Building Block**:
-One reusable flight routine in the Core Library (e.g. launch, transfer, land) that Claudia sets up for a Maneuver Sequence.
+One reusable flight routine in the Core Library (e.g. launch, transfer_to, land) that Claudia sets up for a Maneuver Sequence.
 _Avoid_: primitive, routine, module
 
 **Mission Script**:
