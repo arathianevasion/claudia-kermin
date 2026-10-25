@@ -75,7 +75,8 @@ namespace ClaudiaKermin.Core.Kos
 
         /// <summary>
         /// One compile unit: the Mission Script first (so kOS's line numbers in its errors match what
-        /// Claudia wrote), then the Core Library, then <c>claudia_config()</c> with the player's wait
+        /// Claudia wrote), then the Core Library, then RSVP (each file as a function
+        /// <c>rsvp_file_&lt;name&gt;</c>), then <c>claudia_config()</c> with the player's wait
         /// caps. kOS hoists file-level functions, so the script can call blocks defined after it. The
         /// library's own <c>@lazyglobal</c> lines are dropped: kOS allows the directive only at the top.
         /// </summary>
