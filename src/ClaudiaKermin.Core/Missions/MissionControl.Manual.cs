@@ -111,6 +111,8 @@ namespace ClaudiaKermin.Core.Missions
         private ControlLocks LocksNow()
         {
             var mission = _mission;
+            // The player is in the Child Vessel a sequence is flying: Claudia has its controls until the run ends.
+            if (ChildRunActive) return ControlLocks.Craft | ControlLocks.Warp;
             if (MissionOver || !CraftActive || !ClaudiaHolds(mission)) return ControlLocks.None;
             var locks = IsRunning(mission) ? ControlLocks.Craft | ControlLocks.Warp : ControlLocks.Craft;
             // With no link and no other crew nobody could really fly it: the flight controls stay locked too.

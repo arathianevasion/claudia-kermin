@@ -115,6 +115,7 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is AbortSequence) AbortPressed();
             else if (input is VesselsSeen) VesselsChanged(((VesselsSeen)input).Vessels);
             else if (input is VesselsDocked) Docked((VesselsDocked)input);
+            else if (input is VesselsSeparated) Separated((VesselsSeparated)input);
             else if (input is CraftRange) RangeSeen((CraftRange)input);
             else if (input is VesselUnloaded) Unloaded(((VesselUnloaded)input).VesselId);
             else if (input is FarSwitchConfirmed) FarSwitched(((FarSwitchConfirmed)input).VesselName);
@@ -388,7 +389,7 @@ namespace ClaudiaKermin.Core.Missions
                     + MissionPrompts.ModeFacts(mission.Remote, _snapshot) + "\n"
                     + "Spending Cap: $" + mission.SpendingCap.ToString("0.00", CultureInfo.InvariantCulture) + ".\n"
                     + MissionPrompts.SettingsText(MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config))) + "\n"
-                    + MissionPrompts.Facts(_ut, _snapshot),
+                    + MissionPrompts.Facts(_ut, _snapshot) + ChildVesselFacts(mission),
                 Notice = MissionPrompts.PlanNotice,
             });
         }
@@ -404,6 +405,7 @@ namespace ClaudiaKermin.Core.Missions
             _snapshot = null;
             _active = null;
             _craftLink = null;
+            _seen = new List<SeenVessel>();
             _pendingStart = null;
             _startRefusal = "";
             _craftCheck.Reset();
@@ -490,15 +492,14 @@ namespace ClaudiaKermin.Core.Missions
             if (WindowMissed(plan) && !TakeNextWindow(mission, plan)) return;
             if (plan.Manual)
             {
+                // The player flies a manual stretch in whatever vessel they are in: no Child Vessel run.
+                mission.RunningChild = "";
                 StartPlannedManual(mission, plan);
                 return;
             }
-            var processor = _craftCheck.ProcessorFor(_snapshot);
-            if (!processor.HasValue)
-            {
-                Note(LogKind.Notice, "Can't run the script: the craft has no kOS processor.");
-                return;
-            }
+            // The craft's processor, or a Child Vessel's over a CommNet path from Claudia (MissionControl.ChildVessels.cs).
+            var processor = SequenceProcessor(mission, plan);
+            if (!processor.HasValue) return;
             // The plan was checked before it was offered; the bundle that starts is checked again, whatever path
             // (a reply, a restored save, a refused start) brought the plan here. No automatic rewrite: the plan
             // was offered already, so the player decides what happens next.
@@ -517,6 +518,7 @@ namespace ClaudiaKermin.Core.Missions
             StartRunawayTimer(mission, plan);
             RunStarting(mission);
             StartLive(mission, plan);
+            StartedOn(mission, plan);
             _commands.Add(new StartScript(processor.Value, "claudia:" + mission.Id + ":" + plan.Name, bundle, mission.RunId.Value));
         }
 
@@ -742,7 +744,7 @@ namespace ClaudiaKermin.Core.Missions
             {
                 Purpose = Purpose.Debrief,
                 Effort = "high",
-                UserText = MissionPrompts.RunReport(mission.PendingSequence, outcome, CrossingsText(mission)) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
+                UserText = MissionPrompts.RunReport(mission.PendingSequence, outcome, CrossingsText(mission)) + "\n" + ChildRunNote(mission) + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.DebriefNotice,
             };
             if (mission.Stage == MissionStage.Paused) mission.StageBeforePause = MissionStage.Debriefing;
@@ -1252,6 +1254,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.Plan = plan;
             mission.PlanBaseline = _snapshot;
             PlanOffered(mission);
+            PlanChildVessels(mission, plan);
             mission.Stage = MissionStage.AwaitingPlanApproval;
             if (plan.Sequences.Count == 0)
             {
@@ -1263,11 +1266,13 @@ namespace ClaudiaKermin.Core.Missions
             for (var i = 0; i < plan.Sequences.Count; i++)
             {
                 var s = plan.Sequences[i];
-                body.Append(i + 1).Append(". ").Append(s.Name).Append(s.Manual ? " [you fly this by hand]" : "").Append(": ").Append(s.Intent)
+                body.Append(i + 1).Append(". ").Append(s.Name).Append(s.Manual ? " [you fly this by hand]" : "")
+                    .Append(FliesCraft(mission, s.Vessel) ? "" : " [" + s.Vessel + "]").Append(": ").Append(s.Intent)
                     .Append(" (").Append(MetresPerSecond(s.DeltaV)).Append(", ").Append(s.Timing);
                 if (s.DueTimeUt.HasValue) body.Append("; Due Time ").Append(KerbinTime.Date(s.DueTimeUt.Value));
                 body.Append(")\n");
             }
+            body.Append(ChildVesselLines(plan));
             body.Append("Total ").Append(MetresPerSecond(plan.TotalDeltaV)).Append(", ").Append(plan.ExpectedDuration).Append('.');
             if (plan.MissionTimeSeconds.HasValue) body.Append(" Total Mission time ").Append(KerbinTime.Span(plan.MissionTimeSeconds.Value)).Append('.');
             AddCard(mission, LogKind.MissionPlan, "Mission Plan", body.ToString(), plan.Why);
@@ -1297,6 +1302,7 @@ namespace ClaudiaKermin.Core.Missions
             }
             else mission.DueNotified = false;
             if (plan.Manual) body.Append("Manual stretch: you fly this one by hand; Approve gives you the controls.\n");
+            if (!FliesCraft(mission, plan.Vessel)) body.Append("Flies the Child Vessel ").Append(plan.Vessel).Append('\n');
             body.Append(plan.Intent).Append('\n')
                 .Append("Target: ").Append(plan.Target).Append(" (tolerances: ").Append(plan.Tolerances).Append(")\n")
                 .Append("Expected: ").Append(MetresPerSecond(plan.ExpectedDeltaV)).Append(", ")
@@ -1626,7 +1632,7 @@ namespace ClaudiaKermin.Core.Missions
                 view.CurrentSequence = Math.Min(mission.SequencesProposed, view.PlanSequences.Count) - 1;
                 if (mission.Stage == MissionStage.Running && mission.PendingSequence != null)
                 {
-                    view.RunStatus = "Running: " + mission.PendingSequence.Name;
+                    view.RunStatus = "Running: " + mission.PendingSequence.Name + (mission.RunningChild.Length > 0 ? " on " + mission.RunningChild : "");
                     view.RunProgress = Progress(mission);
                 }
                 view.AbortRecommended = mission.AbortRecommendation;
@@ -1637,6 +1643,8 @@ namespace ClaudiaKermin.Core.Missions
 
                 view.LeavingFlightNeedsConfirmation = IsRunning(mission);
                 view.CraftVesselId = FollowsCraft(mission) ? mission.VesselId : "";
+                view.ChildVessels = ChildVesselViews(mission);
+                view.RunningChildVesselId = RunningChildVesselId(mission);
                 view.Settings = MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config));
                 view.CanEditSettings = CanEditSettings;
                 var due = PendingDueTime;

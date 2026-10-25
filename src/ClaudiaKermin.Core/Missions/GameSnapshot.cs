@@ -24,13 +24,26 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The stage the part is in (its inverse stage number): 0 is the last to go.</summary>
         public int Stage;
         /// <summary>What the part can do, as the adapter reads it: command, crew_seat, probe_core, parachute, landing_leg,
-        /// heat_shield, antenna, electric_generator, reaction_wheel, rcs, gimbal, engine, experiment, kos_processor.</summary>
+        /// heat_shield, antenna, electric_generator, reaction_wheel, rcs, gimbal, engine, experiment, kos_processor, decoupler.</summary>
         public List<string> Tags = new List<string>();
         public int CrewCapacity;
         /// <summary>An antenna's power; 0 for other parts.</summary>
         public double AntennaPower;
         /// <summary>The boot file set on a kOS processor; "" for none.</summary>
         public string BootFile = "";
+
+        // ---- Child Vessel facts (#100): enough to work out a separated vessel's own figures ----
+
+        /// <summary>Mass with its resources, tonnes.</summary>
+        public double MassT;
+        /// <summary>Mass without its resources, tonnes; 0 means it carries none (the same as <see cref="MassT"/>).</summary>
+        public double DryMassT;
+        /// <summary>An engine's thrust in vacuum and at sea level (kN) and vacuum Isp (s); 0 for other parts.</summary>
+        public double ThrustVacKn;
+        public double ThrustAslKn;
+        public double IspVac;
+        /// <summary>The electric charge it can store.</summary>
+        public double ChargeMax;
     }
 
     public sealed class SnapshotCraft
@@ -183,6 +196,11 @@ namespace ClaudiaKermin.Core.Missions
                 else json.Null();
                 json.Field("name", part.Name).Field("title", part.Title).Field("kos", part.HasKosProcessor)
                     .Field("stage", part.Stage).Field("seats", part.CrewCapacity).Field("antenna", part.AntennaPower).Field("boot", part.BootFile);
+                // Written only when set, so a part's line stays short in Claudia's facts.
+                if (part.MassT > 0) json.Field("mass_t", part.MassT);
+                if (part.DryMassT > 0 && part.DryMassT != part.MassT) json.Field("dry_t", part.DryMassT);
+                if (part.ThrustVacKn > 0) json.Field("thrust_vac_kn", part.ThrustVacKn).Field("thrust_asl_kn", part.ThrustAslKn).Field("isp_vac", part.IspVac);
+                if (part.ChargeMax > 0) json.Field("ec_max", part.ChargeMax);
                 json.Name("tags").BeginArray();
                 foreach (var tag in part.Tags) json.String(tag);
                 json.EndArray().EndObject();
@@ -275,6 +293,7 @@ namespace ClaudiaKermin.Core.Missions
                     {
                         var parent = JsonNode.Long(part["parent"]);
                         var tags = part["tags"];
+                        var mass = JsonNode.Double(part["mass_t"]) ?? 0;
                         snapshot.Craft.Parts.Add(new SnapshotPart
                         {
                             Id = (uint)(JsonNode.Long(part["id"]) ?? 0),
@@ -287,6 +306,12 @@ namespace ClaudiaKermin.Core.Missions
                             AntennaPower = JsonNode.Double(part["antenna"]) ?? 0,
                             BootFile = JsonNode.Str(part["boot"]) ?? "",
                             Tags = tags == null ? new List<string>() : tags.Items.Select(JsonNode.Str).Where(t => t != null).ToList(),
+                            MassT = mass,
+                            DryMassT = JsonNode.Double(part["dry_t"]) ?? mass,
+                            ThrustVacKn = JsonNode.Double(part["thrust_vac_kn"]) ?? 0,
+                            ThrustAslKn = JsonNode.Double(part["thrust_asl_kn"]) ?? 0,
+                            IspVac = JsonNode.Double(part["isp_vac"]) ?? 0,
+                            ChargeMax = JsonNode.Double(part["ec_max"]) ?? 0,
                         });
                     }
                 }

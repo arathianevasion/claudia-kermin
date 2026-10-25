@@ -104,6 +104,7 @@ namespace ClaudiaKermin.Core.Missions
                 mission.VesselId = craft.Id;
                 mission.VesselName = craft.Name;
             }
+            ChildVesselsSeen(vessels);
             var why = MissionCraft.CannotFly(mission.Remote, craft);
             if (why == mission.CannotFlyBecause) return;
             mission.CannotFlyBecause = why;
@@ -185,7 +186,15 @@ namespace ClaudiaKermin.Core.Missions
         private void Unloaded(string vesselId)
         {
             var mission = _mission;
-            if (mission == null || MissionOver || !IsRunning(mission) || vesselId != mission.VesselId || CraftActive) return;
+            if (mission == null || MissionOver || !IsRunning(mission)) return;
+            // A Child Vessel's run is cut off the same way when it goes out of physics range.
+            var child = RunningChildVesselId(mission);
+            if (child.Length > 0)
+            {
+                if (vesselId == child) Interrupt(mission, mission.RunningChild + " unloaded: it went out of range of the player's vessel");
+                return;
+            }
+            if (vesselId != mission.VesselId || CraftActive) return;
             Interrupt(mission, "the craft unloaded: the player's vessel went too far from it");
         }
 

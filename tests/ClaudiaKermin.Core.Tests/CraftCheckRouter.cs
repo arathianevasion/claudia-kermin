@@ -40,7 +40,7 @@ namespace ClaudiaKermin.Core.Tests
 
         public IHttpStream Open(HttpRequestSpec request, CancellationToken cancel)
         {
-            if (!request.Body.Contains("\"required\":[\"summary\",\"findings\"]")) return _mission.Open(request, cancel);
+            if (!request.Body.Contains("\"required\":[\"summary\",\"findings\"")) return _mission.Open(request, cancel);
             if (Recheck != null && request.Body.Contains("Margin recheck after a Maneuver Sequence"))
             {
                 lock (_checks) _checks.Requests.Add(request);

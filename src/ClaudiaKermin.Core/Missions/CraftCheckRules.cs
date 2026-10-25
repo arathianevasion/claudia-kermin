@@ -53,8 +53,9 @@ namespace ClaudiaKermin.Core.Missions
             new CraftCheckRule("required_experiments_missing", Blocker, "Required experiments missing",
                 "the Mission Goal needs experiments the craft has no parts for."),
             new CraftCheckRule("child_vessel_problem", Blocker, "Child Vessel problem",
-                "a Child Vessel the Mission Goal plans (a part that separates and carries a kOS processor) lacks, at its separation stage, a processor, "
-                + "an antenna able to reach Claudia, delta-v, thrust-to-weight or electric power."),
+                "a Child Vessel the Mission Goal plans (a vessel in the separations facts, flown by Claudia after it separates) lacks, at its separation stage, a processor, "
+                + "an antenna able to reach Claudia, the delta-v or thrust-to-weight its part of the Mission Goal needs, or electric power. "
+                + "The mod also raises it itself for the problems it lists and for a staging plan that strands Claudia without a processor."),
 
             new CraftCheckRule("launch_twr_low", Warning, "Launch thrust-to-weight under 1.2",
                 "the launch thrust over weight is under 1.2 (but not under 1.0, which is a Blocker)."),
@@ -103,8 +104,10 @@ namespace ClaudiaKermin.Core.Missions
             var codes = new JsonWriter().BeginArray();
             foreach (var rule in All) codes.String(rule.Code);
             codes.EndArray();
-            return "{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"summary\",\"findings\"],\"properties\":{"
+            return "{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"summary\",\"findings\",\"child_vessel_stages\"],\"properties\":{"
                 + "\"summary\":{\"type\":\"string\",\"description\":\"Your line to the player: concise mission-control voice, key numbers first, one or two sentences.\"},"
+                + "\"child_vessel_stages\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"},\"description\":\"The separation stages (from the separations facts) "
+                + "whose vessels the Mission Goal plans to fly as Child Vessels; empty when it plans none.\"},"
                 + "\"findings\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"additionalProperties\":false,"
                 + "\"required\":[\"code\",\"explanation\",\"fix\"],\"properties\":{"
                 + "\"code\":{\"type\":\"string\",\"enum\":" + codes + "},"

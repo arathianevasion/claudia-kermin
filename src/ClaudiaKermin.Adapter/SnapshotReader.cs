@@ -121,7 +121,11 @@ namespace ClaudiaKermin.Adapter
                     Title = part.partInfo != null ? part.partInfo.title : "",
                     Stage = part.inverseStage,
                     CrewCapacity = part.CrewCapacity,
+                    // Part.mass is the dry mass; its resources' mass comes on top.
+                    DryMassT = part.mass,
+                    MassT = part.mass + part.GetResourceMass(),
                 };
+                if (part.Resources.Contains("ElectricCharge")) info.ChargeMax = part.Resources["ElectricCharge"].maxAmount;
                 if (part.CrewCapacity > 0) info.Tags.Add("crew_seat");
                 snapshot.Craft.Seats += part.CrewCapacity;
                 foreach (var module in part.Modules) Classify(snapshot, part, info, module);
@@ -215,7 +219,21 @@ namespace ClaudiaKermin.Adapter
             else if (Is(module, "ModuleReactionWheel")) Tag(info, "reaction_wheel");
             else if (Is(module, "ModuleRCS")) Tag(info, "rcs");
             else if (Is(module, "ModuleGimbal")) Tag(info, "gimbal");
-            else if (Is(module, "ModuleEngines")) Tag(info, "engine");
+            else if (Is(module, "ModuleEngines"))
+            {
+                Tag(info, "engine");
+                var engine = module as ModuleEngines;
+                // A multi-mode engine has a module per mode: its strongest stands for the part.
+                if (engine != null && engine.maxThrust > info.ThrustVacKn)
+                {
+                    var ispVac = engine.atmosphereCurve.Evaluate(0f);
+                    var ispAsl = engine.atmosphereCurve.Evaluate(1f);
+                    info.ThrustVacKn = engine.maxThrust;
+                    info.IspVac = ispVac;
+                    info.ThrustAslKn = ispVac > 0 ? engine.maxThrust * ispAsl / ispVac : 0;
+                }
+            }
+            else if (Is(module, "ModuleDecouplerBase") || Is(module, "ModuleDecouple") || Is(module, "ModuleAnchoredDecoupler")) Tag(info, "decoupler");
             else if (Is(module, "ModuleScienceExperiment"))
             {
                 Tag(info, "experiment");
