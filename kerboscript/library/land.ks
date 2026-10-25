@@ -506,9 +506,10 @@ function land {
 
   // A burn that left periapsis well under the plan (a bad burn or bad terrain data) would put the
   // craft into the ground before the descent could be flown to plan.
-  if not land_periapsis_ok(ship:orbit:periapsis, plan:r_pe - body:radius) {
+  local planned_pe is plan:r_pe - body:radius.
+  if not land_periapsis_ok(ship:orbit:periapsis, planned_pe) {
     claudia_make_safe().
-    return claudia_finish(ctx, false, "deorbit left periapsis at " + round(ship:orbit:periapsis) + " m, planned " + round(plan:r_pe - body:radius) + " m", extra).
+    return claudia_finish(ctx, false, "deorbit left periapsis at " + round(ship:orbit:periapsis) + " m, planned " + round(planned_pe) + " m", extra).
   }
 
   // Correction, a quarter orbit before the site: turn the plane about the craft's position so it
@@ -565,7 +566,8 @@ function land {
 
 // claudia_warp_to's loop to ut, ended early (returns "") once land_brake_now says the terrain under
 // the craft is coming too soon, since KSP can cut rails warp short near the ground and then ticks at
-// 1x without looking. a_brake: m/s^2 the engines brake with. Returns "" or an abort reason.
+// 1x without looking. a_brake: m/s^2 the engines brake with. Returns "" (at ut, or early for the
+// ground; the descent follows either way) or an abort reason. Keep in step with claudia_warp_to.
 function land_coast {
   parameter ctx, ut, a_brake.
   local warp_end is claudia_warp_end(ut, 30).
