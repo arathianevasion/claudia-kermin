@@ -110,6 +110,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.CannotFlyBecause = why;
             if (why.Length > 0) Event(mission, "cannot_fly", why);
             else Note(LogKind.Notice, "Claudia can fly " + mission.VesselName + " again. Resume from it when you're ready.");
+            CarryOnWhenSceneAllows();
         }
 
         /// <summary>If she can fly no vessel the Mission is Paused (not in Manual Control: the player has the craft until hand back).</summary>

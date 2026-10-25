@@ -768,6 +768,76 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ACapPausedMissionRefusedOnLoadCarriesOnOnceTheSceneAllowsIt()
+        {
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-big.sse"), ScriptedResponse.Fixture("mission-plan-priced.sse"));
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            StartChecked(mission, new StartMission(Goal, 0.50m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.Paused);
+            // The Pause is the cap's and the craft's both: Resume waits for the player to be in Flight with it.
+            var saved = Saved(mission);
+            saved[0].PausedCannotFly = true;
+            mission.Send(new RaiseCap(25m));
+
+            // Loaded at the space centre: Resume is refused there, so the Mission waits.
+            var after = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-priced.sse"));
+            var resumed = Control(after);
+            resumed.Send(new SceneChanged(GameScene.Other));
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Equal(MissionStage.Paused, resumed.View.Stage);
+            Assert.Empty(after.Requests);
+
+            // Into Flight, in the craft: the cap covers what it has spent, so the Mission carries on.
+            resumed.Send(new SceneChanged(GameScene.Flight));
+            resumed.Send(OnPad());
+            Assert.Equal(MissionStage.AwaitingPlanApproval, resumed.View.Stage);
+            Assert.DoesNotContain(QuickReply.RaiseCap, resumed.View.QuickReplies);
+        }
+
+        [Fact]
+        public void ACapPausedMissionRefusedOnARaiseSendsItsWaitingRequestOnceTheSceneAllowsIt()
+        {
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-big.sse"));
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            StartChecked(mission, new StartMission(Goal, 0.50m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.Paused);
+            var saved = Saved(mission);
+
+            // Loaded in Flight; the Approve is turned away at the cap, and the request waits.
+            var after = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var resumed = Control(after);
+            resumed.Send(new SceneChanged(GameScene.Flight));
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            resumed.Send(OnPad());
+            resumed.Send(new Retry());
+            resumed.Send(new Approve());
+            Assert.Equal(MissionStage.Paused, resumed.View.Stage);
+            Assert.Empty(after.Requests);
+
+            // Raised while the player is in another vessel: Resume is refused, so it waits.
+            var elsewhere = OnPad();
+            elsewhere.Craft.VesselId = "relay";
+            elsewhere.Craft.Name = "Relay Station";
+            elsewhere.Crew.Clear();
+            elsewhere.Craft.Parts.RemoveAll(p => p.HasKosProcessor);
+            resumed.Send(elsewhere);
+            resumed.Send(new RaiseCap(25m));
+            Assert.Equal(MissionStage.Paused, resumed.View.Stage);
+            Assert.Empty(after.Requests);
+
+            // Back in the craft: the cap covers the waiting request, so one request goes out.
+            resumed.Send(OnPad());
+            DrainUntil(resumed, v => after.Requests.Count > 0 && !v.Busy);
+            Assert.Single(after.Requests);
+            resumed.Send(OnPad());
+            Assert.Single(after.Requests);
+        }
+
+        [Fact]
         public void ACapPausedMissionWhoseCapIsStillReachedStaysPausedWhenLoaded()
         {
             var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-big.sse")));

@@ -444,6 +444,7 @@ namespace ClaudiaKermin.Core.Missions
             if (mission == null) return;
             // A plan restored from a save was never offered against a snapshot: the first one after the load is its baseline.
             if (mission.AwaitingApproval && mission.PlanBaseline == null && !mission.InFlight && _scene == GameScene.Flight) mission.PlanBaseline = snapshot;
+            CarryOnWhenSceneAllows();
         }
 
         // ---- Approval ----
@@ -1627,6 +1628,15 @@ namespace ClaudiaKermin.Core.Missions
                 mission.PausedForCap = false;
                 mission.PauseReason = EvaPauseReason(mission.EvaScience);
             }
+        }
+
+        /// <summary>A cap-paused Mission whose carrying on was refused (the wrong scene or vessel) goes ahead once the scene allows it, quietly until then (#220).</summary>
+        private void CarryOnWhenSceneAllows()
+        {
+            var mission = _mission;
+            if (mission == null || mission.Stage != MissionStage.Paused || !mission.PausedForCap || mission.InFlight) return;
+            if (mission.UnreadableCostLogRestore != null || ResumeRefusal(mission).Length > 0) return;
+            CarryOnIfCapCovers(mission);
         }
 
         private void LogCost(Mission mission, string kind, decimal amount, string outcome)

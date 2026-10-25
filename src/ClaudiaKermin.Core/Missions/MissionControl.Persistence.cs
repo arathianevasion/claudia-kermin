@@ -234,11 +234,16 @@ namespace ClaudiaKermin.Core.Missions
         {
             var leaving = _scene == GameScene.Flight && scene != GameScene.Flight;
             _scene = scene;
-            if (!leaving) return;
+            if (!leaving)
+            {
+                CarryOnWhenSceneAllows();
+                return;
+            }
             _snapshot = null;
             _active = null;
             if (_mission != null) _mission.SwitchingAway = false;
             if (_mission != null && IsRunning(_mission)) Interrupt(_mission, "the player left Flight");
+            CarryOnWhenSceneAllows();
         }
 
         private void Interrupt(Mission mission, string reason)
