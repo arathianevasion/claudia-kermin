@@ -16,20 +16,23 @@
 //| Options:
 //|   target_pe [35000]: the Kerbin periapsis altitude to aim for, m; inside the atmosphere (70 km)
 //|     the craft comes down.
-//|   window ["next"]: "next" ejects at the best point of the craft's orbit from 5 minutes ahead,
-//|     within the wait cap (about one orbit); a time (UT seconds) ejects no earlier than that time.
+//|   window ["next"]: "next" ejects at the burn point's next pass, in the craft's next orbit from 5
+//|     minutes ahead; a time (UT seconds) ejects at its first pass from that time. A pass past the
+//|     wait cap fails, naming its UT: plan a Due Time.
 //|   correction [true]: false leaves out the mid-course correction.
 //|   max_duration ["auto"]: the time to the predicted reentry plus 900 s.
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block; each burn gets them too.
 //| Extra results: kerbin_pe (m, the predicted Kerbin periapsis), reentry_ut (UT of the predicted
 //| entry into Kerbin's atmosphere, or of periapsis if that is above it).
-//| The correction is skipped when the prediction is already within 1 km of target_pe; it is planned
-//| after leaving the moon's sphere of influence when that comes before halfway.
+//| The correction is skipped when the prediction is already within 1 km of target_pe or the fix is
+//| under 0.1 m/s. When leaving the moon's sphere of influence comes before halfway, the block waits
+//| that out first; with no closed orbit that wait has the 3 h cap, enough from the Mun or Minmus.
 //| Fails with an option value it can't read, "not in orbit", "already orbiting Kerbin: lower the
 //| periapsis with exec_node instead", "return starts from orbit around a moon of Kerbin, not <body>",
-//| "a maneuver node is already planned: remove it first", a wait over the cap, "found no ejection
-//| that returns to Kerbin", "no return to Kerbin after the ejection burn", an exec_node failure (that
-//| burn's node is left in place), or an abort.
+//| "a maneuver node is already planned: remove it first", "the next window departs at UT <t>, beyond
+//| the wait cap: plan a Due Time before it", a wait over the cap, "found no ejection that returns to
+//| Kerbin", "no return to Kerbin after the ejection burn" (or "after the correction"), an exec_node
+//| failure (that burn's node is left in place), or an abort.
 //| Follow it with reentry in a later sequence, with its Due Time shortly before reentry_ut.
 //| Example: `local r is return(). addons:claudia:report(r).`
 
@@ -149,24 +152,22 @@ function return {
     return claudia_finish(ctx, false, "a maneuver node is already planned: remove it first", extra).
   }
 
-  local span is transfer_to_departure_span(time:seconds, opt:window, transfer_to_wait_cap()).
-  if span:duration <= 0 {
-    local waiting is claudia_check_wait(span:earliest - time:seconds).
-    if waiting = "" {
-      set waiting to "the window is at the wait cap: plan a Due Time instead".
-    }
-    return claudia_finish(ctx, false, waiting, extra).
+  local earliest is transfer_to_earliest(time:seconds, opt:window).
+  local too_far is claudia_check_wait(earliest - time:seconds).
+  if too_far <> "" {
+    return claudia_finish(ctx, false, too_far, extra).
   }
-  local latest is span:earliest + span:duration.
+  // The burn point comes round once an orbit.
+  local latest is earliest + ship:orbit:period.
 
   // Seed the burn from the patched-conic sums, then let the predicted path settle time and size.
   local seed is return_ejection(planet:mu, moon:orbit:semimajoraxis, planet:radius + opt:target_pe, moon:mu, ship:orbit:semimajoraxis).
-  local seed_ut is return_ejection_time(moon, seed:eject_angle, span:earliest, min(latest, span:earliest + ship:orbit:period)).
+  local seed_ut is return_ejection_time(moon, seed:eject_angle, earliest, latest).
   local nd is node(seed_ut, 0, 0, seed:dv).
   add nd.
   local found is transfer_to_descend({
     parameter x.
-    if x[0] < span:earliest or x[0] > latest {
+    if x[0] < earliest or x[0] > latest {
       return 1e13.
     }
     set nd:eta to x[0] - time:seconds.
@@ -179,6 +180,11 @@ function return {
   if planned:istype("String") {
     remove nd.
     return claudia_finish(ctx, false, "found no ejection that returns to Kerbin", extra).
+  }
+  local departing is transfer_to_departure_wait(time:seconds + nd:eta).
+  if departing <> "" {
+    remove nd.
+    return claudia_finish(ctx, false, departing, extra).
   }
   if opt:max_duration:istype("String") {
     set opt:max_duration to return_reentry_ut(planned:orbit) - ctx:start_ut + 900.

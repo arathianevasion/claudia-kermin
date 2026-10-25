@@ -90,14 +90,21 @@ namespace ClaudiaKermin.Kerboscript.Tests
         // ---- Departure span ----
 
         [Theory]
-        [InlineData("\"next\"", 1300, 1700)]
-        [InlineData("2000", 2000, 1000)]
-        [InlineData("1100", 1300, 1700)]
-        [InlineData("4000", 4000, -1000)]
-        public void The_departure_is_searched_from_five_minutes_ahead_or_the_window_up_to_the_wait_cap(string window, double earliest, double duration)
+        [InlineData("\"next\"", "1300")]
+        [InlineData("2000", "2000")]
+        [InlineData("1100", "1300")]
+        public void The_departure_is_searched_from_five_minutes_ahead_or_from_the_window(string window, string earliest)
         {
-            var printed = Run("local s is transfer_to_departure_span(1000, " + window + ", 2000). print s:earliest. print s:duration.");
-            Assert.Equal(new[] { earliest.ToString(CultureInfo.InvariantCulture), duration.ToString(CultureInfo.InvariantCulture) }, printed);
+            Assert.Equal(earliest, One("transfer_to_earliest(1000, " + window + ")"));
+        }
+
+        [Theory]
+        [InlineData(2, 3, "6")]
+        [InlineData(3, 2, "6")]
+        [InlineData(5, 5, "5")]
+        public void The_next_window_comes_round_once_a_synodic_period(double a, double b, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "round(transfer_to_synodic({0}, {1}), 6)", a, b)));
         }
 
         // ---- Coordinate descent ----
