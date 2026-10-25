@@ -716,11 +716,13 @@ namespace ClaudiaKermin.Core.Missions
         {
             var reason = refused.Reason;
             var mission = _mission;
-            if (mission == null || mission.Stage != MissionStage.Running || mission.RunId != refused.RunId) return;
+            if (mission == null || !IsRunning(mission) || mission.RunId != refused.RunId) return;
             mission.RunId = null;
             mission.RunDeadlineUt = null;
             EndLive(mission);
-            mission.Stage = MissionStage.AwaitingSequenceApproval;
+            // Paused from Running, the Mission stays Paused and Resume goes back to approval, not to Running.
+            if (mission.Stage == MissionStage.Paused) mission.StageBeforePause = MissionStage.AwaitingSequenceApproval;
+            else mission.Stage = MissionStage.AwaitingSequenceApproval;
             Note(LogKind.Notice, "The script didn't start: " + reason);
         }
 
