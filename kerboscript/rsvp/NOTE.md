@@ -1,7 +1,7 @@
 # RSVP v9, bundled
 
 [RSVP](https://github.com/maneatingape/rsvp) by maneatingape, tag `v9` (see `VERSION.txt`), is
-licensed GPL-3.0 (`LICENSE.md`, kept with it). The `transfer` Building Block uses it to plan the
+licensed GPL-3.0 (`LICENSE.md`, kept with it). The `transfer_to` Building Block uses it to plan the
 ejection burn. These files were copied from an RSVP v9 install's `Ships/Script/rsvp/`.
 
 ## What is unmodified
@@ -39,8 +39,8 @@ So, and only so:
    `parameter export.` becomes that function's parameter, its file-level locals and functions become
    the function's, and kOS closures keep them alive as RSVP's file scopes did. `rsvp_file_main()`
    declares the global `rsvp` and imports the rest.
-3. `transfer_rsvp()` (in `transfer.ks`) calls `rsvp_file_main()` the first time a block needs RSVP,
+3. `transfer_to_rsvp()` (in `transfer_to.ks`) calls `rsvp_file_main()` the first time a block needs RSVP,
    because a bundled file's top-level statements would only run after the Mission Script ends.
 
-RSVP's planning code itself is untouched. While running it prints (with `verbose`, which `transfer`
+RSVP's planning code itself is untouched. While running it prints (with `verbose`, which `transfer_to`
 leaves off) and adds and removes maneuver nodes; it writes no files.

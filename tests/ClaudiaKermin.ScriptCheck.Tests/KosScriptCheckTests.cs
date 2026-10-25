@@ -299,6 +299,16 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             AssertAllowed(CoreLibrary.Bundle(script, 1, 10800));
         }
 
+        [Theory]
+        [InlineData("transfer_to")]
+        [InlineData("return")]
+        public void EachBlockTestScriptBundledWithTheLibraryAndRsvpPasses(string test)
+        {
+            // transfer_to plans with the bundled RSVP; return calls the block kOS lets be named return.
+            var script = File.ReadAllText(Path.Combine(RepoRoot(), "tests", "blocks", test, "test.ks"));
+            AssertAllowed(CoreLibrary.Bundle(script, 1, 10800));
+        }
+
         [Fact]
         public void AForbiddenCallInABundledScriptFailsOnTheScriptsOwnLine()
         {

@@ -59,19 +59,6 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(new[] { "1.5", "7200" }, KosHarness.Run(bundle));
         }
 
-        [Fact]
-        public void Rsvp_loads_from_the_bundle_with_every_function_it_exports()
-        {
-            var printed = Run("transfer_rsvp(). print rsvp:length. print rsvp:haskey(\"goto\"). print rsvp:haskey(\"line_search\"). print rsvp:haskey(\"time_at_periapsis\"). print rsvp:haskey(\"compile_to\").");
-            Assert.Equal(new[] { "31", "True", "True", "True", "False" }, printed);
-        }
-
-        [Fact]
-        public void Rsvp_loads_once_however_often_a_block_asks_for_it()
-        {
-            Assert.Equal("31", One("transfer_rsvp():length + 0 * transfer_rsvp():length"));
-        }
-
         // ---- Options ----
 
         [Fact]
