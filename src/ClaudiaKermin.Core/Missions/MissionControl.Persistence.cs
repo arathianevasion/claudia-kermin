@@ -67,6 +67,7 @@ namespace ClaudiaKermin.Core.Missions
                 SequenceCounted = mission.SequenceCounted,
                 LatestLine = mission.LatestLine,
                 PauseReason = mission.PauseReason,
+                PauseCause = mission.Stage == MissionStage.Paused && mission.PauseCause != PauseCause.Other ? mission.PauseCause.ToString() : "",
                 VesselId = mission.VesselId,
                 VesselName = mission.VesselName,
                 DueNotified = mission.DueNotified,
@@ -489,6 +490,10 @@ namespace ClaudiaKermin.Core.Missions
             }
 
             mission.PauseReason = state.PauseReason;
+            // An unknown or missing cause (an older save) is a plain Pause.
+            PauseCause cause;
+            mission.PauseCause = state.Stage == MissionStage.Paused && Enum.TryParse(state.PauseCause, out cause) && Enum.IsDefined(typeof(PauseCause), cause)
+                ? cause : PauseCause.Other;
             // A run the mod stopped itself is Debriefed with its reason even after a load (no timer: no run survives one).
             mission.StopReason = state.StopReason;
             mission.RunDeadlineUt = null;

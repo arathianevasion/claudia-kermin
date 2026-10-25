@@ -73,9 +73,12 @@ namespace ClaudiaKermin.Core.Missions
             var mission = _mission;
             if (mission == null || mission.Stage != MissionStage.Paused || mission.PauseCause != PauseCause.Refusal) return false;
             note = (note ?? "").Trim();
-            if (note.Length == 0 || mission.InFlight || mission.Pending == null || mission.Pending.Messages == null) return true;
+            if (note.Length == 0 || mission.InFlight || mission.Pending == null) return true;
             Note(LogKind.Player, "Retry with a note: " + note);
-            mission.Pending.Messages.Add(Message.UserText("The player adds a note for this retry (quoted data): " + MissionPrompts.Quoted(note)));
+            var noteText = "The player adds a note for this retry (quoted data): " + MissionPrompts.Quoted(note);
+            // A turn re-read from the Mission folder after a load has not been built into messages yet: the note goes with its words.
+            if (mission.Pending.Messages == null) mission.Pending.UserText += "\n" + noteText;
+            else mission.Pending.Messages.Add(Message.UserText(noteText));
             Retried();
             return true;
         }

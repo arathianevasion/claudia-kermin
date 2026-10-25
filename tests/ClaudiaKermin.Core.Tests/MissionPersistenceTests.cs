@@ -639,6 +639,70 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(transport.Requests[0].Body, after.Requests[0].Body);
         }
 
+        // ---- The Pause cause ----
+
+        private IList<MissionSaveState> PausedBy(ScriptedResponse failure)
+        {
+            var mission = Control(new StreamingFakeTransport(failure));
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            StartChecked(mission, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.Paused);
+            return Saved(mission);
+        }
+
+        [Fact]
+        public void ARefusalPauseKeepsItsQuickRepliesAcrossAReloadAndRetryWithANoteSendsTheNote()
+        {
+            var saved = PausedBy(ScriptedResponse.Fixture("refusal.sse"));
+            Assert.Equal("Refusal", saved[0].PauseCause);
+            saved = new List<MissionSaveState> { MissionSaveState.FromValues(saved[0].ToValues()) };
+
+            var after = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse"));
+            var resumed = Control(after);
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Equal(new[] { QuickReply.Retry, QuickReply.RetryWithNote, QuickReply.EndMission }, resumed.View.QuickReplies.ToArray());
+            Assert.Empty(after.Requests);
+
+            resumed.Send(new RetryWithNote("It is a harmless test craft."));
+            DrainUntil(resumed, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            Assert.Contains("It is a harmless test craft.", Assert.Single(after.Requests).Body);
+        }
+
+        [Fact]
+        public void AModelGonePauseOffersChooseModelAfterAReloadAndPlainRetryStillDoesNothing()
+        {
+            var saved = PausedBy(ScriptedResponse.Error(404, "not_found_error", "model: claude-sonnet-5-5"));
+            Assert.Equal("ModelGone", saved[0].PauseCause);
+            saved = new List<MissionSaveState> { MissionSaveState.FromValues(saved[0].ToValues()) };
+
+            var after = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse"));
+            var resumed = Control(after);
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Equal(new[] { QuickReply.ChooseModel, QuickReply.EndMission }, resumed.View.QuickReplies.ToArray());
+
+            resumed.Send(new Retry());
+            Assert.Empty(after.Requests);
+            resumed.Send(new ChooseModel("claude-opus-5-5"));
+            DrainUntil(resumed, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            Assert.Equal("claude-opus-5-5", resumed.View.Model);
+        }
+
+        [Fact]
+        public void APlainPauseAndASaveFromBeforeTheCauseExistedLoadAsAPlainPause()
+        {
+            var saved = PausedBy(ScriptedResponse.Error(400, "invalid_request_error", "bad"));
+            Assert.Equal("", saved[0].PauseCause);
+            Assert.DoesNotContain("pauseCause", saved[0].ToValues().Keys);
+
+            var resumed = Control(new StreamingFakeTransport());
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Equal(MissionStage.Paused, resumed.View.Stage);
+            var replies = resumed.View.QuickReplies ?? new List<QuickReply>();
+            Assert.DoesNotContain(QuickReply.RetryWithNote, replies);
+            Assert.DoesNotContain(QuickReply.ChooseModel, replies);
+        }
+
         // ---- Crash, quit or leaving Flight while Running ----
 
         [Fact]
