@@ -171,5 +171,35 @@ namespace ClaudiaKermin.Core.Tests
         {
             Assert.Equal(0, CapcomStripLayout.Place(300, 70, Size, 500, 1080).X);
         }
+
+        // ---- Mouse lock ----
+
+        // A 740 x 200 window with a 30 px tab row and a 100 px wide tab, so the tab spans x 320..420.
+        [Theory]
+        [InlineData(10, 100, true)]   // strip body
+        [InlineData(10, 175, false)]  // bottom tab row, left band
+        [InlineData(730, 175, false)] // bottom tab row, right band
+        [InlineData(370, 175, true)]  // the tab
+        [InlineData(319, 175, false)] // just left of the tab
+        [InlineData(320, 175, true)]  // tab's left edge
+        [InlineData(420, 175, false)] // just right of the tab
+        [InlineData(10, 169, true)]   // just above the tab row
+        [InlineData(-1, 100, false)]
+        [InlineData(10, 200, false)]
+        public void BelowTheMouseIsLockedOnlyOverTheBodyAndTheTab(float x, float y, bool locked)
+        {
+            Assert.Equal(locked, CapcomStripHit.Locks(x, y, 740, 200, PanelSide.Below, 30, 100));
+        }
+
+        [Theory]
+        [InlineData(10, 15, false)]   // top tab row, left band
+        [InlineData(370, 15, true)]   // the tab
+        [InlineData(730, 15, false)]  // right band
+        [InlineData(10, 30, true)]    // strip body starts under the row
+        [InlineData(10, 175, true)]   // bottom edge is body now
+        public void AboveTheTabRowIsAtTheTop(float x, float y, bool locked)
+        {
+            Assert.Equal(locked, CapcomStripHit.Locks(x, y, 740, 200, PanelSide.Above, 30, 100));
+        }
     }
 }
