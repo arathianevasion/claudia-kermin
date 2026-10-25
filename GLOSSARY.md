@@ -21,7 +21,7 @@ Claudia's crew role, combining the abilities of a Pilot, an Engineer and a Scien
 _Avoid_: trait (alone), class, profession
 
 **Mission Goal**:
-The player's plain-language statement of what a mission must achieve, e.g. "Land on the Mun, run 3 experiments, return to Kerbin."
+The player's plain-language statement of what a mission must achieve, e.g. "Land on the Mun, run 3 experiments, return to Kerbin." It changes only when the player gives Approval to a revised Mission Plan that names a new goal; Claudia cannot change it on her own.
 _Avoid_: objective, prompt, task
 
 **Mission Settings**:
