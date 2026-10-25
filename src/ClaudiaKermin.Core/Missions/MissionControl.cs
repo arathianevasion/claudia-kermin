@@ -1587,8 +1587,9 @@ namespace ClaudiaKermin.Core.Missions
                 view.PendingCharge = mission.PendingCharge;
                 view.CapWarning = mission.Committed >= mission.SpendingCap * 0.8m;
                 view.LatestLine = mission.LatestLine;
-                view.Busy = mission.InFlight;
-                view.Activity = mission.Activity;
+                // A Paused Mission waits on the player, not on Claude: the line clears on Pause.
+                view.Busy = mission.InFlight && mission.Stage != MissionStage.Paused;
+                view.Activity = view.Busy ? mission.Activity : "";
                 view.PauseReason = mission.PauseReason;
                 view.Remote = mission.Remote;
                 view.EvaScience = mission.EvaScience;
@@ -1670,6 +1671,12 @@ namespace ClaudiaKermin.Core.Missions
                     view.QuickReplies = new[] { QuickReply.Abort }.Concat(view.QuickReplies).ToList();
                 if (mission.WaitingForCap && !view.QuickReplies.Contains(QuickReply.RaiseCap))
                     view.QuickReplies = view.QuickReplies.Concat(new[] { QuickReply.RaiseCap }).ToList();
+            }
+            // The Craft Check is a request too, before a Mission and when one resumes.
+            if (!view.Busy && view.CraftCheck.State == CraftCheckState.Running)
+            {
+                view.Busy = true;
+                view.Activity = "checking the craft";
             }
             _view = view;
         }

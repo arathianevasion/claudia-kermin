@@ -94,7 +94,6 @@ namespace ClaudiaKermin.Adapter
             if (_send != null && view.StartForm.CanStart && view.StartForm.Refusal.Length > 0) GUILayout.Label(view.StartForm.Refusal, ClaudiaSkin.DangerText);
             foreach (var entry in view.Log) DrawEntry(entry, view.Ut, width);
             if (_send != null && confirming) DrawApproval(view);
-            if (view.Busy) GUILayout.Label("Claudia is " + (view.Activity.Length > 0 ? view.Activity : "thinking") + "…", ClaudiaSkin.Muted);
             GUILayout.EndScrollView();
         }
 
