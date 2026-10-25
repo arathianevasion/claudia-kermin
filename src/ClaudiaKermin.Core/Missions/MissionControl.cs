@@ -330,7 +330,7 @@ namespace ClaudiaKermin.Core.Missions
             };
             // Frozen for the whole Mission, so the cached prefix never changes.
             mission.System.Add(MissionPrompts.BaseLayer);
-            mission.System.Add(MissionPrompts.MissionLayer(id));
+            mission.System.Add(MissionPrompts.MissionLayer(id, goal));
             var settings = start.Settings != null ? start.Settings.Copy() : MissionSettingsValues.Defaults(_config);
             settings.WriteTo(mission.Settings);
             mission.System.Add(MissionPrompts.TimingLayer(settings));
