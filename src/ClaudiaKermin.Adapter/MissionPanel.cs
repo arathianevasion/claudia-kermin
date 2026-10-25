@@ -406,7 +406,7 @@ namespace ClaudiaKermin.Adapter
             GUILayout.Space(ClaudiaSkin.Padding);
             GUILayout.Label("Raise Spending Cap to $", ClaudiaSkin.Body, GUILayout.ExpandWidth(false));
             GUI.SetNextControlName(RaiseControl);
-            _raiseTo = GUILayout.TextField(_raiseTo, 10, ClaudiaSkin.TextField, GUILayout.Width(90));
+            _raiseTo = GUILayout.TextField(_raiseTo, 10, ClaudiaSkin.TextField, GUILayout.Width(ClaudiaSkin.Scaled(90)));
             decimal cap;
             GUI.enabled = decimal.TryParse(_raiseTo, NumberStyles.Number, CultureInfo.InvariantCulture, out cap) && cap > _view.SpendingCap;
             if (ClaudiaSkin.PrimaryButton("Raise", GUILayout.ExpandWidth(false)))
@@ -465,7 +465,7 @@ namespace ClaudiaKermin.Adapter
             _summary.Draw(rect, new GUIContent(ClaudiaSkin.Ellipsize(text, _summary, rect.width), text), false, false, false, false);
         }
 
-        // "$1.42 / $10.00" over an 84×4 bar (84 times the font scale): accent, amber from 80% of the Spending Cap.
+        // "$1.42 / $10.00" over a bar 84 px wide (times the font scale) and 4 px high: accent, amber from 80% of the Spending Cap.
         private void DrawSpendMeter()
         {
             GUILayout.BeginVertical(GUILayout.ExpandWidth(false));

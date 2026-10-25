@@ -119,7 +119,7 @@ namespace ClaudiaKermin.Adapter
         public static GUIStyle Secondary { get { Build(); return _secondary; } }
         /// <summary>Muted text, 12 px (times FontScale), wrapping.</summary>
         public static GUIStyle Muted { get { Build(); return _muted; } }
-        /// <summary>16 px bold, for names and headers.</summary>
+        /// <summary>16 px bold times FontScale, for names and headers.</summary>
         public static GUIStyle Heading { get { Build(); return _heading; } }
         /// <summary>Monospace body text (an OS font; the skin's font when none is found).</summary>
         public static GUIStyle Mono { get { Build(); return _mono14; } }

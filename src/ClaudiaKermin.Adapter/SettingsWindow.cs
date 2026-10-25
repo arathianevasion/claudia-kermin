@@ -292,7 +292,7 @@ namespace ClaudiaKermin.Adapter
             GUILayout.BeginHorizontal();
             GUILayout.Label("$", ClaudiaSkin.Body, GUILayout.ExpandWidth(false));
             GUI.SetNextControlName(CapControl);
-            _cap = GUILayout.TextField(_cap, 10, ClaudiaSkin.TextField, GUILayout.Width(120));
+            _cap = GUILayout.TextField(_cap, 10, ClaudiaSkin.TextField, GUILayout.Width(ClaudiaSkin.Scaled(120)));
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
             if (error.Length > 0) GUILayout.Label(error, ClaudiaSkin.DangerText);
