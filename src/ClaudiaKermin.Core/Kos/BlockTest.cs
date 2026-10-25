@@ -14,10 +14,22 @@ namespace ClaudiaKermin.Core.Kos
     /// Script Result must meet. Format: <c>name = value</c> lines, <c>#</c> comments; each
     /// <c>check = field op value</c> compares one result field (dotted for nested lexicons, e.g.
     /// <c>orbit.ap</c>) with <c>==</c>, <c>!=</c>, <c>&lt;</c>, <c>&lt;=</c>, <c>&gt;</c> or <c>&gt;=</c>.
+    /// <c>value</c> is a literal, never another field: a number; for <c>==</c> and <c>!=</c> also <c>true</c>,
+    /// <c>false</c>, a vessel situation (<c>LANDED</c>), a stock body (<c>Kerbin</c>) or nothing (an empty
+    /// string). Anything else (a field name, say) is refused when the spec is read; a test that needs to
+    /// compare two fields has its <c>test.ks</c> report the comparison.
     /// </summary>
     public sealed class BlockTestSpec
     {
         private static readonly string[] Operators = { "==", "!=", "<=", ">=", "<", ">" };
+
+        /// <summary>kOS's <c>status</c> values and the stock bodies' names: the words a check may compare with.</summary>
+        private static readonly string[] KnownValues =
+        {
+            "PRELAUNCH", "LANDED", "SPLASHED", "FLYING", "SUB_ORBITAL", "ORBITING", "ESCAPING", "DOCKED",
+            "Sun", "Moho", "Eve", "Gilly", "Kerbin", "Mun", "Minmus", "Duna", "Ike", "Dres", "Jool", "Laythe",
+            "Vall", "Tylo", "Bop", "Pol", "Eeloo",
+        };
 
         public string Name { get; private set; }
         public string Block { get; private set; }
@@ -84,7 +96,7 @@ namespace ClaudiaKermin.Core.Kos
                     case "tumble_rate": spec.TumbleRate = Number(name, value); break;
                     case "timeout_s": spec.TimeoutSeconds = Number(name, value); break;
                     case "check":
-                        Split(name, value);
+                        Readable(name, value, Split(name, value));
                         spec.Checks.Add(value);
                         break;
                     default: throw new FormatException(name + ": unknown setting '" + key + "'");
@@ -146,6 +158,23 @@ namespace ClaudiaKermin.Core.Kos
                 return new[] { check.Substring(0, at).Trim(), op, rest.Trim() };
             }
             throw new FormatException(name + ": a check needs 'field op value': " + check);
+        }
+
+        /// <summary>Throws unless the check's expected value is one <see cref="Holds"/> reads as a literal.</summary>
+        private static void Readable(string name, string check, string[] parts)
+        {
+            double number;
+            if (double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out number)) return;
+            if (parts[1] == "==" || parts[1] == "!=")
+            {
+                var expected = parts[2];
+                if (expected.Length == 0 || string.Equals(expected, "true", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(expected, "false", StringComparison.OrdinalIgnoreCase)
+                    || KnownValues.Any(k => string.Equals(k, expected, StringComparison.OrdinalIgnoreCase))) return;
+                throw new FormatException(name + ": '" + check + "' compares with '" + expected
+                    + "', which is not a number, true, false, a situation or a body (a check can't name another field)");
+            }
+            throw new FormatException(name + ": '" + check + "' needs a number after " + parts[1]);
         }
 
         private static bool TryField(IDictionary<string, object> report, string path, out object value)

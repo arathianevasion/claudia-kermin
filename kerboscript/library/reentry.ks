@@ -25,7 +25,8 @@
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block (this block never stages: it holds no burn, so auto-staging never fires).
 //| Extra results: max_g (peak g felt, in g), max_temp_pct (hottest part, in percent of its limit),
 //| geo (lexicon lat, lng, alt where it ended), splashed (true if it ended in water), touchdown_speed
-//| (m/s just before contact; over 15 m/s fails the block). Fails with "body has no atmosphere", an
+//| (m/s just before contact; over 15 m/s fails the block), shield_dropped (true if the heat shield's
+//| decoupler fired and the craft lost the part). Fails with "body has no atmosphere", an
 //| orbit that never reaches the atmosphere, an option it can't read, a hard
 //| touchdown, or an abort (a mid-air abort still opens the parachutes if that is safe).
 //| Fly it after a return or a de-orbit burn, with the orbit's periapsis inside the atmosphere. It does
@@ -223,13 +224,37 @@ function reentry_shield_modules {
     }
     if wanted {
       for name in list("ModuleDecouple", "ModuleAnchoredDecoupler", "ModuleJettison") {
-        if p:hasmodule(name) and p:getmodule(name):hasevent("decouple") {
-          found:add(p:getmodule(name)).
+        if p:hasmodule(name) {
+          local m is p:getmodule(name).
+          local event is reentry_jettison_event(m:alleventnames).
+          if event <> "" {
+            found:add(lexicon("module", m, "event", event)).
+          }
         }
       }
     }
   }
   return found.
+}
+
+// The event, of a decoupler module's event names, that drops what it holds; "" if it has none. kOS
+// names an event by its menu text, which a part may rename (stock HeatShield1's ModuleDecouple lists
+// "jettison heat shield", not "decouple"), so the known names come first, then any that says it.
+function reentry_jettison_event {
+  parameter names.
+  for wanted in list("decouple", "jettison heat shield", "jettison") {
+    for name in names {
+      if name:tolower = wanted {
+        return name.
+      }
+    }
+  }
+  for name in names {
+    if name:tolower:contains("decouple") or name:tolower:contains("jettison") {
+      return name.
+    }
+  }
+  return "".
 }
 
 // True if the decoupler p is a heat shield or sits against one.
@@ -306,7 +331,7 @@ function reentry_abort {
 
 function reentry {
   parameter options is lexicon().
-  local extra is lexicon("max_g", 0, "max_temp_pct", 0, "geo", lexicon(), "splashed", false, "touchdown_speed", -1).
+  local extra is lexicon("max_g", 0, "max_temp_pct", 0, "geo", lexicon(), "splashed", false, "touchdown_speed", -1, "shield_dropped", false).
   local ctx is claudia_begin("reentry", options, reentry_defaults(), "auto").
   if ctx:error <> "" {
     return claudia_finish(ctx, false, ctx:error, extra).
@@ -368,12 +393,14 @@ function reentry {
     }
 
     if reentry_shield_due(shield_gone, last_speed, agl) {
-      for m in shield {
-        m:doevent("decouple").
+      local count_before is ship:parts:length.
+      for drop in shield {
+        drop:module:doevent(drop:event).
       }
       set shield_gone to true.
       // The shield leaving is not a part lost: count what is left once it has gone.
       wait 0.5.
+      set extra:shield_dropped to ship:parts:length < count_before.
       set ctx:parts to ship:parts:length.
     }
     local chute_plan is reentry_chute_stage(opt:chute_mode, has_drogues, drogues_out, mains_out, last_speed, agl, pressure).

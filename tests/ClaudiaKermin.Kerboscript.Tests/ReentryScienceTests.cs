@@ -141,6 +141,26 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(due ? "True" : "False", One(string.Format(CultureInfo.InvariantCulture, "reentry_shield_due({0}, {1}, {2})", gone.ToString().ToLowerInvariant(), speed, agl)));
         }
 
+        // #214: stock HeatShield1's ModuleDecouple is renamed by its menuName, so kOS lists its event as
+        // "jettison heat shield", never "decouple", and a lookup by that one name found no shield to drop.
+        [Theory]
+        [InlineData("list(\"jettison heat shield\", \"disable staging\")", "jettison heat shield")]
+        [InlineData("list(\"decouple\")", "decouple")]
+        [InlineData("list(\"Jettison\")", "Jettison")]
+        [InlineData("list(\"toggle staging\", \"decouple top node\")", "decouple top node")]
+        [InlineData("list(\"disable staging\")", "")]
+        [InlineData("list()", "")]
+        public void The_heat_shield_is_dropped_by_whichever_decouple_or_jettison_event_its_module_has(string events, string chosen)
+        {
+            Assert.Equal(chosen, One("reentry_jettison_event(" + events + ")"));
+        }
+
+        [Fact]
+        public void The_prompt_docs_name_shield_dropped()
+        {
+            Assert.Contains("shield_dropped", CoreLibrary.FullDocs(new[] { "reentry" }));
+        }
+
         [Fact]
         public void The_chute_speed_is_below_the_shield_speed_so_the_shield_goes_first()
         {

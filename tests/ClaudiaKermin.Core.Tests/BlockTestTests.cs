@@ -143,5 +143,37 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Throws<System.FormatException>(() => BlockTestSpec.Parse("t", "block = exec_node\ncheck = residual about 0.5\n"));
             Assert.Throws<System.FormatException>(() => BlockTestSpec.Parse("t", "craft = x.craft\n"));
         }
+
+        // #214: "kept == ran" and "parts_after < parts_before" compared a field with the literal
+        // strings "ran" and "parts_before", so they could never pass; that must fail at load instead.
+        [Theory]
+        [InlineData("check = kept == ran")]
+        [InlineData("check = parts_after < parts_before")]
+        [InlineData("check = situation == landed_somewhere")]
+        [InlineData("check = residual < true")]
+        [InlineData("check = situation > ORBITING")]
+        [InlineData("check = residual <= ")]
+        public void ARightHandSideThatIsNotANumberBoolOrKnownValueIsRejectedWhenTheSpecIsRead(string check)
+        {
+            var e = Assert.Throws<System.FormatException>(() => BlockTestSpec.Parse("t", "block = exec_node\n" + check + "\n"));
+            Assert.Contains(check.Substring("check = ".Length).Trim(), e.Message);
+        }
+
+        [Theory]
+        [InlineData("check = residual < 0.5")]
+        [InlineData("check = dv_used >= -1e3")]
+        [InlineData("check = success == true")]
+        [InlineData("check = success != False")]
+        [InlineData("check = situation == ORBITING")]
+        [InlineData("check = situation != splashed")]
+        [InlineData("check = situation == SUB_ORBITAL")]
+        [InlineData("check = body == Kerbin")]
+        [InlineData("check = body == Mun")]
+        [InlineData("check = reason == ")]
+        public void ANumberABoolASituationABodyOrNothingIsARightHandSideTheCheckerReads(string check)
+        {
+            var spec = BlockTestSpec.Parse("t", "block = exec_node\n" + check + "\n");
+            Assert.Single(spec.Checks);
+        }
     }
 }

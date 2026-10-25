@@ -4,7 +4,8 @@
 // science block test: the Mission Script the debug block test runner starts (bundled with the Core
 // Library, as for a real Mission). The probe arrives in a 100 km circular Kerbin orbit in Sandbox.
 // science runs once, keeping the data, then again: the second call must run nothing, because every
-// experiment now holds data. The Script Result is the first call's plus counts of the entries.
+// experiment now holds data. The Script Result is the first call's plus counts of the entries, and
+// kept_all: every experiment that ran kept its data.
 
 @lazyglobal off.
 
@@ -29,6 +30,8 @@ for entry in second:results {
 }
 set first["ran"] to ran.
 set first["kept"] to kept.
+// The checker compares a field with a literal only, so the comparison of two counts is reported.
+set first["kept_all"] to kept = ran.
 set first["ran_again"] to ran_again.
 set first["success_again"] to second:success.
 print "science test: success " + first:success + ", ran " + ran + ", kept " + kept + ", ran again " + ran_again + ", " + first:reason.
