@@ -1,8 +1,8 @@
 ship = Claudia lander test
 version = 1.12.5
-description = Block test craft for land and ascend: OKTO2 probe core, kOS KR-2042, two batteries, FL-T800, LV-909 and four LT-1 landing legs. Stock parts plus kOS, KSP 1.12.5. Part nodes carry placement and staging only; module and resource data take the parts' defaults.
+description = Block test craft for land and ascend: OKTO2 probe core, kOS KR-2042, two batteries, a Small Inline Reaction Wheel on top of the probe core (the OKTO2 has none, and the lander has to point without thrust), FL-T800, LV-909 and four LT-1 landing legs. Stock parts plus kOS, KSP 1.12.5. Part nodes carry placement and staging only; module and resource data take the parts' defaults.
 type = VAB
-size = 2.6,5.9,2.6
+size = 2.6,6.0822218,2.6
 steamPublishedFileId = 0
 persistentId = 3089373780
 rot = 0,0,0,0
@@ -39,7 +39,46 @@ PART
 	modMass = 0
 	modSize = 0,0,0
 	link = kOSMachine1m_4294597990
+	link = sasModule_4294700001
 	attN = bottom,kOSMachine1m_4294597990_0|-0.0610621013|0_0|-1|0_0|-0.0610621013|0_0|-1|0
+	attN = top,sasModule_4294700001_0|0.0610621013|0_0|1|0_0|0.0610621013|0_0|1|0
+	EVENTS
+	{
+	}
+	ACTIONS
+	{
+	}
+	PARTDATA
+	{
+	}
+}
+PART
+{
+	part = sasModule_4294700001
+	partName = Part
+	persistentId = 2622052600
+	pos = 0,15.152173,0
+	attPos = 0,0,0
+	attPos0 = 0,0.152173042,0
+	rot = 0,0,0,1
+	attRot = 0,0,0,1
+	attRot0 = 0,0,0,1
+	mir = 1,1,1
+	symMethod = Radial
+	autostrutMode = Off
+	rigidAttachment = False
+	istg = -1
+	resPri = 0
+	dstg = 0
+	sidx = -1
+	sqor = -1
+	sepI = -1
+	attm = 0
+	sameVesselCollision = False
+	modCost = 0
+	modMass = 0
+	modSize = 0,0,0
+	attN = bottom,probeCoreOcto2.v2_4294601898_0|-0.0911109|0_0|-1|0_0|-0.0911109|0_0|-1|0
 	EVENTS
 	{
 	}
