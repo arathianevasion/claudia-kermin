@@ -281,6 +281,11 @@ namespace ClaudiaKermin.Core.Missions
         public bool Remote;
         /// <summary>While Paused for EVA science: what the player is to do by hand, then Resume; "" otherwise.</summary>
         public string EvaScience = "";
+        /// <summary>
+        /// The waiting call: Claudia's next request would pass the Spending Cap, so it waits unsent for Raise cap while the
+        /// Mission carries on (a run is never Paused for it); the screen message's text, or "" when nothing waits.
+        /// </summary>
+        public string CapWait = "";
         /// <summary>The question shown with Yes/Not yet after a typed reply; null otherwise.</summary>
         public string ConfirmPrompt;
 

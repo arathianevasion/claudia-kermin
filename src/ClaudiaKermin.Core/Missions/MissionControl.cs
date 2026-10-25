@@ -140,6 +140,12 @@ namespace ClaudiaKermin.Core.Missions
             public string Notice;
             /// <summary>A rewrite after a failed Script Check: if this script fails too, there is no further automatic rewrite.</summary>
             public bool ScriptRewrite;
+            /// <summary>
+            /// Sent while a run is live or near one (a hand-back Debrief and its revision, a late-Approval re-plan): at the
+            /// Spending Cap it waits for Raise cap instead of Pausing the Mission (<see cref="WaitForCap"/>). A turn sent
+            /// while Running always waits.
+            /// </summary>
+            public bool Waits;
             public List<Message> Messages;
             public CancellationTokenSource Cancel;
         }
@@ -214,6 +220,10 @@ namespace ClaudiaKermin.Core.Missions
             public bool Warned;
             /// <summary>Paused because of the Spending Cap, so Raise cap resumes it.</summary>
             public bool PausedForCap;
+            /// <summary>The waiting call: the pending turn would pass the Spending Cap, so it waits unsent for Raise cap while the Mission carries on.</summary>
+            public bool WaitingForCap;
+            /// <summary>What the waiting call's screen message said, for the view; "" when nothing waits.</summary>
+            public string CapWaitText = "";
             public int Requests;
             /// <summary>How the last request ended, for the cost log.</summary>
             public string Settlement = "";
@@ -563,6 +573,7 @@ namespace ClaudiaKermin.Core.Missions
                 Effort = "high",
                 UserText = MissionPrompts.LateApprovalReplan(_ut, plan.ExpectedDeltaV, next) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.LateReplanNotice,
+                Waits = true,
             });
             return false;
         }
@@ -719,6 +730,8 @@ namespace ClaudiaKermin.Core.Missions
             mission.EvaScience = "";
             mission.PauseReason = "";
             mission.PausedForCap = false;
+            mission.WaitingForCap = false;
+            mission.CapWaitText = "";
             mission.Stage = MissionStage.Lost;
             ClearUnanswered(mission);
 
@@ -826,7 +839,9 @@ namespace ClaudiaKermin.Core.Missions
             request.Messages.AddRange(mission.Conversation);
             request.Messages.AddRange(turn.Messages);
             decimal worstCase;
-            if (!MaySend(mission, request, out worstCase)) return;
+            if (!MaySend(mission, request, turn.Waits || IsRunning(mission), out worstCase)) return;
+            mission.WaitingForCap = false;
+            mission.CapWaitText = "";
 
             // Recorded before sending; replaced by the real usage, or kept if the request is cancelled or lost.
             mission.PendingCharge = worstCase;
@@ -845,18 +860,35 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>
         /// The Spending Cap's pre-send check: spent + kept charges + the request's estimated input and its
-        /// worst-case <c>max_tokens</c> output must fit the cap, or the request is not sent and the Mission is
-        /// Paused with Raise cap or End Mission.
+        /// worst-case <c>max_tokens</c> output must fit the cap, or the request is not sent. A request that
+        /// <paramref name="waits"/> becomes the waiting call (<see cref="WaitForCap"/>); any other Pauses the
+        /// Mission with Raise cap or End Mission (story 124).
         /// </summary>
-        private bool MaySend(Mission mission, MessagesRequest request, out decimal worstCase)
+        private bool MaySend(Mission mission, MessagesRequest request, bool waits, out decimal worstCase)
         {
             // About 3 characters a token, rounded up: the estimate leans high.
             var estimatedInput = (request.ToJson().Length + 2) / 3;
             worstCase = _config.Prices.WorstCase(mission.Model, estimatedInput, request.MaxTokens);
             if (mission.Committed + worstCase <= mission.SpendingCap) return true;
             LogCost(mission, "blocked", worstCase, "over_cap");
-            PauseForCap(mission, "The next request could pass the Spending Cap ($" + Dollars(mission.SpendingCap) + "). Raise cap to carry on, or End Mission.");
+            if (waits) WaitForCap(mission);
+            else PauseForCap(mission, "The next request could pass the Spending Cap ($" + Dollars(mission.SpendingCap) + "). Raise cap to carry on, or End Mission.");
             return false;
+        }
+
+        /// <summary>
+        /// The waiting call (story 125): a request sent while a run is live, or near one, that would pass the Spending Cap
+        /// is kept unsent as the pending turn. The Mission stays where it is (a run carries on without Claudia), a screen
+        /// message says so, and Raise cap sends it (<see cref="Raised"/>).
+        /// </summary>
+        private void WaitForCap(Mission mission)
+        {
+            if (mission.WaitingForCap) return;
+            mission.WaitingForCap = true;
+            mission.CapWaitText = "Claudia's next request waits: it could pass the Spending Cap ($" + Dollars(mission.SpendingCap) + "). "
+                + (IsRunning(mission) ? "The sequence carries on without her; Raise cap to send it." : "Raise cap to send it, or End Mission.");
+            Note(LogKind.Notice, mission.CapWaitText);
+            _commands.Add(new PostScreenMessage(mission.CapWaitText, always: true));
         }
 
         private void Streamed(Mission mission, Turn turn, StreamUpdate update)
@@ -1395,8 +1427,10 @@ namespace ClaudiaKermin.Core.Missions
                 Note(LogKind.Notice, text);
                 NeedsPlayer(text);
             }
-            if (mission.Committed < mission.SpendingCap || mission.PausedForCap) return;
-            // A running sequence is not touched: its script finishes and the Debrief waits for Raise cap.
+            if (mission.Committed < mission.SpendingCap || mission.PausedForCap || mission.WaitingForCap) return;
+            // While Running the Mission is never Paused (story 125): the script finishes, a live call waits at the cap,
+            // and the Debrief Pauses for Raise cap (story 124).
+            if (IsRunning(mission)) return;
             var reason = "The Spending Cap is reached ($" + Dollars(mission.Committed) + " of $" + Dollars(mission.SpendingCap) + "). Raise cap to carry on, or End Mission.";
             if (mission.Stage == MissionStage.Paused) mission.PauseReason += " " + reason;
             else Pause(mission, reason);
@@ -1427,6 +1461,8 @@ namespace ClaudiaKermin.Core.Missions
                     mission.PauseReason = EvaPauseReason(mission.EvaScience);
                 }
             }
+            if (mission.WaitingForCap && mission.Pending != null && !mission.InFlight && mission.Stage != MissionStage.Paused)
+                Send(mission, mission.Pending);
         }
 
         private void LogCost(Mission mission, string kind, decimal amount, string outcome)
@@ -1507,6 +1543,7 @@ namespace ClaudiaKermin.Core.Missions
                 view.Remote = mission.Remote;
                 view.EvaScience = mission.EvaScience;
                 view.ConfirmPrompt = mission.ConfirmPrompt;
+                view.CapWait = mission.CapWaitText;
                 // Entries are stamped with the UT of the rebuild that first shows them, for "3h 5m ago" in the log.
                 foreach (var entry in mission.Log)
                     if (entry.Ut <= 0) entry.Ut = _ut;
@@ -1568,6 +1605,8 @@ namespace ClaudiaKermin.Core.Missions
                         ? new List<QuickReply> { QuickReply.ConfirmApproval, QuickReply.NotYet }
                         : new List<QuickReply> { first ?? QuickReply.Approve, QuickReply.ChangeSomething, QuickReply.AskQuestion };
                 }
+                if (mission.WaitingForCap && !view.QuickReplies.Contains(QuickReply.RaiseCap))
+                    view.QuickReplies = view.QuickReplies.Concat(new[] { QuickReply.RaiseCap }).ToList();
             }
             _view = view;
         }

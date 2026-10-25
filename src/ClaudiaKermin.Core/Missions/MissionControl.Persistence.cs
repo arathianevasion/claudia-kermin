@@ -120,6 +120,7 @@ namespace ClaudiaKermin.Core.Missions
                     UserText = turn.UserText,
                     Notice = turn.Notice,
                     ScriptRewrite = turn.ScriptRewrite,
+                    Waits = turn.Waits,
                     BaseMessages = mission.Conversation.Count,
                 });
             }
@@ -414,6 +415,7 @@ namespace ClaudiaKermin.Core.Missions
                     UserText = unanswered.UserText,
                     Notice = unanswered.Notice,
                     ScriptRewrite = unanswered.ScriptRewrite,
+                    Waits = unanswered.Waits,
                 };
                 var requestStage = StageOf(purpose);
                 var settled = requestStage != MissionStage.None ? requestStage : Settle(mission, state.Stage == MissionStage.Paused ? state.StageBeforePause : state.Stage);

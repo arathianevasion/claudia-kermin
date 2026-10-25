@@ -198,6 +198,7 @@ namespace ClaudiaKermin.Core.Missions
                 UserText = MissionPrompts.HandBackReport(plan, mission.ManualPlanned, mission.ManualOrigin, mission.HandBackMessage)
                     + "\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.HandBackDebriefNotice(mission.ManualPlanned),
+                Waits = true,
             };
         }
 
@@ -211,6 +212,7 @@ namespace ClaudiaKermin.Core.Missions
                 Effort = "high",
                 UserText = "Revise the Mission Plan.\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.RevisedPlanNotice,
+                Waits = true,
             });
         }
 

@@ -455,7 +455,7 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
-        public void TheHandBackRequestsGoThroughTheSpendingCapAndAHandBackThatWouldPassTheCapPausesTheMission()
+        public void TheHandBackRequestsGoThroughTheSpendingCapAndAHandBackThatWouldPassTheCapWaitsWithoutPausing()
         {
             var transport = Replies("mission-plan.sse", "mission-sequence-plan-priced.sse", "mission-debrief-manual.sse", "mission-plan.sse");
             var mission = Control(transport);
@@ -470,8 +470,11 @@ namespace ClaudiaKermin.Core.Tests
 
             mission.Send(new HandBack("done"));
 
-            Assert.Equal(MissionStage.Paused, mission.View.Stage);
-            Assert.Equal(new[] { QuickReply.RaiseCap, QuickReply.EndMission }, mission.View.QuickReplies);
+            // The waiting call: the Debrief waits unsent for Raise cap, the Mission is not Paused, and a screen message says so.
+            Assert.Equal(MissionStage.Debriefing, mission.View.Stage);
+            Assert.Equal(new[] { QuickReply.RaiseCap }, mission.View.QuickReplies);
+            Assert.Contains("Spending Cap", mission.View.CapWait);
+            Assert.Contains(mission.TakeCommands().OfType<PostScreenMessage>(), m => m.Always && m.Text.Contains("Spending Cap"));
             Assert.Equal(2, transport.Requests.Count);
 
             mission.Send(new RaiseCap(10m));
