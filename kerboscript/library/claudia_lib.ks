@@ -7,7 +7,7 @@
 // are the docs Claudia reads in her prompt; keep them true.
 //
 // Conventions every block follows (the contract later blocks copy):
-// - A block is one global function named as in the spec (exec_node, launch, ...) taking one options
+// - A block is one global function named as in the spec (exec_node, launch, transfer_to, ...; never a kOS built-in such as transfer) taking one options
 //   lexicon, in its own file kerboscript/library/<block>.ks. Options are snake_case, SI units, with
 //   documented defaults returned by <block>_defaults(); an unknown option fails at once with reason
 //   "unknown option <name>". Block-only helpers are prefixed <block>_.
