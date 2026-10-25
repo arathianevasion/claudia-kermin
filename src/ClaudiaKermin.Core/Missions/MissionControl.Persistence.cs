@@ -564,7 +564,7 @@ namespace ClaudiaKermin.Core.Missions
                 case MissionStage.Running:
                 case MissionStage.Debriefing:
                     mission.Owed = Owed.Debrief;
-                    mission.OwedOutcome = new RunOutcome(RunOutcomeKind.Interrupted, null, "", mission.InterruptReason ?? "the game was loaded, quit or crashed while it ran", false);
+                    mission.OwedOutcome = new RunOutcome(RunOutcomeKind.Interrupted, null, mission.ScriptError, mission.InterruptReason ?? "the game was loaded, quit or crashed while it ran", false);
                     return MissionStage.Debriefing;
                 case MissionStage.Sequencing:
                     mission.Owed = Owed.SequencePlan;

@@ -657,6 +657,27 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ASavedScriptErrorReachesTheOwedDebriefAfterALoad()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport);
+            ToRunning(mission);
+            var state = Saved(mission)[0];
+            state.ScriptError = "undefined variable xyzzy";
+
+            var after = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-debrief.sse"));
+            var resumed = Control(after);
+            resumed.Send(new MissionsRestored(_save.Path, new List<MissionSaveState> { MissionSaveState.FromValues(state.ToValues()) }));
+            resumed.Send(new SceneChanged(GameScene.Flight));
+            resumed.Send(OnPad());
+            DrainUntil(resumed, v => v.Stage == MissionStage.Succeeded);
+            var turn = Messages(after.Requests[0]).Where(m => m.GetProperty("role").GetString() == "user").Select(Text).Last();
+            Assert.Contains("undefined variable xyzzy", turn);
+        }
+
+        [Fact]
         public void AnOlderSaveWithoutRunEventsLoadsEmpty()
         {
             var transport = new StreamingFakeTransport(
