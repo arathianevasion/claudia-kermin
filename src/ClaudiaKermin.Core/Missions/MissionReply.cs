@@ -4,6 +4,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using ClaudiaKermin.Core.Claude;
+using ClaudiaKermin.Core.Kos;
 
 namespace ClaudiaKermin.Core.Missions
 {
@@ -374,14 +375,20 @@ namespace ClaudiaKermin.Core.Missions
                     Risks = Strings(sequence["risks"]),
                     TelemetryChecks = Checks(sequence["telemetry_checks"]),
                     Script = JsonNode.Str(sequence["script"]) ?? "",
-                    CustomScript = JsonNode.Bool(sequence["custom_script"]) ?? false,
-                    CustomScriptReason = JsonNode.Str(sequence["custom_script_reason"]) ?? "",
                     DueTimeUt = NonNegative(sequence["due_time_ut"]),
                     WindowClosesUt = NonNegative(sequence["window_closes_ut"]),
                     LateWindowDeltaV = NonNegative(sequence["late_window_dv"]),
                     Manual = JsonNode.Bool(sequence["manual"]) ?? false,
                     Vessel = (JsonNode.Str(sequence["vessel"]) ?? "").Trim(),
                 };
+                // The badge is read from the script, not taken from Claudia's custom_script; her reason text is kept when it is custom.
+                var proposed = reply.SequencePlan;
+                proposed.CustomScript = proposed.Script.Trim().Length > 0 && ScriptProvenance.IsCustom(proposed.Script);
+                if (proposed.CustomScript)
+                {
+                    var reason = (JsonNode.Str(sequence["custom_script_reason"]) ?? "").Trim();
+                    proposed.CustomScriptReason = reason.Length > 0 ? reason : "It is not built from Building Blocks alone.";
+                }
             }
 
             var debrief = Object(root["debrief"]);

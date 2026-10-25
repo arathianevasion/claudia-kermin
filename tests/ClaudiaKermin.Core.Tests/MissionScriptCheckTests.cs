@@ -281,12 +281,27 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void APlanBuiltFromBuildingBlocksHasNoCustomScriptBadge()
         {
-            // mission-sequence-plan.sse leaves custom_script out, which reads as false.
+            // The fixture says custom_script true, but its script only calls circularize: the badge follows the script.
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan-blocks.sse");
+            var mission = Control(transport);
+            ApproveMissionPlan(mission);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+            var card = Assert.Single(SequenceCards(mission.View));
+            Assert.False(card.CustomScript);
+            Assert.Equal("", card.CustomScriptReason);
+        }
+
+        [Fact]
+        public void APlanThatCallsNoBuildingBlockIsACustomScriptEvenWhenClaudiaLeavesTheFlagOut()
+        {
+            // mission-sequence-plan.sse leaves custom_script out and calls no Building Block.
             var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
             var mission = Control(transport);
             ApproveMissionPlan(mission);
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
-            Assert.False(Assert.Single(SequenceCards(mission.View)).CustomScript);
+            var card = Assert.Single(SequenceCards(mission.View));
+            Assert.True(card.CustomScript);
+            Assert.NotEqual("", card.CustomScriptReason);
         }
 
         [Fact]

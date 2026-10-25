@@ -1,0 +1,33 @@
+event: message_start
+data: {"type":"message_start","message":{"id":"msg_01MissionSequenceBlocks","type":"message","role":"assistant","content":[],"model":"claude-sonnet-5-5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":3400,"cache_creation_input_tokens":300,"cache_read_input_tokens":2600,"output_tokens":1}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"c2lnLXNlcXVlbmNl"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"{\"kind\":\"sequence_plan\",\"say\":\"Sequence Plan: circularize.\",\"reply_intent\":\"none\",\"mission_plan\":null,"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"\"sequence_plan\":{\"name\":\"Circularize\",\"intent\":\"Circularize with the Building Block.\",\"why\":\"Proves the block path.\",\"target\":\"A report with success true\",\"tolerances\":\"none\",\"expected_delta_v\":0,\"expected_duration_s\":5,\"abort_conditions\":[\"no report within 30 s\"],\"risks\":[\"none\"],"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"\"custom_script\":true,\"custom_script_reason\":\"Claudia says custom, the script says otherwise.\",\"script\":\"local res is circularize().\\nADDONS:CLAUDIA:REPORT(LEXICON(\\\"success\\\", res:success)).\\n\"},\"debrief\":null}"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":310,"iterations":[{"type":"message","input_tokens":3400,"output_tokens":310}]}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
