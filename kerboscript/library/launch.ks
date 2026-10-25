@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Andrew Watson
 //
 // Building Block launch: flies from the ground of a body with an atmosphere to a coast out of it.
-// Built on claudia_lib.ks; block-only helpers are prefixed launch_. The "//|" lines are Claudia's
-// docs for it; the first is its summary.
+// Built on claudia_lib.ks and KSLib's lib_lazcalc.ks (bundled, kerboscript/kslib/) for its heading;
+// block-only helpers are prefixed launch_. The "//|" lines are Claudia's docs for it; the first is
+// its summary.
 
 @lazyglobal off.
 
