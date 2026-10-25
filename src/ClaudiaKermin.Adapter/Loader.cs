@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Andrew Watson
 
+using System;
+using System.Collections.Generic;
 using System.IO;
 using ClaudiaKermin.Core;
 using ClaudiaKermin.Core.Chat;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Config;
+using ClaudiaKermin.Core.Ui;
 using ClaudiaKermin.ScriptCheck;
 using KSP.UI.Screens;
 using MissionControl = ClaudiaKermin.Core.Missions.MissionControl;
@@ -39,11 +42,14 @@ namespace ClaudiaKermin.Adapter
         private Texture2D _icon;
         private Texture2D _iconAttention;
         private bool _attentionShown;
+        private string _kosProblem = "";
+        private bool _kosProblemShown;
 
         private void Awake()
         {
             DontDestroyOnLoad(this);
             Debug.Log(ModInfo.LoadedLine);
+            CheckKos();
 
             var directory = ConfigDirectory.ResolveCurrent();
             var config = PlayerConfig.LoadOrCreate(directory);
@@ -71,6 +77,24 @@ namespace ClaudiaKermin.Adapter
             GameEvents.onHideUI.Add(HideUI);
             GameEvents.onShowUI.Add(ShowUI);
             GameEvents.onGameSceneLoadRequested.Add(SceneChanging);
+        }
+
+        // KSP refuses ClaudiaKermin.KOS.dll without kOS 1.6+ and only logs its own warning, and this assembly
+        // loads without kOS: so say it here, in the log now and on screen once the first scene is up.
+        private void CheckKos()
+        {
+            var loaded = new List<KeyValuePair<string, Version>>();
+            foreach (var entry in AssemblyLoader.loadedAssemblies)
+            {
+                if (entry.assembly == null) continue;
+                var version = entry.assembly.GetName().Version;
+                // kOS declares its version to KSP with KSPAssembly: the one KSPAssemblyDependency is checked against.
+                foreach (KSPAssembly declared in entry.assembly.GetCustomAttributes(typeof(KSPAssembly), false))
+                    version = new Version(declared.versionMajor, declared.versionMinor);
+                loaded.Add(new KeyValuePair<string, Version>(entry.name, version));
+            }
+            _kosProblem = KosPresence.Check(KosPresence.Find(loaded));
+            if (_kosProblem.Length > 0) Debug.LogError(ModInfo.LogTag + " " + _kosProblem);
         }
 
         private void OnDestroy()
@@ -205,6 +229,11 @@ namespace ClaudiaKermin.Adapter
                 _iconAttention = LoadIcon(AttentionIconUrl, ClaudiaSkin.Attention);
             }
             _attentionShown = false;
+            if (_kosProblem.Length > 0 && !_kosProblemShown)
+            {
+                _kosProblemShown = true;
+                ScreenMessages.PostScreenMessage(_kosProblem, 15f, ScreenMessageStyle.UPPER_CENTER);
+            }
             _button = ApplicationLauncher.Instance.AddModApplication(
                 ButtonOn, ButtonOff, null, null, null, null, ButtonScenes, _icon);
             if (Toggled) _button.SetTrue(false);
