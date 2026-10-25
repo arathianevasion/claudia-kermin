@@ -192,9 +192,10 @@ namespace ClaudiaKermin.Core.Missions
                     mission.Pending = null;
                     return;
                 }
+                // Recorded before AfterCharge, which may Pause for the cap: a quit then still owes the Debrief.
+                RecordUnanswered(mission, turn);
                 AfterCharge(mission);
                 if (mission != _mission || mission.Stage == MissionStage.Paused) return;
-                RecordUnanswered(mission, turn);
                 Send(mission, turn);
             }
             finally
