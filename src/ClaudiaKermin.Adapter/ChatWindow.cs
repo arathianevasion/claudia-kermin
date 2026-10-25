@@ -29,7 +29,6 @@ namespace ClaudiaKermin.Adapter
         private bool _dumping;
         private GUIStyle _lineStyle;
         private readonly BannerDrawer _banner = new BannerDrawer();
-        // The banner's view of "no Mission": the basic chat has none.
 
         public bool Visible;
 
