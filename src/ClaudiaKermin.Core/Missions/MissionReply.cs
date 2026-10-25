@@ -239,7 +239,7 @@ namespace ClaudiaKermin.Core.Missions
 
         private const string SequencePlanSchema =
             "{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"name\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"telemetry_checks\",\"risks\",\"custom_script\",\"custom_script_reason\",\"script\",\"due_time_ut\",\"window_closes_ut\",\"late_window_dv\",\"manual\",\"vessel\"],"
+            + "\"required\":[\"name\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"telemetry_checks\",\"risks\",\"custom_script_reason\",\"script\",\"due_time_ut\",\"window_closes_ut\",\"late_window_dv\",\"manual\",\"vessel\"],"
             + "\"properties\":{"
             + "\"vessel\":{\"type\":\"string\",\"description\":\"craft, or the name of a Child Vessel from the Mission Plan: the script goes only to that vessel, "
             + "over a CommNet path from you, and every other vessel of the Mission must be stable (in orbit, landed or splashed down) when it starts.\"},"
@@ -259,7 +259,6 @@ namespace ClaudiaKermin.Core.Missions
             + "\"threshold\":{\"type\":\"number\"},"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"}}}},"
             + "\"risks\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},"
-            + "\"custom_script\":{\"type\":\"boolean\",\"description\":\"True when the script is written from scratch instead of from Building Blocks.\"},"
             + "\"custom_script_reason\":{\"type\":\"string\",\"description\":\"For a Custom Script, one short sentence on why no Building Block fits; otherwise empty.\"},"
             + "\"due_time_ut\":{\"type\":\"number\",\"description\":\"The earliest UT in seconds the sequence may start, only when a wait that needs the player comes first; otherwise -1. The script itself warps through waits for windows, daylight or holds.\"},"
             + "\"window_closes_ut\":{\"type\":\"number\",\"description\":\"UT in seconds after which the planned window is missed, if the sequence depends on one; otherwise -1.\"},"
@@ -381,7 +380,7 @@ namespace ClaudiaKermin.Core.Missions
                     Manual = JsonNode.Bool(sequence["manual"]) ?? false,
                     Vessel = (JsonNode.Str(sequence["vessel"]) ?? "").Trim(),
                 };
-                // The badge is read from the script, not taken from Claudia's custom_script; her reason text is kept when it is custom.
+                // The badge is read from the script, not taken from a custom_script field (older transcripts and saved plans may still carry one; it is ignored); her reason text is kept when it is custom.
                 var proposed = reply.SequencePlan;
                 proposed.CustomScript = proposed.Script.Trim().Length > 0 && ScriptProvenance.IsCustom(proposed.Script);
                 if (proposed.CustomScript)

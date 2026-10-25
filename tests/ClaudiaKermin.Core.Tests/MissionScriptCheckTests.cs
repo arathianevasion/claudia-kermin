@@ -294,7 +294,7 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void APlanThatCallsNoBuildingBlockIsACustomScriptEvenWhenClaudiaLeavesTheFlagOut()
         {
-            // mission-sequence-plan.sse leaves custom_script out and calls no Building Block.
+            // mission-sequence-plan.sse has no custom_script and calls no Building Block.
             var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
             var mission = Control(transport);
             ApproveMissionPlan(mission);
@@ -305,13 +305,13 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
-        public void TheReplySchemaAsksWhetherTheScriptIsACustomScript()
+        public void TheReplySchemaAsksOnlyWhyAScriptIsCustom()
         {
             var transport = Replies("mission-plan.sse");
             var mission = Control(transport);
             StartInFlight(mission);
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
-            Assert.Contains("custom_script", transport.Requests[0].Body);
+            Assert.DoesNotContain("\"custom_script\"", transport.Requests[0].Body);
             Assert.Contains("custom_script_reason", transport.Requests[0].Body);
         }
 
