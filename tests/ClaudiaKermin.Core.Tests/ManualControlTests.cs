@@ -251,6 +251,54 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ManualControlIsNotOfferedWhileTheLinkIsDownOrUnsteadyAndTheViewSaysWhy()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
+            var mission = Control(transport);
+            ToRunning(mission);
+            var ut = Pad().Ut;
+            Assert.True(mission.View.ManualControlAllowed);
+            Assert.Equal("", mission.View.ManualControlUnavailable);
+
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 1; }));
+            Assert.DoesNotContain(QuickReply.ManualControl, mission.View.QuickReplies);
+            Assert.Equal("no link to Kerbin and no other crew aboard", mission.View.ManualControlUnavailable);
+
+            // Back, but only just: it may drop again, so the button isn't offered and taking the craft is refused.
+            mission.Send(Pad(s => s.Ut = ut + 2));
+            Assert.False(mission.View.ManualControlAllowed);
+            Assert.DoesNotContain(QuickReply.ManualControl, mission.View.QuickReplies);
+            Assert.Equal("the link to Kerbin is unsteady", mission.View.ManualControlUnavailable);
+            mission.Send(new TakeManualControl());
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+            Assert.Empty(mission.TakeCommands());
+            Assert.Contains(mission.View.Log, e => e.Kind == LogKind.Notice && e.Text.Contains("the link to Kerbin is unsteady"));
+
+            // Steady for the grace: offered again.
+            mission.Send(Pad(s => s.Ut = ut + 7));
+            Assert.Equal(new[] { QuickReply.ManualControl }, mission.View.QuickReplies);
+            Assert.Equal("", mission.View.ManualControlUnavailable);
+            mission.Send(new TakeManualControl());
+            Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
+        }
+
+        [Fact]
+        public void AnUnsteadyLinkDoesNotMatterWithAnotherCrewMemberAboard()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
+            var mission = Control(transport);
+            ToRunning(mission);
+            var ut = Pad().Ut;
+            Action<GameSnapshot> pilot = s => s.Crew.Add(new SnapshotCrewMember { Name = "Jebediah Kerman", Trait = "Pilot" });
+
+            mission.Send(Pad(s => { pilot(s); s.HasLink = false; s.Ut = ut + 1; }));
+            mission.Send(Pad(s => { pilot(s); s.Ut = ut + 2; }));
+
+            Assert.Equal(new[] { QuickReply.ManualControl }, mission.View.QuickReplies);
+            Assert.Equal("", mission.View.ManualControlUnavailable);
+        }
+
+        [Fact]
         public void ARunWithNoLinkAndNoOtherCrewKeepsRunningUntilItEndsNormally()
         {
             var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief.sse");

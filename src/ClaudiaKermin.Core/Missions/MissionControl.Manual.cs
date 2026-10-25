@@ -36,6 +36,8 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>UT of the first Game Snapshot of the current stretch without a link; null while linked.</summary>
         private double? _linkDownSince;
+        /// <summary>UT the link last came back after a drop; until the grace has passed since, the link is unsteady.</summary>
+        private double _linkBackAt = double.NegativeInfinity;
 
         /// <summary>
         /// Keeps the link's history from each Game Snapshot, and takes the craft back once the link has been down in
@@ -44,6 +46,7 @@ namespace ClaudiaKermin.Core.Missions
         /// </summary>
         private void LinkSeen(GameSnapshot snapshot)
         {
+            if (snapshot.HasLink && _linkDownSince.HasValue) _linkBackAt = _ut;
             if (snapshot.HasLink) _linkDownSince = null;
             else if (!_linkDownSince.HasValue) _linkDownSince = _ut;
             var mission = _mission;
@@ -52,10 +55,22 @@ namespace ClaudiaKermin.Core.Missions
             LinkLostDuringManual();
         }
 
-        /// <summary>A link to Kerbin (CommNet off counts) or another non-Tourist crew member aboard: someone could really fly the craft.</summary>
+        /// <summary>
+        /// A steady link to Kerbin (CommNet off counts) or another non-Tourist crew member aboard: someone could really fly
+        /// the craft. A link that came back less than the grace ago doesn't count, so the button isn't offered just before
+        /// the link drops again and Claudia takes the craft back.
+        /// </summary>
         private bool ManualAllowed
         {
-            get { return _snapshot != null && (_snapshot.HasLink || _snapshot.HasOtherCrew); }
+            get { return _snapshot != null && ManualUnavailableBecause().Length == 0; }
+        }
+
+        /// <summary>Why nobody could fly the craft now; "" when someone could (or there is no Game Snapshot yet).</summary>
+        private string ManualUnavailableBecause()
+        {
+            if (_snapshot == null || _snapshot.HasOtherCrew) return "";
+            if (!_snapshot.HasLink) return "no link to Kerbin and no other crew aboard";
+            return _ut - _linkBackAt < _config.ManualLinkGraceSeconds ? "the link to Kerbin is unsteady" : "";
         }
 
         /// <summary>A sequence is Running, or a plan waits for Approval with no request out: the player may take the craft now.</summary>
@@ -100,7 +115,7 @@ namespace ClaudiaKermin.Core.Missions
                 if (_ut - mission.RefusedAt >= RefusalNoticeSeconds)
                 {
                     mission.RefusedAt = _ut;
-                    Note(LogKind.Notice, "Manual Control isn't available: there is no link to Kerbin and no other crew aboard, so the flight controls stay locked.");
+                    Note(LogKind.Notice, "Manual Control isn't available: " + ManualUnavailableBecause() + ", so the flight controls stay locked.");
                 }
                 return;
             }
@@ -125,7 +140,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             if (!ManualAllowed)
             {
-                Note(LogKind.Notice, "Can't start the manual stretch: there is no link to Kerbin and no other crew aboard, so the flight controls stay locked.");
+                Note(LogKind.Notice, "Can't start the manual stretch: " + ManualUnavailableBecause() + ", so the flight controls stay locked.");
                 return;
             }
             mission.ManualPlanned = true;

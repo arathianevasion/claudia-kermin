@@ -365,6 +365,7 @@ namespace ClaudiaKermin.Core.Missions
             _saveDirectory = saveDirectory;
             _snapshot = null;
             _linkDownSince = null;
+            _linkBackAt = double.NegativeInfinity;
             _pendingStart = null;
             _startRefusal = "";
             _craftCheck.Reset();
@@ -1536,6 +1537,7 @@ namespace ClaudiaKermin.Core.Missions
                 }
                 view.Locks = LocksNow();
                 view.ManualControlAllowed = ManualAllowed;
+                view.ManualControlUnavailable = ManualUnavailableBecause();
                 view.PlanStale = StaleBecause(mission);
                 if (mission.Stage == MissionStage.ManualControl)
                     view.QuickReplies = new List<QuickReply> { QuickReply.HandBack };
