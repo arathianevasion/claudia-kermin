@@ -16,11 +16,12 @@ namespace ClaudiaKermin.Core.Missions
     /// </summary>
     internal static class MissionLogRebuild
     {
-        private const string Replied = "The player replied (quoted data): ";
-        private const string Changed = "The player wants a change (quoted data): ";
-        private const string Asked = "The player asks (quoted data): ";
-        private const string RunEndedMarker = "\nkOS run ended: ";
-        private const string CrossingsMarker = "Telemetry Checks crossed during the run, with your mid-run verdicts: ";
+        // The phrases it parses live in MissionPrompts, with the text that writes them.
+        private const string Replied = MissionPrompts.RepliedPrefix;
+        private const string Changed = MissionPrompts.ChangedPrefix;
+        private const string Asked = MissionPrompts.AskedPrefix;
+        private const string CrossingsMarker = MissionPrompts.CrossingsMarker;
+        private const string RunEndedMarker = "\n" + MissionPrompts.RunEndedPrefix;
 
         /// <param name="craftName">The Mission's craft, so the plan cards mark what flies a Child Vessel as the loop's did.</param>
         /// <param name="notices">The mod's own notices the Mission folder kept, each placed by the conversation's length when it was written.</param>
@@ -176,11 +177,11 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The game time the turn asking for a plan gave Claudia ("UT: 123.4 s."), which the card's Due Time was "in" so long against; null without one.</summary>
         private static double? TurnUt(string userText)
         {
-            const string marker = "UT: ";
+            const string marker = MissionPrompts.UtMarker;
             var at = userText.StartsWith(marker, System.StringComparison.Ordinal) ? 0 : userText.IndexOf("\n" + marker, System.StringComparison.Ordinal);
             if (at < 0) return null;
             var start = userText.IndexOf(marker, at, System.StringComparison.Ordinal) + marker.Length;
-            var end = userText.IndexOf(" s.", start, System.StringComparison.Ordinal);
+            var end = userText.IndexOf(MissionPrompts.UtUnit, start, System.StringComparison.Ordinal);
             double ut;
             if (end < 0 || !double.TryParse(userText.Substring(start, end - start), NumberStyles.Float, CultureInfo.InvariantCulture, out ut)) return null;
             return ut;
