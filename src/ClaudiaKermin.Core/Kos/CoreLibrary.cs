@@ -48,8 +48,10 @@ namespace ClaudiaKermin.Core.Kos
         public const string DocPrefix = "//|";
         public const string SharedFile = "claudia_lib";
         private const string ResourcePrefix = "ClaudiaKermin.Core.library.";
+        private const string RsvpResourcePrefix = "ClaudiaKermin.Core.rsvp.";
 
         private static readonly Lazy<IList<LibraryFile>> LoadedFiles = new Lazy<IList<LibraryFile>>(Load);
+        private static readonly Lazy<IList<LibraryFile>> LoadedRsvp = new Lazy<IList<LibraryFile>>(LoadRsvp);
 
         /// <summary>The shared helpers first, then every block by name.</summary>
         public static IList<LibraryFile> Files
@@ -60,6 +62,15 @@ namespace ClaudiaKermin.Core.Kos
         public static IEnumerable<LibraryFile> Blocks
         {
             get { return Files.Where(f => f.IsBlock); }
+        }
+
+        /// <summary>
+        /// RSVP v9's files (<c>kerboscript/rsvp/</c>), by name. Not Building Blocks: <c>transfer</c> loads
+        /// them through <c>transfer_rsvp()</c>; see <c>kerboscript/rsvp/NOTE.md</c>.
+        /// </summary>
+        public static IList<LibraryFile> Rsvp
+        {
+            get { return LoadedRsvp.Value; }
         }
 
         /// <summary>
@@ -80,6 +91,19 @@ namespace ClaudiaKermin.Core.Kos
                     if (line.TrimStart().StartsWith("@lazyglobal", StringComparison.OrdinalIgnoreCase)) continue;
                     text.Append(line).Append('\n');
                 }
+            }
+            // RSVP's files are programs of their own (parameter export., file-level locals), so each
+            // becomes the body of one function, called by transfer_rsvp() (kerboscript/rsvp/NOTE.md).
+            text.Append("// ---- RSVP v9 (GPL-3.0, https://github.com/maneatingape/rsvp), bundled by Claudia Kermin ----\n");
+            foreach (var file in Rsvp)
+            {
+                text.Append("function rsvp_file_").Append(file.Name).Append(" {\n");
+                foreach (var line in file.Source.Split('\n'))
+                {
+                    if (line.TrimStart().StartsWith("@lazyglobal", StringComparison.OrdinalIgnoreCase)) continue;
+                    text.Append(line).Append('\n');
+                }
+                text.Append("}\n");
             }
             text.Append("// The player's wait caps (player config).\n")
                 .Append("function claudia_config {\n")
@@ -115,21 +139,31 @@ namespace ClaudiaKermin.Core.Kos
 
         private static IList<LibraryFile> Load()
         {
+            return Resources(ResourcePrefix)
+                .OrderBy(f => f.IsBlock ? 1 : 0)
+                .ThenBy(f => f.Name, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        private static IList<LibraryFile> LoadRsvp()
+        {
+            return Resources(RsvpResourcePrefix).OrderBy(f => f.Name, StringComparer.Ordinal).ToList();
+        }
+
+        private static List<LibraryFile> Resources(string prefix)
+        {
             var assembly = typeof(CoreLibrary).Assembly;
             var files = new List<LibraryFile>();
-            foreach (var resource in assembly.GetManifestResourceNames().Where(n => n.StartsWith(ResourcePrefix, StringComparison.Ordinal)))
+            foreach (var resource in assembly.GetManifestResourceNames().Where(n => n.StartsWith(prefix, StringComparison.Ordinal)))
             {
                 using (var stream = assembly.GetManifestResourceStream(resource))
                 using (var reader = new StreamReader(stream))
                 {
-                    var name = resource.Substring(ResourcePrefix.Length);
+                    var name = resource.Substring(prefix.Length);
                     files.Add(new LibraryFile(name.Substring(0, name.Length - ".ks".Length), reader.ReadToEnd()));
                 }
             }
-            return files
-                .OrderBy(f => f.IsBlock ? 1 : 0)
-                .ThenBy(f => f.Name, StringComparer.Ordinal)
-                .ToList();
+            return files;
         }
     }
 }

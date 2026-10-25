@@ -14,5 +14,7 @@
   <!-- The Core Library ships inside the core, so bundling a Mission Script reads no files. -->
   <ItemGroup>
     <EmbeddedResource Include="$(RepoRoot)kerboscript/library/*.ks" LogicalName="ClaudiaKermin.Core.library.%(Filename).ks" />
+    <!-- RSVP v9 (GPL-3.0), which transfer plans with; bundled as described in kerboscript/rsvp/NOTE.md. -->
+    <EmbeddedResource Include="$(RepoRoot)kerboscript/rsvp/*.ks" LogicalName="ClaudiaKermin.Core.rsvp.%(Filename).ks" />
   </ItemGroup>
 </Project>

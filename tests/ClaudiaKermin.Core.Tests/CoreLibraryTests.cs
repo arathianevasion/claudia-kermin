@@ -53,5 +53,15 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Contains("max_residual [0.5]", CoreLibrary.FullDocs(new[] { "exec_node" }));
             Assert.Equal("", CoreLibrary.FullDocs(new[] { "land" }));
         }
+
+        [Fact]
+        public void TheBundleHoldsEachRsvpFileAsAFunctionAfterTheLibrary()
+        {
+            var bundle = CoreLibrary.Bundle(Script, 1, 10800);
+            foreach (var name in new[] { "hill_climb", "lambert", "main", "maneuver", "orbit", "refine", "search", "transfer", "validate" })
+                Assert.Contains("\nfunction rsvp_file_" + name + " {\n", bundle);
+            Assert.True(bundle.IndexOf("function rsvp_file_main {", System.StringComparison.Ordinal) > bundle.IndexOf("function exec_node {", System.StringComparison.Ordinal));
+            Assert.DoesNotContain(CoreLibrary.Blocks, b => b.Name.StartsWith("rsvp", System.StringComparison.Ordinal));
+        }
     }
 }
