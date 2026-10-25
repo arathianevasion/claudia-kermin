@@ -173,7 +173,7 @@ namespace ClaudiaKermin.Adapter
             _log.SetupRemote = _setup.Remote;
             _log.Estimate = settingUp && form.Estimates.TryGetValue(model, out estimate) ? estimate : (decimal?)null;
             _log.CheckAgain = () => _goal.Length > 0 && form.Models.Count > 0 && _view.CraftCheck.State != CraftCheckState.Running
-                ? new RunCraftCheck(_goal, model, _setup.Remote) : null;
+                ? new RunCraftCheck(_goal, _setup.SpendingCap, model, _setup.Remote) : null;
         }
 
         private void Styles(int rightRoom)
@@ -396,7 +396,7 @@ namespace ClaudiaKermin.Adapter
             }
             GUI.enabled = _goal.Length > 0 && form.Models.Count > 0 && check.State != CraftCheckState.Running;
             if (ClaudiaSkin.SecondaryButton(check.State == CraftCheckState.None ? "Check craft" : "Check again", GUILayout.ExpandWidth(false)))
-                _send(new RunCraftCheck(_goal, _setup.ModelFor(form), _setup.Remote));
+                _send(new RunCraftCheck(_goal, _setup.SpendingCap, _setup.ModelFor(form), _setup.Remote));
             GUI.enabled = true;
             GUILayout.Space(ClaudiaSkin.Padding);
             GUILayout.EndHorizontal();

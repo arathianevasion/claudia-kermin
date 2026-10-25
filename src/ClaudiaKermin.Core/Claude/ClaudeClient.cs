@@ -66,6 +66,12 @@ namespace ClaudiaKermin.Core.Claude
             _log = log;
         }
 
+        /// <summary>Writes a line to KSP.log, for things that belong there and in no Mission folder.</summary>
+        public void Log(string line)
+        {
+            _log(line);
+        }
+
         /// <summary>Throws <see cref="NetworkUnavailableException"/> when there is no response.</summary>
         public HttpResponseData Get(string path)
         {

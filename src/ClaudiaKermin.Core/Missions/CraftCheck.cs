@@ -81,6 +81,8 @@ namespace ClaudiaKermin.Core.Missions
         private uint? _preferredProcessor;
         private List<string> _keptAcknowledgements = new List<string>();
         private CancellationTokenSource _cancel;
+        /// <summary>What the latest check cost; goes to the Mission started from it, or to KSP.log when the check is replaced.</summary>
+        private CraftCheckCharge _cost;
 
         /// <param name="completed">Called on the main thread when a request ends, whatever the result.</param>
         public CraftCheckFlow(ClaudeClient client, Background background, PlayerConfig config, Func<bool> hasKey, Action completed)
@@ -147,8 +149,11 @@ namespace ClaudiaKermin.Core.Missions
             if (snapshot != null && snapshot.Craft.Parts.Any(p => p.Id == partId.Value && p.HasKosProcessor)) _preferredProcessor = partId;
         }
 
-        /// <summary>Checks the craft. Stops and asks when the stock simulator is off; does nothing without a craft or a goal.</summary>
-        public void Run(string goal, string model, GameSnapshot snapshot, bool remote = false)
+        /// <summary>
+        /// Checks the craft. Stops and asks when the stock simulator is off; does nothing without a craft or a goal.
+        /// Like a Mission request it is sent only if its worst case fits the Spending Cap the player entered.
+        /// </summary>
+        public void Run(string goal, string model, GameSnapshot snapshot, decimal spendingCap, bool remote = false)
         {
             goal = (goal ?? "").Trim();
             if (snapshot == null || goal.Length == 0 || Running) return;
@@ -170,11 +175,13 @@ namespace ClaudiaKermin.Core.Missions
                 return;
             }
 
-            _state = CraftCheckState.Running;
-            _goal = goal;
-            _remote = remote;
-            _noSeat = !remote && !snapshot.ClaudiaAboard && snapshot.FreeSeats == 0;
-            _craftKey = CraftKey(snapshot);
+            if (spendingCap <= 0)
+            {
+                _state = CraftCheckState.Error;
+                _message = "Set a Spending Cap above zero, then run the Craft Check again.";
+                return;
+            }
+
             var request = new MessagesRequest
             {
                 Model = _config.Models.Contains(model) ? model : _config.DefaultModel,
@@ -185,13 +192,28 @@ namespace ClaudiaKermin.Core.Missions
             };
             request.System.Add(CraftCheckPrompts.System);
             request.Messages.Add(Message.UserText(CraftCheckPrompts.Facts(goal, snapshot, _config.CraftCheckMarginPercent, _preferredProcessor, remote)));
+            var worstCase = RequestCharge.WorstCase(_config.Prices, request.Model, request);
+            if (worstCase > spendingCap)
+            {
+                _state = CraftCheckState.Error;
+                _message = "The Craft Check could cost up to $" + worstCase.ToString("0.00", CultureInfo.InvariantCulture)
+                    + ", more than the Spending Cap ($" + spendingCap.ToString("0.00", CultureInfo.InvariantCulture)
+                    + "). Raise the Spending Cap, then run the Craft Check again.";
+                return;
+            }
 
+            _state = CraftCheckState.Running;
+            _goal = goal;
+            _remote = remote;
+            _noSeat = !remote && !snapshot.ClaudiaAboard && snapshot.FreeSeats == 0;
+            _craftKey = CraftKey(snapshot);
+            var charge = new CraftCheckCharge { Model = request.Model, Pending = worstCase };
             var cancel = new CancellationTokenSource();
             _cancel = cancel;
             _background.Run(
                 () => _client.Stream(request, update => { }, cancel.Token),
-                result => Finished(cancel, result),
-                error => Finished(cancel, null));
+                result => Finished(cancel, charge, result),
+                error => Finished(cancel, charge, null));
         }
 
         /// <summary>Drops a request in flight and the result, e.g. when another save loads.</summary>
@@ -204,6 +226,7 @@ namespace ClaudiaKermin.Core.Missions
 
         private void Forget()
         {
+            DropCost();
             if (_cancel != null) _cancel.Cancel();
             _cancel = null;
             _verdict = CraftVerdict.None;
@@ -214,10 +237,43 @@ namespace ClaudiaKermin.Core.Missions
             _goal = null;
         }
 
-        private void Finished(CancellationTokenSource cancel, StreamResult result)
+        /// <summary>
+        /// Hands over the latest check's settled cost to the Mission starting from it, once; null when the check isn't done
+        /// or its cost was already taken.
+        /// </summary>
+        public CraftCheckCharge TakeCost()
         {
-            // Superseded (cancelled by Reset or a newer Run) while it ran.
-            if (_cancel != cancel || _state != CraftCheckState.Running) return;
+            if (_state != CraftCheckState.Done) return null;
+            var cost = _cost;
+            _cost = null;
+            return cost;
+        }
+
+        /// <summary>This check is replaced or gone: no Mission starts from it, so its charge goes to KSP.log only.</summary>
+        private void DropCost()
+        {
+            var cost = _cost;
+            _cost = null;
+            if (cost != null) LogCost(cost);
+        }
+
+        private void LogCost(CraftCheckCharge charge)
+        {
+            _client.Log("Craft Check " + charge.Settlement.Kind + " $" + charge.Settlement.Amount.ToString("0.0000", CultureInfo.InvariantCulture)
+                + " on " + charge.Model + ", charged to no Mission.");
+        }
+
+        private void Finished(CancellationTokenSource cancel, CraftCheckCharge charge, StreamResult result)
+        {
+            // Settled whatever came of the check, by the rules a Mission request follows.
+            charge.Settlement = RequestCharge.Settle(_config.Prices, charge.Pending, result, charge.Model);
+            // Superseded (cancelled by Reset or a newer Run) while it ran: its charge is in KSP.log only.
+            if (_cancel != cancel || _state != CraftCheckState.Running)
+            {
+                LogCost(charge);
+                return;
+            }
+            _cost = charge;
             _cancel = null;
             cancel.Dispose();
             try

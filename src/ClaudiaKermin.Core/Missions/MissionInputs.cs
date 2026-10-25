@@ -46,13 +46,16 @@ namespace ClaudiaKermin.Core.Missions
     public sealed class RunCraftCheck : MissionInput
     {
         public readonly string Goal;
+        /// <summary>The Spending Cap the player has entered; the check is sent only if its worst case fits.</summary>
+        public readonly decimal SpendingCap;
         public readonly string Model;
         /// <summary>The check is for a remote Mission (see <see cref="StartMission.Remote"/>); false is crewed.</summary>
         public readonly bool Remote;
 
-        public RunCraftCheck(string goal, string model, bool remote = false)
+        public RunCraftCheck(string goal, decimal spendingCap, string model, bool remote = false)
         {
             Goal = goal;
+            SpendingCap = spendingCap;
             Model = model;
             Remote = remote;
         }

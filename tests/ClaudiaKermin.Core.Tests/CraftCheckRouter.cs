@@ -21,7 +21,7 @@ namespace ClaudiaKermin.Core.Tests
         public CraftCheckRouter(IHttpTransport mission)
         {
             _mission = mission;
-            for (var i = 0; i < 20; i++) _checks.Add(ScriptedResponse.Fixture("craft-check-pass.sse", 64));
+            for (var i = 0; i < 20; i++) _checks.Add(ScriptedResponse.Fixture("craft-check-pass-free.sse", 64));
         }
 
         public HttpResponseData Send(HttpRequestSpec request)
