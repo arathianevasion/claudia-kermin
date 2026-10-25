@@ -190,6 +190,7 @@ namespace ClaudiaKermin.Core.Missions
             if (!leaving) return;
             _snapshot = null;
             _active = null;
+            if (_mission != null) _mission.SwitchingAway = false;
             if (_mission != null && IsRunning(_mission)) Interrupt(_mission, "the player left Flight");
         }
 
@@ -212,7 +213,7 @@ namespace ClaudiaKermin.Core.Missions
             var mission = _mission;
             if (mission == null || mission.Owed == Owed.None || mission.Pending != null || mission.InFlight) return;
             // It needs the craft's own facts: with the player in another vessel it waits until they are back in the craft.
-            if (mission.Stage == MissionStage.Paused || !CraftActive) return;
+            if (mission.Stage == MissionStage.Paused || !CraftActive || mission.SwitchingAway) return;
 
             Turn turn;
             if (mission.Owed == Owed.Debrief && mission.Stage == MissionStage.Debriefing)

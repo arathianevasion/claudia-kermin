@@ -29,6 +29,11 @@ namespace ClaudiaKermin.Core.Missions
             public bool PausedCannotFly;
             /// <summary>The 10-second unload warning was given and the craft is still on its way out of range.</summary>
             public bool UnloadWarned;
+            /// <summary>
+            /// A far switch was confirmed and the player hasn't been seen in another vessel yet: the owed Debrief waits for them
+            /// to leave and come back, not for the last snapshots of the craft before the scene reloads.
+            /// </summary>
+            public bool SwitchingAway;
             /// <summary>Why the running sequence was interrupted, for its Debrief even across a reload; null otherwise.</summary>
             public string InterruptReason;
             /// <summary>The craft docked since the pending plan was offered (what with), so Approve is Re-plan; "" otherwise.</summary>
@@ -69,7 +74,11 @@ namespace ClaudiaKermin.Core.Missions
             _active = snapshot;
             var mission = _mission;
             if (mission == null || !FollowsCraft(mission) || _scene != GameScene.Flight) return true;
-            if (!MissionCraft.Is(mission.Remote, mission.ProcessorPartId, mission.VesselId, snapshot)) return false;
+            if (!MissionCraft.Is(mission.Remote, mission.ProcessorPartId, mission.VesselId, snapshot))
+            {
+                mission.SwitchingAway = false;
+                return false;
+            }
             if (snapshot.Craft.VesselId.Length > 0) mission.VesselId = snapshot.Craft.VesselId;
             mission.VesselName = snapshot.Craft.Name;
             return true;
@@ -148,6 +157,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             var mission = _mission;
             if (mission == null || MissionOver || !IsRunning(mission)) return;
+            mission.SwitchingAway = true;
             Interrupt(mission, "the player switched to " + (string.IsNullOrEmpty(vesselName) ? "a vessel" : vesselName) + ", far enough away to unload the craft");
         }
 
