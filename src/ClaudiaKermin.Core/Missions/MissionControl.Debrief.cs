@@ -143,7 +143,7 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>What the Debrief request itself could cost at worst, with slack for the recheck's text.</summary>
         private decimal DebriefReserve(Mission mission, Turn turn)
         {
-            var probe = new MessagesRequest { Model = mission.Model, MaxTokens = MissionPrompts.MaxTokens, OutputSchemaJson = MissionReply.SchemaJson };
+            var probe = new MessagesRequest { Model = mission.Model, MaxTokens = MissionPrompts.MaxTokens, OutputSchemaJson = MissionReply.FlightSchemaJson };
             probe.System.AddRange(mission.System);
             probe.Messages.AddRange(mission.Conversation);
             probe.Messages.Add(Message.UserText(turn.UserText));

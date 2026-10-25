@@ -25,6 +25,33 @@ namespace ClaudiaKermin.Core.Claude
             return Optional(JsonReader.Parse(schemaJson));
         }
 
+        /// <summary>
+        /// Every property definition at any depth, plus every enum value: a proxy for the compiled grammar's size,
+        /// which the API does not publish. A union counts its branches' properties once, however often it nests.
+        /// </summary>
+        public static int Size(string schemaJson)
+        {
+            return Size(JsonReader.Parse(schemaJson));
+        }
+
+        private static int Size(JsonNode node)
+        {
+            var count = 0;
+            if (node.Kind == JsonKind.Object)
+            {
+                var properties = node["properties"];
+                if (properties != null && properties.Kind == JsonKind.Object) count += properties.Members.Count();
+                var values = node["enum"];
+                if (values != null && values.Kind == JsonKind.Array) count += values.Items.Count();
+                count += node.Members.Sum(m => Size(m.Value));
+            }
+            else if (node.Kind == JsonKind.Array)
+            {
+                count += node.Items.Sum(Size);
+            }
+            return count;
+        }
+
         private static int Unions(JsonNode node)
         {
             var count = 0;

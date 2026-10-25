@@ -134,9 +134,9 @@ namespace ClaudiaKermin.Core.Missions
     }
 
     /// <summary>
-    /// One Claudia reply in a Mission. Every Mission turn uses the same structured-output schema, so the
-    /// request's <c>output_config</c> never changes and the cached prefix stays intact; <see cref="Kind"/>
-    /// says which part is filled in.
+    /// One Claudia reply in a Mission; <see cref="Kind"/> says which part is filled in. A request sends one of two
+    /// structured-output schemas (<see cref="PlanningSchemaJson"/>, <see cref="FlightSchemaJson"/>) with only the
+    /// parts it can come back as, and <see cref="Parse"/> reads every part whatever the schema.
     /// </summary>
     internal sealed class MissionReply
     {
@@ -155,25 +155,66 @@ namespace ClaudiaKermin.Core.Missions
         public Debrief Debrief;
         public AlertVerdict Alert;
 
+        // Grammar budget (#199): the API compiles the schema to a grammar, and past an internal size limit every
+        // request is a 400 ("compiled grammar is too large"). One schema holding all four parts went over it even
+        // with only four unions, so each request sends only the parts it can come back as, in one of two schemas
+        // (two, not one per request, because a changed schema costs the prompt cache). Only the parts are nullable;
+        // any other "none" is a sentinel (-1, "", "none") that Parse maps back to null. A schema that grows must be
+        // probed against the API first (tools/ClaudiaKermin.SchemaProbe); MissionReplySchemaTests holds the budget.
+        // Limits: https://platform.claude.com/docs/en/build-with-claude/structured-outputs#schema-complexity-limits
+
+        /// <summary>Every kind, in the schema's order.</summary>
+        public static readonly string[] AllKinds = { MissionPlanKind, SequencePlanKind, DebriefKind, AnswerKind, AlertKind };
+
+        // Declared before the schemas below: static fields are initialized in order.
+        private static readonly KeyValuePair<string, string>[] Parts =
+        {
+            new KeyValuePair<string, string>(MissionPlanKind, MissionPlanSchema),
+            new KeyValuePair<string, string>(SequencePlanKind, SequencePlanSchema),
+            new KeyValuePair<string, string>(DebriefKind, DebriefSchema),
+            new KeyValuePair<string, string>(AlertKind, AlertSchema),
+        };
+
         /// <summary>
-        /// The structured-output schema. Short "why" fields only: the mod never asks for written-out
-        /// thinking. No numeric or length limits (structured outputs don't support them).
+        /// Mission Plan, Mission Settings, typed replies and changes to a pending plan, and questions before a Mission
+        /// Plan is approved: an answer, a Mission Plan, or (a revision of a pending one) a Sequence Plan.
         /// </summary>
-        // Union budget (#199): the API compiles this schema to a grammar, and each anyOf or type array makes that
-        // grammar grow fast. Past a limit every request is a 400 ("compiled grammar is too large"), and the
-        // limit is lower than the documented 16 unions once nested objects count. So only the four parts are
-        // nullable; any other "none" is a sentinel (-1, "", "none") that Parse maps back to null. A new nullable
-        // field must be probed against the API first (tools/ClaudiaKermin.SchemaProbe); MissionReplySchemaTests
-        // holds the budget. Limits: https://platform.claude.com/docs/en/build-with-claude/structured-outputs#schema-complexity-limits
-        public const string SchemaJson =
-            "{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"kind\",\"say\",\"reply_intent\",\"mission_plan\",\"sequence_plan\",\"debrief\",\"alert\"],"
-            + "\"properties\":{"
-            + "\"kind\":{\"type\":\"string\",\"enum\":[\"mission_plan\",\"sequence_plan\",\"debrief\",\"answer\",\"alert\"]},"
-            + "\"say\":{\"type\":\"string\",\"description\":\"Your line to the player: concise mission-control voice, key numbers first, one or two sentences.\"},"
+        public static readonly string PlanningSchemaJson = SchemaFor(AnswerKind, MissionPlanKind, SequencePlanKind);
+
+        /// <summary>Sequence Plans, Debriefs, Alerts and questions once a Mission Plan is approved.</summary>
+        public static readonly string FlightSchemaJson = SchemaFor(AnswerKind, SequencePlanKind, DebriefKind, AlertKind);
+
+        /// <summary>
+        /// The structured-output schema for a reply that is one of <paramref name="kinds"/>. Each part but answer is
+        /// required, and nullable when there is another kind to choose. Short "why" fields only: the mod never asks
+        /// for written-out thinking. No numeric or length limits (structured outputs don't support them).
+        /// </summary>
+        public static string SchemaFor(params string[] kinds)
+        {
+            var parts = Parts.Where(p => kinds.Contains(p.Key)).ToList();
+            var nullable = kinds.Distinct().Count() > 1;
+            var json = new System.Text.StringBuilder();
+            json.Append("{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"say\",\"reply_intent\"");
+            foreach (var part in parts) json.Append(",\"").Append(part.Key).Append('"');
+            json.Append("],\"properties\":{\"kind\":{\"type\":\"string\",\"enum\":[")
+                .Append(string.Join(",", AllKinds.Where(kinds.Contains).Select(k => "\"" + k + "\"").ToArray())).Append("]},")
+                .Append(SayAndIntent);
+            foreach (var part in parts)
+            {
+                json.Append(",\"").Append(part.Key).Append("\":");
+                if (nullable) json.Append("{\"anyOf\":[").Append(part.Value).Append(",{\"type\":\"null\"}]}");
+                else json.Append(part.Value);
+            }
+            return json.Append("}}").ToString();
+        }
+
+        private const string SayAndIntent =
+            "\"say\":{\"type\":\"string\",\"description\":\"Your line to the player: concise mission-control voice, key numbers first, one or two sentences.\"},"
             + "\"reply_intent\":{\"type\":\"string\",\"enum\":[\"none\",\"approve\",\"revise\",\"question\",\"unclear\"],"
-            + "\"description\":\"Only when classifying the player's typed reply to a pending plan; otherwise none.\"},"
-            + "\"mission_plan\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
+            + "\"description\":\"Only when classifying the player's typed reply to a pending plan; otherwise none.\"}";
+
+        private const string MissionPlanSchema =
+            "{\"type\":\"object\",\"additionalProperties\":false,"
             + "\"required\":[\"why\",\"sequences\",\"total_delta_v\",\"expected_duration\",\"mission_time_s\",\"new_goal\",\"child_vessels\"],\"properties\":{"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
             + "\"child_vessels\":{\"type\":\"array\",\"description\":\"The Child Vessels you plan to fly, each named once; separated vessels not named here are ignored.\","
@@ -192,8 +233,10 @@ namespace ClaudiaKermin.Core.Missions
             + "\"total_delta_v\":{\"type\":\"number\",\"description\":\"m/s\"},"
             + "\"expected_duration\":{\"type\":\"string\"},"
             + "\"mission_time_s\":{\"type\":\"number\",\"description\":\"Expected total Mission time in seconds, waits between sequences included; -1 if you can't say.\"},"
-            + "\"new_goal\":{\"type\":\"string\",\"description\":\"Only when the player asked to change the Mission Goal itself: the new Mission Goal in their words, which replaces the old one if they approve this plan; otherwise empty.\"}}},{\"type\":\"null\"}]},"
-            + "\"sequence_plan\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
+            + "\"new_goal\":{\"type\":\"string\",\"description\":\"Only when the player asked to change the Mission Goal itself: the new Mission Goal in their words, which replaces the old one if they approve this plan; otherwise empty.\"}}}";
+
+        private const string SequencePlanSchema =
+            "{\"type\":\"object\",\"additionalProperties\":false,"
             + "\"required\":[\"name\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"telemetry_checks\",\"risks\",\"custom_script\",\"custom_script_reason\",\"script\",\"due_time_ut\",\"window_closes_ut\",\"late_window_dv\",\"manual\",\"vessel\"],"
             + "\"properties\":{"
             + "\"vessel\":{\"type\":\"string\",\"description\":\"craft, or the name of a Child Vessel from the Mission Plan: the script goes only to that vessel, "
@@ -220,8 +263,10 @@ namespace ClaudiaKermin.Core.Missions
             + "\"window_closes_ut\":{\"type\":\"number\",\"description\":\"UT in seconds after which the planned window is missed, if the sequence depends on one; otherwise -1.\"},"
             + "\"late_window_dv\":{\"type\":\"number\",\"description\":\"Delta-v in m/s of the next window if the planned one is missed; -1 when there is none.\"},"
             + "\"script\":{\"type\":\"string\",\"description\":\"The complete Mission Script in kerboscript; empty for a manual stretch.\"},"
-            + "\"manual\":{\"type\":\"boolean\",\"description\":\"True when the player flies this stretch by hand (docking, EVA science, or when they say they will fly it): the script is then empty.\"}}},{\"type\":\"null\"}]},"
-            + "\"debrief\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
+            + "\"manual\":{\"type\":\"boolean\",\"description\":\"True when the player flies this stretch by hand (docking, EVA science, or when they say they will fly it): the script is then empty.\"}}}";
+
+        private const string DebriefSchema =
+            "{\"type\":\"object\",\"additionalProperties\":false,"
             + "\"required\":[\"outcome\",\"why\",\"what_happened\",\"goal_reached\",\"next\",\"eva_science\",\"outcome_vs_target\",\"plan_margin\",\"science\",\"goal_checklist\",\"follow_up\",\"follow_up_text\"],\"properties\":{"
             + "\"outcome\":{\"type\":\"string\",\"enum\":[\"Nominal\",\"Off-Nominal\",\"Failed\"]},"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
@@ -236,14 +281,15 @@ namespace ClaudiaKermin.Core.Missions
             + "\"required\":[\"item\",\"done\"],\"properties\":{\"item\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"}}}},"
             + "\"follow_up\":{\"type\":\"string\",\"enum\":[\"none\",\"corrective_sequence\",\"revised_plan\",\"reduced_goal\",\"end_mission\"],"
             + "\"description\":\"Off-Nominal: corrective_sequence or revised_plan. Failed: reduced_goal (the player must approve it) or end_mission. Nominal: none.\"},"
-            + "\"follow_up_text\":{\"type\":\"string\",\"description\":\"The corrective sequence or the revised Mission Plan in a few words; for reduced_goal, the reduced Mission Goal itself; otherwise empty.\"}}},{\"type\":\"null\"}]},"
-            + "\"alert\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
+            + "\"follow_up_text\":{\"type\":\"string\",\"description\":\"The corrective sequence or the revised Mission Plan in a few words; for reduced_goal, the reduced Mission Goal itself; otherwise empty.\"}}}";
+
+        private const string AlertSchema =
+            "{\"type\":\"object\",\"additionalProperties\":false,"
             + "\"required\":[\"verdict\",\"why\",\"set_follow_up_threshold\",\"follow_up_threshold\"],\"properties\":{"
             + "\"verdict\":{\"type\":\"string\",\"enum\":[\"carry_on\",\"abort\"],\"description\":\"abort recommends the player Abort; you never abort yourself.\"},"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
             + "\"set_follow_up_threshold\":{\"type\":\"boolean\",\"description\":\"True only with carry_on, when you set follow_up_threshold.\"},"
-            + "\"follow_up_threshold\":{\"type\":\"number\",\"description\":\"When set_follow_up_threshold is true: one more threshold for the same check, in its units, for one more Alert; otherwise 0 (ignored).\"}}},{\"type\":\"null\"}]}"
-            + "}}";
+            + "\"follow_up_threshold\":{\"type\":\"number\",\"description\":\"When set_follow_up_threshold is true: one more threshold for the same check, in its units, for one more Alert; otherwise 0 (ignored).\"}}}";
 
         /// <summary>The reply in a message's text, or null when it isn't a reply in this schema.</summary>
         public static MissionReply Parse(string text)

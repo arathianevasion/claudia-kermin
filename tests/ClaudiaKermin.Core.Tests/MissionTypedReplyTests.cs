@@ -134,6 +134,8 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Contains("wants a change", LastUserText(transport.Requests[2]));
             Assert.Contains("revise to land at night", LastUserText(transport.Requests[2]));
             Assert.Null(mission.View.ConfirmPrompt);
+            // The question and the change both stay in the planning schema (#199), so the prompt cache holds.
+            Assert.All(transport.Requests, r => Assert.Contains(MissionReply.PlanningSchemaJson, r.Body));
         }
 
         [Fact]

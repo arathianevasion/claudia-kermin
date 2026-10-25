@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Andrew Watson
 
+using System.Linq;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Missions;
 using Xunit;
@@ -8,21 +9,40 @@ using Xunit;
 namespace ClaudiaKermin.Core.Tests
 {
     /// <summary>
-    /// The structured-output schemas stay small enough for the API to compile (#199): with 14 unions the
-    /// MissionReply schema was rejected on every request as "compiled grammar is too large".
+    /// The structured-output schemas stay small enough for the API to compile (#199): one MissionReply schema with
+    /// every part was rejected on every request as "compiled grammar is too large", at 14 unions and still at 4.
     /// </summary>
     public class MissionReplySchemaTests
     {
-        /// <summary>
-        /// The four nullable parts (mission_plan, sequence_plan, debrief, alert). Raise it only after the schema
-        /// probe (tools/ClaudiaKermin.SchemaProbe) shows the bigger schema still compiles, with one more to spare.
-        /// </summary>
-        private const int MissionReplyUnionBudget = 4;
+        // The API's grammar limit is internal (https://platform.claude.com/docs/en/build-with-claude/structured-outputs#schema-complexity-limits),
+        // so these budgets come from probing it (tools/ClaudiaKermin.SchemaProbe, claude-haiku-5-5). By the
+        // SchemaComplexity.Size proxy, size 75 (11 unions, before #65) compiled and 89 (12 unions, main before the Child
+        // Vessels merge) worked in play; 95 (14 unions) and 97 (4 unions, every part with sentinels) were refused. Raise a
+        // budget only after the probe shows the bigger schema, plus one more nullable field, compiles.
 
-        [Fact]
-        public void MissionReplyStaysWithinItsUnionBudget()
+        /// <summary>The flight schema's three nullable parts (sequence_plan, debrief, alert).</summary>
+        private const int UnionBudget = 3;
+
+        /// <summary>Below the 89 that compiled, with room under the 95 that did not.</summary>
+        private const int SizeBudget = 85;
+
+        public static TheoryData<string, string> Schemas()
         {
-            Assert.InRange(SchemaComplexity.Unions(MissionReply.SchemaJson), 0, MissionReplyUnionBudget);
+            return new TheoryData<string, string>
+            {
+                { "planning", MissionReply.PlanningSchemaJson },
+                { "flight", MissionReply.FlightSchemaJson },
+                { "craft check", CraftCheckRules.SchemaJson() },
+            };
+        }
+
+        [Theory]
+        [MemberData(nameof(Schemas))]
+        public void EverySchemaSentStaysWithinTheGrammarBudget(string name, string schema)
+        {
+            Assert.True(SchemaComplexity.Unions(schema) <= UnionBudget, name + ": " + SchemaComplexity.Unions(schema) + " unions");
+            Assert.True(SchemaComplexity.Size(schema) <= SizeBudget, name + ": size " + SchemaComplexity.Size(schema));
+            Assert.Equal(0, SchemaComplexity.OptionalParameters(schema));
         }
 
         [Fact]
@@ -32,10 +52,41 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
-        public void NeitherSchemaHasOptionalParameters()
+        public void EveryPartTogetherIsOverTheBudget()
         {
-            Assert.Equal(0, SchemaComplexity.OptionalParameters(MissionReply.SchemaJson));
-            Assert.Equal(0, SchemaComplexity.OptionalParameters(CraftCheckRules.SchemaJson()));
+            // Why there are two schemas: the one #199 found refused, even with sentinels.
+            Assert.True(SchemaComplexity.Size(MissionReply.SchemaFor(MissionReply.AllKinds)) > SizeBudget);
+        }
+
+        [Fact]
+        public void EachSchemaOffersTheKindsItsRequestsCanComeBackAs()
+        {
+            Assert.Equal(new[] { "mission_plan", "sequence_plan", "answer" }, Kinds(MissionReply.PlanningSchemaJson));
+            Assert.Equal(new[] { "sequence_plan", "debrief", "answer", "alert" }, Kinds(MissionReply.FlightSchemaJson));
+            var planning = JsonReader.Parse(MissionReply.PlanningSchemaJson);
+            Assert.Equal(new[] { "kind", "say", "reply_intent", "mission_plan", "sequence_plan" }, planning["required"].Items.Select(JsonNode.Str).ToArray());
+        }
+
+        [Fact]
+        public void ASingleKindIsNotNullable()
+        {
+            var schema = MissionReply.SchemaFor(MissionReply.AlertKind);
+            Assert.Equal(0, SchemaComplexity.Unions(schema));
+            Assert.Equal("object", JsonNode.Str(JsonReader.Parse(schema)["properties"]["alert"]["type"]));
+        }
+
+        private static string[] Kinds(string schema)
+        {
+            return JsonReader.Parse(schema)["properties"]["kind"]["enum"].Items.Select(JsonNode.Str).ToArray();
+        }
+
+        [Fact]
+        public void TheSizeCountsPropertiesAndEnumValuesAtAnyDepth()
+        {
+            const string schema = "{\"type\":\"object\",\"properties\":{"
+                + "\"a\":{\"anyOf\":[{\"type\":\"object\",\"properties\":{\"c\":{\"type\":\"string\",\"enum\":[\"x\",\"y\"]}}},{\"type\":\"null\"}]},"
+                + "\"b\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"d\":{\"type\":\"number\"}}}}}}";
+            Assert.Equal(6, SchemaComplexity.Size(schema));
         }
 
         [Fact]

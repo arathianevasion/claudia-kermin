@@ -883,7 +883,7 @@ namespace ClaudiaKermin.Core.Missions
             {
                 Model = mission.Model,
                 MaxTokens = MissionPrompts.MaxTokens,
-                OutputSchemaJson = MissionReply.SchemaJson,
+                OutputSchemaJson = Schema(mission, turn),
                 CompactionTriggerTokens = _config.CompactionTriggerTokens,
                 CompactionInstructions = MissionPrompts.CompactionInstructions,
             };
@@ -909,6 +909,28 @@ namespace ClaudiaKermin.Core.Missions
                 () => _client.Stream(request, update => _background.Post(() => Streamed(mission, turn, update)), cancel, dump),
                 result => Finished(mission, turn, result),
                 error => Finished(mission, turn, null));
+        }
+
+        /// <summary>
+        /// The reply schema for a turn (#199): one schema with every part is too big for the API to compile, so a
+        /// request carries only the parts its reply can be (<see cref="Mismatch"/>, <see cref="Apply"/>).
+        /// </summary>
+        private static string Schema(Mission mission, Turn turn)
+        {
+            switch (turn.Purpose)
+            {
+                case Purpose.MissionPlan:
+                case Purpose.Settings:
+                case Purpose.Reply:
+                case Purpose.Change:
+                    return MissionReply.PlanningSchemaJson;
+                case Purpose.Question:
+                    // Only an answer: the schema the Mission is in, so the prompt cache holds.
+                    return mission.Stage == MissionStage.Planning || mission.Stage == MissionStage.AwaitingPlanApproval
+                        ? MissionReply.PlanningSchemaJson : MissionReply.FlightSchemaJson;
+                default:
+                    return MissionReply.FlightSchemaJson;
+            }
         }
 
         /// <summary>
