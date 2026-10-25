@@ -549,7 +549,13 @@ namespace ClaudiaKermin.Core.Tests
             crashed.Send(new SceneChanged(GameScene.Flight));
             crashed.Send(OnPad());
             StartChecked(crashed, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
-            while (crashed.View.Stage != MissionStage.AwaitingPlanApproval) _crashable[crashed].Drain();
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (crashed.View.Stage != MissionStage.AwaitingPlanApproval && DateTime.UtcNow < deadline)
+            {
+                _crashable[crashed].Drain();
+                Thread.Sleep(2);
+            }
+            Assert.Equal(MissionStage.AwaitingPlanApproval, crashed.View.Stage);
             crashed.Send(new AskQuestion("revise to land at night"));
             Assert.True(crashed.View.Busy);
             saved = Saved(crashed);
