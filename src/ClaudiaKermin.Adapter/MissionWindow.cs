@@ -33,7 +33,7 @@ namespace ClaudiaKermin.Adapter
         private readonly WindowFrame _frame =
             new WindowFrame(0x434B03, "Claudia: Mission", LockId, new Rect(260, 80, 420, 760), new Vector2(360, 420), true);
         private readonly LogDrawer _log;
-        private GUIStyle _controlBar;
+        private GUIStyle _controlBar, _summary;
         private GUIStyle _builtFrom;
 
         // The Mission being set up: its type, model, Spending Cap and Mission Settings (the Settings window edits them).
@@ -176,7 +176,7 @@ namespace ClaudiaKermin.Adapter
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
             DrawPrompt(prompt);
-            DrawActions(settingUp);
+            DrawActions(settingUp, prompt.For);
             DrawControlBar(settingUp);
 
             _frame.DrawGrip();
@@ -189,6 +189,7 @@ namespace ClaudiaKermin.Adapter
             if (_controlBar != null && ReferenceEquals(_builtFrom, ClaudiaSkin.Bar)) return;
             _builtFrom = ClaudiaSkin.Bar;
             _controlBar = new GUIStyle(ClaudiaSkin.Bar) { padding = new RectOffset(ClaudiaSkin.Padding, GripRoom, 6, 6) };
+            _summary = new GUIStyle(ClaudiaSkin.Secondary) { wordWrap = false, alignment = TextAnchor.MiddleLeft };
         }
 
         // ---- Title bar ----
@@ -302,6 +303,11 @@ namespace ClaudiaKermin.Adapter
                     _swallowNewline = false;
                     e.Use();
                 }
+                else if (e.keyCode != KeyCode.None)
+                {
+                    // Any other key: an Enter whose newline came in the same event leaves nothing to swallow.
+                    _swallowNewline = false;
+                }
             }
             // The send button sits over the text area's right edge, so its click is taken before the text area would.
             if (canSend && e.type == EventType.MouseDown && e.button == 0 && send.Contains(e.mousePosition))
@@ -362,7 +368,7 @@ namespace ClaudiaKermin.Adapter
             }
             else
             {
-                _send(MissionWindowRules.Send(prompt.For, _typed));
+                _send(MissionWindowRules.Send(prompt.For, text));
                 _promptFor = PromptFor.Reply;
             }
             _typed = "";
@@ -370,7 +376,8 @@ namespace ClaudiaKermin.Adapter
 
         // ---- Action row ----
 
-        private void DrawActions(bool settingUp)
+        /// <param name="writing">What the prompt settled on; Change and Ask show pressed while it is theirs.</param>
+        private void DrawActions(bool settingUp, PromptFor writing)
         {
             if (settingUp)
             {
@@ -400,8 +407,8 @@ namespace ClaudiaKermin.Adapter
                     var label = Label(reply, View);
                     bool clicked;
                     if (MissionWindowRules.IsPrimary(reply)) clicked = ClaudiaSkin.PrimaryButton(label, GUILayout.ExpandWidth(true), GUILayout.MinWidth(0));
-                    else if (reply == QuickReply.ChangeSomething) clicked = ClaudiaSkin.ToggleButton(_promptFor == PromptFor.Change, label, GUILayout.ExpandWidth(false));
-                    else if (reply == QuickReply.AskQuestion) clicked = ClaudiaSkin.ToggleButton(_promptFor == PromptFor.Question, label, GUILayout.ExpandWidth(false));
+                    else if (reply == QuickReply.ChangeSomething) clicked = ClaudiaSkin.ToggleButton(writing == PromptFor.Change, label, GUILayout.ExpandWidth(false));
+                    else if (reply == QuickReply.AskQuestion) clicked = ClaudiaSkin.ToggleButton(writing == PromptFor.Question, label, GUILayout.ExpandWidth(false));
                     else clicked = ClaudiaSkin.SecondaryButton(label, GUILayout.ExpandWidth(false));
                     if (clicked) QuickReplied(reply);
                 }
@@ -500,13 +507,11 @@ namespace ClaudiaKermin.Adapter
         }
 
         // One line of the pending setup, ellipsized to the room it gets.
-        private static void DrawSummary(string text)
+        private void DrawSummary(string text)
         {
-            var style = ClaudiaSkin.Secondary;
-            var rect = GUILayoutUtility.GetRect(new GUIContent(text), style, GUILayout.ExpandWidth(true), GUILayout.MinWidth(0), GUILayout.Height(ControlBarHeight - 12));
+            var rect = GUILayoutUtility.GetRect(new GUIContent(text), _summary, GUILayout.ExpandWidth(true), GUILayout.MinWidth(0), GUILayout.Height(ControlBarHeight - 12));
             if (Event.current.type != EventType.Repaint) return;
-            var line = new GUIStyle(style) { wordWrap = false, alignment = TextAnchor.MiddleLeft };
-            line.Draw(rect, new GUIContent(ClaudiaSkin.Ellipsize(text, line, rect.width), text), false, false, false, false);
+            _summary.Draw(rect, new GUIContent(ClaudiaSkin.Ellipsize(text, _summary, rect.width), text), false, false, false, false);
         }
 
         // "$1.42 / $10.00" over an 84×4 bar: accent, amber from 80% of the Spending Cap.

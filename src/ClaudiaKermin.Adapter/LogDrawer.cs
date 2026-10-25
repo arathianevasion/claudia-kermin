@@ -130,18 +130,21 @@ namespace ClaudiaKermin.Adapter
                 if (entry.CustomScriptReason.Length > 0) GUILayout.Label(entry.CustomScriptReason, ClaudiaSkin.Secondary);
             }
             GUILayout.Label(entry.Text, ClaudiaSkin.Body);
+            // Read before the buttons: a click mustn't add the expanded text to an event that was laid out without it.
+            var showWhy = _showWhy.Contains(entry);
+            var showScript = _showScript.Contains(entry);
             if (entry.Why.Length > 0 || entry.Script.Length > 0)
             {
                 GUILayout.BeginHorizontal();
-                if (entry.Why.Length > 0 && ClaudiaSkin.SmallButton(_showWhy.Contains(entry) ? "Hide why" : "Why", GUILayout.ExpandWidth(false)))
+                if (entry.Why.Length > 0 && ClaudiaSkin.SmallButton(showWhy ? "Hide why" : "Why", GUILayout.ExpandWidth(false)))
                     Toggle(_showWhy, entry);
-                if (entry.Script.Length > 0 && ClaudiaSkin.SmallButton(_showScript.Contains(entry) ? "Hide script" : "Show script", GUILayout.ExpandWidth(false)))
+                if (entry.Script.Length > 0 && ClaudiaSkin.SmallButton(showScript ? "Hide script" : "Show script", GUILayout.ExpandWidth(false)))
                     Toggle(_showScript, entry);
                 GUILayout.FlexibleSpace();
                 GUILayout.EndHorizontal();
             }
-            if (_showWhy.Contains(entry)) GUILayout.Label("Why: " + entry.Why, ClaudiaSkin.Secondary);
-            if (_showScript.Contains(entry)) GUILayout.TextArea(entry.Script, _script);
+            if (showWhy) GUILayout.Label("Why: " + entry.Why, ClaudiaSkin.Secondary);
+            if (showScript) GUILayout.TextArea(entry.Script, _script);
             ClaudiaSkin.EndCard();
         }
 
