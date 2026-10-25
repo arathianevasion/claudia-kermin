@@ -68,6 +68,8 @@ namespace ClaudiaKermin.Core.Missions
         public string ReducedGoal = "";
         /// <summary>The Mission's Child Vessels and what the mod knows of each (JSON written by MissionControl); "" for none.</summary>
         public string ChildVessels = "";
+        /// <summary>The Telemetry Check crossings of the run since the last Debrief, with their verdicts (JSON written by MissionControl); "" for none or in older saves.</summary>
+        public string Crossings = "";
         public MissionPlan MissionPlan;
         /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
         public SequencePlan SequencePlan;
@@ -113,6 +115,7 @@ namespace ClaudiaKermin.Core.Missions
             if (InterruptReason != null) values["interruptReason"] = InterruptReason;
             if (ProcessorPartId.HasValue) values["processorPartId"] = ProcessorPartId.Value.ToString(CultureInfo.InvariantCulture);
             if (ChildVessels.Length > 0) values["childVessels"] = ChildVessels;
+            if (Crossings.Length > 0) values["crossings"] = Crossings;
             foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
             for (var i = 0; i < UnsafeProblems.Count; i++) values[UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture)] = UnsafeProblems[i];
             if (MissionPlan != null || SequencePlan != null) values["plans"] = WritePlans(MissionPlan, SequencePlan);
@@ -152,6 +155,7 @@ namespace ClaudiaKermin.Core.Missions
                 HandBackMessage = Get(values, "handBackMessage"),
                 ReducedGoal = Get(values, "reducedGoal"),
                 ChildVessels = Get(values, "childVessels"),
+                Crossings = Get(values, "crossings"),
             };
             decimal cap;
             if (decimal.TryParse(Get(values, "spendingCap"), NumberStyles.Number, CultureInfo.InvariantCulture, out cap)) state.SpendingCap = cap;
