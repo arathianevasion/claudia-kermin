@@ -23,8 +23,9 @@
 //|     "any" lands about half an orbit on. A site must pass within 20 km of the ground track in the
 //|     next 3 orbits; plan a plane change first otherwise.
 //|   daylight [true]: set it from the Mission Setting Daylight landing. true touches down only with
-//|     the sun at least 5 degrees up at the site, waiting up to 3 orbits for such a pass (and within
-//|     the wait cap); it fails if there is none (plan a Due Time for the site's day).
+//|     the sun at least 5 degrees up at the site. It looks up to 3 orbits ahead for such a pass but
+//|     never waits past the wait cap (one orbit unless the player raised it); with no pass in reach
+//|     it fails (plan a Due Time for the site's day).
 //|   max_slope [8]: degrees; steeper ground is rejected during final descent.
 //|   max_divert [300]: m it may move off the site to find ground within max_slope.
 //|   touchdown_speed [2]: m/s at touchdown.
@@ -87,6 +88,7 @@ function land_unreadable {
   return "".
 }
 
+// True if x is a number from low to high.
 function land_number_in {
   parameter x, low, high.
   if not x:istype("Scalar") {
@@ -121,8 +123,6 @@ function land_site_lng {
   parameter lng, dt, rotation_period.
   return land_wrap_lng(lng + 360 * dt / rotation_period).
 }
-
-// (Names like r, v and q are kOS built-in functions, which kOS won't let a script hide.)
 
 // The prograde delta-v (m/s, negative) at radius r0 (m), moving at speed (m/s) horizontally,
 // that lowers periapsis to radius r_pe.
@@ -233,6 +233,7 @@ function land_pe_radius {
   return r_pe.
 }
 
+// land_plan's failure when the orbit is too low to start the descent from over the site.
 function land_too_low {
   parameter site, approach.
   local lowest is max(0, body:geopositionlatlng(site:lat, site:lng):terrainheight) + approach + 1000.
@@ -341,20 +342,6 @@ function land_node_for {
   return chosen.
 }
 
-// Flies a node this block added with exec_node, folding its delta-v into ctx. Returns "" or why it failed.
-function land_fly_node {
-  parameter ctx, nd.
-  local opt is ctx:opt.
-  local inner is exec_node(lexicon("node", nd, "min_ec_pct", opt:min_ec_pct, "abort_on_part_loss", opt:abort_on_part_loss, "stage_limit", opt:stage_limit)).
-  claudia_add_result(ctx, inner).
-  if not inner:success {
-    // exec_node leaves its node in place when it fails.
-    remove nd.
-    return inner:reason.
-  }
-  return "".
-}
-
 // ---- The block ----
 
 function land {
@@ -422,7 +409,7 @@ function land {
   // Deorbit: retrograde, half an orbit before the site.
   local deorbit is node(plan:burn_ut, 0, 0, deorbit_dv).
   add deorbit.
-  local flown is land_fly_node(ctx, deorbit).
+  local flown is claudia_fly_node(ctx, deorbit).
   if flown <> "" {
     claudia_make_safe().
     return claudia_finish(ctx, false, flown, extra).
@@ -445,7 +432,7 @@ function land {
     local fix_dv is wanted - fix_vel.
     if fix_dv:mag > 0.5 {
       local fix is land_node_for(fix_ut, fix_dv).
-      set flown to land_fly_node(ctx, fix).
+      set flown to claudia_fly_node(ctx, fix).
       if flown <> "" {
         claudia_make_safe().
         return claudia_finish(ctx, false, flown, extra).

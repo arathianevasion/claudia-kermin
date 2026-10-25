@@ -6,15 +6,15 @@
 // block-only helpers are prefixed ascend_. The "//|" lines are Claudia's docs for it; the first is
 // its summary.
 //
-// The climb: straight up off the ground, then the pitch that holds the vertical speed needed to
-// coast up to target_alt (so most of the thrust goes into orbital speed), until apoapsis reaches
-// it; then a node at apoapsis circularizes.
+// The climb: straight up off the ground, then the pitch that holds half the vertical speed that
+// would coast it up to target_alt (so most of the thrust goes into orbital speed), until apoapsis
+// reaches it; then a node at apoapsis circularizes.
 
 @lazyglobal off.
 
 //| ascend(options): flies from the surface of an airless body (the Mun, Minmus...) to a circular
-//| orbit at target_alt: up off the ground, then a low climb that holds just the vertical speed to
-//| coast up to target_alt, then a circularization burn at apoapsis (flown as exec_node does).
+//| orbit at target_alt: up off the ground, then a low climb that builds orbital speed until
+//| apoapsis reaches target_alt, then a circularization burn at apoapsis (flown with exec_node).
 //| Options:
 //|   target_alt ["auto"]: orbit altitude in m; "auto" is 5 km above the body's highest terrain.
 //|     It must be above the highest terrain (ADDONS:CLAUDIA:HIGHESTTERRAIN(body)) and inside the SOI.
@@ -34,6 +34,18 @@ function ascend_defaults {
 
 // ---- Pure helpers ----
 
+// "" or why target_inc isn't one the block can use (target_alt is checked once it is resolved).
+function ascend_unreadable {
+  parameter opt.
+  if not opt:target_inc:istype("Scalar") {
+    return "target_inc must be degrees from 0 to 180".
+  }
+  if opt:target_inc < 0 or opt:target_inc > 180 {
+    return "target_inc must be degrees from 0 to 180".
+  }
+  return "".
+}
+
 // target_alt resolved: "auto" is 5 km above the highest terrain; anything else is left as it is.
 function ascend_target_alt {
   parameter target_alt, highest.
@@ -46,7 +58,7 @@ function ascend_target_alt {
 // "" or why a (resolved) target_alt can't be flown to: it must be metres, above the highest
 // terrain and below the edge of the sphere of influence (soi_alt, m above sea level).
 function ascend_check_alt {
-  parameter target_alt, highest, soi_alt, body_name is "body".
+  parameter target_alt, highest, soi_alt, body_name.
   if not target_alt:istype("Scalar") {
     return "target_alt must be " + char(34) + "auto" + char(34) + " or metres, not '" + target_alt + "'".
   }
@@ -74,11 +86,12 @@ function ascend_azimuth {
   return az.
 }
 
-// The vertical speed (m/s) from which the craft would coast up to target_alt from alt_now under
-// gravity less centrifugal lift, g_eff (m/s^2).
+// The vertical speed (m/s) to climb at: half of what would coast the craft up to target_alt from
+// alt_now under gravity less centrifugal lift, g_eff (m/s^2), so most of the thrust goes into
+// horizontal speed and apoapsis reaches target_alt mostly through that (as g_eff falls).
 function ascend_vv_target {
   parameter alt_now, target_alt, g_eff.
-  return sqrt(2 * max(0.01, g_eff) * max(0, target_alt - alt_now)).
+  return 0.5 * sqrt(2 * max(0.01, g_eff) * max(0, target_alt - alt_now)).
 }
 
 // Pitch above the horizon (degrees) that holds vertical speed vv at vv_want with full acceleration
@@ -107,14 +120,15 @@ function ascend {
     return claudia_finish(ctx, false, ctx:error, extra).
   }
   local opt is ctx:opt.
+  local unreadable is ascend_unreadable(opt).
+  if unreadable <> "" {
+    return claudia_finish(ctx, false, unreadable, extra).
+  }
   if body:atm:exists {
     return claudia_finish(ctx, false, "ascend flies from airless bodies only; " + body:name + " has an atmosphere (use launch)", extra).
   }
   if not claudia_on_ground() {
     return claudia_finish(ctx, false, "ascend starts on the ground, not " + status, extra).
-  }
-  if not opt:target_inc:istype("Scalar") or opt:target_inc < 0 or opt:target_inc > 180 {
-    return claudia_finish(ctx, false, "target_inc must be degrees from 0 to 180", extra).
   }
   local highest is addons:claudia:highestterrain(body).
   local goal is ascend_target_alt(opt:target_alt, highest).
@@ -178,14 +192,11 @@ function ascend {
   // Circularize at apoapsis.
   local nd is node(time:seconds + eta:apoapsis, 0, 0, ascend_circularize_dv(mu, body:radius + ship:apoapsis, ship:orbit:semimajoraxis)).
   add nd.
-  local inner is exec_node(lexicon("node", nd, "min_ec_pct", opt:min_ec_pct, "abort_on_part_loss", opt:abort_on_part_loss, "stage_limit", opt:stage_limit)).
-  claudia_add_result(ctx, inner).
+  local flown is claudia_fly_node(ctx, nd).
   set extra:ap_error to round(ship:apoapsis - goal).
-  if not inner:success {
-    // exec_node leaves its node in place when it fails.
-    remove nd.
+  if flown <> "" {
     claudia_make_safe().
-    return claudia_finish(ctx, false, inner:reason, extra).
+    return claudia_finish(ctx, false, flown, extra).
   }
   if ship:periapsis <= highest {
     return claudia_finish(ctx, false, "periapsis " + round(ship:periapsis) + " m is still under the highest terrain, " + round(highest) + " m", extra).

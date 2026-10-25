@@ -149,6 +149,9 @@ namespace ClaudiaKermin.Kerboscript.Tests
             var printed = Run("local o is claudia_options(lexicon(), ascend_defaults(), 900):opt.\nprint o:target_alt. print o:target_inc. print o:max_duration.");
             Assert.Equal(new[] { "auto", "0", "900" }, printed);
             Assert.Equal("unknown option target_ap", One("claudia_options(lexicon(\"target_ap\", 5), ascend_defaults(), 900):error"));
+            Assert.Equal("", One("ascend_unreadable(claudia_options(lexicon(\"target_inc\", 90), ascend_defaults(), 900):opt)"));
+            Assert.Equal("target_inc must be degrees from 0 to 180", One("ascend_unreadable(claudia_options(lexicon(\"target_inc\", 200), ascend_defaults(), 900):opt)"));
+            Assert.Equal("target_inc must be degrees from 0 to 180", One("ascend_unreadable(claudia_options(lexicon(\"target_inc\", \"polar\"), ascend_defaults(), 900):opt)"));
         }
 
         [Fact]
@@ -156,10 +159,10 @@ namespace ClaudiaKermin.Kerboscript.Tests
         {
             Assert.Equal("12061", One("ascend_target_alt(\"auto\", 7061)"));
             Assert.Equal("20000", One("ascend_target_alt(20000, 7061)"));
-            Assert.Equal("", One("ascend_check_alt(12061, 7061, 2429559)"));
-            Assert.Equal("target_alt 5000 m is not above the highest terrain, 7061 m", One("ascend_check_alt(5000, 7061, 2429559)"));
+            Assert.Equal("", One("ascend_check_alt(12061, 7061, 2429559, \"Mun\")"));
+            Assert.Equal("target_alt 5000 m is not above the highest terrain, 7061 m", One("ascend_check_alt(5000, 7061, 2429559, \"Mun\")"));
             Assert.Equal("target_alt 3000000 m is outside the Mun's sphere of influence", One("ascend_check_alt(3000000, 7061, 2429559, \"Mun\")"));
-            Assert.Equal("target_alt must be \"auto\" or metres, not 'high'", One("ascend_check_alt(\"high\", 7061, 2429559)"));
+            Assert.Equal("target_alt must be \"auto\" or metres, not 'high'", One("ascend_check_alt(\"high\", 7061, 2429559, \"Mun\")"));
         }
 
         [Fact]
@@ -176,9 +179,10 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         [Fact]
-        public void Ascend_climbs_just_fast_enough_to_coast_up_to_the_target()
+        public void Ascend_climbs_at_half_the_speed_that_would_coast_it_up_to_the_target()
         {
-            Assert.Equal("178.885", One("round(ascend_vv_target(2000, 12000, 1.6), 3)"));
+            // Coasting up 10 km at 1.6 m/s^2 takes 178.885 m/s; it climbs at half that.
+            Assert.Equal("89.443", One("round(ascend_vv_target(2000, 12000, 1.6), 3)"));
             Assert.Equal("0", One("ascend_vv_target(13000, 12000, 1.6)"));
         }
 

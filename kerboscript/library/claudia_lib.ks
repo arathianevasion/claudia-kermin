@@ -19,6 +19,8 @@
 //   "abort <option>: <detail>"; there is no in-block recovery.
 // - Block loops call claudia_tick() each physics tick: it measures delta-v used, auto-stages and
 //   checks the common aborts. Waits go through claudia_wait_until().
+// - A block that flies another block (e.g. a burn through exec_node) passes on its common options
+//   and folds the result into its own with claudia_add_result (claudia_fly_node does both for nodes).
 // - Helpers are prefixed claudia_. Pure helpers (no ship, no time) take plain values so they can be
 //   unit-tested on kOS.Safe outside KSP.
 
@@ -375,6 +377,21 @@ function claudia_add_result {
   set ctx:dv_used to ctx:dv_used + inner:dv_used.
   set ctx:parts to ship:parts:length.
   set ctx:last_ut to time:seconds.
+}
+
+// Flies a maneuver node the calling block added, with exec_node and the caller's common options,
+// folding its delta-v into ctx. On failure removes the node (exec_node leaves it in place).
+// Returns "" or why it failed.
+function claudia_fly_node {
+  parameter ctx, nd.
+  local opt is ctx:opt.
+  local inner is exec_node(lexicon("node", nd, "min_ec_pct", opt:min_ec_pct, "abort_on_part_loss", opt:abort_on_part_loss, "stage_limit", opt:stage_limit)).
+  claudia_add_result(ctx, inner).
+  if not inner:success {
+    remove nd.
+    return inner:reason.
+  }
+  return "".
 }
 
 // The block's result lexicon: the Script Result's common fields plus extra (the block's own).

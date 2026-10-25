@@ -4,6 +4,7 @@
 using System;
 using ClaudiaKermin.Core.Kos;
 using kOS.Safe.Encapsulation;
+using kOS.Safe.Exceptions;
 using kOS.Safe.Encapsulation.Suffixes;
 using kOS.Suffixed;
 
@@ -16,7 +17,10 @@ namespace ClaudiaKermin.KOS
     /// </summary>
     public partial class ClaudiaAddon
     {
-        /// <summary>The farthest <c>FLATSPOT</c> searches, in metres, so a script can't stall a frame on a huge search.</summary>
+        /// <summary>
+        /// The farthest <c>FLATSPOT</c> searches, in metres, so a script can't stall a frame on a huge
+        /// search; <c>land</c>'s <c>max_divert</c> has the same bound.
+        /// </summary>
         private const double MaxReach = 2000;
 
         private void AddTerrainSuffixes()
@@ -43,11 +47,13 @@ namespace ClaudiaKermin.KOS
 
         private static ScalarValue Slope(GeoCoordinates geo)
         {
+            if (geo.Body == null) throw new KOSException("SLOPE needs a GEOPOSITION on a body");
             return ScalarValue.Create(Terrain.Slope(HeightOn(geo.Body), geo.Body.Radius, geo.Latitude, geo.Longitude));
         }
 
         private static Lexicon FlatSpot(GeoCoordinates geo, ScalarValue reach, ScalarValue maxSlope)
         {
+            if (geo.Body == null) throw new KOSException("FLATSPOT needs a GEOPOSITION on a body");
             var metres = Math.Min(MaxReach, Math.Max(0, reach.GetDoubleValue()));
             var spot = Terrain.Flattest(HeightOn(geo.Body), geo.Body.Radius, geo.Latitude, geo.Longitude, metres, maxSlope.GetDoubleValue());
             var result = new Lexicon();
