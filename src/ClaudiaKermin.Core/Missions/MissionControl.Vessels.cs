@@ -103,6 +103,10 @@ namespace ClaudiaKermin.Core.Missions
             {
                 mission.VesselId = craft.Id;
                 mission.VesselName = craft.Name;
+                // An aboard Mission's processor is one on the vessel Claudia is in: after an undock the original may have gone with the other half.
+                // (A remote Mission's craft is found by its processor, so that one never moves.)
+                if (!mission.Remote && craft.ProcessorPartIds.Count > 0 && !craft.ProcessorPartIds.Contains(mission.ProcessorPartId ?? 0))
+                    mission.ProcessorPartId = craft.ProcessorPartIds[0];
             }
             ChildVesselsSeen(vessels);
             var why = MissionCraft.CannotFly(mission.Remote, craft);
