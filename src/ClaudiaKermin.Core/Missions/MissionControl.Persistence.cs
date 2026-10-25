@@ -405,7 +405,8 @@ namespace ClaudiaKermin.Core.Missions
 
             // Spend is never the save's: the cost log is never rewound, so a load cannot refund anything.
             var cost = MissionStore.ReadCostTotals(mission.Folder);
-            if (cost.Unreadable)
+            // A Mission that is over sends nothing more, so its spend can't be refunded into anything.
+            if (cost.Unreadable && !Finished(restore.State.Stage))
             {
                 // Unreadable is not zero spend (that would be a refund): nothing is sent until the log reads.
                 _mission = mission;
