@@ -35,6 +35,9 @@ namespace ClaudiaKermin.KOS
                 part.temperature = 1.0;
             }
 
+            // As on the launchpad, nothing has fired: the current stage is one past the highest stage a part is in.
+            var currentStage = ship.parts.Max(part => part.inverseStage) + 1;
+
             // Snapshot the parts through a throwaway vessel, then let them go.
             var holder = new GameObject("claudia block test spawn");
             var dummyVessel = holder.AddComponent<Vessel>();
@@ -59,6 +62,7 @@ namespace ClaudiaKermin.KOS
                 : new Orbit(inclination, 0, apRadius, 0, 0, 0, Planetarium.GetUniversalTime(), body);
             var discovery = ProtoVessel.CreateDiscoveryNode(DiscoveryLevels.Owned, UntrackedObjectClass.A, double.PositiveInfinity, double.PositiveInfinity);
             var vesselNode = ProtoVessel.CreateVesselNode(ship.shipName, VesselType.Probe, orbit, 0, partNodes, discovery);
+            vesselNode.SetValue("stg", currentStage, true); // CreateVesselNode writes 0; Vessel.currentStage loads from this
             return game.AddVessel(vesselNode);
         }
     }
