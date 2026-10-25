@@ -105,7 +105,7 @@ namespace ClaudiaKermin.Core.Missions
                 + "(mass, stages and delta-v, crew, resources, kOS processors) before the next plan; any plan made before docking is out of date.";
         }
 
-        private static string PartList(SeenVessel vessel)
+        internal static string PartList(SeenVessel vessel)
         {
             if (vessel.PartTitles.Count == 0) return "no parts the mod could name";
             // Repeated parts are counted, in the order they first appear.
@@ -127,8 +127,14 @@ namespace ClaudiaKermin.Core.Missions
         public bool HasKosProcessor;
         /// <summary>The <c>persistentId</c>s of its parts with a kOS processor.</summary>
         public List<uint> ProcessorPartIds = new List<uint>();
-        /// <summary>Part titles, filled only for docking (<see cref="VesselsDocked"/>).</summary>
+        /// <summary>Part titles, filled only for docking and separation (<see cref="VesselsDocked"/>, <see cref="VesselsSeparated"/>).</summary>
         public List<string> PartTitles = new List<string>();
+        /// <summary>KSP's situation name, e.g. ORBITING or SUB_ORBITAL; "" when not read.</summary>
+        public string Situation = "";
+        /// <summary>It has a CommNet path to Kerbin (true for every vessel when the save has CommNet off).</summary>
+        public bool LinkedHome;
+        /// <summary>The ids of the other vessels it has a CommNet path to (every vessel when CommNet is off).</summary>
+        public List<string> LinkedTo = new List<string>();
     }
 
     // ---- Game events ----

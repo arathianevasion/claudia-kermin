@@ -19,6 +19,18 @@ namespace ClaudiaKermin.Core.Missions
         public double? DueTimeUt;
         /// <summary>A stretch the player flies by hand (docking, EVA science): no script, and its Approval gives the player the controls.</summary>
         public bool Manual;
+        /// <summary>The vessel it flies: "" or "craft" for the Mission's craft, otherwise a Child Vessel's name from the Mission Plan.</summary>
+        public string Vessel = "";
+    }
+
+    /// <summary>A Child Vessel the Mission Plan names: one the staging plan will release, or one that has already separated.</summary>
+    public sealed class PlannedChildVessel
+    {
+        public string Name = "";
+        /// <summary>The separation stage that releases it; null for a vessel already separated.</summary>
+        public int? SeparationStage;
+        /// <summary>An already separated vessel's id, from the mod's separation notice; "" otherwise.</summary>
+        public string VesselId = "";
     }
 
     /// <summary>The ordered Maneuver Sequences Claudia intends to fly to reach the Mission Goal.</summary>
@@ -26,6 +38,8 @@ namespace ClaudiaKermin.Core.Missions
     {
         public string Why = "";
         public List<PlannedSequence> Sequences = new List<PlannedSequence>();
+        /// <summary>The Child Vessels Claudia plans to fly; separated vessels not named here are ignored.</summary>
+        public List<PlannedChildVessel> ChildVessels = new List<PlannedChildVessel>();
         public double TotalDeltaV;
         public string ExpectedDuration = "";
         /// <summary>The expected total Mission time in seconds, waits between sequences included; null when Claudia gave none.</summary>
@@ -60,6 +74,8 @@ namespace ClaudiaKermin.Core.Missions
         public double? LateWindowDeltaV;
         /// <summary>A manual stretch: the player flies it by hand, so there is no script. Approval starts Manual Control.</summary>
         public bool Manual;
+        /// <summary>The vessel it flies: "" or "craft" for the Mission's craft, otherwise a Child Vessel's name from the Mission Plan.</summary>
+        public string Vessel = "";
     }
 
     public sealed class Debrief
@@ -128,10 +144,16 @@ namespace ClaudiaKermin.Core.Missions
             + "\"reply_intent\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"approve\",\"revise\",\"question\",\"unclear\"]},{\"type\":\"null\"}],"
             + "\"description\":\"Only when classifying the player's typed reply to a pending plan; otherwise null.\"},"
             + "\"mission_plan\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"why\",\"sequences\",\"total_delta_v\",\"expected_duration\",\"mission_time_s\"],\"properties\":{"
+            + "\"required\":[\"why\",\"sequences\",\"total_delta_v\",\"expected_duration\",\"mission_time_s\",\"child_vessels\"],\"properties\":{"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
+            + "\"child_vessels\":{\"type\":\"array\",\"description\":\"The Child Vessels you plan to fly, each named once; separated vessels not named here are ignored.\","
+            + "\"items\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"name\",\"separation_stage\",\"vessel_id\"],\"properties\":{"
+            + "\"name\":{\"type\":\"string\",\"description\":\"Your name for it, used as the vessel of its sequences.\"},"
+            + "\"separation_stage\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"The separation stage that releases it, from the separations facts; null for one already separated.\"},"
+            + "\"vessel_id\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"For a vessel already separated, its id from the mod's notice; otherwise null.\"}}}},"
             + "\"sequences\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"name\",\"intent\",\"delta_v\",\"timing\",\"due_time_ut\",\"manual\"],\"properties\":{"
+            + "\"required\":[\"name\",\"intent\",\"delta_v\",\"timing\",\"due_time_ut\",\"manual\",\"vessel\"],\"properties\":{"
+            + "\"vessel\":{\"type\":\"string\",\"description\":\"craft, or the name of the Child Vessel this sequence flies.\"},"
             + "\"name\":{\"type\":\"string\"},\"intent\":{\"type\":\"string\"},"
             + "\"delta_v\":{\"type\":\"number\",\"description\":\"m/s\"},"
             + "\"timing\":{\"type\":\"string\",\"description\":\"Due Time or rough timing\"},"
@@ -141,8 +163,10 @@ namespace ClaudiaKermin.Core.Missions
             + "\"expected_duration\":{\"type\":\"string\"},"
             + "\"mission_time_s\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"description\":\"Expected total Mission time in seconds, waits between sequences included.\"}}},{\"type\":\"null\"}]},"
             + "\"sequence_plan\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"name\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"telemetry_checks\",\"risks\",\"custom_script\",\"custom_script_reason\",\"script\",\"due_time_ut\",\"window_closes_ut\",\"late_window_dv\",\"manual\"],"
+            + "\"required\":[\"name\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"telemetry_checks\",\"risks\",\"custom_script\",\"custom_script_reason\",\"script\",\"due_time_ut\",\"window_closes_ut\",\"late_window_dv\",\"manual\",\"vessel\"],"
             + "\"properties\":{"
+            + "\"vessel\":{\"type\":\"string\",\"description\":\"craft, or the name of a Child Vessel from the Mission Plan: the script goes only to that vessel, "
+            + "over a CommNet path from you, and every other vessel of the Mission must be stable (in orbit, landed or splashed down) when it starts.\"},"
             + "\"name\":{\"type\":\"string\"},\"intent\":{\"type\":\"string\"},"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
             + "\"target\":{\"type\":\"string\"},\"tolerances\":{\"type\":\"string\"},"
@@ -224,6 +248,23 @@ namespace ClaudiaKermin.Core.Missions
                             Timing = JsonNode.Str(s["timing"]) ?? "",
                             DueTimeUt = JsonNode.Double(s["due_time_ut"]),
                             Manual = JsonNode.Bool(s["manual"]) ?? false,
+                            Vessel = (JsonNode.Str(s["vessel"]) ?? "").Trim(),
+                        });
+                    }
+                }
+                var children = plan["child_vessels"];
+                if (children != null)
+                {
+                    foreach (var c in children.Items.Where(i => i.Kind == JsonKind.Object))
+                    {
+                        var name = (JsonNode.Str(c["name"]) ?? "").Trim();
+                        if (name.Length == 0 || reply.MissionPlan.ChildVessels.Any(v => string.Equals(v.Name, name, System.StringComparison.OrdinalIgnoreCase))) continue;
+                        var stage = JsonNode.Long(c["separation_stage"]);
+                        reply.MissionPlan.ChildVessels.Add(new PlannedChildVessel
+                        {
+                            Name = name,
+                            SeparationStage = stage.HasValue ? (int?)stage.Value : null,
+                            VesselId = (JsonNode.Str(c["vessel_id"]) ?? "").Trim(),
                         });
                     }
                 }
@@ -251,6 +292,7 @@ namespace ClaudiaKermin.Core.Missions
                     WindowClosesUt = JsonNode.Double(sequence["window_closes_ut"]),
                     LateWindowDeltaV = JsonNode.Double(sequence["late_window_dv"]),
                     Manual = JsonNode.Bool(sequence["manual"]) ?? false,
+                    Vessel = (JsonNode.Str(sequence["vessel"]) ?? "").Trim(),
                 };
             }
 

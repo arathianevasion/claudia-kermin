@@ -119,6 +119,85 @@ namespace ClaudiaKermin.Core.Missions
                 separation.DeltaVVac = separation.ThrustVacKn / flow * G0 * Math.Log(separation.MassT / dry);
             return separation;
         }
+
+        /// <summary>
+        /// A script may go to <paramref name="vessel"/> only over a CommNet path from Claudia: from Kerbin on a remote Mission,
+        /// from the craft she is aboard otherwise.
+        /// </summary>
+        public static bool LinkedToClaudia(bool remote, string craftId, SeenVessel vessel)
+        {
+            if (vessel == null) return false;
+            return remote ? vessel.LinkedHome : !string.IsNullOrEmpty(craftId) && vessel.LinkedTo.Contains(craftId);
+        }
+
+        /// <summary>A vessel left behind is stable unless it is flying in an atmosphere or on a path that meets the ground.</summary>
+        public static bool Stable(string situation)
+        {
+            return situation != "FLYING" && situation != "SUB_ORBITAL";
+        }
+
+        /// <summary>The notice in the Mission log: what left the craft, and whether Claudia may fly it.</summary>
+        public static string LeftLine(SeenVessel left, bool undocked, string childName)
+        {
+            return (undocked ? "Undocked: " : "Separated: ") + left.Name + " left the craft with " + MissionCraft.PartList(left) + ". "
+                + (childName != null ? "It is the planned Child Vessel " + childName + "."
+                    : left.HasKosProcessor ? "It isn't a planned Child Vessel, so Claudia ignores it unless she revises the Mission Plan to use it." : "");
+        }
+
+        /// <summary>The notice to Claudia, with her next turn: what left the craft, its id, and what it is to the Mission.</summary>
+        public static string LeftNotice(SeenVessel left, bool undocked, string childName)
+        {
+            return "Mod notice: " + (undocked ? "the craft undocked" : "a vessel separated from the craft") + ": " + MissionPrompts.Quoted(left.Name)
+                + " (vessel id " + left.Id + ", " + (left.HasKosProcessor ? "with" : "without") + " a kOS processor). "
+                + "Parts that left the craft (quoted data): " + MissionPrompts.Quoted(MissionCraft.PartList(left)) + ". "
+                + (childName != null ? "It is the planned Child Vessel " + MissionPrompts.Quoted(childName) + "; its sequences name it as their vessel."
+                    : "It is not a planned Child Vessel and is ignored; to fly it, revise the Mission Plan to name it in child_vessels with this vessel id.")
+                + " Recheck the craft's facts in the Game Snapshot before the next plan.";
+        }
+    }
+
+    /// <summary>A Child Vessel of the Mission, and what the mod last saw of it.</summary>
+    internal sealed class ChildVessel
+    {
+        /// <summary>Claudia's name for it in the Mission Plan, which its Sequence Plans use as their vessel.</summary>
+        public string Name = "";
+        /// <summary>Its kOS processors (part <c>persistentId</c>s): how the mod knows it once it has separated.</summary>
+        public List<uint> ProcessorPartIds = new List<uint>();
+        /// <summary>Once separated: its vessel id and name; "" before.</summary>
+        public string VesselId = "";
+        public string VesselName = "";
+        public bool Separated;
+        /// <summary>It has a CommNet path from Claudia now.</summary>
+        public bool Linked;
+        public string Situation = "";
+    }
+
+    /// <summary>A Child Vessel as the Mission window shows it.</summary>
+    public sealed class ChildVesselView
+    {
+        public string Name = "";
+        public bool Separated;
+        public bool Linked;
+        /// <summary>A sequence is running on it now.</summary>
+        public bool Running;
+    }
+
+    /// <summary>
+    /// Two vessels split apart, by staging or undocking: the core works out whether one of them is the craft and reports
+    /// what left it. Each side carries its part titles.
+    /// </summary>
+    public sealed class VesselsSeparated : MissionInput
+    {
+        public readonly SeenVessel First;
+        public readonly SeenVessel Second;
+        public readonly bool Undocked;
+
+        public VesselsSeparated(SeenVessel first, SeenVessel second, bool undocked)
+        {
+            First = first;
+            Second = second;
+            Undocked = undocked;
+        }
     }
 
     /// <summary>What the staging plan separates from the craft, and whether it strands Claudia.</summary>
