@@ -316,7 +316,8 @@ namespace ClaudiaKermin.Core.Missions
             if (snapshot == null) view.StartAllowed = false;
             else if (_state == CraftCheckState.Running || _state == CraftCheckState.NeedsSimulator || _state == CraftCheckState.Error)
                 view.StartAllowed = false;
-            else if (_state == CraftCheckState.Done && !view.Stale) view.StartAllowed = Cleared;
+            // A stale result that had Blockers keeps Start Mission closed until the check runs again; any other stale one lets Start check again.
+            else if (_state == CraftCheckState.Done) view.StartAllowed = view.Stale ? _verdict != CraftVerdict.Fail : Cleared;
             else view.StartAllowed = true;
         }
 
