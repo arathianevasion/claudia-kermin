@@ -86,7 +86,7 @@ namespace ClaudiaKermin.Adapter
             GUI.skin = HighLogic.Skin;
             Styles();
             var expanded = PanelShowing;
-            var shape = expanded + "|" + (View.PlanSequences.Count > 0) + "|" + (MissionWindowRules.LockLine(View).Length > 0) + "|" + Screen.height;
+            var shape = expanded + "|" + (View.PlanSequences.Count > 0) + "|" + MissionWindowRules.LockLine(View) + "|" + Screen.height;
             // Under the altimeter at the top centre; it grows to fit and can't be dragged off.
             var height = shape == _shape ? _frame.Rect.height : 0;
             _shape = shape;

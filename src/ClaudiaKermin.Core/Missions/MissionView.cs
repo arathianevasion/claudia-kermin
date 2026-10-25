@@ -266,7 +266,7 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>What Claudia is doing while busy ("thinking", "writing"), or "".</summary>
         public string Activity = "";
 
-        /// <summary>The Mission Plan's Maneuver Sequences, for the stepper.</summary>
+        /// <summary>The Mission Plan's Maneuver Sequences, for the Capcom strip's segment track.</summary>
         public IList<string> PlanSequences = new List<string>();
         /// <summary>Parallel to <see cref="PlanSequences"/>: the Maneuver Sequence is a manual stretch the player flies by hand.</summary>
         public IList<bool> PlanSequencesManual = new List<bool>();
