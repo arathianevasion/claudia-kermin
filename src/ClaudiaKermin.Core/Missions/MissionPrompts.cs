@@ -119,13 +119,15 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>
         /// The per-Mission layer, frozen when the Mission starts: full docs for the Building Blocks this
-        /// Mission likely needs. Until the Craft Check picks them, that is every shipped block.
+        /// Mission likely needs, picked from its Mission Goal (<see cref="BlockSelection"/>). The base layer's
+        /// Summaries still name every block.
         /// </summary>
-        public static string MissionLayer(string missionId)
+        public static string MissionLayer(string missionId, string goal)
         {
             return "Mission " + missionId + ".\n\n"
-                + "Building Blocks for this Mission, in full. Where no shipped block fits, write a Custom Script.\n\n"
-                + CoreLibrary.FullDocs();
+                + "Building Blocks for this Mission, in full (the others are in the summaries above, without their options spelled out). "
+                + "Where no shipped block fits, write a Custom Script.\n\n"
+                + CoreLibrary.FullDocs(BlockSelection.For(goal));
         }
 
         // ---- Mission Settings and timing ----
