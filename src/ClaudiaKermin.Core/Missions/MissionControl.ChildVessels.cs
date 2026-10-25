@@ -32,9 +32,7 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>A Sequence Plan's vessel is the craft: "", "craft" or the craft's own name.</summary>
         private static bool FliesCraft(Mission mission, string vessel)
         {
-            vessel = (vessel ?? "").Trim();
-            return vessel.Length == 0 || string.Equals(vessel, "craft", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(vessel, mission.VesselName, StringComparison.OrdinalIgnoreCase);
+            return MissionCards.FliesCraft(mission.VesselName, vessel);
         }
 
         /// <summary>The Mission Plan's Child Vessel by this name, or null.</summary>
@@ -90,14 +88,6 @@ namespace ClaudiaKermin.Core.Missions
             }
             mission.Children = children;
             UpdateChildren(mission);
-        }
-
-        /// <summary>The Mission Plan card's lines about Child Vessels.</summary>
-        private static string ChildVesselLines(MissionPlan plan)
-        {
-            if (plan.ChildVessels.Count == 0) return "";
-            return "Child Vessels: " + string.Join(", ", plan.ChildVessels.Select(c => c.Name + (c.SeparationStage.HasValue
-                ? " (separates at stage " + c.SeparationStage.Value.ToString(CultureInfo.InvariantCulture) + ")" : " (already separated)")).ToArray()) + "\n";
         }
 
         // ---- What the mod sees of them ----
