@@ -532,6 +532,34 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ALinkThatComesBackWithinTheGraceDoesNotHandBackAndTheGraceStartsAgainWhenItDrops()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-manual.sse", "mission-plan.sse");
+            var mission = Control(transport);
+            ToRunning(mission);
+            mission.Send(new TakeManualControl());
+            mission.TakeCommands();
+            var ut = Pad().Ut;
+
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 1; }));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 4; }));
+            mission.Send(Pad(s => s.Ut = ut + 5));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 7; }));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 11; }));
+            Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
+            Assert.Empty(mission.TakeCommands());
+
+            // Down longer than the grace since it last dropped: Claudia takes the craft back, once.
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 12.5; }));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 13.5; }));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 20; }));
+            Assert.Single(mission.TakeCommands().OfType<MakeCraftSafe>());
+            Assert.Single(mission.View.Log, e => e.Kind == LogKind.Player && e.Text.StartsWith("Hand back"));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            Assert.Empty(mission.TakeCommands().OfType<MakeCraftSafe>());
+        }
+
+        [Fact]
         public void LosingTheLinkInManualControlWithNoOtherCrewTakesTheCraftBackAndMakesItSafe()
         {
             var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-manual.sse", "mission-plan.sse");

@@ -72,6 +72,22 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void TheManualControlLinkGraceIsFiveSecondsByDefaultAndReadFromTheFile()
+        {
+            using (var dir = new TempDir())
+            {
+                Assert.Equal(5, PlayerConfig.LoadOrCreate(dir.Sub).ManualLinkGraceSeconds);
+                var path = Path.Combine(dir.Sub, PlayerConfig.FileName);
+                Assert.Contains("manual_link_grace_s = 5", File.ReadAllText(path));
+
+                File.WriteAllText(path, "manual_link_grace_s = 12.5\n");
+                Assert.Equal(12.5, PlayerConfig.LoadOrCreate(dir.Sub).ManualLinkGraceSeconds);
+                File.WriteAllText(path, "manual_link_grace_s = -1\n");
+                Assert.Equal(5, PlayerConfig.LoadOrCreate(dir.Sub).ManualLinkGraceSeconds);
+            }
+        }
+
+        [Fact]
         public void SavingAnEmptyKeyIsRejected()
         {
             using (var dir = new TempDir())
