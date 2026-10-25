@@ -75,7 +75,7 @@ namespace ClaudiaKermin.Core.Tests
         {
             var transport = new StreamingFakeTransport(
                 ScriptedResponse.Fixture("mission-plan-priced.sse"),
-                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan-priced.sse"), "\"window_closes_ut\":1300,\"late_window_dv\":null,"));
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan-priced.sse"), "\"window_closes_ut\":1300,\"late_window_dv\":-1,"));
             var mission = Control(transport);
             CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 1.20m, Sonnet));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);

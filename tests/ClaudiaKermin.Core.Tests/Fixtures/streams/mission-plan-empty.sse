@@ -17,7 +17,7 @@ event: ping
 data: {"type": "ping"}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"{\"kind\":\"mission_plan\",\"say\":\"0 m/s, no sequences: I can't quicksave from a script, because saving, loading and reverting are forbidden in Mission Scripts and the mod would refuse it. Press F5 yourself, or give me a flight goal such as a launch to orbit.\",\"reply_intent\":null,"}}
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"{\"kind\":\"mission_plan\",\"say\":\"0 m/s, no sequences: I can't quicksave from a script, because saving, loading and reverting are forbidden in Mission Scripts and the mod would refuse it. Press F5 yourself, or give me a flight goal such as a launch to orbit.\",\"reply_intent\":\"none\","}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"\"mission_plan\":{\"why\":\"A quicksave from kOS is on the forbidden list, so no script can fly this goal.\",\"sequences\":[],\"total_delta_v\":0,\"expected_duration\":\"0 s\"},\"sequence_plan\":null,\"debrief\":null}"}}

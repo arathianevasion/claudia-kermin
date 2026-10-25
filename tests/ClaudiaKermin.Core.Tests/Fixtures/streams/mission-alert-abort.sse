@@ -5,10 +5,10 @@ event: content_block_start
 data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\"kind\":\"alert\",\"say\":\"Delta-v used is double the plan: recommend Abort.\",\"reply_intent\":null,"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\"kind\":\"alert\",\"say\":\"Delta-v used is double the plan: recommend Abort.\",\"reply_intent\":\"none\","}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\"mission_plan\":null,\"sequence_plan\":null,\"debrief\":null,\"alert\":{\"verdict\":\"abort\",\"why\":\"The burn is overrunning.\",\"follow_up_threshold\":null}}"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\"mission_plan\":null,\"sequence_plan\":null,\"debrief\":null,\"alert\":{\"verdict\":\"abort\",\"why\":\"The burn is overrunning.\",\"set_follow_up_threshold\":false,\"follow_up_threshold\":0}}"}}
 
 event: content_block_stop
 data: {"type":"content_block_stop","index":0}

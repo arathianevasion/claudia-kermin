@@ -5,7 +5,7 @@ event: content_block_start
 data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\"kind\":\"debrief\",\"say\":\"Nominal: we are down. The EVA report is yours.\",\"reply_intent\":null,"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\"kind\":\"debrief\",\"say\":\"Nominal: we are down. The EVA report is yours.\",\"reply_intent\":\"none\","}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\"mission_plan\":null,\"sequence_plan\":null,\"debrief\":{\"outcome\":\"Nominal\",\"why\":\"The report came back with success true.\","}}

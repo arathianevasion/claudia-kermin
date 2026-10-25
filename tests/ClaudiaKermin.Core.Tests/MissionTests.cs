@@ -209,7 +209,7 @@ namespace ClaudiaKermin.Core.Tests
                 var last = messages.Last();
                 Assert.Equal("assistant", last.GetProperty("role").GetString());
                 Assert.Equal("c2lnLWRlYnJpZWY=", last.GetProperty("content")[0].GetProperty("signature").GetString());
-                Assert.Equal("{\"kind\":\"debrief\",\"say\":\"Nominal: the script reported PRELAUNCH. Mission Goal met.\",\"reply_intent\":null,"
+                Assert.Equal("{\"kind\":\"debrief\",\"say\":\"Nominal: the script reported PRELAUNCH. Mission Goal met.\",\"reply_intent\":\"none\","
                     + "\"mission_plan\":null,\"sequence_plan\":null,\"debrief\":{\"outcome\":\"Nominal\",\"why\":\"The report came back with success true.\","
                     + "\"what_happened\":\"The script printed and reported the craft’s status.\",\"goal_reached\":true,\"next\":\"Nothing: the Mission Goal is met.\"}}",
                     Text(last));

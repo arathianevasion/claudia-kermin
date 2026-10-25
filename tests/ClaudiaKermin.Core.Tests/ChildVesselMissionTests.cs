@@ -34,28 +34,28 @@ namespace ClaudiaKermin.Core.Tests
 
         // ---- Claudia's replies ----
 
-        private static ScriptedResponse MissionPlan(string childVessels = "[{\"name\":\"Probe\",\"separation_stage\":2,\"vessel_id\":null}]", string secondVessel = "Probe")
+        private static ScriptedResponse MissionPlan(string childVessels = "[{\"name\":\"Probe\",\"separation_stage\":2,\"vessel_id\":\"\"}]", string secondVessel = "Probe")
         {
-            return Mothership.Reply("{\"kind\":\"mission_plan\",\"say\":\"Mission Plan: release the probe, then fly it.\",\"reply_intent\":null,"
+            return Mothership.Reply("{\"kind\":\"mission_plan\",\"say\":\"Mission Plan: release the probe, then fly it.\",\"reply_intent\":\"none\","
                 + "\"mission_plan\":{\"why\":\"The probe flies on alone.\",\"sequences\":["
-                + "{\"name\":\"Release\",\"intent\":\"Release the probe.\",\"delta_v\":0,\"timing\":\"right away\",\"due_time_ut\":null,\"manual\":false,\"vessel\":\"craft\"},"
-                + "{\"name\":\"Probe burn\",\"intent\":\"Raise the probe's orbit.\",\"delta_v\":100,\"timing\":\"after release\",\"due_time_ut\":null,\"manual\":false,\"vessel\":\"" + secondVessel + "\"}],"
-                + "\"total_delta_v\":100,\"expected_duration\":\"an hour\",\"mission_time_s\":null,\"child_vessels\":" + childVessels + "},"
+                + "{\"name\":\"Release\",\"intent\":\"Release the probe.\",\"delta_v\":0,\"timing\":\"right away\",\"due_time_ut\":-1,\"manual\":false,\"vessel\":\"craft\"},"
+                + "{\"name\":\"Probe burn\",\"intent\":\"Raise the probe's orbit.\",\"delta_v\":100,\"timing\":\"after release\",\"due_time_ut\":-1,\"manual\":false,\"vessel\":\"" + secondVessel + "\"}],"
+                + "\"total_delta_v\":100,\"expected_duration\":\"an hour\",\"mission_time_s\":-1,\"child_vessels\":" + childVessels + "},"
                 + "\"sequence_plan\":null,\"debrief\":null}");
         }
 
         private static ScriptedResponse SequencePlan(string name, string vessel)
         {
-            return Mothership.Reply("{\"kind\":\"sequence_plan\",\"say\":\"Sequence Plan: " + name + ".\",\"reply_intent\":null,\"mission_plan\":null,"
+            return Mothership.Reply("{\"kind\":\"sequence_plan\",\"say\":\"Sequence Plan: " + name + ".\",\"reply_intent\":\"none\",\"mission_plan\":null,"
                 + "\"sequence_plan\":{\"name\":\"" + name + "\",\"intent\":\"Fly it.\",\"why\":\"It is next.\",\"target\":\"done\",\"tolerances\":\"none\","
                 + "\"expected_delta_v\":10,\"expected_duration_s\":60,\"abort_conditions\":[],\"telemetry_checks\":[],\"risks\":[],"
                 + "\"custom_script\":false,\"custom_script_reason\":\"\",\"script\":\"print \\\"go\\\".\\n\","
-                + "\"due_time_ut\":null,\"window_closes_ut\":null,\"late_window_dv\":null,\"manual\":false,\"vessel\":\"" + vessel + "\"},\"debrief\":null}");
+                + "\"due_time_ut\":-1,\"window_closes_ut\":-1,\"late_window_dv\":-1,\"manual\":false,\"vessel\":\"" + vessel + "\"},\"debrief\":null}");
         }
 
         private static ScriptedResponse Debrief(bool goalReached)
         {
-            return Mothership.Reply("{\"kind\":\"debrief\",\"say\":\"Debrief: Nominal.\",\"reply_intent\":null,\"mission_plan\":null,\"sequence_plan\":null,"
+            return Mothership.Reply("{\"kind\":\"debrief\",\"say\":\"Debrief: Nominal.\",\"reply_intent\":\"none\",\"mission_plan\":null,\"sequence_plan\":null,"
                 + "\"debrief\":{\"outcome\":\"Nominal\",\"why\":\"It went to plan.\",\"what_happened\":\"Done.\",\"goal_reached\":" + (goalReached ? "true" : "false")
                 + ",\"next\":\"\",\"eva_science\":\"\"}}");
         }
@@ -151,7 +151,7 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void AChildVesselAtAStageWhereNothingWithAProcessorSeparatesIsFlaggedWhenThePlanIsOffered()
         {
-            var transport = new StreamingFakeTransport(MissionPlan("[{\"name\":\"Probe\",\"separation_stage\":7,\"vessel_id\":null}]"));
+            var transport = new StreamingFakeTransport(MissionPlan("[{\"name\":\"Probe\",\"separation_stage\":7,\"vessel_id\":\"\"}]"));
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Flight));
             CraftCheckRouter.StartChecked(mission, _background, Mothership.WithProbe(), new StartMission(Goal, 10m, Sonnet, false));
@@ -252,7 +252,7 @@ namespace ClaudiaKermin.Core.Tests
         public void AnUnplannedSeparatedVesselIsIgnoredUntilClaudiaRevisesTheMissionPlanToUseIt()
         {
             var plan = MissionPlan("[]", "craft");
-            var revised = MissionPlan("[{\"name\":\"Stray\",\"separation_stage\":null,\"vessel_id\":\"stray\"}]", "Stray");
+            var revised = MissionPlan("[{\"name\":\"Stray\",\"separation_stage\":-1,\"vessel_id\":\"stray\"}]", "Stray");
             var transport = new StreamingFakeTransport(plan, revised, SequencePlan("Release", "craft"), Debrief(false), SequencePlan("Stray burn", "Stray"));
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Flight));
@@ -366,12 +366,12 @@ namespace ClaudiaKermin.Core.Tests
         public void AMissionPlanWithBothANewGoalAndChildVesselsParsesIsSavedAndRestored()
         {
             const string newGoal = "Release the probe and fly it past the Mun.";
-            var plan = Mothership.Reply("{\"kind\":\"mission_plan\",\"say\":\"Mission Plan: release the probe.\",\"reply_intent\":null,"
+            var plan = Mothership.Reply("{\"kind\":\"mission_plan\",\"say\":\"Mission Plan: release the probe.\",\"reply_intent\":\"none\","
                 + "\"mission_plan\":{\"why\":\"The probe flies on alone.\",\"sequences\":["
-                + "{\"name\":\"Release\",\"intent\":\"Release the probe.\",\"delta_v\":0,\"timing\":\"right away\",\"due_time_ut\":null,\"manual\":false,\"vessel\":\"craft\"},"
-                + "{\"name\":\"Probe burn\",\"intent\":\"Raise the probe's orbit.\",\"delta_v\":100,\"timing\":\"after release\",\"due_time_ut\":null,\"manual\":false,\"vessel\":\"Probe\"}],"
-                + "\"total_delta_v\":100,\"expected_duration\":\"an hour\",\"mission_time_s\":null,\"new_goal\":\"" + newGoal + "\","
-                + "\"child_vessels\":[{\"name\":\"Probe\",\"separation_stage\":2,\"vessel_id\":null}]},"
+                + "{\"name\":\"Release\",\"intent\":\"Release the probe.\",\"delta_v\":0,\"timing\":\"right away\",\"due_time_ut\":-1,\"manual\":false,\"vessel\":\"craft\"},"
+                + "{\"name\":\"Probe burn\",\"intent\":\"Raise the probe's orbit.\",\"delta_v\":100,\"timing\":\"after release\",\"due_time_ut\":-1,\"manual\":false,\"vessel\":\"Probe\"}],"
+                + "\"total_delta_v\":100,\"expected_duration\":\"an hour\",\"mission_time_s\":-1,\"new_goal\":\"" + newGoal + "\","
+                + "\"child_vessels\":[{\"name\":\"Probe\",\"separation_stage\":2,\"vessel_id\":\"\"}]},"
                 + "\"sequence_plan\":null,\"debrief\":null}");
             var mission = Control(new StreamingFakeTransport(plan));
             mission.Send(new SceneChanged(GameScene.Flight));

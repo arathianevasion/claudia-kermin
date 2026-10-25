@@ -47,12 +47,12 @@ namespace ClaudiaKermin.Core.Tests
             return new ScriptedResponse { Body = Encoding.UTF8.GetBytes(sse) };
         }
 
-        /// <summary>A Mission Plan reply with one sequence named <paramref name="name"/>; <paramref name="newGoal"/> is JSON ("null" or a quoted string).</summary>
-        private static ScriptedResponse Plan(string name, string newGoal = "null", string intent = "null")
+        /// <summary>A Mission Plan reply with one sequence named <paramref name="name"/>; <paramref name="newGoal"/> is JSON (a quoted string, "\"\"" for none).</summary>
+        private static ScriptedResponse Plan(string name, string newGoal = "\"\"", string intent = "\"none\"")
         {
             return Reply("{\"kind\":\"mission_plan\",\"say\":\"Mission Plan: " + name + ".\",\"reply_intent\":" + intent + ","
-                + "\"mission_plan\":{\"why\":\"Because.\",\"sequences\":[{\"name\":\"" + name + "\",\"intent\":\"Do it.\",\"delta_v\":100,\"timing\":\"right away\",\"due_time_ut\":null,\"manual\":false}],"
-                + "\"total_delta_v\":100,\"expected_duration\":\"an hour\",\"mission_time_s\":null,\"new_goal\":" + newGoal + "},\"sequence_plan\":null,\"debrief\":null}");
+                + "\"mission_plan\":{\"why\":\"Because.\",\"sequences\":[{\"name\":\"" + name + "\",\"intent\":\"Do it.\",\"delta_v\":100,\"timing\":\"right away\",\"due_time_ut\":-1,\"manual\":false}],"
+                + "\"total_delta_v\":100,\"expected_duration\":\"an hour\",\"mission_time_s\":-1,\"new_goal\":" + newGoal + "},\"sequence_plan\":null,\"debrief\":null}");
         }
 
         private static ScriptedResponse Answer(string intent)
@@ -153,7 +153,7 @@ namespace ClaudiaKermin.Core.Tests
 
         [Theory]
         [InlineData("\"question\"")]
-        [InlineData("null")]
+        [InlineData("\"none\"")]
         [InlineData("\"unclear\"")]
         public void AQuestionWithNoApproveOrReviseIntentChangesNothing(string intent)
         {
