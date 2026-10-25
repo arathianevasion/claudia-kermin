@@ -126,6 +126,7 @@ namespace ClaudiaKermin.Core.Missions
                 }
                 child.Separated = true;
                 child.VesselId = seen.Id;
+                mission.LeftTheCraft.Add(seen.Id);
                 child.VesselName = seen.Name;
                 if (seen.ProcessorPartIds.Count > 0) child.ProcessorPartIds = seen.ProcessorPartIds.ToList();
                 child.Linked = ChildVessels.LinkedToClaudia(mission.Remote, mission.VesselId, seen);
@@ -253,6 +254,7 @@ namespace ClaudiaKermin.Core.Missions
         private static void ReleaseChildVessels(Mission mission)
         {
             mission.Children.Clear();
+            mission.LeftTheCraft.Clear();
             mission.RunningChild = "";
         }
 
