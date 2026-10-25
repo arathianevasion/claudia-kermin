@@ -116,6 +116,7 @@ namespace ClaudiaKermin.Adapter
                 var info = new SnapshotPart
                 {
                     Id = part.persistentId,
+                    CraftId = part.craftID,
                     ParentId = part.parent != null ? (uint?)part.parent.persistentId : null,
                     Name = part.partInfo != null ? part.partInfo.name : part.name,
                     Title = part.partInfo != null ? part.partInfo.title : "",

@@ -31,7 +31,7 @@ namespace ClaudiaKermin.Core.Missions
             };
             request.System.Add(CraftCheckPrompts.System);
             request.System.Add(RecheckPrompts.System);
-            request.Messages.Add(Message.UserText(RecheckPrompts.Facts(goal, snapshot, _config.CraftCheckMarginPercent, _preferredProcessor, remote, restOfPlan)));
+            request.Messages.Add(Message.UserText(RecheckPrompts.Facts(goal, snapshot, _config.CraftCheckMarginPercent, ResolvePreferred(snapshot), remote, restOfPlan)));
             return request;
         }
 

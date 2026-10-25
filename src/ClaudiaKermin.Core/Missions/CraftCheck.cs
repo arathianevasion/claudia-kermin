@@ -90,6 +90,8 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>What the checked craft's staging plan separates, so planned Child Vessels are judged on the mod's own figures.</summary>
         private StagingPlan _staging = new StagingPlan();
         private uint? _preferredProcessor;
+        /// <summary>The chosen processor's <c>craftID</c>, which survives launch when its <c>persistentId</c> may not (0: unknown).</summary>
+        private uint _preferredCraftId;
         private List<string> _keptAcknowledgements = new List<string>();
         private CancellationTokenSource _cancel;
         /// <summary>What the latest check cost; goes to the Mission started from it, or to KSP.log when the check is replaced.</summary>
@@ -112,7 +114,19 @@ namespace ClaudiaKermin.Core.Missions
 
         public uint? ProcessorFor(GameSnapshot snapshot)
         {
-            return snapshot == null ? null : snapshot.ProcessorFor(_preferredProcessor);
+            return snapshot == null ? null : snapshot.ProcessorFor(ResolvePreferred(snapshot));
+        }
+
+        /// <summary>
+        /// The player's chosen processor as this craft numbers its parts: launch may reassign part <c>persistentId</c>s, so the
+        /// choice is found again by <c>craftID</c> and then follows the new id. Without a match the id is left as it was.
+        /// </summary>
+        private uint? ResolvePreferred(GameSnapshot snapshot)
+        {
+            if (!_preferredProcessor.HasValue || snapshot == null || _preferredCraftId == 0) return _preferredProcessor;
+            var part = snapshot.Craft.Parts.FirstOrDefault(p => p.CraftId == _preferredCraftId && p.HasKosProcessor);
+            if (part != null) _preferredProcessor = part.Id;
+            return _preferredProcessor;
         }
 
         /// <summary>The result is for this goal and this craft (with this processor), so it still holds.</summary>
@@ -155,9 +169,13 @@ namespace ClaudiaKermin.Core.Missions
             if (!partId.HasValue)
             {
                 _preferredProcessor = null;
+                _preferredCraftId = 0;
                 return;
             }
-            if (snapshot != null && snapshot.Craft.Parts.Any(p => p.Id == partId.Value && p.HasKosProcessor)) _preferredProcessor = partId;
+            var part = snapshot == null ? null : snapshot.Craft.Parts.FirstOrDefault(p => p.Id == partId.Value && p.HasKosProcessor);
+            if (part == null) return;
+            _preferredProcessor = partId;
+            _preferredCraftId = part.CraftId;
         }
 
         /// <summary>
@@ -202,7 +220,7 @@ namespace ClaudiaKermin.Core.Missions
                 CompactionTriggerTokens = _config.CompactionTriggerTokens,
             };
             request.System.Add(CraftCheckPrompts.System);
-            request.Messages.Add(Message.UserText(CraftCheckPrompts.Facts(goal, snapshot, _config.CraftCheckMarginPercent, _preferredProcessor, remote)));
+            request.Messages.Add(Message.UserText(CraftCheckPrompts.Facts(goal, snapshot, _config.CraftCheckMarginPercent, ResolvePreferred(snapshot), remote)));
             var worstCase = RequestCharge.WorstCase(_config.Prices, request.Model, request);
             if (worstCase > spendingCap)
             {
@@ -234,6 +252,7 @@ namespace ClaudiaKermin.Core.Missions
             Forget();
             _state = CraftCheckState.None;
             _preferredProcessor = null;
+            _preferredCraftId = 0;
         }
 
         private void Forget()

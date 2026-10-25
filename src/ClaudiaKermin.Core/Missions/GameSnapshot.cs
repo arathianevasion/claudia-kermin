@@ -13,6 +13,11 @@ namespace ClaudiaKermin.Core.Missions
     {
         /// <summary>The part's <c>persistentId</c>.</summary>
         public uint Id;
+        /// <summary>
+        /// The part's <c>craftID</c>: set in the editor and carried through launch (the proto part copies it), unlike
+        /// <c>persistentId</c>, which launch may reassign. 0: unknown.
+        /// </summary>
+        public uint CraftId;
         /// <summary>The parent part's <c>persistentId</c>; null for the root.</summary>
         public uint? ParentId;
         /// <summary>The part's internal name.</summary>
