@@ -55,10 +55,49 @@ namespace ClaudiaKermin.Core.Ui
         public bool Enabled;
     }
 
+    /// <summary>Where a segment of the Capcom strip's track is in the Mission Plan.</summary>
+    public enum SegmentState
+    {
+        Done,
+        Current,
+        Upcoming,
+    }
+
+    /// <summary>How a segment's bar is drawn.</summary>
+    public enum SegmentBar
+    {
+        /// <summary>Solid accent: a done sequence.</summary>
+        Accent,
+        /// <summary>Claudia-blue fill: the current sequence while Running.</summary>
+        Claudia,
+        /// <summary>Grey with a Claudia-blue outline: the current sequence while Claudia plans or Debriefs it.</summary>
+        ClaudiaOutline,
+        /// <summary>Grey with an amber outline: the current sequence waits on the player (Approval, a Pause).</summary>
+        AttentionOutline,
+        /// <summary>Amber fill: the current sequence in Manual Control.</summary>
+        AttentionFill,
+        /// <summary>Grey: an upcoming sequence.</summary>
+        Grey,
+        /// <summary>A dashed amber outline: a manual stretch not yet started.</summary>
+        ManualDashed,
+    }
+
+    /// <summary>One Maneuver Sequence of the Mission Plan on the Capcom strip's track.</summary>
+    public sealed class PlanSegment
+    {
+        /// <summary>"2 · Circularize".</summary>
+        public string Label = "";
+        public SegmentState State;
+        public SegmentBar Bar;
+        /// <summary>A manual stretch not yet done: "(you)" follows the label in amber.</summary>
+        public bool You;
+    }
+
     /// <summary>
-    /// What the compact Mission window shows for a <see cref="MissionView"/>, kept apart from the drawing so it can be
-    /// tested: the status chip, the prompt's mode and what it sends, the action row's labels and primary action, and the
-    /// control bar's setup summary and spend meter. Presentation only: it decides no Mission behaviour.
+    /// What the compact Mission window and the Capcom strip show for a <see cref="MissionView"/>, kept apart from the
+    /// drawing so it can be tested: the status chips, the prompt's mode and what it sends, the action row's labels and
+    /// primary action, the control bar's setup summary and spend meter, and the strip's segment track, expand tab and
+    /// lock line. Presentation only: it decides no Mission behaviour.
     /// </summary>
     public static class MissionWindowRules
     {
@@ -363,6 +402,124 @@ namespace ClaudiaKermin.Core.Ui
         public static int ToAcknowledge(CraftCheckView check)
         {
             return check.Findings.Count(f => f.Severity == CraftFindingSeverity.Warning && !f.Acknowledged);
+        }
+
+        // ---- The Capcom strip ----
+
+        /// <summary>The strip's line before there is a Mission Plan.</summary>
+        public const string NoPlanYet = "Mission Plan: not yet";
+
+        /// <summary>
+        /// The strip's chip: "Flying · <i>sequence</i>" while Running, "Waiting for you" in amber while the player is waited on,
+        /// "Manual Control · you fly" in amber, and the stage in blue otherwise; null with no Mission.
+        /// </summary>
+        public static StatusChip StripStatus(MissionView view)
+        {
+            if (view.Stage == MissionStage.Running)
+            {
+                var current = view.CurrentSequence >= 0 && view.CurrentSequence < view.PlanSequences.Count ? view.PlanSequences[view.CurrentSequence] : "";
+                return new StatusChip(current.Length > 0 ? "Flying · " + current : "Flying", ChipTone.Info);
+            }
+            if (view.ConfirmPrompt != null || view.Stage == MissionStage.AwaitingPlanApproval || view.Stage == MissionStage.AwaitingSequenceApproval
+                || view.Stage == MissionStage.Paused || view.Stage == MissionStage.UnsafeScript)
+                return new StatusChip("Waiting for you", ChipTone.Attention);
+            if (view.Stage == MissionStage.ManualControl) return new StatusChip("Manual Control · you fly", ChipTone.Attention);
+            var chip = StageChip(view);
+            return chip == null ? null : new StatusChip(chip.Text, ChipTone.Info);
+        }
+
+        /// <summary>The strip's one line after "Claudia": her latest line, or what she is doing while Busy.</summary>
+        public static string StripLine(MissionView view)
+        {
+            if (view.Busy) return "Claudia is " + (view.Activity.Length > 0 ? view.Activity : "thinking") + "…";
+            return view.LatestLine.Length > 0 ? view.LatestLine : "Standing by.";
+        }
+
+        /// <summary>The Mission Plan's sequences as the strip's track: done, current and upcoming, and the manual stretches; empty before there is a plan.</summary>
+        public static IList<PlanSegment> Segments(MissionView view)
+        {
+            var segments = new List<PlanSegment>();
+            var allDone = view.Stage == MissionStage.Succeeded;
+            for (var i = 0; i < view.PlanSequences.Count; i++)
+            {
+                var manual = i < view.PlanSequencesManual.Count && view.PlanSequencesManual[i];
+                var state = allDone || i < view.CurrentSequence ? SegmentState.Done : i == view.CurrentSequence ? SegmentState.Current : SegmentState.Upcoming;
+                var bar = state == SegmentState.Done ? SegmentBar.Accent
+                    : state == SegmentState.Current ? CurrentBar(view)
+                    : manual ? SegmentBar.ManualDashed : SegmentBar.Grey;
+                segments.Add(new PlanSegment
+                {
+                    Label = (i + 1).ToString(CultureInfo.InvariantCulture) + " · " + view.PlanSequences[i],
+                    State = state,
+                    Bar = bar,
+                    You = manual && state != SegmentState.Done,
+                });
+            }
+            return segments;
+        }
+
+        private static SegmentBar CurrentBar(MissionView view)
+        {
+            switch (view.Stage)
+            {
+                case MissionStage.Running: return SegmentBar.Claudia;
+                case MissionStage.ManualControl: return SegmentBar.AttentionFill;
+                case MissionStage.AwaitingPlanApproval:
+                case MissionStage.AwaitingSequenceApproval:
+                case MissionStage.Paused:
+                case MissionStage.UnsafeScript: return SegmentBar.AttentionOutline;
+                default: return SegmentBar.ClaudiaOutline;
+            }
+        }
+
+        /// <summary>
+        /// What Claudia needs from the player now, for the amber expand tab: a plan to approve, an Approval to confirm, a
+        /// Re-plan, a Pause or an unsafe script; "" when nothing is needed. While she answers a question meanwhile, nothing is.
+        /// </summary>
+        public static string NeedsYou(MissionView view)
+        {
+            if (view.Busy) return "";
+            if (view.ConfirmPrompt != null) return "Confirm your Approval";
+            var replies = view.QuickReplies;
+            switch (view.Stage)
+            {
+                case MissionStage.AwaitingPlanApproval:
+                case MissionStage.AwaitingSequenceApproval:
+                    if (replies.Contains(QuickReply.Replan) && view.PlanStale.Length > 0) return "The craft has changed: Re-plan?";
+                    if (!replies.Contains(QuickReply.Approve)) return "";
+                    if (view.Stage == MissionStage.AwaitingPlanApproval) return "Approve the Mission Plan?";
+                    if (!view.DueTime.HasDueTime) return "Sequence Plan awaiting Approval";
+                    return "Sequence Plan awaiting Approval · Due Time " + (view.DueTime.Reached ? "reached" : "in " + MissionClock.Span(view.DueTime.SecondsLeft));
+                case MissionStage.Paused:
+                    if (replies.Contains(QuickReply.RaiseCap)) return "Paused at the Spending Cap";
+                    return view.PauseReason.Length > 0 ? "Paused: " + view.PauseReason : "Paused";
+                case MissionStage.UnsafeScript: return "Couldn't produce a safe script";
+                default: return "";
+            }
+        }
+
+        /// <summary>The tab under the strip: "Collapse" when the panel is open, otherwise what Claudia needs or "Chat".</summary>
+        public static string ExpandTab(MissionView view, bool expanded)
+        {
+            if (expanded) return "Collapse";
+            var needs = NeedsYou(view);
+            return needs.Length > 0 ? needs : "Chat";
+        }
+
+        /// <summary>
+        /// The strip's lock line: a stale plan's Re-plan note, the link-loss countdown in Manual Control, why Manual Control
+        /// is unavailable, or what Claudia's hold on the craft locks; "" when nothing is locked and nothing is pending.
+        /// </summary>
+        public static string LockLine(MissionView view)
+        {
+            if (view.PlanStale.Length > 0) return "The craft has changed (" + view.PlanStale + "): Re-plan";
+            if (view.LinkLossTakeBackIn.HasValue)
+                return "No link to Kerbin: Claudia takes the craft back in "
+                    + System.Math.Ceiling(view.LinkLossTakeBackIn.Value).ToString("0", CultureInfo.InvariantCulture) + " s unless it returns";
+            if (view.Locks == ControlLocks.None) return "";
+            if (view.ManualControlUnavailable.Length > 0) return "Manual Control unavailable: " + view.ManualControlUnavailable;
+            if (view.Stage == MissionStage.Running) return "Staging, action groups, SAS, RCS, gear and brakes locked while Claudia flies";
+            return "Controls stay locked until you approve or take the controls";
         }
 
         private static StatusChip StageChip(MissionView view)
