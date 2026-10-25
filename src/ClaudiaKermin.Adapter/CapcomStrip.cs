@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Andrew Watson
 
+using System;
 using System.Text;
 using ClaudiaKermin.Core.Missions;
+using ClaudiaKermin.Core.Ui;
 using UnityEngine;
 
 namespace ClaudiaKermin.Adapter
@@ -21,7 +23,7 @@ namespace ClaudiaKermin.Adapter
         private const string PortraitUrl = "ClaudiaKermin/Icons/ClaudiaPortrait";
 
         private readonly MissionWindow _window;
-        private readonly LogDrawer _log = new LogDrawer();
+        private readonly LogDrawer _log;
         private readonly WindowFrame _frame =
             new WindowFrame(0x434B04, "", "ClaudiaKerminCapcom", new Rect(0, 70, Width, 0), Vector2.zero, false);
         private GUIStyle _wrap;
@@ -35,9 +37,17 @@ namespace ClaudiaKermin.Adapter
         /// <summary>Set before each OnGUI.</summary>
         public MissionView View;
 
-        public CapcomStrip(MissionWindow window)
+        /// <param name="send">Takes what the drawer's transcript sends: Warning acknowledgements and the approval checkbox.</param>
+        public CapcomStrip(MissionWindow window, Action<MissionInput> send)
         {
             _window = window;
+            _log = new LogDrawer(send);
+        }
+
+        /// <summary>Flight is loading: the Craft Check in the drawer starts collapsed again.</summary>
+        public void FlightLoading()
+        {
+            _log.FlightLoading();
         }
 
         /// <summary>The strip is on screen, so the player can see Claudia's line without a window.</summary>
@@ -94,11 +104,13 @@ namespace ClaudiaKermin.Adapter
 
             GUILayout.BeginHorizontal();
             foreach (var reply in View.QuickReplies)
-                if (GUILayout.Button(MissionWindow.Label(reply, View), GUILayout.ExpandWidth(false))) _window.QuickReplied(reply);
+                if (MissionWindowRules.InActionRow(reply) && GUILayout.Button(MissionWindow.Label(reply, View), GUILayout.ExpandWidth(false))) _window.QuickReplied(reply);
             GUILayout.FlexibleSpace();
             if (GUILayout.Button(DrawerOpen ? "Hide log" : "Show log", GUILayout.ExpandWidth(false))) DrawerOpen = !DrawerOpen;
             GUILayout.EndHorizontal();
 
+            // With the drawer closed, confirming a typed approval is still here, where the buttons used to be.
+            if (!DrawerOpen && View.ConfirmPrompt != null) _log.DrawApproval(View);
             if (DrawerOpen) _log.Draw(View, Width - 40, GUILayout.Height(DrawerHeight));
             WindowFrame.DrawTooltip();
         }

@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using ClaudiaKermin.Core.Missions;
 using ClaudiaKermin.Core.Ui;
 using UnityEngine;
@@ -13,8 +12,9 @@ namespace ClaudiaKermin.Adapter
     /// <summary>
     /// Draws the transcript: the player's lines as bubbles, Claudia's under her name, notices as muted lines, and the
     /// Mission Plan, Sequence Plans and Debriefs as cards with a "Why" expander and, for a Sequence Plan, "Show script";
-    /// then the Busy line. Given a send, it leads with the Craft Check, whose Warnings it acknowledges. Used by the Mission
-    /// window and by the Capcom strip's Show log drawer, so an entry looks and behaves the same in both. Plain text only:
+    /// then the Busy line. Given a send, it leads with the Craft Check as a card (its Warnings are checkboxes that acknowledge
+    /// them) and ends with the checkbox that confirms a typed approval. Used by the Mission window and by the Capcom
+    /// strip's Show log drawer, so an entry looks and behaves the same in both. Plain text only:
     /// Claude's replies may contain '&lt;', which rich text would misread.
     /// </summary>
     public class LogDrawer
@@ -31,6 +31,19 @@ namespace ClaudiaKermin.Adapter
 
         // The Craft Check: a new result (a different set of findings) brings the transcript back to the top, where it is.
         private string _seenCheckResult = "";
+        // When the current result first reached the view, for the card's "in -2m" time.
+        private double _checkedAt;
+        // The approval checkbox appeared: the transcript follows it to the bottom.
+        private bool _seenConfirm;
+        // The width the entries get; the facts row wraps at it.
+        private float _width;
+
+        /// <summary>The Mission Goal is pinned (the card's notice says so); set before <see cref="Draw"/>.</summary>
+        public bool GoalSet;
+        /// <summary>The estimated cost of the Mission for the chosen model, for the facts row; null for none.</summary>
+        public decimal? Estimate;
+        /// <summary>Builds the input Check again sends, or null when it can't be sent yet (no Mission Goal pinned).</summary>
+        public Func<MissionInput> CheckAgain;
         // In Flight the Craft Check starts collapsed to one line so the Mission log gets the room; reset when Flight loads.
         private bool _checkCollapsed = true;
 
@@ -58,15 +71,19 @@ namespace ClaudiaKermin.Adapter
         public void Draw(MissionView view, float width, params GUILayoutOption[] options)
         {
             Styles();
-            if (view.Log.Count != _seenLogCount)
+            _width = width;
+            var confirming = view.ConfirmPrompt != null;
+            if (view.Log.Count != _seenLogCount || (confirming && !_seenConfirm))
             {
                 _seenLogCount = view.Log.Count;
                 _scroll.y = float.MaxValue;
             }
+            _seenConfirm = confirming;
             _scroll = GUILayout.BeginScrollView(_scroll, false, false, GUIStyle.none, GUI.skin.verticalScrollbar, GUIStyle.none, options);
             if (_send != null && (view.StartForm.CanStart || view.CraftCheck.State != CraftCheckState.None)) DrawCraftCheck(view);
             if (_send != null && view.StartForm.CanStart && view.StartForm.Refusal.Length > 0) GUILayout.Label(view.StartForm.Refusal, ClaudiaSkin.DangerText);
             foreach (var entry in view.Log) DrawEntry(entry, view.Ut, width);
+            if (_send != null && confirming) DrawApproval(view);
             if (view.Busy) GUILayout.Label("Claudia is " + (view.Activity.Length > 0 ? view.Activity : "thinking") + "…", ClaudiaSkin.Muted);
             GUILayout.EndScrollView();
         }
@@ -172,7 +189,7 @@ namespace ClaudiaKermin.Adapter
             if (!set.Remove(entry)) set.Add(entry);
         }
 
-        // ---- Craft Check (moved here from the Mission window as it was; the next ticket restyles it into a card) ----
+        // ---- Craft Check: the first item of the transcript ----
 
         private void DrawCraftCheck(MissionView view)
         {
@@ -183,92 +200,175 @@ namespace ClaudiaKermin.Adapter
             var needsPlayer = check.State == CraftCheckState.Running || check.State == CraftCheckState.NeedsSimulator
                 || check.State == CraftCheckState.Error
                 || (check.State == CraftCheckState.Done && form.CanStart && !check.StartAllowed);
-            if (HighLogic.LoadedSceneIsFlight)
-            {
-                // Forced open without touching the player's choice, which comes back once the check no longer needs them.
-                var collapsed = _checkCollapsed && !needsPlayer;
-                GUILayout.BeginHorizontal();
-                GUILayout.Label(collapsed ? CollapsedHeading(check) : "Craft Check", _bold);
-                if (!needsPlayer && ClaudiaSkin.SmallButton(collapsed ? "Expand" : "Collapse", GUILayout.ExpandWidth(false)))
-                    _checkCollapsed = !_checkCollapsed;
-                GUILayout.EndHorizontal();
-                if (collapsed) return;
-            }
-            else
-            {
-                GUILayout.Label("Craft Check", _bold);
-            }
-
-            // Chosen in the Settings window.
-            foreach (var processor in check.Processors)
-                if (processor.Chosen) GUILayout.Label("Claudia's kOS processor: " + processor.Title, ClaudiaSkin.Secondary);
+            var inFlight = HighLogic.LoadedSceneIsFlight;
+            // Forced open without touching the player's choice, which comes back once the check no longer needs them.
+            var collapsed = inFlight && _checkCollapsed && !needsPlayer;
 
             // Any result after a pause (Running, Error, ...) is new, even if it matches the last one.
             if (check.State != CraftCheckState.Done) _seenCheckResult = "";
-            switch (check.State)
+
+            if (collapsed)
             {
-                case CraftCheckState.None:
-                    GUILayout.Label("Not checked yet. Start Mission checks the craft first, or press Check again.", ClaudiaSkin.Body);
-                    break;
-                case CraftCheckState.Running:
-                    GUILayout.Label("Claudia is checking the craft...", ClaudiaSkin.Body);
-                    break;
-                case CraftCheckState.NeedsSimulator:
-                case CraftCheckState.Error:
-                    GUILayout.Label(check.Message, ClaudiaSkin.Body);
-                    break;
-                case CraftCheckState.Done:
-                    DrawCraftCheckResult(view);
-                    break;
+                DrawCollapsed(check);
+                return;
             }
-            if (form.CanStart && !check.StartAllowed && check.State == CraftCheckState.Done && !check.Stale)
-                GUILayout.Label(check.Verdict == CraftVerdict.Fail
-                    ? "Start Mission is closed: fix every Blocker in the craft and check again."
-                    : "Start Mission opens once you have acknowledged every Warning.", ClaudiaSkin.Body);
+
+            var notice = MissionWindowRules.CraftNotice(check, !HighLogic.LoadedSceneIsEditor, GoalSet);
+            if (notice.Length > 0) GUILayout.Label(notice, ClaudiaSkin.Notice);
+
+            if (check.State != CraftCheckState.Done)
+            {
+                DrawStateLine(check);
+                return;
+            }
+            DrawResult(view, inFlight && !needsPlayer);
         }
 
-        private static string VerdictText(CraftCheckView check)
+        // In Flight the card is its header line with an expand control.
+        private void DrawCollapsed(CraftCheckView check)
         {
-            return check.Verdict == CraftVerdict.Pass ? "Pass"
-                : check.Verdict == CraftVerdict.PassWithWarnings ? "Pass with Warnings" : "Fail";
+            ClaudiaSkin.BeginCard();
+            GUILayout.BeginHorizontal();
+            if (check.State == CraftCheckState.Done) VerdictIcon(check.Verdict);
+            GUILayout.Label(MissionWindowRules.CollapsedTitle(check), _bold);
+            GUILayout.FlexibleSpace();
+            if (ClaudiaSkin.SmallButton("Expand", GUILayout.ExpandWidth(false))) _checkCollapsed = false;
+            GUILayout.EndHorizontal();
+            ClaudiaSkin.EndCard();
         }
 
-        /// <summary>The one line shown while collapsed, e.g. "Craft Check: Pass with Warnings (2)".</summary>
-        private static string CollapsedHeading(CraftCheckView check)
+        // None reads as a notice; Running, NeedsSimulator and Error as Claudia's line, with Check again where it helps.
+        private void DrawStateLine(CraftCheckView check)
         {
-            if (check.State == CraftCheckState.None) return "Craft Check: not checked yet";
-            if (check.State != CraftCheckState.Done) return "Craft Check";
-            return "Craft Check: " + VerdictText(check)
-                + (check.Verdict == CraftVerdict.Pass ? "" : " (" + check.Findings.Count.ToString(CultureInfo.InvariantCulture) + ")")
-                + (check.Stale ? " - the craft changed since" : "");
+            var line = MissionWindowRules.StateLine(check);
+            if (check.State == CraftCheckState.None)
+            {
+                GUILayout.Label(line, ClaudiaSkin.Notice);
+                return;
+            }
+            DrawClaudiaLine(line);
+            if (!MissionWindowRules.OffersCheckAgain(check.State)) return;
+            var input = CheckAgain != null ? CheckAgain() : null;
+            var old = GUI.enabled;
+            GUI.enabled = input != null;
+            GUILayout.BeginHorizontal();
+            if (ClaudiaSkin.SecondaryButton("Check again", GUILayout.ExpandWidth(false)) && input != null) _send(input);
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+            GUI.enabled = old;
         }
 
-        private void DrawCraftCheckResult(MissionView view)
+        private static void DrawClaudiaLine(string text)
+        {
+            GUILayout.Label("Claudia", ClaudiaSkin.ClaudiaName);
+            GUILayout.Label(text, ClaudiaSkin.Body);
+        }
+
+        // Amber triangle for Pass with Warnings, red for Fail, green check for Pass.
+        private static void VerdictIcon(CraftVerdict verdict)
+        {
+            var tone = MissionWindowRules.VerdictTone(verdict);
+            ClaudiaSkin.IconLabel(verdict == CraftVerdict.Pass ? ClaudiaSkin.IconShape.Check : ClaudiaSkin.IconShape.Warning,
+                tone == ChipTone.Success ? ClaudiaSkin.IconGreen : tone == ChipTone.Danger ? ClaudiaSkin.Danger : ClaudiaSkin.Attention, 16);
+        }
+
+        private void DrawResult(MissionView view, bool canCollapse)
         {
             var check = view.CraftCheck;
-            GUILayout.Label(VerdictText(check) + (check.Stale ? " (the craft changed since; Start Mission checks again)" : ""), _bold);
             var signature = check.Summary;
             foreach (var finding in check.Findings) signature += "|" + finding.Code;
             if (signature != _seenCheckResult)
             {
                 _seenCheckResult = signature;
+                _checkedAt = view.Ut;
                 // Before a Mission the Craft Check is what the player reads; during one the log keeps the bottom.
                 if (view.StartForm.CanStart) _scroll.y = 0;
             }
-            if (check.Summary.Length > 0) GUILayout.Label("Claudia: " + check.Summary, ClaudiaSkin.Body);
-            foreach (var finding in check.Findings)
+            var summary = MissionWindowRules.ClaudiaLine(check);
+            if (summary.Length > 0) DrawClaudiaLine(summary);
+
+            ClaudiaSkin.BeginCard();
+            GUILayout.BeginHorizontal();
+            VerdictIcon(check.Verdict);
+            GUILayout.Label(MissionWindowRules.CardTitle(check), _bold);
+            GUILayout.FlexibleSpace();
+            if (_checkedAt > 0 && view.Ut > 0) GUILayout.Label(TimeContent(_checkedAt, view.Ut), ClaudiaSkin.Secondary, GUILayout.ExpandWidth(false));
+            if (canCollapse && ClaudiaSkin.SmallButton("Collapse", GUILayout.ExpandWidth(false))) _checkCollapsed = true;
+            GUILayout.EndHorizontal();
+
+            DrawFacts(MissionWindowRules.Facts(check, Estimate));
+            foreach (var finding in check.Findings) DrawFinding(finding);
+
+            if (view.StartForm.CanStart)
             {
-                ClaudiaSkin.BeginCard();
-                GUILayout.Label((finding.Severity == CraftFindingSeverity.Blocker ? "Blocker: " : "Warning: ") + finding.Title, _bold);
-                GUILayout.Label(finding.Explanation, ClaudiaSkin.Body);
-                if (finding.Fix.Length > 0) GUILayout.Label("Fix: " + finding.Fix, ClaudiaSkin.Body);
-                if (finding.Severity == CraftFindingSeverity.Warning)
-                {
-                    var acknowledged = GUILayout.Toggle(finding.Acknowledged, "I accept this risk");
-                    if (acknowledged && !finding.Acknowledged) _send(new AcknowledgeWarning(finding.Code));
-                }
-                ClaudiaSkin.EndCard();
+                var footer = MissionWindowRules.Footer(check);
+                if (footer.Text.Length > 0) GUILayout.Label(footer.Text, footer.Tone == ChipTone.Success ? ClaudiaSkin.SuccessText : ClaudiaSkin.Secondary);
             }
+            ClaudiaSkin.EndCard();
+        }
+
+        // Small chips that wrap onto further lines when the row is full.
+        private void DrawFacts(IList<StatusChip> facts)
+        {
+            var room = _width - 2 * ClaudiaSkin.Padding;
+            var used = 0f;
+            var open = false;
+            foreach (var chip in facts)
+            {
+                var kind = ClaudiaSkin.KindOf(chip.Tone);
+                var size = ClaudiaSkin.ChipStyle(kind).CalcSize(new GUIContent(chip.Text)).x + ClaudiaSkin.Gap;
+                if (!open || (used > 0 && used + size > room))
+                {
+                    if (open) GUILayout.EndHorizontal();
+                    GUILayout.BeginHorizontal();
+                    open = true;
+                    used = 0;
+                }
+                ClaudiaSkin.Chip(chip.Text, kind);
+                used += size;
+            }
+            if (open) GUILayout.EndHorizontal();
+        }
+
+        // A Warning gets the box and a checkbox that acknowledges it; a Blocker the box alone.
+        private void DrawFinding(CraftFinding finding)
+        {
+            var warning = finding.Severity == CraftFindingSeverity.Warning;
+            GUILayout.BeginVertical(warning ? ClaudiaSkin.WarningBox : ClaudiaSkin.BlockerBox);
+            GUILayout.Label(MissionWindowRules.FindingLabel(finding.Severity), warning ? ClaudiaSkin.WarningLabel : ClaudiaSkin.BlockerLabel);
+            GUILayout.Label(finding.Title, _bold);
+            GUILayout.Label(finding.Explanation, ClaudiaSkin.Secondary);
+            if (finding.Fix.Length > 0)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Fix:", _bold, GUILayout.ExpandWidth(false));
+                GUILayout.Label(finding.Fix, ClaudiaSkin.Body);
+                GUILayout.EndHorizontal();
+            }
+            if (warning)
+            {
+                // The core can't un-acknowledge: once it has, the box stays checked and takes no clicks.
+                var acknowledged = ClaudiaSkin.Checkbox(finding.Acknowledged, "I accept this risk", !finding.Acknowledged);
+                if (acknowledged && !finding.Acknowledged) _send(new AcknowledgeWarning(finding.Code));
+            }
+            GUILayout.EndVertical();
+        }
+
+        // ---- Approval: a typed reply that reads like an approval ends the transcript with a checkbox ----
+
+        /// <summary>Claudia's ask and the box with the checkbox and Not yet; the strip draws it itself while its drawer is closed.</summary>
+        public void DrawApproval(MissionView view)
+        {
+            Styles();
+            DrawClaudiaLine(MissionWindowRules.ApprovalAsk);
+            GUILayout.BeginVertical(ClaudiaSkin.AskBox);
+            if (ClaudiaSkin.Checkbox(false, MissionWindowRules.ApprovalLabel(view))) _send(new ConfirmApproval(true));
+            GUILayout.BeginHorizontal();
+            if (ClaudiaSkin.TextButton("Not yet", GUILayout.ExpandWidth(false))) _send(new ConfirmApproval(false));
+            GUILayout.Label("Or keep typing to change it.", ClaudiaSkin.Secondary);
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
         }
     }
 }
+

@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using ClaudiaKermin.Core.Ui;
 using UnityEngine;
 
 namespace ClaudiaKermin.Adapter
@@ -52,6 +53,8 @@ namespace ClaudiaKermin.Adapter
         public const float ButtonHeight = 36;
         /// <summary>Nothing clickable is smaller than this.</summary>
         public const float MinClickable = 28;
+        /// <summary>The height of a checkbox row.</summary>
+        public const float CheckboxHeight = 32;
         /// <summary>The height of the title bar <see cref="Window"/> leaves for <see cref="DrawTitleBar"/>.</summary>
         public const int TitleBarHeight = 36;
 
@@ -72,6 +75,7 @@ namespace ClaudiaKermin.Adapter
             Check,
             Close,
             Pencil,
+            Warning,
             ArrowUp,
             Dot,
         }
@@ -86,6 +90,7 @@ namespace ClaudiaKermin.Adapter
         private static GUIStyle _successText, _dangerText, _switchOn, _switchOff, _knobOn, _knobOff;
         private static GUIStyle _bareWindow, _raised, _bar, _prompt, _bubble, _claudiaName, _notice, _cardHeader, _kindLabel, _titleAccent;
         private static GUIStyle _textButton, _toggleOn, _small, _disabledButton, _sendOn, _sendOff;
+        private static GUIStyle _checkOn, _checkOff, _checkDone, _warningBox, _blockerBox, _askBox, _warningLabel, _blockerLabel;
 
         // ---- Styles ----
 
@@ -126,6 +131,18 @@ namespace ClaudiaKermin.Adapter
         /// <summary>A window title in accent, 16 px bold.</summary>
         public static GUIStyle TitleAccent { get { Build(); return _titleAccent; } }
 
+        /// <summary>The chip colour for a tone the rules chose.</summary>
+        public static ChipKind KindOf(ChipTone tone)
+        {
+            switch (tone)
+            {
+                case ChipTone.Success: return ChipKind.Success;
+                case ChipTone.Attention: return ChipKind.Attention;
+                case ChipTone.Danger: return ChipKind.Danger;
+                default: return ChipKind.Info;
+            }
+        }
+
         public static GUIStyle ChipStyle(ChipKind kind)
         {
             Build();
@@ -136,6 +153,17 @@ namespace ClaudiaKermin.Adapter
         public static GUIStyle SuccessText { get { Build(); return _successText; } }
         /// <summary>Secondary-size text in danger red (a value that can't be applied).</summary>
         public static GUIStyle DangerText { get { Build(); return _dangerText; } }
+
+        /// <summary>A Craft Check Warning's box: amber-tinted.</summary>
+        public static GUIStyle WarningBox { get { Build(); return _warningBox; } }
+        /// <summary>A Craft Check Blocker's box: danger-tinted.</summary>
+        public static GUIStyle BlockerBox { get { Build(); return _blockerBox; } }
+        /// <summary>The bordered box Claudia asks the player to confirm in (an Approval).</summary>
+        public static GUIStyle AskBox { get { Build(); return _askBox; } }
+        /// <summary>"WARNING" over a finding: 11 px bold capitals in amber.</summary>
+        public static GUIStyle WarningLabel { get { Build(); return _warningLabel; } }
+        /// <summary>"BLOCKER" over a finding: 11 px bold capitals in danger red.</summary>
+        public static GUIStyle BlockerLabel { get { Build(); return _blockerLabel; } }
 
         // ---- Controls ----
 
@@ -317,6 +345,26 @@ namespace ClaudiaKermin.Adapter
                 (on ? _knobOn : _knobOff).Draw(knob, false, false, false, false);
             }
             return on;
+        }
+
+        /// <summary>
+        /// A checkbox with its label to the right; the whole row, at least 32 px high, is the click target. Returns the new
+        /// value. A checked box that is not <paramref name="enabled"/> (a done acknowledgement) shows checked and takes no clicks.
+        /// </summary>
+        public static bool Checkbox(bool on, string label, bool enabled = true)
+        {
+            Build();
+            var row = GUILayoutUtility.GetRect(new GUIContent(label), _body, GUILayout.Height(CheckboxHeight), GUILayout.ExpandWidth(true));
+            var clicked = enabled && GUI.Button(row, GUIContent.none, GUIStyle.none);
+            if (Event.current.type == EventType.Repaint)
+            {
+                const float size = 20;
+                var box = new Rect(row.x, row.y + (row.height - size) / 2, size, size);
+                (on ? (enabled ? _checkOn : _checkDone) : _checkOff).Draw(box, false, false, false, false);
+                if (on) DrawIcon(new Rect(box.x + 2, box.y + 2, size - 4, size - 4), IconShape.Check, enabled ? OnAccent : Text);
+                _body.Draw(new Rect(box.xMax + Gap, row.y, row.width - size - Gap, row.height), new GUIContent(label), false, false, false, false);
+            }
+            return clicked ? !on : on;
         }
 
         /// <summary>Starts a card box; end it with <see cref="EndCard"/>.</summary>
@@ -541,6 +589,15 @@ namespace ClaudiaKermin.Adapter
             _sendOn = Box(Accent, Accent, 4);
             _sendOn.hover.background = Rounded(Hex(0xc8e65e), Accent, 4);
             _sendOff = Box(RaisedBackground, BorderStrong, 4);
+
+            _checkOn = Box(Accent, Accent, 4);
+            _checkOff = Box(InputBackground, BorderStrong, 4);
+            _checkDone = Box(SuccessBorder, SuccessBorder, 4);
+            _warningBox = Box(AttentionFill, AttentionBorder, 4);
+            _blockerBox = Box(Hex(0x2a2020), DangerBorder, 4);
+            _askBox = Box(CardBackground, BorderStrong, 4);
+            _warningLabel = TextStyle(skin, 11, Attention, FontStyle.Bold);
+            _blockerLabel = TextStyle(skin, 11, Danger, FontStyle.Bold);
         }
 
         private static GUIStyle TextStyle(GUISkin skin, int size, Color color, FontStyle fontStyle)
@@ -663,6 +720,13 @@ namespace ClaudiaKermin.Adapter
                 case IconShape.ArrowUp:
                     return Segment(p, new Vector2(0.5f, 0.82f), new Vector2(0.5f, 0.2f)) <= 0.08f
                         || Segment(p, new Vector2(0.24f, 0.46f), new Vector2(0.5f, 0.2f)) <= 0.08f || Segment(p, new Vector2(0.5f, 0.2f), new Vector2(0.76f, 0.46f)) <= 0.08f;
+                case IconShape.Warning:
+                {
+                    // A triangle (apex at the top) with the exclamation mark cut out of it.
+                    if (v < 0.1f || v > 0.88f || Mathf.Abs(u - 0.5f) > (v - 0.1f) / 0.78f * 0.46f) return false;
+                    var stem = Mathf.Abs(u - 0.5f) <= 0.05f && v >= 0.38f && v <= 0.62f;
+                    return !stem && Vector2.Distance(p, new Vector2(0.5f, 0.74f)) > 0.065f;
+                }
                 case IconShape.Dot:
                     return Vector2.Distance(p, new Vector2(0.5f, 0.5f)) <= 0.45f;
                 case IconShape.ChevronDown:

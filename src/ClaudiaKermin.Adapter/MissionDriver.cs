@@ -80,7 +80,7 @@ namespace ClaudiaKermin.Adapter
             Current = this;
             _mission = mission;
             Window = new MissionWindow(Send, Setup, debugTools);
-            Strip = new CapcomStrip(Window);
+            Strip = new CapcomStrip(Window, Send);
             GameEvents.onKerbalStatusChange.Add(OnKerbalStatusChange);
         }
 

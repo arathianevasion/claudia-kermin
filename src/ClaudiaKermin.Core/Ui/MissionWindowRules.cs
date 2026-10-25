@@ -344,6 +344,9 @@ namespace ClaudiaKermin.Core.Ui
             return severity == CraftFindingSeverity.Blocker ? "BLOCKER" : "WARNING";
         }
 
+        /// <summary>Claudia's line above the approval checkbox.</summary>
+        public const string ApprovalAsk = "That reads like an approval. Confirm and I'll carry on.";
+
         /// <summary>The checkbox that ends the transcript while a typed reply awaits confirming.</summary>
         public static string ApprovalLabel(MissionView view)
         {

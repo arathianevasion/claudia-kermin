@@ -403,6 +403,7 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("Yes, approve the Mission Plan", MissionWindowRules.ApprovalLabel(view));
             view.Stage = MissionStage.AwaitingSequenceApproval;
             Assert.Equal("Yes, approve the Sequence Plan", MissionWindowRules.ApprovalLabel(view));
+            Assert.Equal("That reads like an approval. Confirm and I'll carry on.", MissionWindowRules.ApprovalAsk);
         }
 
         [Fact]
