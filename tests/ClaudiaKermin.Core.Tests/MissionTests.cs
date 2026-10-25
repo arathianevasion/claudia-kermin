@@ -209,7 +209,7 @@ namespace ClaudiaKermin.Core.Tests
                 var last = messages.Last();
                 Assert.Equal("assistant", last.GetProperty("role").GetString());
                 Assert.Equal("c2lnLWRlYnJpZWY=", last.GetProperty("content")[0].GetProperty("signature").GetString());
-                Assert.Equal("{\"kind\":\"debrief\",\"say\":\"Nominal: the script reported PRELAUNCH. Mission Goal met.\",\"reply_intent\":null,"
+                Assert.Equal("{\"kind\":\"debrief\",\"say\":\"Nominal: the script reported PRELAUNCH. Mission Goal met.\",\"reply_intent\":\"none\","
                     + "\"mission_plan\":null,\"sequence_plan\":null,\"debrief\":{\"outcome\":\"Nominal\",\"why\":\"The report came back with success true.\","
                     + "\"what_happened\":\"The script printed and reported the craft’s status.\",\"goal_reached\":true,\"next\":\"Nothing: the Mission Goal is met.\"}}",
                     Text(last));
@@ -249,10 +249,13 @@ namespace ClaudiaKermin.Core.Tests
                 foreach (var layer in system.EnumerateArray())
                     Assert.Equal("1h", layer.GetProperty("cache_control").GetProperty("ttl").GetString());
                 Assert.Equal(bodies[0].GetProperty("system").GetRawText(), system.GetRawText());
-                Assert.Equal(bodies[0].GetProperty("output_config").GetRawText(), body.GetProperty("output_config").GetRawText());
                 Assert.Equal("json_schema", body.GetProperty("output_config").GetProperty("format").GetProperty("type").GetString());
                 Assert.Equal(90000, body.GetProperty("context_management").GetProperty("edits")[0].GetProperty("trigger").GetProperty("value").GetInt32());
             }
+            // Each request carries only the reply parts it can come back as (#199): the Mission Plan the planning
+            // schema; the Sequence Plan, and a question once the Mission Plan is approved, the flight schema.
+            Assert.Equal(new[] { MissionReply.PlanningSchemaJson, MissionReply.FlightSchemaJson, MissionReply.FlightSchemaJson },
+                bodies.Select(b => b.GetProperty("output_config").GetProperty("format").GetProperty("schema").GetRawText()).ToArray());
             var baseLayer = bodies[0].GetProperty("system")[0].GetProperty("text").GetString();
             Assert.Contains("Kerbal Space Program", baseLayer);
             Assert.Contains("kOS", baseLayer);

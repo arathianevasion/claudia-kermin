@@ -1,0 +1,19 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  The schema probe (#199): sends one tiny Messages request with a structured-output schema through the mod's
+  own Claude client, to see whether the API compiles the schema. It spends real tokens (a few), so it is run
+  by hand, never in CI. Not part of the mod.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <!-- NU1702: referencing the net48 core from net10.0 is deliberate, as in the core tests. -->
+    <NoWarn>$(NoWarn);NU1702</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/ClaudiaKermin.Core/ClaudiaKermin.Core.csproj" />
+  </ItemGroup>
+</Project>

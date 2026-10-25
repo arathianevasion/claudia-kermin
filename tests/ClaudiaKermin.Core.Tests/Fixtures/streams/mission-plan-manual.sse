@@ -20,7 +20,7 @@ event: content_block_delta
 data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"{\"kind\":\"mission_plan\",\"say\":\"Mission Plan: a link check, then a hop you fly by hand. Approve to go.\","}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"\"reply_intent\":null,\"mission_plan\":{\"why\":\"Prove the kOS link first, then you hop the craft yourself.\",\"sequences\":[{\"name\":\"Link check\",\"intent\":\"Report the craft’s status from the pad.\",\"delta_v\":0,\"timing\":\"right away\"},{\"name\":\"Hop\",\"intent\":\"You hop the craft off the pad by hand.\",\"delta_v\":50,\"timing\":\"after the link check\",\"manual\":true}],"}}
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"\"reply_intent\":\"none\",\"mission_plan\":{\"why\":\"Prove the kOS link first, then you hop the craft yourself.\",\"sequences\":[{\"name\":\"Link check\",\"intent\":\"Report the craft’s status from the pad.\",\"delta_v\":0,\"timing\":\"right away\"},{\"name\":\"Hop\",\"intent\":\"You hop the craft off the pad by hand.\",\"delta_v\":50,\"timing\":\"after the link check\",\"manual\":true}],"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"\"total_delta_v\":50,\"expected_duration\":\"a few minutes\"},\"sequence_plan\":null,\"debrief\":null}"}}

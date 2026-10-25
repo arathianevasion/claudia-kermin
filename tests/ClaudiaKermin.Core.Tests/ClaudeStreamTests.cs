@@ -461,6 +461,8 @@ namespace ClaudiaKermin.Core.Tests
         [InlineData(403, "permission_error", "forbidden", StreamFailure.Unauthorized)]
         [InlineData(400, "invalid_request_error", "Your credit balance is too low to access the Anthropic API.", StreamFailure.LowCredit)]
         [InlineData(400, "invalid_request_error", "messages: bad", StreamFailure.HttpStatus)]
+        // #199: the schema rejection showed twice in the chat (its notice and the Paused line), not because it was sent twice.
+        [InlineData(400, "invalid_request_error", "The compiled grammar is too large, which would cause performance issues. Simplify your tool schemas or reduce the number of strict tools.", StreamFailure.HttpStatus)]
         public void ClientErrorsAreNotRetried(int status, string type, string message, StreamFailure expected)
         {
             var transport = new StreamingFakeTransport(ScriptedResponse.Error(status, type, message), ScriptedResponse.Fixture("text.sse"));

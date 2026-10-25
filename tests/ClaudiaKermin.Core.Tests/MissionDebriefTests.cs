@@ -94,13 +94,10 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void TheSchemaRequiresEveryDebriefFieldTheMissionAsksFor()
         {
-            var rig = new Rig(this, DebriefJson("Nominal", ""));
-            rig.Mission.Send(new StartMission(Goal, 10m, Sonnet));
-            CraftCheckRouter.StartChecked(rig.Mission, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
-            rig.DrainUntil(v => v.Stage == MissionStage.AwaitingPlanApproval);
-            using (var request = JsonDocument.Parse(rig.Transport.Requests[0].Body))
+            // A Debrief request sends the flight schema (#199).
+            using (var request = JsonDocument.Parse(MissionReply.FlightSchemaJson))
             {
-                var schema = request.RootElement.GetProperty("output_config").GetProperty("format").GetProperty("schema");
+                var schema = request.RootElement;
                 var debrief = schema.GetProperty("properties").GetProperty("debrief").GetProperty("anyOf")[0];
                 var required = debrief.GetProperty("required").EnumerateArray().Select(e => e.GetString()).ToList();
                 var properties = debrief.GetProperty("properties").EnumerateObject().Select(p => p.Name).ToList();
@@ -434,17 +431,17 @@ namespace ClaudiaKermin.Core.Tests
 
         private static string DebriefJson(string outcome, string extra)
         {
-            return "{\"kind\":\"debrief\",\"say\":\"Debrief.\",\"reply_intent\":null,\"mission_plan\":null,\"sequence_plan\":null,\"alert\":null,"
+            return "{\"kind\":\"debrief\",\"say\":\"Debrief.\",\"reply_intent\":\"none\",\"mission_plan\":null,\"sequence_plan\":null,\"alert\":null,"
                 + "\"debrief\":{\"outcome\":\"" + outcome + "\",\"why\":\"It went.\",\"what_happened\":\"It went.\",\"goal_reached\":false,\"next\":\"Fly on.\",\"eva_science\":\"\"" + extra + "}}";
         }
 
         private static ScriptedResponse PlanReply()
         {
-            return Reply("{\"kind\":\"mission_plan\",\"say\":\"Plan.\",\"reply_intent\":null,\"sequence_plan\":null,\"debrief\":null,\"alert\":null,"
+            return Reply("{\"kind\":\"mission_plan\",\"say\":\"Plan.\",\"reply_intent\":\"none\",\"sequence_plan\":null,\"debrief\":null,\"alert\":null,"
                 + "\"mission_plan\":{\"why\":\"Two legs.\",\"sequences\":["
-                + "{\"name\":\"Link check\",\"intent\":\"Prove the link.\",\"delta_v\":0,\"timing\":\"now\",\"due_time_ut\":null,\"manual\":false},"
-                + "{\"name\":\"Second leg\",\"intent\":\"Go on.\",\"delta_v\":1000,\"timing\":\"after\",\"due_time_ut\":null,\"manual\":false}],"
-                + "\"total_delta_v\":1000,\"expected_duration\":\"short\",\"mission_time_s\":null}}");
+                + "{\"name\":\"Link check\",\"intent\":\"Prove the link.\",\"delta_v\":0,\"timing\":\"now\",\"due_time_ut\":-1,\"manual\":false},"
+                + "{\"name\":\"Second leg\",\"intent\":\"Go on.\",\"delta_v\":1000,\"timing\":\"after\",\"due_time_ut\":-1,\"manual\":false}],"
+                + "\"total_delta_v\":1000,\"expected_duration\":\"short\",\"mission_time_s\":-1}}");
         }
 
         /// <summary>A reply as the stream carries it: the JSON as one text block, priced by its usage.</summary>

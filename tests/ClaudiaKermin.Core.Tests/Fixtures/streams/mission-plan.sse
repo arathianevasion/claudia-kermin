@@ -20,7 +20,7 @@ event: content_block_delta
 data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"{\"kind\":\"mission_plan\",\"say\":\"Mission Plan: one Maneuver Sequence, no delta-v. Approve to go.\","}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"\"reply_intent\":null,\"mission_plan\":{\"why\":\"The goal only needs the kOS link proven; nothing has to fly.\",\"sequences\":[{\"name\":\"Link check\",\"intent\":\"Report the craft’s status from the pad.\",\"delta_v\":0,\"timing\":\"right away\"}],"}}
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"\"reply_intent\":\"none\",\"mission_plan\":{\"why\":\"The goal only needs the kOS link proven; nothing has to fly.\",\"sequences\":[{\"name\":\"Link check\",\"intent\":\"Report the craft’s status from the pad.\",\"delta_v\":0,\"timing\":\"right away\"}],"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"\"total_delta_v\":0,\"expected_duration\":\"under a minute\"},\"sequence_plan\":null,\"debrief\":null}"}}

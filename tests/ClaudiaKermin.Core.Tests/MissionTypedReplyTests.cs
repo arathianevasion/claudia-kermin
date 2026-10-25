@@ -47,12 +47,12 @@ namespace ClaudiaKermin.Core.Tests
             return new ScriptedResponse { Body = Encoding.UTF8.GetBytes(sse) };
         }
 
-        /// <summary>A Mission Plan reply with one sequence named <paramref name="name"/>; <paramref name="newGoal"/> is JSON ("null" or a quoted string).</summary>
-        private static ScriptedResponse Plan(string name, string newGoal = "null", string intent = "null")
+        /// <summary>A Mission Plan reply with one sequence named <paramref name="name"/>; <paramref name="newGoal"/> is JSON (a quoted string, "\"\"" for none).</summary>
+        private static ScriptedResponse Plan(string name, string newGoal = "\"\"", string intent = "\"none\"")
         {
             return Reply("{\"kind\":\"mission_plan\",\"say\":\"Mission Plan: " + name + ".\",\"reply_intent\":" + intent + ","
-                + "\"mission_plan\":{\"why\":\"Because.\",\"sequences\":[{\"name\":\"" + name + "\",\"intent\":\"Do it.\",\"delta_v\":100,\"timing\":\"right away\",\"due_time_ut\":null,\"manual\":false}],"
-                + "\"total_delta_v\":100,\"expected_duration\":\"an hour\",\"mission_time_s\":null,\"new_goal\":" + newGoal + "},\"sequence_plan\":null,\"debrief\":null}");
+                + "\"mission_plan\":{\"why\":\"Because.\",\"sequences\":[{\"name\":\"" + name + "\",\"intent\":\"Do it.\",\"delta_v\":100,\"timing\":\"right away\",\"due_time_ut\":-1,\"manual\":false}],"
+                + "\"total_delta_v\":100,\"expected_duration\":\"an hour\",\"mission_time_s\":-1,\"new_goal\":" + newGoal + "},\"sequence_plan\":null,\"debrief\":null}");
         }
 
         private static ScriptedResponse Answer(string intent)
@@ -134,6 +134,8 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Contains("wants a change", LastUserText(transport.Requests[2]));
             Assert.Contains("revise to land at night", LastUserText(transport.Requests[2]));
             Assert.Null(mission.View.ConfirmPrompt);
+            // The question and the change both stay in the planning schema (#199), so the prompt cache holds.
+            Assert.All(transport.Requests, r => Assert.Contains(MissionReply.PlanningSchemaJson, r.Body));
         }
 
         [Fact]
@@ -153,7 +155,7 @@ namespace ClaudiaKermin.Core.Tests
 
         [Theory]
         [InlineData("\"question\"")]
-        [InlineData("null")]
+        [InlineData("\"none\"")]
         [InlineData("\"unclear\"")]
         public void AQuestionWithNoApproveOrReviseIntentChangesNothing(string intent)
         {

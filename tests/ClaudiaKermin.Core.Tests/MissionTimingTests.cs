@@ -54,22 +54,22 @@ namespace ClaudiaKermin.Core.Tests
 
         private static string D(double? value)
         {
-            return value.HasValue ? value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "null";
+            return value.HasValue ? value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-1";
         }
 
         /// <summary>A Mission Plan: launch right away, then a Mun transfer after a long wait (Due Time).</summary>
         private static ScriptedResponse TimedMissionPlan(double? transferDue = Due, double? missionTime = 250000)
         {
-            return Reply("{\"kind\":\"mission_plan\",\"say\":\"Mission Plan: launch, then a Mun transfer at its window.\",\"reply_intent\":null,"
+            return Reply("{\"kind\":\"mission_plan\",\"say\":\"Mission Plan: launch, then a Mun transfer at its window.\",\"reply_intent\":\"none\","
                 + "\"mission_plan\":{\"why\":\"The transfer window is a day away.\",\"sequences\":["
-                + "{\"name\":\"Launch\",\"intent\":\"Reach a 100 km orbit.\",\"delta_v\":3400,\"timing\":\"right away\",\"due_time_ut\":null},"
+                + "{\"name\":\"Launch\",\"intent\":\"Reach a 100 km orbit.\",\"delta_v\":3400,\"timing\":\"right away\",\"due_time_ut\":-1},"
                 + "{\"name\":\"Mun transfer\",\"intent\":\"Burn for the Mun.\",\"delta_v\":900,\"timing\":\"at the window\",\"due_time_ut\":" + D(transferDue) + "}],"
                 + "\"total_delta_v\":4300,\"expected_duration\":\"about a day\",\"mission_time_s\":" + D(missionTime) + "},\"sequence_plan\":null,\"debrief\":null}");
         }
 
         private static ScriptedResponse SequencePlan(double? due, double? windowCloses = null, double? lateDv = null, double expectedDv = 100, string name = "Mun transfer")
         {
-            return Reply("{\"kind\":\"sequence_plan\",\"say\":\"Sequence Plan: " + name + ".\",\"reply_intent\":null,\"mission_plan\":null,"
+            return Reply("{\"kind\":\"sequence_plan\",\"say\":\"Sequence Plan: " + name + ".\",\"reply_intent\":\"none\",\"mission_plan\":null,"
                 + "\"sequence_plan\":{\"name\":\"" + name + "\",\"intent\":\"Burn for the Mun.\",\"why\":\"The window is open then.\",\"target\":\"Mun encounter\","
                 + "\"tolerances\":\"Pe within 20 km\",\"expected_delta_v\":" + D(expectedDv) + ",\"expected_duration_s\":600,\"abort_conditions\":[],\"risks\":[],"
                 + "\"custom_script\":false,\"custom_script_reason\":\"\",\"script\":\"print \\\"go\\\".\\n\","

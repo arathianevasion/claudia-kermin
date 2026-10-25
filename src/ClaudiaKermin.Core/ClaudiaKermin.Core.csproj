@@ -11,6 +11,12 @@
     <ShipsInGameData>true</ShipsInGameData>
   </PropertyGroup>
 
+  <!-- The structured-output schemas and their union budget (#199), for the tests and the schema probe tool. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="ClaudiaKermin.Core.Tests" />
+    <InternalsVisibleTo Include="ClaudiaKermin.SchemaProbe" />
+  </ItemGroup>
+
   <!-- The Core Library ships inside the core, so bundling a Mission Script reads no files. -->
   <ItemGroup>
     <EmbeddedResource Include="$(RepoRoot)kerboscript/library/*.ks" LogicalName="ClaudiaKermin.Core.library.%(Filename).ks" />
