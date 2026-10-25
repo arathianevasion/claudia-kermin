@@ -108,7 +108,7 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is EditSettings) SettingsEdited(((EditSettings)input).Settings);
             else if (input is WarpToDueTime) WarpRequested();
             else if (input is GoToVessel) GoToRequested();
-            else if (input is ClaudiaKilled) Killed();
+            else if (input is ClaudiaKilled) Killed(((ClaudiaKilled)input).VesselId);
             else if (input is KosRunBlocked) RunBlocked((KosRunBlocked)input);
             else if (input is KosBlockStarted) BlockStarted((KosBlockStarted)input);
             else if (input is KosBlockEnded) BlockEnded((KosBlockEnded)input);
@@ -759,10 +759,12 @@ namespace ClaudiaKermin.Core.Missions
         /// Spending Cap. Late run events carry a run id the Mission no longer holds, so they are ignored. A remote
         /// Mission never had her aboard and carries on.
         /// </summary>
-        private void Killed()
+        private void Killed(string vesselId)
         {
             var mission = _mission;
             if (MissionOver || mission.Remote) return;
+            // She died aboard some other craft: not this Mission's loss.
+            if (vesselId.Length > 0 && mission.VesselId.Length > 0 && vesselId != mission.VesselId) return;
             var doing = LostDoing(mission);
             if (mission.InFlight) mission.Pending.Cancel.Cancel();
             else mission.Pending = null;
@@ -771,6 +773,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.RunId = null;
             mission.RunningProcessor = null;
             mission.Queue.Clear();
+            if (mission.PendingSequence != null && mission.PendingSequence.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
             EndLive(mission);
             mission.Owed = Owed.None;
             mission.OwedOutcome = null;
