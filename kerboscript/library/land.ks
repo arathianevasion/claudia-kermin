@@ -295,8 +295,10 @@ function land_plan {
       break.
     }
     // Start the fine search an orbit early, so the pass the coarse step found is inside it.
+    // Any miss here (dark, or the passes in this window wide of the site on an inclined orbit) steps
+    // on: the first search already found the site near the track, so only success ends the search.
     set plan to land_plan_from(opt, site, approach, max(earliest, lit - period)).
-    if not plan:haskey("dark") {
+    if plan:error = "" {
       return plan.
     }
     set from_ut to lit + period.

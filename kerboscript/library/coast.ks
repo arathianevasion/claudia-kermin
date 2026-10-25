@@ -62,11 +62,11 @@ function coast {
     set opt:max_duration to max(0, end_ut - time:seconds) + 600.
   }
   if end_ut > time:seconds {
-    local held is claudia_warp_to(ctx, end_ut, opt:lead).
-    if held <> "" {
+    local waited is claudia_warp_to(ctx, end_ut, opt:lead).
+    if waited <> "" {
       claudia_make_safe().
       set extra:coasted to round(time:seconds - ctx:start_ut, 1).
-      return claudia_finish(ctx, false, held, extra).
+      return claudia_finish(ctx, false, waited, extra).
     }
   }
   set extra:coasted to round(time:seconds - ctx:start_ut, 1).
