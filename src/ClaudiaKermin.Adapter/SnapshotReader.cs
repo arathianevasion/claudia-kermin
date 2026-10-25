@@ -214,6 +214,7 @@ namespace ClaudiaKermin.Adapter
                 Tag(info, "electric_generator");
             else if (Is(module, "ModuleReactionWheel")) Tag(info, "reaction_wheel");
             else if (Is(module, "ModuleRCS")) Tag(info, "rcs");
+            else if (Is(module, "ModuleLiftingSurface")) Tag(info, "aero_stabiliser");
             else if (Is(module, "ModuleGimbal")) Tag(info, "gimbal");
             else if (Is(module, "ModuleEngines")) Tag(info, "engine");
             else if (Is(module, "ModuleScienceExperiment"))
