@@ -37,6 +37,12 @@ namespace ClaudiaKermin.Core.Kos
         /// </summary>
         public double? OrbitPeriapsis { get; private set; }
 
+        /// <summary>
+        /// Degrees per second the craft is set spinning about its pitch axis when the test starts (0, the
+        /// default, leaves it steady): a scenario that starts tumbling.
+        /// </summary>
+        public double TumbleRate { get; private set; }
+
         /// <summary>Real seconds the run may take, warp included, before it is aborted and fails.</summary>
         public double TimeoutSeconds { get; private set; }
 
@@ -75,6 +81,7 @@ namespace ClaudiaKermin.Core.Kos
                     case "orbit_altitude": spec.OrbitAltitude = Number(name, value); break;
                     case "orbit_inclination": spec.OrbitInclination = Number(name, value); break;
                     case "orbit_pe": spec.OrbitPeriapsis = Number(name, value); break;
+                    case "tumble_rate": spec.TumbleRate = Number(name, value); break;
                     case "timeout_s": spec.TimeoutSeconds = Number(name, value); break;
                     case "check":
                         Split(name, value);

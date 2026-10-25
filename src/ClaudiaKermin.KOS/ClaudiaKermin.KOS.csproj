@@ -24,6 +24,7 @@
     <Reference Include="kOS.Safe" HintPath="$(KOSPluginsDir)/kOS.Safe.dll" Private="false" />
     <!-- GUILayout, for the debug_tools window. -->
     <Reference Include="UnityEngine.IMGUIModule" HintPath="$(KSPManagedDir)/UnityEngine.IMGUIModule.dll" Private="false" />
+    <Reference Include="UnityEngine.PhysicsModule" HintPath="$(KSPManagedDir)/UnityEngine.PhysicsModule.dll" Private="false" />
   </ItemGroup>
 
   <!-- The debug_tools test scripts ship inside the DLL, so running them reads and writes no files. -->

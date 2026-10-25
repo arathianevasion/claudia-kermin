@@ -93,6 +93,51 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal("wait", One("reentry_chute_action(\"safe\", false, 251, 14000, 0.05)"));
         }
 
+        // reentry_chute_stage(mode, has_drogues, drogues_out, mains_out, speed, agl, pressure)
+        [Theory]
+        [InlineData("\"safe\", true, false, false, 450, 20000, 0.1", "drogues")]   // fast but within what a drogue takes
+        [InlineData("\"safe\", true, false, false, 900, 20000, 0.1", "wait")]      // too fast even for the drogues
+        [InlineData("\"safe\", true, false, false, 450, 40000, 0.01", "wait")]     // too thin
+        [InlineData("\"safe\", true, false, false, 200, 9000, 0.3", "drogues")]    // mains would be safe, but drogues still go first
+        [InlineData("\"safe\", true, true, false, 450, 20000, 0.1", "wait")]       // drogues out: mains wait for 250 m/s
+        [InlineData("\"safe\", true, true, false, 200, 9000, 0.3", "mains")]
+        [InlineData("\"safe\", true, true, true, 20, 500, 1.0", "wait")]           // all open
+        [InlineData("\"safe\", false, false, false, 200, 9000, 0.3", "mains")]     // no drogues: mains alone
+        [InlineData("\"safe\", false, false, false, 450, 20000, 0.1", "wait")]
+        [InlineData("\"safe\", true, false, false, 900, 2900, 0.9", "drogues")]    // last resort for the drogues, whatever the speed
+        [InlineData("\"safe\", true, true, false, 900, 1400, 0.9", "mains")]       // last resort for the mains, drogues already out
+        [InlineData("\"safe\", false, false, false, 900, 1400, 0.9", "mains")]
+        [InlineData("\"none\", true, false, false, 100, 500, 1.0", "wait")]
+        public void Drogues_open_before_mains_by_speed_and_pressure(string args, string expected)
+        {
+            Assert.Equal(expected, One("reentry_chute_stage(" + args + ")"));
+        }
+
+        [Fact]
+        public void Mains_never_open_before_the_drogues_even_at_the_main_last_height()
+        {
+            // At 1400 m the drogue last height (3000 m) has long passed, so the drogues are due first.
+            Assert.Equal("drogues", One("reentry_chute_stage(\"safe\", true, false, false, 900, 1400, 0.9)"));
+        }
+
+        [Fact]
+        public void The_drogues_take_more_speed_and_thinner_air_and_open_higher_than_the_mains()
+        {
+            Assert.True(Number("reentry_drogue_max_speed()") > Number("reentry_chute_max_speed()"));
+            Assert.True(Number("reentry_drogue_min_pressure()") < Number("reentry_chute_min_pressure()"));
+            Assert.True(Number("reentry_drogue_last_agl()") > Number("reentry_chute_last_agl()"));
+        }
+
+        [Theory]
+        [InlineData("parachuteDrogue", "True")]
+        [InlineData("Drogue Chute", "True")]
+        [InlineData("parachuteSingle", "False")]
+        [InlineData("parachuteLarge", "False")]
+        public void A_drogue_chute_is_known_by_its_name(string name, string expected)
+        {
+            Assert.Equal(expected, One("reentry_is_drogue(\"" + name + "\")"));
+        }
+
         [Theory]
         [InlineData(false, 380, 9000, true)]
         [InlineData(false, 900, 20000, false)]

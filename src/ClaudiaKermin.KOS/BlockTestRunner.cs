@@ -201,11 +201,24 @@ namespace ClaudiaKermin.KOS
                 return;
             }
             _partId = processor.Value;
+            if (_spec.TumbleRate != 0) SpinUp(vessel, _spec.TumbleRate);
             _stage = Stage.Running;
             _deadline = Time.realtimeSinceStartup + (float)_spec.TimeoutSeconds;
             Note("running " + _spec.Block + " (timeout " + _spec.TimeoutSeconds + " s)");
             var source = CoreLibrary.Bundle(Resource(_test, "test.ks"));
             bridge.BeginRun(_partId, "claudia-blocktest:" + _test, source, Judge, reason => Fail("the bridge refused: " + reason));
+        }
+
+        /// <summary>Sets the unpacked craft spinning about its pitch (right) axis at rate degrees per second: a tumbling start.</summary>
+        private void SpinUp(Vessel vessel, double rate)
+        {
+            var spin = vessel.ReferenceTransform.right * (float)(rate * Math.PI / 180);
+            foreach (var part in vessel.parts)
+            {
+                if (part.Rigidbody == null) continue;
+                part.Rigidbody.angularVelocity = spin;
+            }
+            Note("set the craft tumbling at " + rate + " deg/s");
         }
 
         private void Judge(RunOutcome outcome)
