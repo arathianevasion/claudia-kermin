@@ -530,7 +530,7 @@ namespace ClaudiaKermin.Core.Missions
                 return;
             }
 
-            if (unanswered == null && state.Stage != MissionStage.Paused && AdvanceFromTranscript(mission, state)) return;
+            if (unanswered == null && AdvanceFromTranscript(mission, state)) return;
 
             if (state.Stage == MissionStage.Paused)
             {
@@ -547,12 +547,15 @@ namespace ClaudiaKermin.Core.Missions
         /// The save was made while a Mission Plan or Sequence Plan request was out, and the request has since completed:
         /// its reply is the transcript's last message. Offer that plan for Approval instead of asking again. A reply that
         /// doesn't fit the request, or a script that no longer passes the Script Check, leaves the usual re-ask.
+        /// A Paused save counts by the stage it paused from; the reply is applied and the Mission stays Paused, with its Pause cause.
         /// </summary>
         private bool AdvanceFromTranscript(Mission mission, MissionSaveState state)
         {
             Purpose purpose;
-            if (state.Stage == MissionStage.Planning) purpose = Purpose.MissionPlan;
-            else if (state.Stage == MissionStage.Sequencing) purpose = Purpose.SequencePlan;
+            var paused = state.Stage == MissionStage.Paused;
+            var inFlight = paused ? state.StageBeforePause : state.Stage;
+            if (inFlight == MissionStage.Planning) purpose = Purpose.MissionPlan;
+            else if (inFlight == MissionStage.Sequencing) purpose = Purpose.SequencePlan;
             else return false;
 
             // The in-flight turn joined the conversation after the save, with its reply: the first assistant message past the marker.
@@ -583,6 +586,12 @@ namespace ClaudiaKermin.Core.Missions
             mission.SuppressCards = false;
             Event(mission, "advanced", "the reply to the in-flight " + purpose + " request was already in the transcript");
             Note(LogKind.Notice, "Claudia's last request had already been answered; her reply is offered for your Approval.");
+            if (paused)
+            {
+                // The offer moved the stage on; the Pause and its cause stand, and Resume lands on the offer.
+                mission.StageBeforePause = mission.Stage;
+                mission.Stage = MissionStage.Paused;
+            }
             return true;
         }
 
