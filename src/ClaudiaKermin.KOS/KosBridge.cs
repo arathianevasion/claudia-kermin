@@ -34,8 +34,8 @@ namespace ClaudiaKermin.KOS
         private readonly List<PendingStart> _pending = new List<PendingStart>();
         private readonly Dictionary<uint, ActiveRun> _runs = new Dictionary<uint, ActiveRun>();
         private readonly Queue<Action> _fixedWork = new Queue<Action>();
-        /// <summary>Gate trips to report, from inside kOS's execution, delivered in Update.</summary>
-        private readonly Queue<Action> _tripped = new Queue<Action>();
+        /// <summary>Gate trips and Building Block events, from inside kOS's execution, delivered in Update in the order they came.</summary>
+        private readonly Queue<Action> _events = new Queue<Action>();
         /// <summary>Gate keys for runs with no Mission run id (debug tools): negative, so never a core run id.</summary>
         private int _nextUnkeyedRun = -1;
 
@@ -115,7 +115,7 @@ namespace ClaudiaKermin.KOS
             if (!_runs.TryGetValue(partId, out run) || run.RunId != trip.RunId || run.Run.HasEnded) return;
             run.Run.Aborted("blocked: " + trip.What);
             CraftSafety.MakeSafe(run.Vessel);
-            if (run.OnBlocked != null) _tripped.Enqueue(() => run.OnBlocked(trip.What));
+            if (run.OnBlocked != null) _events.Enqueue(() => run.OnBlocked(trip.What));
         }
 
         /// <summary>From <c>ADDONS:CLAUDIA:REPORT</c>. Reports from programs the mod didn't start are ignored.</summary>
@@ -133,6 +133,22 @@ namespace ClaudiaKermin.KOS
             }
         }
 
+        /// <summary>
+        /// From <c>ADDONS:CLAUDIA:BLOCKSTART</c> (<paramref name="result"/> null) and <c>BLOCKRESULT</c>. Only a Mission's run
+        /// (a core run id) is reported, through <see cref="ScriptRunner.BlockReported"/>; other programs' blocks are ignored.
+        /// </summary>
+        public void OnBlock(uint partId, string block, IDictionary<string, object> result)
+        {
+            ActiveRun run;
+            if (!_runs.TryGetValue(partId, out run) || run.Run.HasEnded || run.RunId <= 0) return;
+            var runId = run.RunId;
+            _events.Enqueue(() =>
+            {
+                var reported = ScriptRunner.BlockReported;
+                if (reported != null) reported(runId, block, result);
+            });
+        }
+
         private void Awake()
         {
             Instance = this;
@@ -146,7 +162,7 @@ namespace ClaudiaKermin.KOS
             GameEvents.onGameSceneLoadRequested.Remove(OnSceneLoadRequested);
             foreach (var pending in _pending) Guard(() => pending.OnRefused("Left Flight before the script could start."));
             _pending.Clear();
-            while (_tripped.Count > 0) Guard(_tripped.Dequeue());
+            while (_events.Count > 0) Guard(_events.Dequeue());
             // Deliver every outcome before this scene's bridge goes away.
             foreach (var run in _runs.Values.ToList())
             {
@@ -171,7 +187,7 @@ namespace ClaudiaKermin.KOS
         private void Update()
         {
             // A trip is reported before its run's outcome, which comes at least a frame after the program ends.
-            while (_tripped.Count > 0) Guard(_tripped.Dequeue());
+            while (_events.Count > 0) Guard(_events.Dequeue());
             foreach (var run in _runs.Values.ToList())
             {
                 if (!run.Run.HasEnded && run.Addon.IsStale)

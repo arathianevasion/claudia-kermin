@@ -15,6 +15,8 @@
 //   max_duration, abort_on_part_loss and stage_limit.
 // - A block returns one result lexicon built by claudia_finish(): the Script Result's common fields
 //   plus the block's extra results. It never reports: the Mission Script reports once.
+// - claudia_begin and claudia_finish tell the mod a block began and what it returned
+//   (ADDONS:CLAUDIA:BLOCKSTART, BLOCKRESULT), for the Capcom strip's progress and the log.
 // - An abort makes the craft safe (claudia_make_safe) and returns success false with reason
 //   "abort <option>: <detail>"; there is no in-block recovery.
 // - Block loops call claudia_tick() each physics tick: it measures delta-v used, auto-stages and
@@ -339,6 +341,8 @@ function claudia_burn_throttle {
 function claudia_begin {
   parameter block, opts, block_defaults, max_duration.
   local checked is claudia_options(opts, block_defaults, max_duration).
+  // For the Capcom strip's progress: the mod shows the block running, with no Claude call.
+  addons:claudia:blockstart(block).
   return lexicon(
     "block", block,
     "error", checked:error,
@@ -387,5 +391,7 @@ function claudia_finish {
   for key in extra:keys {
     set result[key] to extra[key].
   }
+  // One log row per block result; this is not the Script Result, which the Mission Script reports once.
+  addons:claudia:blockresult(ctx:block, result).
   return result.
 }

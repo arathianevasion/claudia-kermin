@@ -194,6 +194,7 @@ namespace ClaudiaKermin.Core.Ui
                 case QuickReply.GoToVessel: return "Go to vessel";
                 case QuickReply.ManualControl: return "Take controls";
                 case QuickReply.HandBack: return "Hand back to Claudia";
+                case QuickReply.Abort: return "Abort";
                 default: return "Retry";
             }
         }
@@ -436,6 +437,38 @@ namespace ClaudiaKermin.Core.Ui
             return view.LatestLine.Length > 0 ? view.LatestLine : "Standing by.";
         }
 
+        /// <summary>
+        /// The strip's live progress line while Running, with no Claude call behind it: the Building Block, time against the
+        /// plan, and the key numbers known now (delta-v, altitude, Ap and Pe, electric charge); "" when nothing runs.
+        /// </summary>
+        public static string ProgressLine(MissionView view)
+        {
+            var progress = view.RunProgress;
+            if (view.Stage != MissionStage.Running || !progress.Running) return "";
+            var parts = new List<string>();
+            if (progress.Block.Length > 0) parts.Add(progress.Block);
+            parts.Add(Whole(progress.ElapsedSeconds) + (progress.PlannedSeconds > 0 ? " s of " + Whole(progress.PlannedSeconds) : "") + " s");
+            if (progress.DeltaVUsed.HasValue)
+                parts.Add("Δv " + Whole(progress.DeltaVUsed.Value) + (progress.PlannedDeltaV > 0 ? " of " + Whole(progress.PlannedDeltaV) : "") + " m/s");
+            if (progress.Altitude.HasValue) parts.Add("Alt " + Kilometres(progress.Altitude.Value));
+            if (progress.Apoapsis.HasValue) parts.Add("Ap " + Kilometres(progress.Apoapsis.Value));
+            if (progress.Periapsis.HasValue) parts.Add("Pe " + Kilometres(progress.Periapsis.Value));
+            if (progress.ElectricChargePercent.HasValue) parts.Add("EC " + Whole(progress.ElectricChargePercent.Value) + "%");
+            if (progress.ChecksCrossed > 0)
+                parts.Add(progress.ChecksCrossed.ToString(CultureInfo.InvariantCulture) + " Telemetry Check" + (progress.ChecksCrossed == 1 ? "" : "s") + " crossed");
+            return string.Join(" · ", parts.ToArray());
+        }
+
+        private static string Whole(double value)
+        {
+            return value.ToString("#,0", CultureInfo.InvariantCulture);
+        }
+
+        private static string Kilometres(double metres)
+        {
+            return (metres / 1000).ToString("0.0", CultureInfo.InvariantCulture) + " km";
+        }
+
         /// <summary>The Mission Plan's sequences as the strip's track: done, current and upcoming, and the manual stretches; empty before there is a plan.</summary>
         public static IList<PlanSegment> Segments(MissionView view)
         {
@@ -479,6 +512,9 @@ namespace ClaudiaKermin.Core.Ui
         /// </summary>
         public static string NeedsYou(MissionView view)
         {
+            // An Abort recommendation can't wait, whatever else Claudia is doing.
+            if (view.AbortRecommended.Length > 0) return "Claudia recommends Abort";
+            if (view.CapWait.Length > 0) return "Raise cap: Claudia's request is waiting";
             if (view.Busy) return "";
             if (view.ConfirmPrompt != null) return "Confirm your Approval";
             var replies = view.QuickReplies;

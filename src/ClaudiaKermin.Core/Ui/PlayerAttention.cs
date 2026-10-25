@@ -15,6 +15,8 @@ namespace ClaudiaKermin.Core.Ui
         Approval,
         /// <summary>The Mission is Paused, or couldn't produce a safe script: the player must act.</summary>
         Pause,
+        /// <summary>Claudia judged an Alert and recommends Abort: the window comes up with its Abort button.</summary>
+        Abort,
     }
 
     public sealed class Attention
@@ -40,6 +42,7 @@ namespace ClaudiaKermin.Core.Ui
         private string _missionId = "";
         private int _debriefs;
         private string _waiting = "";
+        private string _abort = "";
 
         public Attention Observe(MissionView view)
         {
@@ -48,8 +51,14 @@ namespace ClaudiaKermin.Core.Ui
                 _missionId = "";
                 _debriefs = 0;
                 _waiting = "";
+                _abort = "";
                 return null;
             }
+
+            // An Abort recommendation is the most urgent moment there is: it goes before everything else.
+            var newAbort = view.MissionId == _missionId && view.AbortRecommended.Length > 0 && view.AbortRecommended != _abort;
+            _abort = view.AbortRecommended;
+            if (newAbort) return new Attention(AttentionKind.Abort, "Claudia recommends Abort.");
 
             var debriefs = view.Log.Count(e => e.Kind == LogKind.Debrief);
             var waiting = Waiting(view);

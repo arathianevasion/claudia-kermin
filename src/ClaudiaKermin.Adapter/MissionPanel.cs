@@ -143,6 +143,7 @@ namespace ClaudiaKermin.Adapter
                 case QuickReply.WarpToDueTime: _send(new WarpToDueTime()); break;
                 case QuickReply.GoToVessel: _send(new GoToVessel()); break;
                 case QuickReply.ManualControl: _send(new TakeManualControl()); break;
+                case QuickReply.Abort: _send(new AbortSequence()); break;
                 case QuickReply.HandBack:
                     // Whatever is in the prompt goes with it as the optional message about what the player did.
                     _send(new HandBack(_typed));
@@ -349,7 +350,15 @@ namespace ClaudiaKermin.Adapter
                     if (!Shown(reply)) continue;
                     var label = MissionWindowRules.Label(reply, _view);
                     bool clicked;
-                    if (MissionWindowRules.IsPrimary(reply)) clicked = ClaudiaSkin.PrimaryButton(label, GUILayout.ExpandWidth(true), GUILayout.MinWidth(0));
+                    if (reply == QuickReply.Abort && _view.AbortRecommended.Length > 0)
+                    {
+                        // Claudia recommends Abort: the button flashes. Only the tint changes, so the layout stays the same between events.
+                        var tint = GUI.color;
+                        if (Mathf.FloorToInt(Time.realtimeSinceStartup * 2f) % 2 == 0) GUI.color = new Color(1f, 0.75f, 0.4f);
+                        clicked = ClaudiaSkin.PrimaryButton(label, GUILayout.ExpandWidth(true), GUILayout.MinWidth(0));
+                        GUI.color = tint;
+                    }
+                    else if (MissionWindowRules.IsPrimary(reply)) clicked = ClaudiaSkin.PrimaryButton(label, GUILayout.ExpandWidth(true), GUILayout.MinWidth(0));
                     else if (reply == QuickReply.ChangeSomething) clicked = ClaudiaSkin.ToggleButton(writing == PromptFor.Change, label, GUILayout.ExpandWidth(false));
                     else if (reply == QuickReply.AskQuestion) clicked = ClaudiaSkin.ToggleButton(writing == PromptFor.Question, label, GUILayout.ExpandWidth(false));
                     else clicked = ClaudiaSkin.SecondaryButton(label, GUILayout.ExpandWidth(false));

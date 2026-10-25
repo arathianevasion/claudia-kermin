@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Andrew Watson
 
 using System;
+using System.Collections.Generic;
 using ClaudiaKermin.Core.Kos;
 
 namespace ClaudiaKermin.Adapter
@@ -35,5 +36,12 @@ namespace ClaudiaKermin.Adapter
     {
         /// <summary>The kOS bridge in the loaded Flight scene, or null (no Flight, or kOS missing).</summary>
         public static IScriptRunner Current;
+
+        /// <summary>
+        /// A Building Block in a Mission's run began (the result is null) or returned its result lexicon: the run id, the
+        /// block's name and the result. Called on the main thread, in order with the run's other events; the Mission
+        /// driver sets it.
+        /// </summary>
+        public static Action<int, string, IDictionary<string, object>> BlockReported;
     }
 }
