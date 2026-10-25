@@ -16,6 +16,9 @@ namespace ClaudiaKermin.Core.Ui
         public const float SettingsWidthDesign = 375, SettingsHeightDesign = 583;
         public const float StripWidthDesign = 617;
         public const float PanelHeightDesign = 533;
+        // Minimums, chosen so the 1.2 scale gives the 430×460 Mission and 450×400 Settings minimums.
+        public const float MissionMinWidthDesign = 358, MissionMinHeightDesign = 383;
+        public const float SettingsMinWidthDesign = 375, SettingsMinHeightDesign = 333;
 
         public static float Scale(float designPx, float fontScale)
         {
@@ -30,6 +33,16 @@ namespace ClaudiaKermin.Core.Ui
         public static WindowBox Settings(float fontScale, float x, float y)
         {
             return new WindowBox(x, y, Scale(SettingsWidthDesign, fontScale), Scale(SettingsHeightDesign, fontScale));
+        }
+
+        public static WindowBox MissionMin(float fontScale)
+        {
+            return new WindowBox(0, 0, Scale(MissionMinWidthDesign, fontScale), Scale(MissionMinHeightDesign, fontScale));
+        }
+
+        public static WindowBox SettingsMin(float fontScale)
+        {
+            return new WindowBox(0, 0, Scale(SettingsMinWidthDesign, fontScale), Scale(SettingsMinHeightDesign, fontScale));
         }
 
         public static float StripWidth(float fontScale) { return Scale(StripWidthDesign, fontScale); }
