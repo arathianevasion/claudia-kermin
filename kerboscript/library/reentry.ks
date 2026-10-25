@@ -28,7 +28,7 @@
 //| orbit that never reaches the atmosphere, a wait over the cap, an option it can't read, a hard
 //| touchdown, or an abort (a mid-air abort still opens the parachutes if that is safe).
 //| Fly it after a return or a de-orbit burn, with the orbit's periapsis inside the atmosphere. It does
-//| not plan or burn anything. Example: `local r is reentry(). addons:claudia:report(r).`
+//| not plan or burn anything. Example: `local res is reentry(). addons:claudia:report(res).`
 
 // Parachutes: the most speed (m/s) and least air pressure (atm) at which opening is safe, and the
 // height above the ground (m) by which they open regardless.

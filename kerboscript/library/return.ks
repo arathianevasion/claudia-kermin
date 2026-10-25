@@ -11,7 +11,7 @@
 //| return(options): flies home from orbit around a moon of Kerbin (the Mun or Minmus): an ejection
 //| burn onto a path whose Kerbin periapsis is target_pe, then a mid-course correction halfway to
 //| reentry, both flown with exec_node. It ends after the correction, still in space; the craft comes
-//| down anywhere on Kerbin. Call it as a value, `local r is return().`: a bare `return().` is kOS's
+//| down anywhere on Kerbin. Call it as a value, `local res is return().`: a bare `return().` is kOS's
 //| own return statement.
 //| Options:
 //|   target_pe [35000]: the Kerbin periapsis altitude to aim for, m; inside the atmosphere (70 km)
@@ -34,7 +34,7 @@
 //| Kerbin", "no return to Kerbin after the ejection burn" (or "after the correction"), an exec_node
 //| failure (that burn's node is left in place), or an abort.
 //| Follow it with reentry in a later sequence, with its Due Time shortly before reentry_ut.
-//| Example: `local r is return(). addons:claudia:report(r).`
+//| Example: `local res is return(). addons:claudia:report(res).`
 
 // The block's own options and defaults.
 function return_defaults {

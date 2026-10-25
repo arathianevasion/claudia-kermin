@@ -20,8 +20,8 @@
 //| altitude the orbit doesn't pass, a burn point inside the atmosphere or below the surface, the
 //| reasons exec_node gives (no thrust, a wait over the cap, out of fuel, an abort), or "eccentricity
 //| <e> is over tolerance <t>"; on failure the node is left in place.
-//| Example: `local r is launch(lexicon("target_ap", 80000)). if r:success { set r to circularize(). }
-//| addons:claudia:report(r).`
+//| Example: `local res is launch(lexicon("target_ap", 80000)). if res:success { set res to circularize(). }
+//| addons:claudia:report(res).`
 
 // The block's own options and defaults (max_duration "auto" is resolved by exec_node).
 function circularize_defaults {

@@ -26,7 +26,7 @@
 //| Data left on board after "keep" comes home with the craft; recover it. Fails on an option it can't
 //| read, a name matching no experiment, or an abort. Nothing to run is a success with every
 //| experiment skipped. EVA reports and samples are the player's job.
-//| Example: `local r is science(lexicon("transmit", "keep")). addons:claudia:report(r).`
+//| Example: `local res is science(lexicon("transmit", "keep")). addons:claudia:report(res).`
 
 // The block's own options and defaults.
 function science_defaults {

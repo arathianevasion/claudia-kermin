@@ -38,8 +38,8 @@
 //| Fails with "launch starts on the ground", "no atmosphere on <body>: use ascend", "no thrust", a
 //| launch_at it can't use, a wait over the cap, "lost control: ...", "fell back into the
 //| atmosphere: ...", out of fuel, or an abort.
-//| Example: `local r is launch(lexicon("target_ap", 80000)). if r:success { set r to circularize(lexicon("at", "ap")). }
-//| addons:claudia:report(r).`
+//| Example: `local res is launch(lexicon("target_ap", 80000)). if res:success { set res to circularize(lexicon("at", "ap")). }
+//| addons:claudia:report(res).`
 
 // The block's own options and defaults ("auto", "lib_lazcalc", "none" and "body" are resolved once
 // the block knows the body and the wait).
