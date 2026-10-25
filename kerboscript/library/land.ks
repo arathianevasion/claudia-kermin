@@ -39,7 +39,7 @@
 //| (true if nothing within max_divert was flat enough and it landed on the least steep spot
 //| found); geo (lat, lng, alt) is the common field once landed. Fails with "land flies airless
 //| bodies only", an orbit it can't land from, a site off the ground track, no daylight pass,
-//| not enough delta-v, "tipped over", out of fuel, or an abort; a failure in the
+//| not enough delta-v, "deorbit left periapsis" well under the plan, "tipped over", out of fuel, or an abort; a failure in the
 //| descent leaves the craft safe but falling, so give it the delta-v (and TWR over 1.5) it needs.
 //| Example: `local res is land(lexicon("target", latlng(-0.5, 22), "daylight", true)). addons:claudia:report(res).`
 
@@ -142,6 +142,31 @@ function land_transfer_time {
 function land_periapsis_speed {
   parameter mu, r0, r_pe.
   return sqrt(mu * (2 / r_pe - 2 / (r0 + r_pe))).
+}
+
+// ---- Pure helpers: the coast's end condition for the ground ----
+
+// Seconds until a craft h m above the terrain, moving down at v_down (m/s, negative if climbing),
+// reaches it under gravity g (m/s^2): the root of h = v_down t + g t^2 / 2. 0 at or below the ground.
+function land_fall_eta {
+  parameter h, v_down, g.
+  if h <= 0 {
+    return 0.
+  }
+  return (sqrt(v_down ^ 2 + 2 * g * h) - v_down) / g.
+}
+
+// Whether the coast must end and the descent start: the time to impact (t_impact, from land_fall_eta) is
+// inside the time to stop the downward speed at accel (m/s^2), times margin, plus 30 s.
+function land_brake_now {
+  parameter t_impact, v_down, accel, margin.
+  return t_impact < max(0, v_down) / accel * margin + 30.
+}
+
+// Whether periapsis after the deorbit burn (m above sea level) is within 1500 m under the planned one.
+function land_periapsis_ok {
+  parameter actual, planned.
+  return actual >= planned - 1500.
 }
 
 // ---- Pure helpers: descent guidance ----
@@ -479,6 +504,13 @@ function land {
     return claudia_finish(ctx, false, flown, extra).
   }
 
+  // A burn that left periapsis well under the plan (a bad burn or bad terrain data) would put the
+  // craft into the ground before the descent could be flown to plan.
+  if not land_periapsis_ok(ship:orbit:periapsis, plan:r_pe - body:radius) {
+    claudia_make_safe().
+    return claudia_finish(ctx, false, "deorbit left periapsis at " + round(ship:orbit:periapsis) + " m, planned " + round(plan:r_pe - body:radius) + " m", extra).
+  }
+
   // Correction, a quarter orbit before the site: turn the plane about the craft's position so it
   // holds the site at periapsis.
   local pe_ut is time:seconds + eta:periapsis.
@@ -511,7 +543,7 @@ function land {
   local v_pe is land_periapsis_speed(mu, ship:orbit:apoapsis + body:radius, ship:orbit:periapsis + body:radius).
   local brake_ut is time:seconds + eta:periapsis - v_pe * opt:burn_margin / (2 * a_brake).
   if brake_ut - 90 > time:seconds {
-    local coasted is claudia_wait_until(ctx, brake_ut - 90).
+    local coasted is land_coast(ctx, brake_ut - 90, a_brake).
     if coasted <> "" {
       claudia_make_safe().
       return claudia_finish(ctx, false, coasted, extra).
@@ -529,6 +561,43 @@ function land {
     return claudia_finish(ctx, false, "tipped over on landing", extra).
   }
   return claudia_finish(ctx, true, "", extra).
+}
+
+// claudia_warp_to's loop to ut, ended early (returns "") once land_brake_now says the terrain under
+// the craft is coming too soon, since KSP can cut rails warp short near the ground and then ticks at
+// 1x without looking. a_brake: m/s^2 the engines brake with. Returns "" or an abort reason.
+function land_coast {
+  parameter ctx, ut, a_brake.
+  local warp_end is claudia_warp_end(ut, 30).
+  local want is true.
+  until time:seconds >= ut {
+    local g is body:mu / (body:radius + altitude) ^ 2.
+    local t_impact is land_fall_eta(alt:radar, -ship:verticalspeed, g).
+    if land_brake_now(t_impact, -ship:verticalspeed, a_brake, ctx:opt:burn_margin) {
+      kuniverse:timewarp:cancelwarp().
+      break.
+    }
+    local held is addons:claudia:warphold.
+    local action is claudia_warp_step(time:seconds, warp_end, kuniverse:timewarp:rate, held, want).
+    if action = "drop" {
+      kuniverse:timewarp:cancelwarp().
+    } else if action = "warp" {
+      set kuniverse:timewarp:mode to "RAILS".
+      kuniverse:timewarp:warpto(warp_end).
+      set want to false.
+    }
+    if held {
+      set want to true.
+    }
+    local reason is claudia_tick(ctx, 0).
+    if reason <> "" {
+      kuniverse:timewarp:cancelwarp().
+      return reason.
+    }
+    wait 0.
+  }
+  wait until kuniverse:timewarp:issettled and ship:unpacked.
+  return "".
 }
 
 // The powered descent onto aim, to touchdown and a settled craft. Sets best_effort and
