@@ -67,10 +67,10 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [InlineData(81000, 0, -1, 0.7, "0")]
         [InlineData(50000, 15000, 20000, 0, "1")]
         [InlineData(50000, 20000, 20000, 0, "0.5")]
-        [InlineData(50000, 22000, 20000, 0, "0")]
+        [InlineData(50000, 22000, 20000, 0, "0.05")]
         [InlineData(50000, 22000, 20000, 0.6, "0.6")]
         [InlineData(50000, 90000, -1, 0, "1")]
-        public void The_throttle_eases_to_the_target_ap_and_under_max_q_but_never_below_the_floor_until_cutoff(double ap, double q, double maxQ, double floor, string throttle)
+        public void The_throttle_eases_to_the_target_ap_and_under_max_q_but_only_the_target_ap_cuts_it_off(double ap, double q, double maxQ, double floor, string throttle)
         {
             Assert.Equal(throttle, One("round(launch_throttle(" + ap + ", 80000, 2000, " + q + ", " + maxQ + ", " + floor + "), 3)"));
         }

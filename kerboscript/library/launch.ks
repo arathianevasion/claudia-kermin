@@ -23,9 +23,10 @@
 //|     the turn start to the atmosphere top (or target_ap if lower); smaller turns over sooner.
 //|   max_aoa [5]: most degrees the nose may be off the airflow while the air is thick enough to matter
 //|     (over 500 Pa dynamic pressure), all the way up and through the coast.
-//|   throttle_max_q ["none"]: Pa of dynamic pressure to throttle back at.
+//|   throttle_max_q ["none"]: Pa of dynamic pressure to throttle back at (to 5% at most; in thick
+//|     air never below the craft's weight).
 //|   g, atm_height, surface_pressure ["body"]: the body's surface gravity (m/s^2), atmosphere top (m)
-//|     and surface pressure (atm), to override what the game says.
+//|     and surface pressure (Pa), to override what the game says.
 //|   max_duration ["auto"]: the wait on the pad plus 900 s.
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block.
 //| In thick air (over a tenth of surface pressure) the throttle never drops below the weight of the
@@ -89,9 +90,10 @@ function launch_pitch {
   return 90 * (1 - fraction ^ shape).
 }
 
-// The throttle on the way to target_ap: 0 once ap reaches it; easing off linearly over the last
-// ramp metres of apoapsis; easing off from 90% to 110% of max_q (Pa, -1 for no limit) at dynamic
-// pressure q_now (Pa); but never below t_floor before cutoff, so the throttle can't collapse in thick air.
+// The throttle on the way to target_ap: 0 once ap reaches it (only that cuts the engines off);
+// easing off linearly over the last ramp metres of apoapsis; easing off from 90% to 110% of max_q
+// (Pa, -1 for no limit) at dynamic pressure q_now (Pa), down to 5%; but never below t_floor, so the
+// throttle can't collapse in thick air (the floor wins over max_q).
 function launch_throttle {
   parameter ap, target_ap, ramp, q_now, max_q, t_floor.
   if ap >= target_ap {
@@ -99,7 +101,7 @@ function launch_throttle {
   }
   local t is min(1, (target_ap - ap) / ramp).
   if max_q > 0 {
-    set t to min(t, 1 - (q_now - 0.9 * max_q) / (0.2 * max_q)).
+    set t to min(t, max(0.05, 1 - (q_now - 0.9 * max_q) / (0.2 * max_q))).
   }
   return min(1, max(t_floor, max(0, t))).
 }
@@ -171,7 +173,7 @@ function launch_aero_q {
 }
 
 // The body's values, each option's own or, for "body", the game's: lexicon("g", m/s^2,
-// "atm_height", m, "surface_pressure", atm).
+// "atm_height", m, "surface_pressure", Pa).
 function launch_body {
   parameter opt.
   local b is ship:body.
@@ -186,7 +188,7 @@ function launch_body {
     }
   }
   if values:surface_pressure:istype("String") {
-    set values:surface_pressure to b:atm:altitudepressure(0).
+    set values:surface_pressure to b:atm:altitudepressure(0) * constant:atmtokpa * 1000.
   }
   return values.
 }
@@ -272,13 +274,13 @@ function launch {
   if not claudia_on_ground() {
     return claudia_finish(ctx, false, "launch starts on the ground, not " + status, extra).
   }
-  local bv is launch_body(opt).
-  if bv:atm_height <= 0 {
+  local body_values is launch_body(opt).
+  if body_values:atm_height <= 0 {
     return claudia_finish(ctx, false, "no atmosphere on " + ship:body:name + ": use ascend", extra).
   }
   local target_ap is opt:target_ap.
   if target_ap:istype("String") {
-    set target_ap to bv:atm_height + 10000.
+    set target_ap to body_values:atm_height + 10000.
   }
   set extra:ap_error to round(ship:apoapsis - target_ap).
 
@@ -333,8 +335,8 @@ function launch {
   launch_release_clamps(ctx).
 
   // Climb, then coast with the steering held, until out of the atmosphere (or, for a hop, at the top).
-  local hop is target_ap <= bv:atm_height.
-  local turn_end is min(bv:atm_height, target_ap).
+  local hop is target_ap <= body_values:atm_height.
+  local turn_end is min(body_values:atm_height, target_ap).
   local turn_start_alt is -1.
   local ramp is max(500, 0.02 * target_ap).
   local topup_tol is max(100, 0.005 * target_ap).
@@ -348,19 +350,19 @@ function launch {
     local spd is ship:velocity:surface:mag.
     local ap is ship:apoapsis.
     local ratio is 0.
-    if bv:surface_pressure > 0 {
-      set ratio to ship:body:atm:altitudepressure(altitude) / bv:surface_pressure.
+    if body_values:surface_pressure > 0 {
+      set ratio to ship:body:atm:altitudepressure(altitude) * constant:atmtokpa * 1000 / body_values:surface_pressure.
     }
 
     if coasting {
       if hop and ship:verticalspeed <= 0 {
         break.
       }
-      if not hop and altitude > bv:atm_height {
+      if not hop and altitude > body_values:atm_height {
         break.
       }
       if not hop and ship:verticalspeed < 0 {
-        set reason to "fell back into the atmosphere: ap " + round(ap) + " m, below " + round(bv:atm_height) + " m".
+        set reason to "fell back into the atmosphere: ap " + round(ap) + " m, below " + round(body_values:atm_height) + " m".
         break.
       }
       // Top up what drag took, but only out of thick air, so a hop coasts smoothly.
@@ -371,7 +373,7 @@ function launch {
     if coasting {
       set tset to 0.
     } else {
-      local t_floor is launch_throttle_floor(ratio, ship:mass, bv:g, ship:availablethrust).
+      local t_floor is launch_throttle_floor(ratio, ship:mass, body_values:g, ship:availablethrust).
       set tset to launch_throttle(ap, target_ap, ramp, q_pa, max_q_pa, t_floor).
       if tset = 0 {
         set coasting to true.
