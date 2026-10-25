@@ -106,6 +106,13 @@ namespace ClaudiaKermin.Core.Missions
 
         private void RecordStart(Mission mission)
         {
+            WriteInfo(mission);
+            Event(mission, "started", mission.Goal);
+        }
+
+        /// <summary>Writes mission.json: at Mission start, and again when the player raises the Spending Cap, so the Missions list and history show the current cap.</summary>
+        private void WriteInfo(Mission mission)
+        {
             try
             {
                 MissionStore.WriteInfo(mission.Folder, new MissionInfo { Id = mission.Id, Goal = mission.Goal, Model = mission.Model, SpendingCap = mission.SpendingCap });
@@ -114,7 +121,6 @@ namespace ClaudiaKermin.Core.Missions
             {
                 Note(LogKind.Notice, "Couldn't write the Mission's record: " + e.Message);
             }
-            Event(mission, "started", mission.Goal);
         }
 
         private void RecordFinished(Mission mission)

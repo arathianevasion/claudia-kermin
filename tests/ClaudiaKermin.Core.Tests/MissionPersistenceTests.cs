@@ -613,6 +613,21 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void TheMissionsListShowsARaisedSpendingCapBeforeAndAfterALoad()
+        {
+            var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-priced.sse")));
+            ToMissionPlan(mission);
+            var saved = Saved(mission);
+
+            mission.Send(new RaiseCap(25m));
+            Assert.Equal(25m, mission.View.Missions.Single(m => m.Current).SpendingCap);
+
+            // After a load the Mission is read back from its folder, not from memory.
+            Assert.Equal(25m, MissionHistory.Paused(_save.Path, saved[0].Id, saved[0]).SpendingCap);
+            Assert.Equal(25m, MissionStore.ReadInfo(MissionFolder(mission)).SpendingCap);
+        }
+
+        [Fact]
         public void ATornLastLineInTheCostLogFallsBackToTheLineBeforeIt()
         {
             var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-priced.sse")));
