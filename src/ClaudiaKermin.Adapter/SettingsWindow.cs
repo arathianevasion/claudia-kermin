@@ -7,13 +7,14 @@ using System.IO;
 using ClaudiaKermin.Adapter.Roster;
 using ClaudiaKermin.Core.Config;
 using ClaudiaKermin.Core.Missions;
+using ClaudiaKermin.Core.Ui;
 using UnityEngine;
 
 namespace ClaudiaKermin.Adapter
 {
     /// <summary>
-    /// The Settings window: the Mission section on top and, when no Mission is active, the collapsible Claudia Kermin
-    /// section (the API key, Prepare to uninstall). Drawn in one of three contexts: during a Mission (raise the Spending
+    /// The Settings window: the Mission section on top and the collapsible Claudia Kermin section (the API key always;
+    /// Prepare to uninstall only when no Mission is active). Drawn in one of three contexts: during a Mission (raise the Spending
     /// Cap, edit the Mission Settings while a plan awaits Approval), setting up a Mission (the <see cref="MissionSetup"/>
     /// and the kOS processor), and the Space Center (the Mission defaults, saved to <c>config.cfg</c>). The Mission
     /// section is a draft until Apply; Cancel throws it away. The key buttons act right away.
@@ -63,6 +64,8 @@ namespace ClaudiaKermin.Adapter
         private string _applyError = "";
 
         // The Claudia Kermin section, remembered per context for the session.
+        // Open during a Mission, where a Pause may be waiting on the key.
+        private bool _expandedDuring = true;
         private bool _expandedSettingUp;
         private bool _expandedDefaults = true;
         private string _typed = "";
@@ -172,8 +175,7 @@ namespace ClaudiaKermin.Adapter
             _scroll = GUILayout.BeginScrollView(_scroll, false, false, GUIStyle.none, GUI.skin.verticalScrollbar, GUIStyle.none, GUILayout.ExpandHeight(true));
             DrawMissionSection();
             GUILayout.Space(ClaudiaSkin.Gap * 2);
-            if (_context == Context.DuringMission) DrawDashedNote("The API key and Prepare to uninstall are under Claudia Kermin, shown here when no Mission is active.");
-            else DrawClaudiaKermin();
+            DrawClaudiaKermin();
             GUILayout.EndScrollView();
 
             DrawFooter();
@@ -421,14 +423,15 @@ namespace ClaudiaKermin.Adapter
 
         private void DrawClaudiaKermin()
         {
-            var expanded = _context == Context.SettingUp ? _expandedSettingUp : _expandedDefaults;
+            var during = _context == Context.DuringMission;
+            var expanded = during ? _expandedDuring : _context == Context.SettingUp ? _expandedSettingUp : _expandedDefaults;
             GUILayout.BeginHorizontal(expanded ? _headerOpen : _header, GUILayout.MinHeight(ClaudiaSkin.Scaled(52)));
             var portrait = GUILayoutUtility.GetRect(30, 30, GUILayout.Width(30), GUILayout.Height(30));
             if (Event.current.type == EventType.Repaint) GUI.DrawTexture(portrait, Portrait(), ScaleMode.ScaleToFit);
             GUILayout.Space(ClaudiaSkin.Gap);
             GUILayout.BeginVertical();
             GUILayout.Label("Claudia Kermin", ClaudiaSkin.Heading);
-            GUILayout.Label("API key · Prepare to uninstall", ClaudiaSkin.Secondary);
+            GUILayout.Label(SettingsRules.Subtitle(during), ClaudiaSkin.Secondary);
             GUILayout.EndVertical();
             GUILayout.FlexibleSpace();
             ClaudiaSkin.IconLabel(expanded ? ClaudiaSkin.IconShape.ChevronUp : ClaudiaSkin.IconShape.ChevronDown, ClaudiaSkin.TextSecondary, 16);
@@ -436,13 +439,15 @@ namespace ClaudiaKermin.Adapter
             if (Clicked())
             {
                 expanded = !expanded;
-                if (_context == Context.SettingUp) _expandedSettingUp = expanded;
+                if (during) _expandedDuring = expanded;
+                else if (_context == Context.SettingUp) _expandedSettingUp = expanded;
                 else _expandedDefaults = expanded;
             }
             if (!expanded) return;
 
             GUILayout.Space(ClaudiaSkin.Gap);
-            DrawApiKey();
+            if (SettingsRules.ShowApiKey(during)) DrawApiKey();
+            if (!SettingsRules.ShowUninstall(during)) return;
             GUILayout.Space(ClaudiaSkin.Gap);
             DrawUninstall();
             if (_config.DebugTools)
