@@ -273,6 +273,37 @@ namespace ClaudiaKermin.Core.Tests
             return snapshot;
         }
 
+        private static MissionSaveState SaveWithSequence(bool customScript, string reason, string script)
+        {
+            // Written with the badge Claudia claimed, whatever the script says, as saves from before the badge was derived were.
+            var state = new MissionSaveState
+            {
+                Id = "m1",
+                Stage = MissionStage.AwaitingSequenceApproval,
+                SequencePlan = new SequencePlan { Name = "Burn", Script = script, CustomScript = customScript, CustomScriptReason = reason },
+            };
+            return MissionSaveState.FromValues(state.ToValues());
+        }
+
+        [Fact]
+        public void ACustomScriptBadgeIsReDerivedFromTheSavedScriptNotTrustedFromTheSavedFlag()
+        {
+            // An older save carries the badge Claudia claimed: custom on a script built from Building Blocks...
+            var blocks = SaveWithSequence(true, "Nothing fits.", "local res is circularize().\nprint \"done\".\n");
+            Assert.False(blocks.SequencePlan.CustomScript);
+            Assert.Equal("", blocks.SequencePlan.CustomScriptReason);
+
+            // ...and not custom on a script that flies the craft by hand.
+            var custom = SaveWithSequence(false, "", "lock throttle to 1.\nwait 5.\n");
+            Assert.True(custom.SequencePlan.CustomScript);
+            Assert.False(string.IsNullOrWhiteSpace(custom.SequencePlan.CustomScriptReason));
+
+            // A custom script keeps the reason Claudia gave.
+            var kept = SaveWithSequence(true, "Nothing fits.", "lock throttle to 1.\n");
+            Assert.True(kept.SequencePlan.CustomScript);
+            Assert.Equal("Nothing fits.", kept.SequencePlan.CustomScriptReason);
+        }
+
         [Fact]
         public void TheDockingRecheckNoticeAndCannotFlyPauseRoundTripAndOldSavesLoadWithNoneSet()
         {
