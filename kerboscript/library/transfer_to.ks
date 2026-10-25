@@ -356,8 +356,8 @@ function transfer_to {
   if not ejected:success {
     return claudia_finish(ctx, false, ejected:reason, extra).
   }
-  local encounter is transfer_to_patch(ship:orbit, dest).
-  if encounter:istype("String") {
+  local enc is transfer_to_patch(ship:orbit, dest).
+  if enc:istype("String") {
     return claudia_finish(ctx, false, "no encounter with " + dest:name + " after the ejection burn", extra).
   }
 
@@ -367,17 +367,17 @@ function transfer_to {
       claudia_make_safe().
       return claudia_finish(ctx, false, ticked, extra).
     }
-    local fixed is transfer_to_correct(ctx, dest, opt:target_pe, encounter:soi_ut).
+    local fixed is transfer_to_correct(ctx, dest, opt:target_pe, enc:soi_ut).
     set extra:correction_dv to round(fixed:dv, 2).
     if fixed:reason <> "" {
       return claudia_finish(ctx, false, fixed:reason, extra).
     }
-    set encounter to transfer_to_patch(ship:orbit, dest).
-    if encounter:istype("String") {
+    set enc to transfer_to_patch(ship:orbit, dest).
+    if enc:istype("String") {
       return claudia_finish(ctx, false, "no encounter with " + dest:name + " after the correction", extra).
     }
   }
-  set extra:encounter_ut to round(encounter:soi_ut).
-  set extra:target_pe_actual to round(encounter:orbit:periapsis).
+  set extra:encounter_ut to round(enc:soi_ut).
+  set extra:target_pe_actual to round(enc:orbit:periapsis).
   return claudia_finish(ctx, true, "", extra).
 }

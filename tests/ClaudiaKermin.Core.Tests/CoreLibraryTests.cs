@@ -13,25 +13,47 @@ namespace ClaudiaKermin.Core.Tests
     {
         private const string Script = "@lazyglobal off.\r\nlocal res is exec_node().\r\naddons:claudia:report(res).\r\n";
 
-        // Common kOS built-in names (kOS refuses a local that hides one: "clobber BUILTIN_FUNCTION r").
-        // Hand-picked from the kOS built-in function and variable lists, not read from the kOS assembly.
-        private static readonly string[] KosBuiltins =
-        {
-            "r", "v", "q", "node", "heading", "ship", "body", "up", "stage", "time", "list", "target",
-            "orbit", "mass", "velocity", "altitude", "apoapsis", "periapsis", "eta", "status", "steering",
-            "throttle", "lock", "print", "round", "min", "max", "abs", "sqrt", "ln", "log10", "sin", "cos",
-            "tan", "vector", "vessel", "kuniverse", "constant", "warp", "lexicon", "queue", "stack", "range",
-        };
-
+        // kOS refuses a declaration that hides a built-in ("clobber BUILTIN_FUNCTION r"); see KosBuiltinNames.
         [Fact]
         public void NoDocExampleNamesAVariableAfterAKosBuiltin()
         {
             var docs = CoreLibrary.Summaries() + "\n" + CoreLibrary.FullDocs();
-            var bad = new System.Collections.Generic.List<string>();
-            foreach (Match span in Regex.Matches(docs, "`[^`]*`", RegexOptions.Singleline))
-                foreach (Match decl in Regex.Matches(span.Value, "\\b(?:local|parameter)\\s+(\\w+)", RegexOptions.IgnoreCase))
-                    if (KosBuiltins.Contains(decl.Groups[1].Value.ToLowerInvariant())) bad.Add(decl.Value);
-            Assert.Empty(bad);
+            var bad = KosBuiltinNames.ClashesInExamples(docs);
+            Assert.True(bad.Count == 0, string.Join("\n", bad));
+        }
+
+        [Fact]
+        public void NoBundledFileOrBlockTestScriptDeclaresANameThatHidesAKosBuiltin()
+        {
+            var bad = KosBuiltinNames.Clashes("bundle", CoreLibrary.Bundle(Script, 1, 10800));
+            var root = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory);
+            while (root != null && !System.IO.File.Exists(System.IO.Path.Combine(root.FullName, "ClaudiaKermin.sln"))) root = root.Parent;
+            Assert.NotNull(root);
+            var scripts = System.IO.Directory.GetFiles(System.IO.Path.Combine(root.FullName, "tests", "blocks"), "*.ks", System.IO.SearchOption.AllDirectories);
+            Assert.NotEmpty(scripts);
+            foreach (var file in scripts)
+                bad.AddRange(KosBuiltinNames.Clashes(file.Substring(root.FullName.Length + 1), System.IO.File.ReadAllText(file)));
+            Assert.True(bad.Count == 0, string.Join("\n", bad));
+        }
+
+        [Theory]
+        [InlineData("local north is 1.")]
+        [InlineData("global encounter is 2.")]
+        [InlineData("declare local r is 3.")]
+        [InlineData("parameter a, north.")]
+        [InlineData("parameter a, b is max(1, 2), heading.")]
+        [InlineData("function ship { }")]
+        [InlineData("for time in list(1) { }")]
+        [InlineData("local function node { }")]
+        public void TheBuiltinCheckCatchesEachKindOfDeclaration(string code)
+        {
+            Assert.NotEmpty(KosBuiltinNames.Clashes("t", code));
+        }
+
+        [Fact]
+        public void TheBuiltinCheckIgnoresCommentsStringsAndNonBuiltins()
+        {
+            Assert.Empty(KosBuiltinNames.Clashes("t", "// local north is 1.\nlocal v_north is \"local north\". // global r\nparameter a, b is max(1, 2).\nlocal direction is 1."));
         }
 
         [Fact]
