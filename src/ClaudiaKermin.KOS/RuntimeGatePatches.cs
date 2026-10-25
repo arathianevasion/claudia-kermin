@@ -81,6 +81,9 @@ namespace ClaudiaKermin.KOS
             // SetWarp and SetRate, not the tiny SetWarpRate they share, which Mono may inline past a patch.
             Patch(harmony, Method(typeof(TimeWarpValue), "SetWarp", typeof(ScalarIntValue)), nameof(WarpIndexPrefix));
             Patch(harmony, Method(typeof(TimeWarpValue), "SetRate", typeof(ScalarValue)), nameof(WarpRatePrefix));
+            // KUNIVERSE:TIMEWARP:WARPTO and the WARPTO function both end here, in KSP's TimeWarp.WarpTo, which
+            // warps in the mode already set (issue #133): physics mode would bypass the gates above.
+            Patch(harmony, Method(typeof(TimeWarpValue), "WarpTo", typeof(ScalarValue)), nameof(WarpToPrefix));
 
             // Archive writes and deletes (copypath, movepath, deletepath, log, writejson, compile...).
             Patch(harmony, Method(typeof(Archive), "CreateFile", typeof(VolumePath)), nameof(ArchiveWritePrefix));
@@ -163,6 +166,13 @@ namespace ClaudiaKermin.KOS
             if (shared == null || desiredRate == null) return;
             // Any rate above 1x is a warp; kOS rounds it to a rate index (ties go up), so don't second-guess which.
             GateWarp(shared, desiredRate.GetDoubleValue() > 1 ? 1 : 0);
+        }
+
+        private static void WarpToPrefix()
+        {
+            var shared = Gated();
+            if (shared != null)
+                Gate(shared, new GateCall { Target = GateTarget.TimeWarp, Suffix = "WARPTO", PhysicsWarpMode = TimeWarp.WarpMode == TimeWarp.Modes.LOW });
         }
 
         private static void GateWarp(SharedObjects shared, int index)
