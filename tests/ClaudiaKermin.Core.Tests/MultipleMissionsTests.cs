@@ -511,6 +511,26 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ADeletedMissionIsNotBroughtBackByAnOlderSaveThatStillHoldsItsState()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief.sse", "mission-plan.sse");
+            var mission = Control(transport);
+            var run = ToRunning(mission);
+            var first = mission.View.MissionId;
+            var older = mission.ExportStates();
+            mission.Send(new KosRunEnded(Finished(), run.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+            mission.Send(new DeleteMission(first));
+
+            var later = Control(Replies());
+            later.Send(new MissionsRestored(_save.Path, older));
+            Assert.Equal(MissionStage.None, later.View.Stage);
+            Assert.Empty(later.View.Missions);
+            Assert.Empty(later.ExportStates());
+            Assert.False(Directory.Exists(FolderOf(first)));
+        }
+
+        [Fact]
         public void ASaveFromBeforeSeveralMissionsReadsAsTheActiveOne()
         {
             var state = new MissionSaveState { Id = "m1", Goal = "x" };

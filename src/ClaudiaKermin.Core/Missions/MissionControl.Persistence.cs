@@ -266,18 +266,20 @@ namespace ClaudiaKermin.Core.Missions
             _snapshot = null;
             _active = null;
 
-            var restore = Choose(restored.States, existing);
+            // A Mission deleted from the history may still have a state in an older save: without its folder it is gone, not restored.
+            var states = restored.States.Where(s => Directory.Exists(MissionFolder.For(_saveDirectory, s.Id))).ToList();
+            var restore = Choose(states, existing);
             // The save's other unfinished Missions wait Paused at the boundary they were parked at; finished ones are history, kept in their folders.
             _parked.Clear();
             _switch = null;
             _historyVersion++;
-            foreach (var state in restored.States)
+            foreach (var state in states)
                 if ((restore == null || state.Id != restore.State.Id) && !Finished(state.Stage) && _parked.All(p => p.Id != state.Id))
                 {
                     state.Active = false;
                     _parked.Add(state);
                 }
-            if (restore == null && restored.States.Count == 0)
+            if (restore == null && states.Count == 0)
             {
                 // A Mission folder this save knows nothing of, if there is one the player hasn't finished with.
                 var info = MissionStore.NewestResumable(_saveDirectory);
