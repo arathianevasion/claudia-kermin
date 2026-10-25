@@ -18,7 +18,7 @@ namespace ClaudiaKermin.KOS
     /// from the main menu or Space Center runs a Building Block test unattended in real physics: it
     /// writes the test's scenario save and reference craft (from <c>tests/blocks/&lt;test&gt;/</c>,
     /// shipped inside this DLL) to <c>saves/claudia_block_tests/</c>, loads that save, spawns the craft
-    /// into the test's orbit, flies to it, runs the test's Mission Script bundled with the Core Library
+    /// into the test's orbit (or rolls it out to the launch pad), flies to it, runs the test's Mission Script bundled with the Core Library
     /// through the kOS bridge, and judges its Script Result against the contract ranges in
     /// <c>test.cfg</c>. Results go to KSP.log and <c>saves/claudia_block_tests/block-tests.log</c>.
     /// A developer tool: Claude is never involved, so it sits outside the Approval rule of ADR 0002.
@@ -162,10 +162,21 @@ namespace ClaudiaKermin.KOS
             }
         }
 
-        /// <summary>Once the Space Center has settled, spawn the craft into orbit and fly to it.</summary>
+        /// <summary>Once the Space Center has settled, spawn the craft into orbit and fly to it, or roll it out to the launch pad.</summary>
         private void InSpaceCenter()
         {
             if (HighLogic.LoadedScene != GameScenes.SPACECENTER || ++_sceneFrames < 30) return;
+            if (_spec.Start == BlockTestStart.LaunchPad)
+            {
+                // The vessel's id isn't known until Flight builds it; InFlight takes the active vessel.
+                _vesselId = 0;
+                Note("rolling '" + _spec.Craft + "' out to the launch pad; going to Flight");
+                _stage = Stage.WaitingForFlight;
+                _sceneFrames = 0;
+                FlightDriver.StartWithNewLaunch(Path.Combine(SaveDirectory, "Ships/VAB/" + _spec.Craft),
+                    HighLogic.CurrentGame.flagURL, "LaunchPad", new VesselCrewManifest());
+                return;
+            }
             var proto = CraftSpawner.IntoOrbit(Path.Combine(SaveDirectory, "Ships/VAB/" + _spec.Craft),
                 _spec.OrbitBody, _spec.OrbitAltitude, _spec.OrbitInclination);
             _vesselId = proto.persistentId;
@@ -182,7 +193,7 @@ namespace ClaudiaKermin.KOS
             if (HighLogic.LoadedScene != GameScenes.FLIGHT || !FlightGlobals.ready) return;
             var vessel = FlightGlobals.ActiveVessel;
             var bridge = KosBridge.Instance;
-            if (vessel == null || vessel.persistentId != _vesselId || vessel.packed || bridge == null || ++_sceneFrames < 60) return;
+            if (vessel == null || (_vesselId != 0 && vessel.persistentId != _vesselId) || vessel.packed || bridge == null || ++_sceneFrames < 60) return;
 
             var processor = KosBridge.ChooseProcessor(vessel, null);
             if (!processor.HasValue)

@@ -113,6 +113,14 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ATestStartsInOrbitUnlessItSaysTheLaunchPad()
+        {
+            Assert.Equal(BlockTestStart.Orbit, BlockTestSpec.Parse("exec_node", Spec).Start);
+            Assert.Equal(BlockTestStart.LaunchPad, BlockTestSpec.Parse("t", "block = launch\nstart = launchpad\n").Start);
+            Assert.Throws<System.FormatException>(() => BlockTestSpec.Parse("t", "block = launch\nstart = runway\n"));
+        }
+
+        [Fact]
         public void AMalformedCheckIsRejectedWhenTheSpecIsRead()
         {
             Assert.Throws<System.FormatException>(() => BlockTestSpec.Parse("t", "block = exec_node\ncheck = residual about 0.5\n"));
