@@ -81,40 +81,6 @@ namespace ClaudiaKermin.Core.Missions
         }
     }
 
-    /// <summary>Time as the player reads it: the Kerbin calendar (6 h days, 426 days a year).</summary>
-    public static class MissionClock
-    {
-        private const double Minute = 60, Hour = 3600, Day = 6 * Hour, Year = 426 * Day;
-
-        /// <summary>A UT as "Y1 D12 03:20:00" (year and day count from 1).</summary>
-        public static string Ut(double ut)
-        {
-            if (ut < 0) ut = 0;
-            var year = (long)(ut / Year);
-            var rest = ut - year * Year;
-            var day = (long)(rest / Day);
-            rest -= day * Day;
-            var hour = (long)(rest / Hour);
-            rest -= hour * Hour;
-            var minute = (long)(rest / Minute);
-            var second = (long)(rest - minute * Minute);
-            return string.Format(CultureInfo.InvariantCulture, "Y{0} D{1} {2:00}:{3:00}:{4:00}", year + 1, day + 1, hour, minute, second);
-        }
-
-        /// <summary>A span as "2 d 3 h" or "45 min" (days are Kerbin days of 6 h).</summary>
-        public static string Span(double seconds)
-        {
-            if (seconds < 0) seconds = 0;
-            var days = (long)(seconds / Day);
-            var hours = (long)((seconds - days * Day) / Hour);
-            var minutes = (long)((seconds - days * Day - hours * Hour) / Minute);
-            if (days > 0) return days.ToString(CultureInfo.InvariantCulture) + " d " + hours.ToString(CultureInfo.InvariantCulture) + " h";
-            if (hours > 0) return hours.ToString(CultureInfo.InvariantCulture) + " h " + minutes.ToString(CultureInfo.InvariantCulture) + " min";
-            if (minutes > 0) return minutes.ToString(CultureInfo.InvariantCulture) + " min";
-            return ((long)seconds).ToString(CultureInfo.InvariantCulture) + " s";
-        }
-    }
-
     // ---- Player actions ----
 
     /// <summary>

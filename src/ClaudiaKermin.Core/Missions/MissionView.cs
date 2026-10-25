@@ -235,8 +235,10 @@ namespace ClaudiaKermin.Core.Missions
     {
         public bool HasDueTime;
         public double Ut;
-        /// <summary>The Due Time as the player reads it, e.g. "Y1 D12 03:20:00".</summary>
+        /// <summary>The Due Time from now, e.g. "in 2d 3h 10m".</summary>
         public string Text = "";
+        /// <summary>The Kerbin date it lands on, e.g. "Year 1, Day 12, 03:20": the hover text of <see cref="Text"/>.</summary>
+        public string Date = "";
         /// <summary>Seconds still to go; 0 once reached.</summary>
         public double SecondsLeft;
         public bool Reached;

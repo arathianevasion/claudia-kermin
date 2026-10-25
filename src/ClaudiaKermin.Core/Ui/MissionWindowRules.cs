@@ -547,7 +547,7 @@ namespace ClaudiaKermin.Core.Ui
                     if (!replies.Contains(QuickReply.Approve)) return "";
                     if (view.Stage == MissionStage.AwaitingPlanApproval) return "Approve the Mission Plan?";
                     if (!view.DueTime.HasDueTime) return "Sequence Plan awaiting Approval";
-                    return "Sequence Plan awaiting Approval · Due Time " + (view.DueTime.Reached ? "reached" : "in " + MissionClock.Span(view.DueTime.SecondsLeft));
+                    return "Sequence Plan awaiting Approval · Due Time " + (view.DueTime.Reached ? "reached" : "in " + KerbinTime.Span(view.DueTime.SecondsLeft));
                 case MissionStage.Paused:
                     if (replies.Contains(QuickReply.RaiseCap)) return "Paused at the Spending Cap";
                     return view.PauseReason.Length > 0 ? "Paused: " + view.PauseReason : "Paused";

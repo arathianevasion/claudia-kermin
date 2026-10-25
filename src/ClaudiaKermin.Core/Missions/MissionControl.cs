@@ -11,6 +11,7 @@ using System.Threading;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Config;
 using ClaudiaKermin.Core.Kos;
+using ClaudiaKermin.Core.Ui;
 
 namespace ClaudiaKermin.Core.Missions
 {
@@ -477,8 +478,8 @@ namespace ClaudiaKermin.Core.Missions
             // The mod never starts a sequence before its Due Time, and never warps there for the player.
             if (plan.DueTimeUt.HasValue && _ut < plan.DueTimeUt.Value)
             {
-                Note(LogKind.Notice, "Not before the Due Time, " + MissionClock.Ut(plan.DueTimeUt.Value) + " (in "
-                    + MissionClock.Span(plan.DueTimeUt.Value - _ut) + "). Warp to Due Time, then Approve.");
+                Note(LogKind.Notice, "Not before the Due Time, " + KerbinTime.Date(plan.DueTimeUt.Value) + " (in "
+                    + KerbinTime.Span(plan.DueTimeUt.Value - _ut) + "). Warp to Due Time, then Approve.");
                 return;
             }
             if (WindowMissed(plan) && !TakeNextWindow(mission, plan)) return;
@@ -595,11 +596,11 @@ namespace ClaudiaKermin.Core.Missions
             var limit = plan.ExpectedDeltaV * (1 + _config.LateApprovalToleranceDvPercent / 100.0);
             if (next.HasValue && next.Value <= limit)
             {
-                Note(LogKind.Notice, "Late Approval: the planned window closed at " + MissionClock.Ut(plan.WindowClosesUt.Value)
+                Note(LogKind.Notice, "Late Approval: the planned window closed at " + KerbinTime.Date(plan.WindowClosesUt.Value)
                     + "; the script takes the next window (" + MetresPerSecond(next.Value) + " against " + MetresPerSecond(plan.ExpectedDeltaV) + " planned).");
                 return true;
             }
-            Note(LogKind.Notice, "Late Approval: the planned window closed at " + MissionClock.Ut(plan.WindowClosesUt.Value)
+            Note(LogKind.Notice, "Late Approval: the planned window closed at " + KerbinTime.Date(plan.WindowClosesUt.Value)
                 + " and the next one" + (next.HasValue ? " costs " + MetresPerSecond(next.Value) + " against " + MetresPerSecond(plan.ExpectedDeltaV) + " planned" : " is not known")
                 + ", so Claudia is re-planning.");
             if (plan.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
@@ -627,7 +628,7 @@ namespace ClaudiaKermin.Core.Missions
             if (mission == null || mission.DueNotified || !due.HasValue || _ut < due.Value) return;
             mission.DueNotified = true;
             var text = _ut - due.Value > 60
-                ? "Due Time missed by " + MissionClock.Span(_ut - due.Value) + ": " + mission.PendingSequence.Name + " waits for your Approval."
+                ? "Due Time missed by " + KerbinTime.Span(_ut - due.Value) + ": " + mission.PendingSequence.Name + " waits for your Approval."
                 : "Due Time reached: " + mission.PendingSequence.Name + " is ready for your Approval.";
             _commands.Add(new DropWarp());
             Note(LogKind.Notice, text);
@@ -1257,11 +1258,11 @@ namespace ClaudiaKermin.Core.Missions
                 var s = plan.Sequences[i];
                 body.Append(i + 1).Append(". ").Append(s.Name).Append(s.Manual ? " [you fly this by hand]" : "").Append(": ").Append(s.Intent)
                     .Append(" (").Append(MetresPerSecond(s.DeltaV)).Append(", ").Append(s.Timing);
-                if (s.DueTimeUt.HasValue) body.Append("; Due Time ").Append(MissionClock.Ut(s.DueTimeUt.Value));
+                if (s.DueTimeUt.HasValue) body.Append("; Due Time ").Append(KerbinTime.Date(s.DueTimeUt.Value));
                 body.Append(")\n");
             }
             body.Append("Total ").Append(MetresPerSecond(plan.TotalDeltaV)).Append(", ").Append(plan.ExpectedDuration).Append('.');
-            if (plan.MissionTimeSeconds.HasValue) body.Append(" Total Mission time ").Append(MissionClock.Span(plan.MissionTimeSeconds.Value)).Append('.');
+            if (plan.MissionTimeSeconds.HasValue) body.Append(" Total Mission time ").Append(KerbinTime.Span(plan.MissionTimeSeconds.Value)).Append('.');
             AddCard(mission, LogKind.MissionPlan, "Mission Plan", body.ToString(), plan.Why);
             NeedsPlayer("Claudia has a Mission Plan for your Approval.");
         }
@@ -1281,8 +1282,8 @@ namespace ClaudiaKermin.Core.Missions
             var body = new StringBuilder();
             if (plan.DueTimeUt.HasValue)
             {
-                body.Append("Due Time: ").Append(MissionClock.Ut(plan.DueTimeUt.Value)).Append(plan.DueTimeUt.Value > _ut
-                    ? " (in " + MissionClock.Span(plan.DueTimeUt.Value - _ut) + ")" : " (reached)").Append('\n');
+                body.Append("Due Time: ").Append(KerbinTime.Date(plan.DueTimeUt.Value)).Append(plan.DueTimeUt.Value > _ut
+                    ? " (in " + KerbinTime.Span(plan.DueTimeUt.Value - _ut) + ")" : " (reached)").Append('\n');
                 // A stock Alarm Clock alarm at the Due Time; the mod itself never warps between sequences.
                 if (plan.DueTimeUt.Value > _ut) _commands.Add(new SetDueTimeAlarm(mission.Id, plan.DueTimeUt.Value, "Claudia: " + plan.Name));
                 mission.DueNotified = plan.DueTimeUt.Value <= _ut;
@@ -1636,7 +1637,8 @@ namespace ClaudiaKermin.Core.Missions
                     {
                         HasDueTime = true,
                         Ut = due.Value,
-                        Text = MissionClock.Ut(due.Value),
+                        Text = KerbinTime.FromNow(due.Value, _ut),
+                        Date = KerbinTime.Date(due.Value),
                         SecondsLeft = Math.Max(0, due.Value - _ut),
                         Reached = _ut >= due.Value,
                         VesselName = mission.VesselName,
