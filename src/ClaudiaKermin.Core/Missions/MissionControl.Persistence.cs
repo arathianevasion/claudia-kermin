@@ -170,6 +170,22 @@ namespace ClaudiaKermin.Core.Missions
             }
         }
 
+        /// <summary>A notice of the mod's own that a rebuilt Mission log must show again (an approval, a script's start or end): in the log now, and in the event log for a load.</summary>
+        private void Notice(string text)
+        {
+            var entry = Note(LogKind.Notice, text);
+            var mission = _mission;
+            if (mission == null || mission.Folder == null) return;
+            try
+            {
+                MissionStore.AppendNotice(mission.Folder, _ut, mission.Conversation.Count, entry.Text);
+            }
+            catch (Exception e) when (IsFileError(e))
+            {
+                // Best effort, like the rest of the event log.
+            }
+        }
+
         /// <summary>What the next turn says to Claudia about a load goes inside that turn's notice, after the user message.</summary>
         private static void ApplyLoadNotice(Mission mission, Turn turn)
         {
@@ -396,7 +412,7 @@ namespace ClaudiaKermin.Core.Missions
                 foreach (var m in transcript.Messages)
                     if (m.Effort != null) mission.Effort = m.Effort;
                 // The Mission log is the transcript's again: the player's words, Claudia's lines, the plan cards and the Debriefs.
-                mission.Log.AddRange(MissionLogRebuild.From(transcript, state.Goal, mission.VesselName, _config));
+                mission.Log.AddRange(MissionLogRebuild.From(transcript, state.Goal, mission.VesselName, _config, MissionStore.ReadNotices(mission.Folder)));
                 mission.LogRebuilt = transcript.Messages.Count > 0;
             }
             else

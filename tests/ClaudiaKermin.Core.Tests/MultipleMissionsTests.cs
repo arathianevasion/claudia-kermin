@@ -148,6 +148,54 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("Debrief: Nominal", later.View.Log.Last(e => e.Kind == LogKind.Debrief).Title);
         }
 
+        /// <summary>The log with the approval and script notices kept in place, as the player reads it.</summary>
+        private static List<string> WithModNotices(IEnumerable<LogEntry> log)
+        {
+            return log.Where(e => e.Kind != LogKind.Notice || e.Text.Contains("approved") || e.Text.StartsWith("The script ended"))
+                .Select(e => e.Kind + "|" + e.Title + "|" + e.Text).ToList();
+        }
+
+        [Fact]
+        public void AfterALoadTheModsApprovalAndScriptNoticesAreBackInOrderAmongTheTranscriptLines()
+        {
+            var mission = Control(Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief.sse"));
+            var run = ToRunning(mission);
+            mission.Send(new KosRunEnded(Finished(), run.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+
+            var before = WithModNotices(mission.View.Log);
+            Assert.Contains(before, l => l == "Notice||Mission Plan approved.");
+            Assert.Contains(before, l => l == "Notice||Sequence Plan approved: the mod is starting the script.");
+            Assert.Contains(before, l => l.StartsWith("Notice||The script ended"));
+            var saved = mission.ExportStates();
+
+            mission.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Equal(before, WithModNotices(mission.View.Log));
+
+            var later = Control(Replies());
+            later.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Equal(before, WithModNotices(later.View.Log));
+            var order = later.View.Log.Select(e => e.Kind == LogKind.Notice ? e.Text : e.Kind.ToString()).ToList();
+            Assert.True(order.IndexOf("Mission Plan approved.") < order.IndexOf(LogKind.SequencePlan.ToString()));
+            Assert.True(order.IndexOf("Sequence Plan approved: the mod is starting the script.") > order.IndexOf(LogKind.SequencePlan.ToString()));
+            Assert.True(order.FindIndex(t => t.StartsWith("The script ended")) < order.IndexOf(LogKind.Debrief.ToString()));
+        }
+
+        [Fact]
+        public void AFolderWithNoNoticesInItsEventLogStillRebuildsTheLog()
+        {
+            var mission = Control(Replies("mission-plan.sse", "mission-sequence-plan.sse"));
+            ToSequencePlan(mission);
+            var saved = mission.ExportStates();
+            var events = Path.Combine(FolderOf(saved.Single().Id), "events.jsonl");
+            File.WriteAllLines(events, File.ReadAllLines(events).Where(l => !l.Contains("\"notice\"")));
+
+            var later = Control(Replies());
+            later.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Single(later.View.Log, e => e.Kind == LogKind.SequencePlan);
+            Assert.DoesNotContain(later.View.Log, e => e.Text == "Mission Plan approved.");
+        }
+
         [Fact]
         public void APlanAwaitingApprovalIsInTheRebuiltLogOnce()
         {
