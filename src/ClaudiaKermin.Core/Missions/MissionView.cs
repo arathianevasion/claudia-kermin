@@ -336,6 +336,11 @@ namespace ClaudiaKermin.Core.Missions
         public bool CanEndMission;
         /// <summary>Leaving Flight now would cut off a running sequence, so the adapter asks the player first.</summary>
         public bool LeavingFlightNeedsConfirmation;
+        /// <summary>
+        /// The Mission's craft (its vessel id) once it is in Flight, "" before and after: the adapter reports how far the player is
+        /// from it, when it unloads, and asks first before a far switch that would unload it while Running.
+        /// </summary>
+        public string CraftVesselId = "";
         /// <summary>The controls locked now because Claudia has the craft; <see cref="ControlLocks.None"/> in Manual Control and when no Mission is active.</summary>
         public ControlLocks Locks;
         /// <summary>

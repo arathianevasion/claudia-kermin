@@ -96,7 +96,7 @@ namespace ClaudiaKermin.Core.Missions
             get
             {
                 var mission = _mission;
-                if (MissionOver || _scene != GameScene.Flight || mission.DeferredRestore != null) return false;
+                if (MissionOver || !CraftActive || mission.DeferredRestore != null) return false;
                 if (mission.Stage == MissionStage.Running) return true;
                 var waiting = (mission.Stage == MissionStage.AwaitingPlanApproval && !mission.Declined)
                     || mission.Stage == MissionStage.AwaitingSequenceApproval || mission.Stage == MissionStage.UnsafeScript;
@@ -104,15 +104,38 @@ namespace ClaudiaKermin.Core.Missions
             }
         }
 
-        /// <summary>The controls locked while Claudia has the craft: none in Manual Control, warp too while Running.</summary>
+        /// <summary>
+        /// The controls locked while Claudia has the craft, and only on the craft (#129): none in another vessel, in Manual
+        /// Control, before Flight or while Paused (unless a script still flies), warp too while Running.
+        /// </summary>
         private ControlLocks LocksNow()
         {
             var mission = _mission;
-            if (MissionOver || _scene != GameScene.Flight || mission.Stage == MissionStage.ManualControl) return ControlLocks.None;
+            if (MissionOver || !CraftActive || !ClaudiaHolds(mission)) return ControlLocks.None;
             var locks = IsRunning(mission) ? ControlLocks.Craft | ControlLocks.Warp : ControlLocks.Craft;
             // With no link and no other crew nobody could really fly it: the flight controls stay locked too.
             if (_snapshot != null && !ManualAllowed) locks |= ControlLocks.Attitude;
             return locks;
+        }
+
+        /// <summary>The stages in which Claudia has the craft: from her first plan until the Mission ends, but not in Manual Control or Paused with nothing running.</summary>
+        private static bool ClaudiaHolds(Mission mission)
+        {
+            switch (mission.Stage)
+            {
+                case MissionStage.Planning:
+                case MissionStage.Sequencing:
+                case MissionStage.AwaitingPlanApproval:
+                case MissionStage.AwaitingSequenceApproval:
+                case MissionStage.UnsafeScript:
+                case MissionStage.Running:
+                case MissionStage.Debriefing:
+                    return true;
+                case MissionStage.Paused:
+                    return IsRunning(mission);
+                default:
+                    return false;
+            }
         }
 
         // ---- Taking the craft ----
@@ -242,6 +265,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             if (mission == null || !mission.AwaitingApproval || mission.Declined || mission.InFlight) return "";
             if (mission.Stage == MissionStage.AwaitingSequenceApproval && mission.PendingSequence == null) return "";
+            if (mission.Recheck.Length > 0) return mission.Recheck;
             return PlanDrift.Exceeded(mission.PlanBaseline, _snapshot, _config.ReplanTolerancePercent);
         }
 

@@ -58,6 +58,10 @@ namespace ClaudiaKermin.Core.Missions
         public string HandBackMessage = "";
         /// <summary>Why the mod stopped the last run ("blocked: …", "timed out") until its Debrief; null otherwise.</summary>
         public string StopReason;
+        /// <summary>Why the running sequence was interrupted (a far switch, say) until its Debrief; null otherwise.</summary>
+        public string InterruptReason;
+        /// <summary>The original kOS processor's part, which a remote Mission's craft follows; null before Flight or in older saves.</summary>
+        public uint? ProcessorPartId;
         public MissionPlan MissionPlan;
         /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
         public SequencePlan SequencePlan;
@@ -98,6 +102,8 @@ namespace ClaudiaKermin.Core.Missions
                 { "handBackMessage", HandBackMessage },
             };
             if (StopReason != null) values["stopReason"] = StopReason;
+            if (InterruptReason != null) values["interruptReason"] = InterruptReason;
+            if (ProcessorPartId.HasValue) values["processorPartId"] = ProcessorPartId.Value.ToString(CultureInfo.InvariantCulture);
             foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
             for (var i = 0; i < UnsafeProblems.Count; i++) values[UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture)] = UnsafeProblems[i];
             if (MissionPlan != null || SequencePlan != null) values["plans"] = WritePlans(MissionPlan, SequencePlan);
@@ -143,6 +149,10 @@ namespace ClaudiaKermin.Core.Missions
             state.SequenceCounted = Get(values, "sequenceCounted") == "true";
             string stopReason;
             if (values.TryGetValue("stopReason", out stopReason)) state.StopReason = stopReason;
+            string interruptReason;
+            if (values.TryGetValue("interruptReason", out interruptReason)) state.InterruptReason = interruptReason;
+            uint processor;
+            if (uint.TryParse(Get(values, "processorPartId"), NumberStyles.Integer, CultureInfo.InvariantCulture, out processor)) state.ProcessorPartId = processor;
             foreach (var pair in values)
                 if (pair.Key.StartsWith(SettingPrefix, StringComparison.Ordinal)) state.Settings[pair.Key.Substring(SettingPrefix.Length)] = pair.Value;
             // In order: unsafeProblem.0, unsafeProblem.1, ... up to the first one missing.

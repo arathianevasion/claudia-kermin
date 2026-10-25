@@ -110,9 +110,15 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is KosBlockStarted) BlockStarted((KosBlockStarted)input);
             else if (input is KosBlockEnded) BlockEnded((KosBlockEnded)input);
             else if (input is AbortSequence) AbortPressed();
+            else if (input is VesselsSeen) VesselsChanged(((VesselsSeen)input).Vessels);
+            else if (input is VesselsDocked) Docked((VesselsDocked)input);
+            else if (input is CraftRange) RangeSeen((CraftRange)input);
+            else if (input is VesselUnloaded) Unloaded(((VesselUnloaded)input).VesselId);
+            else if (input is FarSwitchConfirmed) FarSwitched(((FarSwitchConfirmed)input).VesselName);
             CheckDue();
             CheckRunaway();
             CheckTelemetry();
+            CheckFlyable();
             TryPlan();
             TryOwed();
             Rebuild();
@@ -356,8 +362,7 @@ namespace ClaudiaKermin.Core.Missions
             var mission = _mission;
             if (mission == null || mission.Stage != MissionStage.WaitingForFlight) return;
             if (_scene != GameScene.Flight || _snapshot == null) return;
-            mission.VesselId = _snapshot.Craft.VesselId;
-            mission.VesselName = _snapshot.Craft.Name;
+            NoteCraft(mission, _snapshot);
             mission.Stage = MissionStage.Planning;
             Begin(new Turn
             {
@@ -382,6 +387,7 @@ namespace ClaudiaKermin.Core.Missions
             if (saveDirectory == _saveDirectory) return;
             _saveDirectory = saveDirectory;
             _snapshot = null;
+            _active = null;
             _pendingStart = null;
             _startRefusal = "";
             _craftCheck.Reset();
@@ -392,10 +398,12 @@ namespace ClaudiaKermin.Core.Missions
 
         private void Snapshot(GameSnapshot snapshot)
         {
+            if (snapshot.Ut > _ut) _ut = snapshot.Ut;
+            // Another vessel than the craft: the Mission keeps the craft's last facts (MissionControl.Vessels.cs).
+            if (!TakeSnapshot(snapshot)) return;
             var previous = _snapshot;
             _snapshot = snapshot;
             _craftCheck.OnSnapshot(snapshot);
-            if (snapshot.Ut > _ut) _ut = snapshot.Ut;
             LinkSeen(previous, snapshot);
             var mission = _mission;
             if (mission == null) return;
@@ -624,7 +632,7 @@ namespace ClaudiaKermin.Core.Missions
                 var mission = _mission;
                 var due = PendingDueTime;
                 if (mission == null || !due.HasValue || _ut < due.Value || mission.VesselId.Length == 0) return false;
-                return _scene != GameScene.Flight || (_snapshot != null && _snapshot.Craft.VesselId != mission.VesselId);
+                return _scene != GameScene.Flight || ElsewhereInFlight;
             }
         }
 
@@ -706,6 +714,7 @@ namespace ClaudiaKermin.Core.Missions
             EndLive(mission);
             var outcome = StoppedOutcome(mission, ended.Outcome);
             Note(LogKind.Notice, "The script ended: " + outcome.Summary + ".");
+            if (DebriefOnReturn(mission, outcome)) return;
             var turn = new Turn
             {
                 Purpose = Purpose.Debrief,
@@ -834,6 +843,7 @@ namespace ClaudiaKermin.Core.Missions
                 Pause(mission, "Add your Anthropic API key in the Claudia Kermin settings, then Retry.");
                 return;
             }
+            if (HeldForCraft(mission, turn)) return;
 
             if (turn.Messages == null)
             {
@@ -1207,6 +1217,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             mission.Plan = plan;
             mission.PlanBaseline = _snapshot;
+            PlanOffered(mission);
             mission.Stage = MissionStage.AwaitingPlanApproval;
             if (plan.Sequences.Count == 0)
             {
@@ -1239,6 +1250,7 @@ namespace ClaudiaKermin.Core.Missions
             }
             mission.PendingSequence = plan;
             mission.PlanBaseline = _snapshot;
+            PlanOffered(mission);
             mission.Stage = MissionStage.AwaitingSequenceApproval;
             var body = new StringBuilder();
             if (plan.DueTimeUt.HasValue)
@@ -1356,6 +1368,13 @@ namespace ClaudiaKermin.Core.Missions
             if (mission == null || mission.Stage != MissionStage.Paused || mission.InFlight) return;
             // A retired model is only left by Choose model (or End Mission).
             if (mission.PauseCause == PauseCause.ModelGone) return;
+            var refusal = ResumeRefusal(mission);
+            if (refusal.Length > 0)
+            {
+                Note(LogKind.Notice, refusal);
+                return;
+            }
+            mission.PausedCannotFly = false;
             CraftCheckOnResume(mission);
             if (mission.EvaScience.Length > 0)
             {
@@ -1587,6 +1606,7 @@ namespace ClaudiaKermin.Core.Missions
                     && mission.Stage != MissionStage.WaitingForFlight && mission.Stage != MissionStage.Lost;
 
                 view.LeavingFlightNeedsConfirmation = IsRunning(mission);
+                view.CraftVesselId = FollowsCraft(mission) ? mission.VesselId : "";
                 view.Settings = MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config));
                 view.CanEditSettings = CanEditSettings;
                 var due = PendingDueTime;
@@ -1621,7 +1641,7 @@ namespace ClaudiaKermin.Core.Missions
                 else if (mission.Stage == MissionStage.Paused && !mission.InFlight)
                     view.QuickReplies = PausedReplies(mission) ?? (mission.PausedForCap
                         ? new List<QuickReply> { QuickReply.RaiseCap, QuickReply.EndMission }
-                        : new List<QuickReply> { mission.AwaitingResume || mission.EvaScience.Length > 0 ? QuickReply.Resume : QuickReply.Retry });
+                        : new List<QuickReply> { mission.AwaitingResume || mission.EvaScience.Length > 0 || mission.PausedCannotFly ? QuickReply.Resume : QuickReply.Retry });
                 else if (mission.Stage == MissionStage.UnsafeScript && !mission.InFlight)
                     view.QuickReplies = new List<QuickReply> { QuickReply.Retry, QuickReply.RetryWithNote, QuickReply.Replan };
                 else if (mission.Declined && !mission.InFlight)

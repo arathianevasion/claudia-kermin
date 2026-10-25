@@ -30,6 +30,7 @@ namespace ClaudiaKermin.Adapter
         private float _nextUt;
 
         private readonly ManualInputWatcher _inputWatcher = new ManualInputWatcher();
+        private readonly VesselWatch _vessels;
 
         /// <summary>The Mission window's body, drawn by the floating window or, docked in Flight, under the Capcom strip.</summary>
         public readonly MissionPanel Panel;
@@ -133,6 +134,7 @@ namespace ClaudiaKermin.Adapter
             Window = new MissionWindow(Panel);
             Strip = new CapcomStrip(Panel) { TabClicked = () => PanelOpen = !PanelOpen };
             GameEvents.onKerbalStatusChange.Add(OnKerbalStatusChange);
+            _vessels = new VesselWatch(Send);
             // Building Block progress, for the strip and the log, with no Claude call behind it.
             ScriptRunner.BlockReported = (runId, block, result) =>
                 Send(result == null ? (MissionInput)new KosBlockStarted(block, runId) : new KosBlockEnded(block, result, runId));
@@ -175,12 +177,15 @@ namespace ClaudiaKermin.Adapter
                 Send(new UtAdvanced(Planetarium.GetUniversalTime()));
             }
 
+            // Which vessel is the craft after a switch, docking or EVA: the core decides from what the game shows.
+            _vessels.Update(scene == GameScene.Flight && FlightGlobals.ready);
             var vessel = scene == GameScene.Flight ? FlightGlobals.ActiveVessel : null;
             if (vessel != null && Time.realtimeSinceStartup >= _nextSnapshot)
             {
                 _nextSnapshot = Time.realtimeSinceStartup + SnapshotSeconds;
                 Send(new UtAdvanced(Planetarium.GetUniversalTime()));
                 Send(SnapshotReader.Read(vessel));
+                _vessels.Range(_mission.View.CraftVesselId);
             }
             else if (scene == GameScene.Editor && EditorLogic.fetch != null && Time.realtimeSinceStartup >= _nextSnapshot)
             {
