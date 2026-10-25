@@ -70,6 +70,14 @@ namespace ClaudiaKermin.Core.Missions
         public string ChildVessels = "";
         /// <summary>The ids of vessels the mod saw leave the craft (a JSON array written by MissionControl); "" for none.</summary>
         public string LeftTheCraft = "";
+        /// <summary>The craft docked since the pending plan was offered (what with), so Approve is Re-plan; "" for none.</summary>
+        public string Recheck = "";
+        /// <summary>Requests sent when the craft docked; a plan from a later request was made with the facts after docking.</summary>
+        public int RecheckSince;
+        /// <summary>What Claudia is still to be told on her next turn (the docking notice, say); "" for none.</summary>
+        public string PendingNotice = "";
+        /// <summary>Paused because Claudia could fly no vessel, so Resume is offered.</summary>
+        public bool PausedCannotFly;
         public MissionPlan MissionPlan;
         /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
         public SequencePlan SequencePlan;
@@ -116,6 +124,10 @@ namespace ClaudiaKermin.Core.Missions
             if (ProcessorPartId.HasValue) values["processorPartId"] = ProcessorPartId.Value.ToString(CultureInfo.InvariantCulture);
             if (ChildVessels.Length > 0) values["childVessels"] = ChildVessels;
             if (LeftTheCraft.Length > 0) values["leftTheCraft"] = LeftTheCraft;
+            if (Recheck.Length > 0) values["recheck"] = Recheck;
+            if (RecheckSince != 0) values["recheckSince"] = RecheckSince.ToString(CultureInfo.InvariantCulture);
+            if (PendingNotice.Length > 0) values["pendingNotice"] = PendingNotice;
+            if (PausedCannotFly) values["pausedCannotFly"] = "true";
             foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
             for (var i = 0; i < UnsafeProblems.Count; i++) values[UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture)] = UnsafeProblems[i];
             if (MissionPlan != null || SequencePlan != null) values["plans"] = WritePlans(MissionPlan, SequencePlan);
@@ -156,6 +168,9 @@ namespace ClaudiaKermin.Core.Missions
                 ReducedGoal = Get(values, "reducedGoal"),
                 ChildVessels = Get(values, "childVessels"),
                 LeftTheCraft = Get(values, "leftTheCraft"),
+                Recheck = Get(values, "recheck"),
+                PendingNotice = Get(values, "pendingNotice"),
+                PausedCannotFly = Get(values, "pausedCannotFly") == "true",
             };
             decimal cap;
             if (decimal.TryParse(Get(values, "spendingCap"), NumberStyles.Number, CultureInfo.InvariantCulture, out cap)) state.SpendingCap = cap;
@@ -163,6 +178,7 @@ namespace ClaudiaKermin.Core.Missions
             if (int.TryParse(Get(values, "transcriptMarker"), NumberStyles.Integer, CultureInfo.InvariantCulture, out number)) state.TranscriptMarker = number;
             if (int.TryParse(Get(values, "sequencesProposed"), NumberStyles.Integer, CultureInfo.InvariantCulture, out number)) state.SequencesProposed = number;
             state.SequenceCounted = Get(values, "sequenceCounted") == "true";
+            if (int.TryParse(Get(values, "recheckSince"), NumberStyles.Integer, CultureInfo.InvariantCulture, out number)) state.RecheckSince = number;
             string stopReason;
             if (values.TryGetValue("stopReason", out stopReason)) state.StopReason = stopReason;
             string interruptReason;

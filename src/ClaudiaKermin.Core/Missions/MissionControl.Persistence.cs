@@ -82,6 +82,10 @@ namespace ClaudiaKermin.Core.Missions
                 ReducedGoal = mission.ReducedGoal,
                 ChildVessels = ChildVesselsJson(mission),
                 LeftTheCraft = LeftTheCraftJson(mission),
+                Recheck = mission.Recheck,
+                RecheckSince = mission.RecheckSince,
+                PendingNotice = mission.LoadNotice ?? "",
+                PausedCannotFly = mission.PausedCannotFly,
                 MissionPlan = mission.Plan,
                 SequencePlan = mission.PendingSequence,
             };
@@ -380,6 +384,8 @@ namespace ClaudiaKermin.Core.Missions
                 ProcessorPartId = state.ProcessorPartId,
                 InterruptReason = state.InterruptReason,
                 ReducedGoal = state.ReducedGoal ?? "",
+                Recheck = state.Recheck ?? "",
+                RecheckSince = state.RecheckSince,
             };
             foreach (var setting in state.Settings) mission.Settings[setting.Key] = setting.Value;
             RestoreChildVessels(mission, state.ChildVessels);
@@ -451,7 +457,12 @@ namespace ClaudiaKermin.Core.Missions
                 Event(mission, "restored", "an earlier save was loaded; the conversation (" + count + " messages) was kept past the save's marker (" + state.TranscriptMarker + ")");
             }
 
+            // What Claudia was still to be told when the save was made (a docking, say) is still owed, ahead of what the load adds.
+            if (!string.IsNullOrEmpty(state.PendingNotice))
+                mission.LoadNotice = state.PendingNotice + (mission.LoadNotice != null ? "\n\n" + mission.LoadNotice : "");
+
             mission.PauseReason = state.PauseReason;
+            mission.PausedCannotFly = state.PausedCannotFly && state.Stage == MissionStage.Paused;
             // A run the mod stopped itself is Debriefed with its reason even after a load (no timer: no run survives one).
             mission.StopReason = state.StopReason;
             mission.RunDeadlineUt = null;
