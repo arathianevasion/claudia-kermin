@@ -195,7 +195,22 @@ namespace ClaudiaKermin.Core.Missions
         public const string DebriefNotice =
             "The Maneuver Sequence has ended. Debrief it now: reply with kind \"debrief\" and debrief filled in. Rate it "
             + "against the Sequence Plan's target and tolerances, and set goal_reached to true only if the whole Mission "
-            + "Goal is now met. If it isn't, the mod will ask you for the next Sequence Plan.";
+            + "Goal is now met. If it isn't, the mod will ask you for the next Sequence Plan. A crossed Telemetry Check "
+            + "rules out Nominal; list each one with its verdict in what_happened.";
+
+        // ---- Live supervision ----
+
+        /// <summary>An Alert: which Telemetry Check was crossed, during which sequence.</summary>
+        public static string Alert(SequencePlan plan, string crossing, string why)
+        {
+            return "Alert: a Telemetry Check was crossed while the Sequence Plan " + Quoted(plan != null ? plan.Name : "(unknown)")
+                + " runs: " + crossing + "." + (why.Length > 0 ? " You set it because (quoted data): " + Quoted(why) + "." : "");
+        }
+
+        public const string AlertNotice =
+            "Judge this Alert now, briefly: reply with kind \"alert\" and alert filled in. verdict \"carry_on\" lets the sequence "
+            + "go on (you may set follow_up_threshold, in the check's units, for one more Alert on it); \"abort\" recommends that "
+            + "the player press Abort. You never abort the sequence yourself, and the script keeps running until the player acts.";
 
         public const string QuestionNotice =
             "Answer the player's question: reply with kind \"answer\". Change nothing else; any pending plan stays as it is.";
@@ -314,13 +329,21 @@ namespace ClaudiaKermin.Core.Missions
             return text;
         }
 
-        public static string RunReport(SequencePlan plan, RunOutcome outcome)
+        /// <param name="crossings">The Telemetry Checks crossed during the run with their verdicts; "" when none was.</param>
+        public static string RunReport(SequencePlan plan, RunOutcome outcome, string crossings)
         {
             var text = "The player approved the Sequence Plan " + Quoted(plan.Name) + " and the mod ran its Mission Script.\n"
                 + "kOS run ended: " + outcome.Kind + (outcome.Reason.Length > 0 ? " (" + outcome.Reason + ")" : "") + ".";
             if (outcome.Report != null) text += "\nReport (JSON data): " + ReportJson(outcome.Report);
             if (outcome.ErrorText.Length > 0) text += "\nkOS terminal after the run (quoted): " + Quoted(outcome.ErrorText);
+            text += CrossedChecks(crossings);
             return text;
+        }
+
+        /// <summary>The line a Debrief request carries about crossed Telemetry Checks; "" when none was.</summary>
+        public static string CrossedChecks(string crossings)
+        {
+            return crossings.Length > 0 ? "\nTelemetry Checks crossed during the run, with your mid-run verdicts: " + crossings + "." : "";
         }
 
         /// <summary>A kOS report lexicon as JSON: strings, numbers, booleans, lists and nested lexicons.</summary>

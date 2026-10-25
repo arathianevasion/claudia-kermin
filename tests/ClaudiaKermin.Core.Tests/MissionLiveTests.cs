@@ -70,7 +70,111 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(MissionStage.Debriefing, mission.View.Stage);
         }
 
+        [Fact]
+        public void ALateApprovalReplanThatWouldPassTheCapWaitsWithoutPausing()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan-priced.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan-priced.sse"), "\"window_closes_ut\":1300,\"late_window_dv\":null,"));
+            var mission = Control(transport);
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 1.20m, Sonnet));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+
+            mission.Send(new UtAdvanced(1400));
+            mission.Send(new Approve());
+
+            Assert.Equal(MissionStage.Sequencing, mission.View.Stage);
+            Assert.Contains("Spending Cap", mission.View.CapWait);
+            Assert.Equal(new[] { QuickReply.RaiseCap }, mission.View.QuickReplies);
+            Assert.Equal(2, transport.Requests.Count);
+        }
+
+        // ---- Questions while Running ----
+
+        [Fact]
+        public void QuestionsWhileRunningGoOneAtATimeWithACompactCraftSnapshotAndNeverTouchTheRun()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                ScriptedResponse.Fixture("mission-answer.sse"),
+                ScriptedResponse.Fixture("mission-answer.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission, 10m);
+            Assert.True(mission.View.CanType);
+            Assert.Contains(QuickReply.AskQuestion, mission.View.QuickReplies);
+
+            mission.Send(new AskQuestion("How long will it take?"));
+            Assert.True(mission.View.Busy);
+            // Asked while the first is out: it waits its turn.
+            mission.Send(new AskQuestion("And the fuel?"));
+            Assert.Equal(2, mission.View.Log.Count(e => e.Kind == LogKind.Player && e.Text.EndsWith("?")));
+
+            DrainUntil(mission, v => !v.Busy && transport.Requests.Count == 4);
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+            Assert.DoesNotContain(mission.TakeCommands(), c => c is AbortScript || c is StartScript);
+
+            var first = LastUserText(transport.Requests[2]);
+            Assert.Contains("How long will it take?", first);
+            Assert.Contains("Craft now (compact, JSON data):", first);
+            Assert.Contains("\"situation\":\"PRELAUNCH\"", first);
+            Assert.Contains("\"run_elapsed_s\"", first);
+            // Compact: not the whole Game Snapshot.
+            Assert.DoesNotContain("Game Snapshot (JSON data", first);
+            Assert.DoesNotContain("\"parts\"", first);
+            Assert.Contains("And the fuel?", LastUserText(transport.Requests[3]));
+            Assert.Equal("low", Effort(transport.Requests[3]));
+
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            Assert.Equal(MissionStage.Debriefing, mission.View.Stage);
+        }
+
+        [Fact]
+        public void AQuestionClaudiaCantAnswerWhileRunningLeavesTheMissionRunning()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                ScriptedResponse.Fixture("refusal.sse"),
+                ScriptedResponse.Fixture("mission-debrief.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission, 10m);
+
+            mission.Send(new AskQuestion("Why?"));
+            DrainUntil(mission, v => !v.Busy);
+
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+            Assert.Equal("", mission.View.PauseReason);
+            Assert.Contains(mission.View.Log, e => e.Kind == LogKind.Notice && e.Text.StartsWith("Claudia couldn't answer that"));
+
+            // The run's Debrief is the next request, as usual.
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+            Assert.Equal(4, transport.Requests.Count);
+        }
+
         // ---- Helpers ----
+
+        /// <summary>A Sequence Plan stream with extra fields put in before its <c>"script"</c>.</summary>
+        private static ScriptedResponse WithSequenceFields(ScriptedResponse response, string fields)
+        {
+            var text = Encoding.UTF8.GetString(response.Body);
+            var escaped = fields.Replace("\"", "\\\"");
+            var replaced = text.Replace("\\\"script\\\":", escaped + "\\\"script\\\":");
+            Assert.NotEqual(text, replaced);
+            return new ScriptedResponse { Body = Encoding.UTF8.GetBytes(replaced), ChunkSize = 4096 };
+        }
+
+        /// <summary>The effort in force for a request: the last effort-only system message in its conversation.</summary>
+        private static string Effort(HttpRequestSpec request)
+        {
+            using (var doc = JsonDocument.Parse(request.Body))
+                return doc.RootElement.GetProperty("messages").EnumerateArray()
+                    .Where(m => m.GetProperty("role").GetString() == "system" && m.TryGetProperty("output_config", out _))
+                    .Select(m => m.GetProperty("output_config").GetProperty("effort").GetString()).Last();
+        }
 
         private MissionControl Control(StreamingFakeTransport transport, PlayerConfig config = null)
         {

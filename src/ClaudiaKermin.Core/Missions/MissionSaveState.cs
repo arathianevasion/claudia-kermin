@@ -239,6 +239,11 @@ namespace ClaudiaKermin.Core.Missions
                     .Field("target", sequence.Target).Field("tolerances", sequence.Tolerances)
                     .Field("expected_delta_v", sequence.ExpectedDeltaV).Field("expected_duration_s", sequence.ExpectedDurationSeconds);
                 Strings(json, "abort_conditions", sequence.AbortConditions);
+                json.Name("telemetry_checks").BeginArray();
+                foreach (var check in sequence.TelemetryChecks)
+                    json.BeginObject().Field("quantity", TelemetryCheck.Key(check.Quantity)).Field("resource", check.Resource)
+                        .Field("direction", check.Below ? "below" : "above").Field("threshold", check.Threshold).Field("why", check.Why).EndObject();
+                json.EndArray();
                 Strings(json, "risks", sequence.Risks);
                 json.Field("custom_script", sequence.CustomScript).Field("custom_script_reason", sequence.CustomScriptReason)
                     .Field("script", sequence.Script).Field("due_time_ut", sequence.DueTimeUt)

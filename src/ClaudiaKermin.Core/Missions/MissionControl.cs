@@ -106,8 +106,12 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is GoToVessel) GoToRequested();
             else if (input is ClaudiaKilled) Killed();
             else if (input is KosRunBlocked) RunBlocked((KosRunBlocked)input);
+            else if (input is KosBlockStarted) BlockStarted((KosBlockStarted)input);
+            else if (input is KosBlockEnded) BlockEnded((KosBlockEnded)input);
+            else if (input is AbortSequence) AbortPressed();
             CheckDue();
             CheckRunaway();
+            CheckTelemetry();
             TryPlan();
             TryOwed();
             Rebuild();
@@ -125,6 +129,8 @@ namespace ClaudiaKermin.Core.Missions
             Question,
             /// <summary>Mission Settings were edited: a revised Mission Plan is asked for.</summary>
             Settings,
+            /// <summary>A Telemetry Check was crossed while Running: Claudia judges it (MissionControl.Live.cs).</summary>
+            Alert,
         }
 
         /// <summary>
@@ -146,6 +152,8 @@ namespace ClaudiaKermin.Core.Missions
             /// while Running always waits.
             /// </summary>
             public bool Waits;
+            /// <summary>An Alert's crossed Telemetry Check, which its verdict is recorded on; null for other turns.</summary>
+            public Crossing Crossing;
             public List<Message> Messages;
             public CancellationTokenSource Cancel;
         }
@@ -183,11 +191,9 @@ namespace ClaudiaKermin.Core.Missions
             public string Activity = "";
             public string PauseReason = "";
             public string ConfirmPrompt;
-            /// <summary>In flight, or failed and waiting for Retry.</summary>
+            /// <summary>In flight, or failed and waiting for Retry, or the waiting call; the turns after it are in <c>Queue</c> (MissionControl.Live.cs).</summary>
             public Turn Pending;
             public bool InFlight;
-            /// <summary>A turn that must follow the one in flight (a Debrief after a mid-run question).</summary>
-            public Turn Next;
             public IRawStreamDump Dump;
             /// <summary>The Mission Settings, by name; persisted with the Mission; EditSettings changes them (MissionSettingsValues reads and writes them).</summary>
             public readonly Dictionary<string, string> Settings = new Dictionary<string, string>();
@@ -479,6 +485,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.RunningProcessor = processor.Value;
             mission.RunId = ++_lastRunId;
             StartRunawayTimer(mission, plan);
+            StartLive(mission, plan);
             _commands.Add(new StartScript(processor.Value, "claudia:" + mission.Id + ":" + plan.Name, bundle, mission.RunId.Value));
         }
 
@@ -516,15 +523,20 @@ namespace ClaudiaKermin.Core.Missions
         {
             text = (text ?? "").Trim();
             var mission = _mission;
-            if (text.Length == 0 || mission == null || mission.InFlight || mission.Stage == MissionStage.Paused
+            if (text.Length == 0 || mission == null || mission.Stage == MissionStage.Paused
                 || mission.Stage == MissionStage.WaitingForFlight || mission.Stage == MissionStage.Lost) return;
+            // While Running a question queues behind the request in hand; otherwise one at a time.
+            var running = mission.Stage == MissionStage.Running;
+            if (mission.InFlight && !running) return;
             Note(LogKind.Player, text);
             Begin(new Turn
             {
                 Purpose = Purpose.Question,
                 Effort = "low",
-                UserText = "The player asks (quoted data): " + MissionPrompts.Quoted(text),
+                // While Running it carries a compact craft snapshot; it never touches the run.
+                UserText = "The player asks (quoted data): " + MissionPrompts.Quoted(text) + (running ? "\n" + CompactFacts(mission) : ""),
                 Notice = MissionPrompts.QuestionNotice,
+                Waits = running,
             });
         }
 
@@ -675,6 +687,7 @@ namespace ClaudiaKermin.Core.Missions
             if (mission == null || mission.Stage != MissionStage.Running || mission.RunId != refused.RunId) return;
             mission.RunId = null;
             mission.RunDeadlineUt = null;
+            EndLive(mission);
             mission.Stage = MissionStage.AwaitingSequenceApproval;
             Note(LogKind.Notice, "The script didn't start: " + reason);
         }
@@ -688,19 +701,19 @@ namespace ClaudiaKermin.Core.Missions
             if (!running || mission.RunId != ended.RunId) return;
             mission.RunId = null;
             mission.RunDeadlineUt = null;
+            EndLive(mission);
             var outcome = StoppedOutcome(mission, ended.Outcome);
             Note(LogKind.Notice, "The script ended: " + outcome.Summary + ".");
             var turn = new Turn
             {
                 Purpose = Purpose.Debrief,
                 Effort = "high",
-                UserText = MissionPrompts.RunReport(mission.PendingSequence, outcome) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
+                UserText = MissionPrompts.RunReport(mission.PendingSequence, outcome, CrossingsText(mission)) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.DebriefNotice,
             };
             if (mission.Stage == MissionStage.Paused) mission.StageBeforePause = MissionStage.Debriefing;
             else mission.Stage = MissionStage.Debriefing;
-            if (mission.Pending != null) mission.Next = turn;
-            else Begin(turn);
+            Begin(turn);
         }
 
         // ---- Lost ----
@@ -723,7 +736,8 @@ namespace ClaudiaKermin.Core.Missions
                 _commands.Add(new AbortScript(mission.RunningProcessor.Value, "Claudia was killed aboard"));
             mission.RunId = null;
             mission.RunningProcessor = null;
-            mission.Next = null;
+            mission.Queue.Clear();
+            EndLive(mission);
             mission.Owed = Owed.None;
             mission.OwedOutcome = null;
             mission.ConfirmPrompt = null;
@@ -803,7 +817,7 @@ namespace ClaudiaKermin.Core.Missions
             var mission = _mission;
             if (mission.Pending != null)
             {
-                mission.Next = turn;
+                Enqueue(mission, turn);
                 return;
             }
             mission.Pending = turn;
@@ -938,30 +952,30 @@ namespace ClaudiaKermin.Core.Missions
         {
             if (result == null)
             {
-                Pause(mission, "Something went wrong getting Claudia's reply; see KSP.log.");
+                Failed(mission, turn, "Something went wrong getting Claudia's reply; see KSP.log.");
                 return;
             }
             if (result.Status != StreamStatus.Completed)
             {
-                Pause(mission, Describe(result));
+                Failed(mission, turn, Describe(result));
                 return;
             }
             var message = result.Message;
             if (message.StopReason == StopReason.Refusal)
             {
-                Pause(mission, "Claudia declined to answer that. Retry, or try again later.");
+                Failed(mission, turn, "Claudia declined to answer that. Retry, or try again later.");
                 return;
             }
             if (message.StopReason == StopReason.MaxTokens)
             {
-                Pause(mission, "Claudia's reply was cut short.");
+                Failed(mission, turn, "Claudia's reply was cut short.");
                 return;
             }
             var reply = MissionReply.Parse(message.Text);
             var problem = reply == null ? "it wasn't in the Mission reply format" : Mismatch(turn.Purpose, reply);
             if (problem != null)
             {
-                Pause(mission, "Claudia's reply didn't fit: " + problem + ".");
+                Failed(mission, turn, "Claudia's reply didn't fit: " + problem + ".");
                 return;
             }
 
@@ -978,12 +992,32 @@ namespace ClaudiaKermin.Core.Missions
 
             Apply(mission, turn, reply, message.FallbackRan ? message.Model ?? "" : "");
 
-            if (mission.Pending == null && mission.Next != null && mission.Stage != MissionStage.Paused)
+            SendQueued(mission);
+        }
+
+        /// <summary>Nothing is in hand: the next queued turn goes, unless the Mission is Paused.</summary>
+        private void SendQueued(Mission mission)
+        {
+            if (mission.Pending != null || mission.Stage == MissionStage.Paused) return;
+            var next = TakeQueued(mission);
+            if (next != null) Begin(next);
+        }
+
+        /// <summary>
+        /// A reply that can't be used. A question asked while Running never affects the run: it is dropped with a notice
+        /// and the next queued turn goes. Anything else Pauses the Mission for Retry (story 134).
+        /// </summary>
+        private void Failed(Mission mission, Turn turn, string reason)
+        {
+            if (turn.Purpose != Purpose.Question || !IsRunning(mission) || mission.Stage == MissionStage.Paused)
             {
-                var next = mission.Next;
-                mission.Next = null;
-                Begin(next);
+                Pause(mission, reason);
+                return;
             }
+            mission.Pending = null;
+            ClearUnanswered(mission);
+            Note(LogKind.Notice, "Claudia couldn't answer that: " + reason + " The sequence carries on.");
+            SendQueued(mission);
         }
 
         private static string Mismatch(Purpose purpose, MissionReply reply)
@@ -999,6 +1033,8 @@ namespace ClaudiaKermin.Core.Missions
                     return reply.SequencePlan == null || (reply.SequencePlan.Script.Trim().Length == 0 && !reply.SequencePlan.Manual) ? "no Sequence Plan with a script" : null;
                 case Purpose.Debrief:
                     return reply.Debrief == null ? "no Debrief" : null;
+                case Purpose.Alert:
+                    return reply.Alert == null ? "no Alert verdict" : null;
                 default:
                     return null;
             }
@@ -1019,7 +1055,10 @@ namespace ClaudiaKermin.Core.Missions
                 }
             }
 
-            mission.LatestLine = SayWithWhy(turn.Purpose, reply);
+            // An Alert's verdict is her line, prefixed with the check: a carry on leaves just this log line.
+            mission.LatestLine = turn.Purpose == Purpose.Alert
+                ? "Alert, " + turn.Crossing.Check.Name() + ": " + (reply.Alert.Abort ? "Abort recommended. " : "carry on. ") + reply.Say
+                : SayWithWhy(turn.Purpose, reply);
             Note(LogKind.Claudia, mission.LatestLine).AnsweredBy = answeredBy;
 
             switch (turn.Purpose)
@@ -1042,6 +1081,9 @@ namespace ClaudiaKermin.Core.Missions
                     break;
                 case Purpose.Change:
                     Revised(mission, reply, planPending);
+                    break;
+                case Purpose.Alert:
+                    Alerted(mission, turn, reply);
                     break;
             }
         }
@@ -1213,6 +1255,10 @@ namespace ClaudiaKermin.Core.Missions
                 .Append("Expected: ").Append(MetresPerSecond(plan.ExpectedDeltaV)).Append(", ")
                 .Append(plan.ExpectedDurationSeconds.ToString("0", CultureInfo.InvariantCulture)).Append(" s");
             if (plan.AbortConditions.Count > 0) body.Append("\nAbort if: ").Append(string.Join("; ", plan.AbortConditions.ToArray()));
+            // The checks the run will watch, as Approval shows them: Claudia's, then the config defaults filling the gaps.
+            if (!plan.Manual)
+                body.Append("\nTelemetry Checks: ").Append(string.Join("; ", TelemetryDefaults.Fill(plan, _config)
+                    .Select(c => c.Describe() + (c.Default ? " (default)" : "")).ToArray()));
             if (plan.Risks.Count > 0) body.Append("\nRisks: ").Append(string.Join("; ", plan.Risks.ToArray()));
             var card = AddCard(mission, LogKind.SequencePlan, plan.Name, body.ToString(), plan.Why);
             card.Script = plan.Script;
@@ -1230,8 +1276,17 @@ namespace ClaudiaKermin.Core.Missions
             mission.ManualPlanned = false;
             mission.ManualOrigin = "";
             mission.HandBackMessage = "";
+            // Any crossed Telemetry Check rules out Nominal (story 107), whatever Claudia rated it; the card lists them all.
+            var crossings = CrossingsText(mission);
+            mission.Crossings.Clear();
+            if (crossings.Length > 0 && debrief.Outcome == "Nominal")
+            {
+                debrief.Outcome = "Off-Nominal";
+                Note(LogKind.Notice, "Rated Off-Nominal, not Nominal: a Telemetry Check was crossed during the run.");
+            }
             var entry = AddCard(mission, LogKind.Debrief, "Debrief: " + debrief.Outcome + TakeStopReason(mission),
-                debrief.WhatHappened + (debrief.Next.Length > 0 ? "\nNext: " + debrief.Next : ""), debrief.Why);
+                debrief.WhatHappened + (debrief.Next.Length > 0 ? "\nNext: " + debrief.Next : "")
+                + (crossings.Length > 0 ? "\nTelemetry Checks crossed: " + crossings : ""), debrief.Why);
             entry.Outcome = debrief.Outcome;
             NeedsPlayer("Claudia's Debrief: " + debrief.Outcome + ".");
             if (debrief.GoalReached)
@@ -1315,12 +1370,7 @@ namespace ClaudiaKermin.Core.Missions
                 if (mission.Pending.Messages == null) ApplyLoadNotice(mission, mission.Pending);
                 Send(mission, mission.Pending);
             }
-            else if (mission.Next != null)
-            {
-                var next = mission.Next;
-                mission.Next = null;
-                Begin(next);
-            }
+            else SendQueued(mission);
         }
 
         private void WriteTranscript(Mission mission)
@@ -1555,9 +1605,14 @@ namespace ClaudiaKermin.Core.Missions
                 }
                 view.CurrentSequence = Math.Min(mission.SequencesProposed, view.PlanSequences.Count) - 1;
                 if (mission.Stage == MissionStage.Running && mission.PendingSequence != null)
+                {
                     view.RunStatus = "Running: " + mission.PendingSequence.Name;
-                view.CanType = !mission.InFlight && mission.Stage != MissionStage.Paused && mission.Stage != MissionStage.WaitingForFlight
-                    && mission.Stage != MissionStage.Lost;
+                    view.RunProgress = Progress(mission);
+                }
+                view.AbortRecommended = mission.AbortRecommendation;
+                // While Running a question queues behind whatever is in hand, so typing stays open.
+                view.CanType = (!mission.InFlight || mission.Stage == MissionStage.Running) && mission.Stage != MissionStage.Paused
+                    && mission.Stage != MissionStage.WaitingForFlight && mission.Stage != MissionStage.Lost;
 
                 view.LeavingFlightNeedsConfirmation = IsRunning(mission);
                 view.Settings = MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config));
@@ -1584,7 +1639,12 @@ namespace ClaudiaKermin.Core.Missions
                     view.QuickReplies = new List<QuickReply> { QuickReply.HandBack };
                 else if (mission.Stage == MissionStage.Running)
                 {
-                    if (CanTakeManual && ManualAllowed) view.QuickReplies = new List<QuickReply> { QuickReply.ManualControl };
+                    // Abort once the run can still be stopped (not after the mod already stopped it).
+                    var replies = new List<QuickReply>();
+                    if (mission.RunId.HasValue && mission.StopReason == null) replies.Add(QuickReply.Abort);
+                    replies.Add(QuickReply.AskQuestion);
+                    if (CanTakeManual && ManualAllowed) replies.Add(QuickReply.ManualControl);
+                    view.QuickReplies = replies;
                 }
                 else if (mission.Stage == MissionStage.Paused && !mission.InFlight)
                     view.QuickReplies = mission.PausedForCap

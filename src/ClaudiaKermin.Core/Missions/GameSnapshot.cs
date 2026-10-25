@@ -77,6 +77,10 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The body the craft is at.</summary>
         public string Body = "";
         public SnapshotCraft Craft = new SnapshotCraft();
+        /// <summary>Altitude above sea level, m; 0 in the editor.</summary>
+        public double Altitude;
+        /// <summary>Vertical speed, m/s, negative going down; 0 in the editor.</summary>
+        public double VerticalSpeed;
         /// <summary>Null when there is no orbit to read (e.g. in the editor).</summary>
         public SnapshotOrbit Orbit;
         public List<SnapshotResource> Resources = new List<SnapshotResource>();
@@ -162,7 +166,9 @@ namespace ClaudiaKermin.Core.Missions
                 .Field("dv_sim", DeltaVSimulator)
                 .Field("claudia_standing", ClaudiaStanding)
                 .Field("commnet", CommNetEnabled)
-                .Field("link", HasLink);
+                .Field("link", HasLink)
+                .Field("altitude", Altitude)
+                .Field("vertical_speed", VerticalSpeed);
             json.Name("craft").BeginObject()
                 .Field("name", Craft.Name)
                 .Field("mass_t", Craft.MassTonnes)
@@ -251,6 +257,8 @@ namespace ClaudiaKermin.Core.Missions
                 ClaudiaStanding = JsonNode.Str(root["claudia_standing"]) ?? "",
                 CommNetEnabled = JsonNode.Bool(root["commnet"]) ?? true,
                 HasLink = JsonNode.Bool(root["link"]) ?? true,
+                Altitude = JsonNode.Double(root["altitude"]) ?? 0,
+                VerticalSpeed = JsonNode.Double(root["vertical_speed"]) ?? 0,
             };
             var craft = root["craft"];
             if (craft != null)

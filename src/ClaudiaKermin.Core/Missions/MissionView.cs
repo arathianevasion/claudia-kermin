@@ -86,6 +86,8 @@ namespace ClaudiaKermin.Core.Missions
         ManualControl,
         /// <summary>In Manual Control: give the craft back to Claudia (the reply box sends an optional message with it).</summary>
         HandBack,
+        /// <summary>Running: stop the script and make the craft safe; the mod records that the player aborted it.</summary>
+        Abort,
     }
 
     public enum LogKind
@@ -232,6 +234,30 @@ namespace ClaudiaKermin.Core.Missions
         public string VesselName = "";
     }
 
+    /// <summary>A running Maneuver Sequence's progress for the Capcom strip: the current Building Block, time and the key numbers.</summary>
+    public sealed class RunProgressView
+    {
+        public bool Running;
+        public string Sequence = "";
+        /// <summary>The Building Block running now, as the kOS bridge reported it; "" between blocks or when the script reports none.</summary>
+        public string Block = "";
+        public int BlocksDone;
+        public double ElapsedSeconds;
+        /// <summary>The Sequence Plan's expected duration, s; 0 when it gave none.</summary>
+        public double PlannedSeconds;
+        /// <summary>Elapsed over planned, 0 to 1; 0 when there is no planned duration.</summary>
+        public double Fraction;
+        /// <summary>Delta-v used so far, m/s; null when the stock simulator gives none.</summary>
+        public double? DeltaVUsed;
+        public double PlannedDeltaV;
+        public double? Apoapsis;
+        public double? Periapsis;
+        public double? Altitude;
+        public double? ElectricChargePercent;
+        /// <summary>Telemetry Checks crossed so far in this run.</summary>
+        public int ChecksCrossed;
+    }
+
     /// <summary>
     /// Everything the adapter's windows draw: the start form, the Capcom strip and the log drawer.
     /// Rebuilt by <see cref="MissionControl"/> after every input and response; <see cref="Version"/> goes up each time.
@@ -275,6 +301,13 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>While Running, what is running; "" otherwise.</summary>
         public string RunStatus = "";
+        /// <summary>While Running, the live progress the Capcom strip shows (no Claude call); <see cref="RunProgressView.Running"/> is false otherwise.</summary>
+        public RunProgressView RunProgress = new RunProgressView();
+        /// <summary>
+        /// Claudia judged a crossed Telemetry Check and recommends Abort: her reason, with warp dropped to 1x and the Abort
+        /// button offered; "" otherwise. She never aborts herself.
+        /// </summary>
+        public string AbortRecommended = "";
         /// <summary>Why the Mission is Paused; "" otherwise.</summary>
         public string PauseReason = "";
         /// <summary>The Mission is flown remotely: Claudia is at Mission Control, not aboard.</summary>

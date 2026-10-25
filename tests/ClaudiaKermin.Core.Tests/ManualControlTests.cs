@@ -155,7 +155,7 @@ namespace ClaudiaKermin.Core.Tests
             var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
             var mission = Control(transport);
             ToRunning(mission);
-            Assert.Equal(new[] { QuickReply.ManualControl }, mission.View.QuickReplies);
+            Assert.Equal(new[] { QuickReply.Abort, QuickReply.AskQuestion, QuickReply.ManualControl }, mission.View.QuickReplies);
 
             mission.Send(new TakeManualControl());
 
@@ -276,7 +276,7 @@ namespace ClaudiaKermin.Core.Tests
 
             // Steady for the grace: offered again.
             mission.Send(Pad(s => s.Ut = ut + 7));
-            Assert.Equal(new[] { QuickReply.ManualControl }, mission.View.QuickReplies);
+            Assert.Equal(new[] { QuickReply.Abort, QuickReply.AskQuestion, QuickReply.ManualControl }, mission.View.QuickReplies);
             Assert.Equal("", mission.View.ManualControlUnavailable);
             mission.Send(new TakeManualControl());
             Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
@@ -294,7 +294,7 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(Pad(s => { pilot(s); s.HasLink = false; s.Ut = ut + 1; }));
             mission.Send(Pad(s => { pilot(s); s.Ut = ut + 2; }));
 
-            Assert.Equal(new[] { QuickReply.ManualControl }, mission.View.QuickReplies);
+            Assert.Equal(new[] { QuickReply.Abort, QuickReply.AskQuestion, QuickReply.ManualControl }, mission.View.QuickReplies);
             Assert.Equal("", mission.View.ManualControlUnavailable);
         }
 

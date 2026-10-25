@@ -44,6 +44,8 @@ namespace ClaudiaKermin.Core.Missions
         public double ExpectedDurationSeconds;
         public List<string> AbortConditions = new List<string>();
         public List<string> Risks = new List<string>();
+        /// <summary>Claudia's Telemetry Checks; the config defaults fill the gaps when the sequence runs (<see cref="TelemetryDefaults"/>).</summary>
+        public List<TelemetryCheck> TelemetryChecks = new List<TelemetryCheck>();
         /// <summary>The Mission Script (kerboscript). The mod runs it only after Approval.</summary>
         public string Script = "";
         /// <summary>The script is a Custom Script: written from scratch instead of from Building Blocks.</summary>
@@ -72,6 +74,15 @@ namespace ClaudiaKermin.Core.Missions
         public string EvaScience = "";
     }
 
+    /// <summary>Claudia's verdict on an Alert: let the sequence carry on, or recommend the player Abort (she never aborts herself).</summary>
+    public sealed class AlertVerdict
+    {
+        public bool Abort;
+        public string Why = "";
+        /// <summary>After a carry on: one more threshold for the same check, in its units; null for none.</summary>
+        public double? FollowUpThreshold;
+    }
+
     /// <summary>How Claude classified a reply the player typed while a plan awaited Approval.</summary>
     public enum ReplyIntent
     {
@@ -93,6 +104,7 @@ namespace ClaudiaKermin.Core.Missions
         public const string SequencePlanKind = "sequence_plan";
         public const string DebriefKind = "debrief";
         public const string AnswerKind = "answer";
+        public const string AlertKind = "alert";
 
         public string Kind = "";
         /// <summary>Claudia's line for the Capcom strip.</summary>
@@ -101,6 +113,7 @@ namespace ClaudiaKermin.Core.Missions
         public MissionPlan MissionPlan;
         public SequencePlan SequencePlan;
         public Debrief Debrief;
+        public AlertVerdict Alert;
 
         /// <summary>
         /// The structured-output schema. Short "why" fields only: the mod never asks for written-out
@@ -108,9 +121,9 @@ namespace ClaudiaKermin.Core.Missions
         /// </summary>
         public const string SchemaJson =
             "{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"kind\",\"say\",\"reply_intent\",\"mission_plan\",\"sequence_plan\",\"debrief\"],"
+            + "\"required\":[\"kind\",\"say\",\"reply_intent\",\"mission_plan\",\"sequence_plan\",\"debrief\",\"alert\"],"
             + "\"properties\":{"
-            + "\"kind\":{\"type\":\"string\",\"enum\":[\"mission_plan\",\"sequence_plan\",\"debrief\",\"answer\"]},"
+            + "\"kind\":{\"type\":\"string\",\"enum\":[\"mission_plan\",\"sequence_plan\",\"debrief\",\"answer\",\"alert\"]},"
             + "\"say\":{\"type\":\"string\",\"description\":\"Your line to the player: concise mission-control voice, key numbers first, one or two sentences.\"},"
             + "\"reply_intent\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"approve\",\"revise\",\"question\",\"unclear\"]},{\"type\":\"null\"}],"
             + "\"description\":\"Only when classifying the player's typed reply to a pending plan; otherwise null.\"},"
@@ -128,7 +141,7 @@ namespace ClaudiaKermin.Core.Missions
             + "\"expected_duration\":{\"type\":\"string\"},"
             + "\"mission_time_s\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"description\":\"Expected total Mission time in seconds, waits between sequences included.\"}}},{\"type\":\"null\"}]},"
             + "\"sequence_plan\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"name\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"risks\",\"custom_script\",\"custom_script_reason\",\"script\",\"due_time_ut\",\"window_closes_ut\",\"late_window_dv\",\"manual\"],"
+            + "\"required\":[\"name\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"telemetry_checks\",\"risks\",\"custom_script\",\"custom_script_reason\",\"script\",\"due_time_ut\",\"window_closes_ut\",\"late_window_dv\",\"manual\"],"
             + "\"properties\":{"
             + "\"name\":{\"type\":\"string\"},\"intent\":{\"type\":\"string\"},"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
@@ -136,6 +149,15 @@ namespace ClaudiaKermin.Core.Missions
             + "\"expected_delta_v\":{\"type\":\"number\",\"description\":\"m/s\"},"
             + "\"expected_duration_s\":{\"type\":\"number\",\"description\":\"Seconds of game time from start to report, waits included; the mod stops a script still running at 300% of it.\"},"
             + "\"abort_conditions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},"
+            + "\"telemetry_checks\":{\"type\":\"array\",\"description\":\"What the mod watches while the sequence runs; crossing one sends you an Alert. "
+            + "Units: delta_v_used, delta_v_left and vertical_speed m/s; duration s since the start; apoapsis, periapsis and altitude m; inclination degrees; "
+            + "resource percent of capacity; fuel_margin percent of delta-v left over what the Mission Plan still needs. Config defaults fill any quantity you leave out.\","
+            + "\"items\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"quantity\",\"resource\",\"direction\",\"threshold\",\"why\"],\"properties\":{"
+            + "\"quantity\":{\"type\":\"string\",\"enum\":[\"delta_v_used\",\"delta_v_left\",\"duration\",\"apoapsis\",\"periapsis\",\"inclination\",\"altitude\",\"vertical_speed\",\"resource\",\"fuel_margin\"]},"
+            + "\"resource\":{\"type\":\"string\",\"description\":\"The resource name for quantity resource, e.g. ElectricCharge; otherwise empty.\"},"
+            + "\"direction\":{\"type\":\"string\",\"enum\":[\"above\",\"below\"],\"description\":\"Crossed when the quantity goes above or below the threshold.\"},"
+            + "\"threshold\":{\"type\":\"number\"},"
+            + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"}}}},"
             + "\"risks\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},"
             + "\"custom_script\":{\"type\":\"boolean\",\"description\":\"True when the script is written from scratch instead of from Building Blocks.\"},"
             + "\"custom_script_reason\":{\"type\":\"string\",\"description\":\"For a Custom Script, one short sentence on why no Building Block fits; otherwise empty.\"},"
@@ -151,7 +173,12 @@ namespace ClaudiaKermin.Core.Missions
             + "\"what_happened\":{\"type\":\"string\"},"
             + "\"goal_reached\":{\"type\":\"boolean\"},"
             + "\"next\":{\"type\":\"string\"},"
-            + "\"eva_science\":{\"type\":\"string\",\"description\":\"Science only a Kerbal on EVA can do next, as an instruction to the player; empty if none is needed.\"}}},{\"type\":\"null\"}]}"
+            + "\"eva_science\":{\"type\":\"string\",\"description\":\"Science only a Kerbal on EVA can do next, as an instruction to the player; empty if none is needed.\"}}},{\"type\":\"null\"}]},"
+            + "\"alert\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
+            + "\"required\":[\"verdict\",\"why\",\"follow_up_threshold\"],\"properties\":{"
+            + "\"verdict\":{\"type\":\"string\",\"enum\":[\"carry_on\",\"abort\"],\"description\":\"abort recommends the player Abort; you never abort yourself.\"},"
+            + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
+            + "\"follow_up_threshold\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"description\":\"With carry_on: one more threshold for the same check, in its units, for one more Alert; otherwise null.\"}}},{\"type\":\"null\"}]}"
             + "}}";
 
         /// <summary>The reply in a message's text, or null when it isn't a reply in this schema.</summary>
@@ -216,6 +243,7 @@ namespace ClaudiaKermin.Core.Missions
                     ExpectedDurationSeconds = JsonNode.Double(sequence["expected_duration_s"]) ?? 0,
                     AbortConditions = Strings(sequence["abort_conditions"]),
                     Risks = Strings(sequence["risks"]),
+                    TelemetryChecks = Checks(sequence["telemetry_checks"]),
                     Script = JsonNode.Str(sequence["script"]) ?? "",
                     CustomScript = JsonNode.Bool(sequence["custom_script"]) ?? false,
                     CustomScriptReason = JsonNode.Str(sequence["custom_script_reason"]) ?? "",
@@ -239,7 +267,46 @@ namespace ClaudiaKermin.Core.Missions
                     EvaScience = (JsonNode.Str(debrief["eva_science"]) ?? "").Trim(),
                 };
             }
+
+            var alert = Object(root["alert"]);
+            if (alert != null)
+            {
+                var verdict = JsonNode.Str(alert["verdict"]);
+                if (verdict == "carry_on" || verdict == "abort")
+                {
+                    reply.Alert = new AlertVerdict
+                    {
+                        Abort = verdict == "abort",
+                        Why = JsonNode.Str(alert["why"]) ?? "",
+                        FollowUpThreshold = verdict == "abort" ? null : JsonNode.Double(alert["follow_up_threshold"]),
+                    };
+                }
+            }
             return reply;
+        }
+
+        /// <summary>Claudia's Telemetry Checks; one with an unknown quantity, no threshold or no resource name is left out.</summary>
+        private static List<TelemetryCheck> Checks(JsonNode node)
+        {
+            var checks = new List<TelemetryCheck>();
+            if (node == null) return checks;
+            foreach (var item in node.Items.Where(i => i.Kind == JsonKind.Object))
+            {
+                var quantity = TelemetryCheck.Parse(JsonNode.Str(item["quantity"]) ?? "");
+                var threshold = JsonNode.Double(item["threshold"]);
+                var resource = (JsonNode.Str(item["resource"]) ?? "").Trim();
+                if (!quantity.HasValue || !threshold.HasValue) continue;
+                if (quantity == TelemetryQuantity.Resource && resource.Length == 0) continue;
+                checks.Add(new TelemetryCheck
+                {
+                    Quantity = quantity.Value,
+                    Resource = quantity == TelemetryQuantity.Resource ? resource : "",
+                    Below = JsonNode.Str(item["direction"]) == "below",
+                    Threshold = threshold.Value,
+                    Why = JsonNode.Str(item["why"]) ?? "",
+                });
+            }
+            return checks;
         }
 
         private static JsonNode Object(JsonNode node)

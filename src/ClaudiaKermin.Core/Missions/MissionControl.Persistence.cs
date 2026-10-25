@@ -192,6 +192,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             if (mission.Stage == MissionStage.Paused) mission.StageBeforePause = MissionStage.Debriefing;
             else mission.Stage = MissionStage.Debriefing;
+            EndLive(mission);
             mission.Owed = Owed.Debrief;
             mission.OwedOutcome = new RunOutcome(RunOutcomeKind.Interrupted, null, "", reason, false);
             Note(LogKind.Notice, "The sequence was interrupted (" + reason + "). Claudia will Debrief it when you are back in Flight.");
@@ -213,7 +214,7 @@ namespace ClaudiaKermin.Core.Missions
                 {
                     Purpose = Purpose.Debrief,
                     Effort = "high",
-                    UserText = MissionPrompts.RunReport(plan, StoppedOutcome(mission, mission.OwedOutcome)) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
+                    UserText = MissionPrompts.RunReport(plan, StoppedOutcome(mission, mission.OwedOutcome), CrossingsText(mission)) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
                     Notice = MissionPrompts.DebriefNotice,
                 };
             }
