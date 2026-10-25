@@ -13,7 +13,8 @@ namespace ClaudiaKermin.Core.Config
     /// The player config file (outside the save). Holds <c>debug_tools</c>, the models offered at Mission
     /// start (the first is the default), the default Spending Cap, the compaction trigger, the wait caps and the runaway multiplier; later tickets
     /// add the price table and the rest of the spec's settings. Format: <c>name = value</c> lines,
-    /// <c>#</c> comments. A missing or unreadable value keeps its default.
+    /// <c>#</c> comments. A missing or unreadable value keeps its default. The Mission defaults are written back by
+    /// <see cref="SaveDefaults"/> (the Settings window, in the Space Center).
     /// </summary>
     public sealed class PlayerConfig
     {
@@ -50,6 +51,9 @@ namespace ClaudiaKermin.Core.Config
         /// <summary>Prefilled in the Mission start form: how Claudia trades time against delta-v.</summary>
         public Missions.TimeVersusDeltaV DefaultTimeVersusDeltaV = Missions.TimeVersusDeltaV.Balanced;
 
+        /// <summary>Prefilled in the Mission start form: a remote Mission (Claudia at Mission Control); false is crewed (she flies aboard).</summary>
+        public bool DefaultRemote;
+
         /// <summary>How much more delta-v a late Approval may cost (the next window against the planned one) before Claudia re-plans, in percent.</summary>
         public int LateApprovalToleranceDvPercent = 10;
 
@@ -66,6 +70,9 @@ namespace ClaudiaKermin.Core.Config
         {
             get { return Models[0]; }
         }
+
+        private const string RemoteComment =
+            "# Mission type prefilled in the start form: false is crewed (Claudia flies aboard), true is remote (Claudia at Mission Control).";
 
         private const string DefaultFile =
             "# Claudia Kermin player config\n"
@@ -92,6 +99,8 @@ namespace ClaudiaKermin.Core.Config
             + "# Mission Settings prefilled in the start form: daylight landing (true/false) and time versus delta-v (Fastest, Balanced, MostEfficient).\n"
             + "daylight_landing = true\n"
             + "time_vs_dv = Balanced\n"
+            + RemoteComment + "\n"
+            + "default_remote = false\n"
             + "# How much more delta-v, in percent, a late Approval may cost before Claudia re-plans instead of taking the next window.\n"
             + "late_approval_dv_tolerance = 10\n"
             + "# Seconds attitude, translation or throttle input must be held to start Manual Control.\n"
@@ -182,6 +191,9 @@ namespace ClaudiaKermin.Core.Config
                         Missions.TimeVersusDeltaV priority;
                         if (Enum.TryParse(value, true, out priority)) config.DefaultTimeVersusDeltaV = priority;
                         break;
+                    case "default_remote":
+                        config.DefaultRemote = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+                        break;
                     case "late_approval_dv_tolerance":
                         int lateTolerance;
                         if (int.TryParse(value.TrimEnd('%'), NumberStyles.Integer, CultureInfo.InvariantCulture, out lateTolerance) && lateTolerance >= 0 && lateTolerance <= 200)
@@ -199,6 +211,72 @@ namespace ClaudiaKermin.Core.Config
                 }
             }
             return config;
+        }
+
+        /// <summary>Makes an offered model the default by moving it to the front of <see cref="Models"/>; a model not offered is ignored.</summary>
+        public void SetDefaultModel(string model)
+        {
+            if (!Models.Contains(model)) return;
+            var models = Models.Where(m => m != model).ToList();
+            models.Insert(0, model);
+            Models = models;
+        }
+
+        /// <summary>
+        /// Writes the Mission defaults (the models in order, the Spending Cap, the Mission Settings and the Mission type)
+        /// into the file, rewriting only their lines: every other line, comment and the order stay as they are. A key the
+        /// file lacks is added at the end. Throws <see cref="IOException"/> or <see cref="UnauthorizedAccessException"/>
+        /// when the file can't be written.
+        /// </summary>
+        public void SaveDefaults(string directory)
+        {
+            var path = Path.Combine(directory, FileName);
+            var text = File.Exists(path) ? File.ReadAllText(path) : DefaultFile;
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(path, WithDefaults(text));
+        }
+
+        private string WithDefaults(string text)
+        {
+            var values = new List<KeyValuePair<string, string>>
+            {
+                new KeyValuePair<string, string>("models", string.Join(", ", Models)),
+                new KeyValuePair<string, string>("default_spending_cap", DefaultSpendingCap.ToString(CultureInfo.InvariantCulture)),
+                new KeyValuePair<string, string>("daylight_landing", DefaultDaylightLanding ? "true" : "false"),
+                new KeyValuePair<string, string>("time_vs_dv", DefaultTimeVersusDeltaV.ToString()),
+                new KeyValuePair<string, string>("default_remote", DefaultRemote ? "true" : "false"),
+            };
+            var newline = text.Contains("\r\n") ? "\r\n" : "\n";
+            var endsWithNewline = text.EndsWith("\n", StringComparison.Ordinal);
+            var body = text.Replace("\r\n", "\n");
+            if (endsWithNewline) body = body.Substring(0, body.Length - 1);
+            var lines = body.Length == 0 ? new List<string>() : body.Split('\n').ToList();
+
+            var written = new HashSet<string>();
+            for (var i = 0; i < lines.Count; i++)
+            {
+                var trimmed = lines[i].Trim();
+                if (trimmed.Length == 0 || trimmed[0] == '#') continue;
+                var eq = trimmed.IndexOf('=');
+                if (eq < 0) continue;
+                var name = trimmed.Substring(0, eq).Trim();
+                foreach (var pair in values)
+                {
+                    if (pair.Key != name) continue;
+                    // The indent is kept; a repeated key is rewritten everywhere, since the last one read wins.
+                    lines[i] = lines[i].Substring(0, lines[i].Length - lines[i].TrimStart().Length) + name + " = " + pair.Value;
+                    written.Add(name);
+                }
+            }
+            var added = false;
+            foreach (var pair in values)
+            {
+                if (written.Contains(pair.Key)) continue;
+                if (pair.Key == "default_remote") lines.Add(RemoteComment);
+                lines.Add(pair.Key + " = " + pair.Value);
+                added = true;
+            }
+            return string.Join(newline, lines) + (endsWithNewline || added ? newline : "");
         }
     }
 }

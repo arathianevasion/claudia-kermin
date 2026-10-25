@@ -201,6 +201,109 @@ namespace ClaudiaKermin.Core.Tests
             }
         }
 
+        // ---- Saving the Mission defaults (Settings, Space Center) ----
+
+        [Fact]
+        public void SavedMissionDefaultsLoadBack()
+        {
+            using (var dir = new TempDir())
+            {
+                var config = PlayerConfig.LoadOrCreate(dir.Sub);
+                config.SetDefaultModel("claude-opus-5-5");
+                config.DefaultSpendingCap = 7.5m;
+                config.DefaultDaylightLanding = false;
+                config.DefaultTimeVersusDeltaV = Missions.TimeVersusDeltaV.MostEfficient;
+                config.DefaultRemote = true;
+                config.SaveDefaults(dir.Sub);
+
+                var loaded = PlayerConfig.LoadOrCreate(dir.Sub);
+                Assert.Equal(new[] { "claude-opus-5-5", "claude-sonnet-5-5" }, loaded.Models);
+                Assert.Equal("claude-opus-5-5", loaded.DefaultModel);
+                Assert.Equal(7.5m, loaded.DefaultSpendingCap);
+                Assert.False(loaded.DefaultDaylightLanding);
+                Assert.Equal(Missions.TimeVersusDeltaV.MostEfficient, loaded.DefaultTimeVersusDeltaV);
+                Assert.True(loaded.DefaultRemote);
+            }
+        }
+
+        [Fact]
+        public void SavingMissionDefaultsRewritesOnlyTheirLinesAndKeepsEverythingElseInOrder()
+        {
+            using (var dir = new TempDir())
+            {
+                Directory.CreateDirectory(dir.Sub);
+                var path = Path.Combine(dir.Sub, PlayerConfig.FileName);
+                File.WriteAllText(path,
+                    "# My own notes\n"
+                    + "debug_tools = true\n"
+                    + "models = claude-sonnet-5-5, claude-opus-5-5, claude-fable-5-1\n"
+                    + "  # indented comment\n"
+                    + "my_unknown_key = keep me\n"
+                    + "default_spending_cap = 10\n"
+                    + "\n"
+                    + "price.claude-fable-5-1 = 10, 50\n"
+                    + "daylight_landing = true\n"
+                    + "time_vs_dv = Balanced\n"
+                    + "default_remote = false\n"
+                    + "runaway_multiplier = 250%\n");
+
+                var config = PlayerConfig.LoadOrCreate(dir.Sub);
+                config.SetDefaultModel("claude-fable-5-1");
+                config.DefaultSpendingCap = 3.25m;
+                config.DefaultDaylightLanding = false;
+                config.DefaultTimeVersusDeltaV = Missions.TimeVersusDeltaV.Fastest;
+                config.DefaultRemote = true;
+                config.SaveDefaults(dir.Sub);
+
+                Assert.Equal(
+                    "# My own notes\n"
+                    + "debug_tools = true\n"
+                    + "models = claude-fable-5-1, claude-sonnet-5-5, claude-opus-5-5\n"
+                    + "  # indented comment\n"
+                    + "my_unknown_key = keep me\n"
+                    + "default_spending_cap = 3.25\n"
+                    + "\n"
+                    + "price.claude-fable-5-1 = 10, 50\n"
+                    + "daylight_landing = false\n"
+                    + "time_vs_dv = Fastest\n"
+                    + "default_remote = true\n"
+                    + "runaway_multiplier = 250%\n",
+                    File.ReadAllText(path));
+                Assert.Equal(2.5, PlayerConfig.LoadOrCreate(dir.Sub).RunawayMultiplier);
+            }
+        }
+
+        [Fact]
+        public void SavingMissionDefaultsAppendsTheKeysTheFileLacks()
+        {
+            using (var dir = new TempDir())
+            {
+                Directory.CreateDirectory(dir.Sub);
+                var path = Path.Combine(dir.Sub, PlayerConfig.FileName);
+                // An older file: no default_remote, and the player deleted the cap line. No final newline either.
+                File.WriteAllText(path, "# old\r\ndebug_tools = false\r\nmodels = claude-sonnet-5-5\r\ndaylight_landing = true\r\ntime_vs_dv = Balanced");
+
+                var config = PlayerConfig.LoadOrCreate(dir.Sub);
+                config.DefaultRemote = true;
+                config.SaveDefaults(dir.Sub);
+
+                var text = File.ReadAllText(path);
+                Assert.StartsWith("# old\r\ndebug_tools = false\r\nmodels = claude-sonnet-5-5\r\ndaylight_landing = true\r\ntime_vs_dv = Balanced\r\n", text);
+                Assert.EndsWith("default_spending_cap = 10\r\n# Mission type prefilled in the start form: false is crewed (Claudia flies aboard), true is remote (Claudia at Mission Control).\r\ndefault_remote = true\r\n", text);
+                Assert.True(PlayerConfig.LoadOrCreate(dir.Sub).DefaultRemote);
+            }
+        }
+
+        [Fact]
+        public void ANewConfigFileOffersACrewedMissionByDefault()
+        {
+            using (var dir = new TempDir())
+            {
+                Assert.False(PlayerConfig.LoadOrCreate(dir.Sub).DefaultRemote);
+                Assert.Contains("default_remote = false", File.ReadAllText(Path.Combine(dir.Sub, PlayerConfig.FileName)));
+            }
+        }
+
         [Fact]
         public void SavingChecksTheKeyAndReportsTheResult()
         {
