@@ -42,6 +42,8 @@ namespace ClaudiaKermin.Core.Missions
         public double ThrustVacKn;
         public double ThrustAslKn;
         public double IspVac;
+        /// <summary>An engine's Isp against pressure: (atmospheres, seconds) keys of its atmosphere curve; empty when not read.</summary>
+        public List<double[]> IspCurve = new List<double[]>();
         /// <summary>The electric charge it can store.</summary>
         public double ChargeMax;
     }
@@ -200,6 +202,12 @@ namespace ClaudiaKermin.Core.Missions
                 if (part.MassT > 0) json.Field("mass_t", part.MassT);
                 if (part.DryMassT > 0 && part.DryMassT != part.MassT) json.Field("dry_t", part.DryMassT);
                 if (part.ThrustVacKn > 0) json.Field("thrust_vac_kn", part.ThrustVacKn).Field("thrust_asl_kn", part.ThrustAslKn).Field("isp_vac", part.IspVac);
+                if (part.IspCurve.Count > 0)
+                {
+                    json.Name("isp_curve").BeginArray();
+                    foreach (var key in part.IspCurve) json.BeginArray().Number(key[0]).Number(key[1]).EndArray();
+                    json.EndArray();
+                }
                 if (part.ChargeMax > 0) json.Field("ec_max", part.ChargeMax);
                 json.Name("tags").BeginArray();
                 foreach (var tag in part.Tags) json.String(tag);
@@ -209,7 +217,7 @@ namespace ClaudiaKermin.Core.Missions
             json.Name("stages").BeginArray();
             foreach (var stage in Stages)
                 json.BeginObject().Field("stage", stage.Number).Field("dv_vac", stage.DeltaVVac).Field("dv_asl", stage.DeltaVAsl)
-                    .Field("thrust_vac_kn", stage.ThrustVacKn).Field("thrust_asl_kn", stage.ThrustAslKn)
+                    .Field("thrust_vac_kn", stage.ThrustVacKn)
                     .Field("start_mass_t", stage.StartMassT).Field("end_mass_t", stage.EndMassT).EndObject();
             json.EndArray();
             json.Name("crew").BeginArray();
@@ -230,7 +238,7 @@ namespace ClaudiaKermin.Core.Missions
                 json.Name("bodies").BeginArray();
                 foreach (var body in Bodies)
                     json.BeginObject().Field("name", body.Name).Field("parent", body.Parent).Field("gm", body.Gm).Field("radius", body.Radius)
-                        .Field("atmosphere_height", body.AtmosphereHeight).Field("sma", body.Sma).Field("inclination", body.Inclination).EndObject();
+                        .Field("atmosphere_height", body.AtmosphereHeight).Field("sea_level_atm", body.SeaLevelAtm).Field("sma", body.Sma).Field("inclination", body.Inclination).EndObject();
                 json.EndArray();
             }
             json.Name("orbit");
@@ -251,6 +259,13 @@ namespace ClaudiaKermin.Core.Missions
                 json.BeginObject().Field("name", resource.Name).Field("amount", resource.Amount).Field("max", resource.Max).EndObject();
             json.EndArray();
             return json.EndObject().ToString();
+        }
+
+        private static List<double[]> IspCurve(JsonNode keys)
+        {
+            if (keys == null) return new List<double[]>();
+            return keys.Items.Where(k => k.Items.Count >= 2)
+                .Select(k => new[] { JsonNode.Double(k.Items[0]) ?? 0, JsonNode.Double(k.Items[1]) ?? 0 }).ToList();
         }
 
         /// <summary>Reads snapshot JSON; missing fields keep their defaults. Throws <see cref="System.FormatException"/> on bad JSON.</summary>
@@ -311,6 +326,7 @@ namespace ClaudiaKermin.Core.Missions
                             ThrustVacKn = JsonNode.Double(part["thrust_vac_kn"]) ?? 0,
                             ThrustAslKn = JsonNode.Double(part["thrust_asl_kn"]) ?? 0,
                             IspVac = JsonNode.Double(part["isp_vac"]) ?? 0,
+                            IspCurve = IspCurve(part["isp_curve"]),
                             ChargeMax = JsonNode.Double(part["ec_max"]) ?? 0,
                         });
                     }
@@ -327,7 +343,6 @@ namespace ClaudiaKermin.Core.Missions
                         DeltaVVac = JsonNode.Double(stage["dv_vac"]) ?? 0,
                         DeltaVAsl = JsonNode.Double(stage["dv_asl"]) ?? 0,
                         ThrustVacKn = JsonNode.Double(stage["thrust_vac_kn"]) ?? 0,
-                        ThrustAslKn = JsonNode.Double(stage["thrust_asl_kn"]) ?? 0,
                         StartMassT = JsonNode.Double(stage["start_mass_t"]) ?? 0,
                         EndMassT = JsonNode.Double(stage["end_mass_t"]) ?? 0,
                     });
@@ -365,6 +380,7 @@ namespace ClaudiaKermin.Core.Missions
                         Gm = JsonNode.Double(body["gm"]) ?? 0,
                         Radius = JsonNode.Double(body["radius"]) ?? 0,
                         AtmosphereHeight = JsonNode.Double(body["atmosphere_height"]) ?? 0,
+                        SeaLevelAtm = JsonNode.Double(body["sea_level_atm"]) ?? 0,
                         Sma = JsonNode.Double(body["sma"]) ?? 0,
                         Inclination = JsonNode.Double(body["inclination"]) ?? 0,
                     });

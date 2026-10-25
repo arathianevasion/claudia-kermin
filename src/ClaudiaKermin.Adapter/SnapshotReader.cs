@@ -162,7 +162,6 @@ namespace ClaudiaKermin.Adapter
                     DeltaVVac = stage.deltaVinVac,
                     DeltaVAsl = stage.deltaVatASL,
                     ThrustVacKn = stage.thrustVac,
-                    ThrustAslKn = stage.thrustASL,
                     StartMassT = stage.startMass,
                     EndMassT = stage.endMass,
                 });
@@ -181,6 +180,8 @@ namespace ClaudiaKermin.Adapter
                     Gm = body.gravParameter,
                     Radius = body.Radius,
                     AtmosphereHeight = body.atmosphere ? body.atmosphereDepth : 0,
+                    // Sea-level pressure in atmospheres, so thrust never depends on the body the delta-v app has selected.
+                    SeaLevelAtm = body.atmosphere ? body.GetPressure(0) / 101.325 : 0,
                     Sma = orbit != null && body.referenceBody != body ? orbit.semiMajorAxis : 0,
                     Inclination = orbit != null ? orbit.inclination : 0,
                 });
@@ -232,6 +233,9 @@ namespace ClaudiaKermin.Adapter
                     info.ThrustVacKn = engine.maxThrust;
                     info.IspVac = ispVac;
                     info.ThrustAslKn = ispVac > 0 ? engine.maxThrust * ispAsl / ispVac : 0;
+                    info.IspCurve.Clear();
+                    // The curve's keys are (atmospheres, seconds); the mod does the interpolating.
+                    foreach (var key in engine.atmosphereCurve.Curve.keys) info.IspCurve.Add(new double[] { key.time, key.value });
                 }
             }
             else if (Is(module, "ModuleDecouplerBase") || Is(module, "ModuleDecouple") || Is(module, "ModuleAnchoredDecoupler")) Tag(info, "decoupler");

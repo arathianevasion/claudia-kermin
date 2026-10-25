@@ -10,8 +10,8 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>Delta-v in vacuum; it does not depend on the simulator's chosen body.</summary>
         public double DeltaVVac;
         public double DeltaVAsl;
+        /// <summary>Vacuum thrust; the sea-level figure is the mod's own, see <see cref="SeaLevelThrust"/>.</summary>
         public double ThrustVacKn;
-        public double ThrustAslKn;
         public double StartMassT;
         public double EndMassT;
     }
@@ -46,6 +46,8 @@ namespace ClaudiaKermin.Core.Missions
         public double Radius;
         /// <summary>The top of the atmosphere above the surface; 0 for an airless body.</summary>
         public double AtmosphereHeight;
+        /// <summary>The pressure at sea level in atmospheres (Kerbin is 1); 0 for an airless body.</summary>
+        public double SeaLevelAtm;
         /// <summary>The semi-major axis of its orbit round <see cref="Parent"/>.</summary>
         public double Sma;
         public double Inclination;

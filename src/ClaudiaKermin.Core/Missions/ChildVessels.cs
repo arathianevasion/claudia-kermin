@@ -109,7 +109,7 @@ namespace ClaudiaKermin.Core.Missions
                 Generates = parts.Any(p => p.Tags.Contains("electric_generator")),
                 MassT = parts.Sum(p => p.MassT),
                 ThrustVacKn = parts.Sum(p => p.ThrustVacKn),
-                ThrustAslKn = parts.Sum(p => p.ThrustAslKn),
+                Engines = parts.Where(p => p.ThrustVacKn > 0).ToList(),
             };
             var named = parts.FirstOrDefault(p => p.Tags.Contains("command")) ?? parts.FirstOrDefault(p => !p.Tags.Contains("decoupler")) ?? parts[0];
             separation.Name = named.Title.Length > 0 ? named.Title : named.Name;
@@ -232,7 +232,8 @@ namespace ClaudiaKermin.Core.Missions
         public double MassT;
         public double DeltaVVac;
         public double ThrustVacKn;
-        public double ThrustAslKn;
+        /// <summary>Its engines, for the thrust at a body's sea-level pressure.</summary>
+        public List<SnapshotPart> Engines = new List<SnapshotPart>();
 
         /// <summary>It has something to fly it by (a kOS processor or a command part), so it could be a Child Vessel; the rest is debris.</summary>
         public bool Candidate

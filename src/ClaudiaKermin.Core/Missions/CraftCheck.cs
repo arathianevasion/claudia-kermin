@@ -516,7 +516,7 @@ namespace ClaudiaKermin.Core.Missions
                 foreach (var body in bodies)
                 {
                     var weight = vessel.MassT * body.SurfaceGravity;
-                    var thrust = body.AtmosphereHeight > 0 ? vessel.ThrustAslKn : vessel.ThrustVacKn;
+                    var thrust = SeaLevelThrust.Of(vessel.Engines, body.SeaLevelAtm);
                     json.Field(body.Name, weight > 0 ? Math.Round(thrust / weight, 2) : 0);
                 }
                 json.EndObject().Name("problems").BeginArray();
@@ -538,18 +538,19 @@ namespace ClaudiaKermin.Core.Missions
             {
                 json.BeginObject().Field("stage", stage.Number).Name("twr").BeginObject();
                 foreach (var body in bodies)
-                    json.Field(body.Name, Math.Round(ThrustOverWeight(stage, body), 2));
+                    json.Field(body.Name, Math.Round(ThrustOverWeight(snapshot, stage, body), 2));
                 json.EndObject().EndObject();
             }
             return json.EndArray().ToString();
         }
 
-        /// <summary>Thrust (kN) over weight (tonnes x surface gravity) of a stage on a body; 0 for a stage with no mass.</summary>
-        public static double ThrustOverWeight(SnapshotStage stage, SnapshotBody body)
+        /// <summary>Thrust (kN) over weight (tonnes x surface gravity) of a stage on a body, with the thrust at that body's sea-level
+        /// pressure (the mod's own sum, not the delta-v app's); 0 for a stage with no mass.</summary>
+        public static double ThrustOverWeight(GameSnapshot snapshot, SnapshotStage stage, SnapshotBody body)
         {
             var weight = stage.StartMassT * body.SurfaceGravity;
             if (weight <= 0) return 0;
-            return (body.AtmosphereHeight > 0 ? stage.ThrustAslKn : stage.ThrustVacKn) / weight;
+            return SeaLevelThrust.ForStage(snapshot, stage, body.SeaLevelAtm) / weight;
         }
     }
 }
