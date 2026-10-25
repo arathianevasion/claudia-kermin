@@ -4,8 +4,8 @@
 // reentry block test, tumbling start: the Mission Script the debug block test runner starts (bundled
 // with the Core Library, as for a real Mission). The runner has set the probe spinning about its pitch
 // axis (tumble_rate in test.cfg) before this starts, high in the atmosphere on a suborbital orbit, so
-// reentry has to bring the heat shield forward on the reaction wheel, then drop it and open the chutes
-// (drogues before mains) and touch down. The Script Result is the block's plus the part counts before
+// reentry has to bring the heat shield forward on the reaction wheel, then drop it and open the chute
+// and touch down. The Script Result is the block's plus the part counts before
 // and after, to show the heat shield separated.
 
 @lazyglobal off.

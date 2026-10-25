@@ -349,7 +349,7 @@ function reentry {
 
   local has_drogues is reentry_has_drogues().
   local drogues_out is false.
-  local chutes_out is false.
+  local mains_out is false.
   local last_speed is ship:velocity:surface:mag.
   local sample_ut is time:seconds.
   local sample_v is ship:velocity:orbit.
@@ -376,15 +376,15 @@ function reentry {
       wait 0.5.
       set ctx:parts to ship:parts:length.
     }
-    local plan is reentry_chute_stage(opt:chute_mode, has_drogues, drogues_out, chutes_out, last_speed, agl, pressure).
-    if plan = "drogues" {
+    local chute_plan is reentry_chute_stage(opt:chute_mode, has_drogues, drogues_out, mains_out, last_speed, agl, pressure).
+    if chute_plan = "drogues" {
       reentry_open_chutes(true).
       set drogues_out to true.
       // Open parachutes steer the craft themselves.
       unlock steering.
-    } else if plan = "mains" {
+    } else if chute_plan = "mains" {
       reentry_open_chutes(false).
-      set chutes_out to true.
+      set mains_out to true.
       unlock steering.
     }
 

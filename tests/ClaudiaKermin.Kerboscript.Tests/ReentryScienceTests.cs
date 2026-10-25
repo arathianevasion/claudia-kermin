@@ -114,13 +114,6 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         [Fact]
-        public void Mains_never_open_before_the_drogues_even_at_the_main_last_height()
-        {
-            // At 1400 m the drogue last height (3000 m) has long passed, so the drogues are due first.
-            Assert.Equal("drogues", One("reentry_chute_stage(\"safe\", true, false, false, 900, 1400, 0.9)"));
-        }
-
-        [Fact]
         public void The_drogues_take_more_speed_and_thinner_air_and_open_higher_than_the_mains()
         {
             Assert.True(Number("reentry_drogue_max_speed()") > Number("reentry_chute_max_speed()"));

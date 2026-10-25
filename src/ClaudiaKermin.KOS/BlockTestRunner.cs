@@ -213,10 +213,14 @@ namespace ClaudiaKermin.KOS
         private void SpinUp(Vessel vessel, double rate)
         {
             var spin = vessel.ReferenceTransform.right * (float)(rate * Math.PI / 180);
+            var centre = vessel.CoM;
+            var drift = vessel.rootPart.Rigidbody.velocity;
             foreach (var part in vessel.parts)
             {
                 if (part.Rigidbody == null) continue;
+                // A rigid spin about the centre of mass: each body also moves with the spin at its offset.
                 part.Rigidbody.angularVelocity = spin;
+                part.Rigidbody.velocity = drift + Vector3.Cross(spin, part.Rigidbody.worldCenterOfMass - centre);
             }
             Note("set the craft tumbling at " + rate + " deg/s");
         }
