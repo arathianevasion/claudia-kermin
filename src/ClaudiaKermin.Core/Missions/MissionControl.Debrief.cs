@@ -50,6 +50,41 @@ namespace ClaudiaKermin.Core.Missions
             mission.ScriptError = "";
         }
 
+        private static string RunEventsJson(Mission mission)
+        {
+            var log = mission.RunEvents;
+            if (log.Count == 0 && log.Dropped == 0) return "";
+            var json = new JsonWriter().BeginObject().Field("dropped", log.Dropped).Name("events").BeginArray();
+            foreach (var e in log.Events)
+                json.BeginObject().Field("ut", e.Ut).Field("kind", e.Kind.ToString()).Field("text", e.Text).EndObject();
+            return json.EndArray().EndObject().ToString();
+        }
+
+        private static void RestoreRunEvents(Mission mission, string text)
+        {
+            mission.RunEvents.Clear();
+            if (string.IsNullOrEmpty(text)) return;
+            try
+            {
+                var root = JsonReader.Parse(text);
+                var events = new List<RunEvent>();
+                var items = root["events"];
+                if (items != null)
+                    foreach (var node in items.Items.Where(n => n.Kind == JsonKind.Object))
+                    {
+                        RunEventKind kind;
+                        var body = JsonNode.Str(node["text"]);
+                        if (!Enum.TryParse(JsonNode.Str(node["kind"]), out kind) || string.IsNullOrEmpty(body)) continue;
+                        events.Add(new RunEvent { Ut = JsonNode.Double(node["ut"]) ?? 0, Kind = kind, Text = body });
+                    }
+                mission.RunEvents.Restore(events, (int)(JsonNode.Long(root["dropped"]) ?? 0));
+            }
+            catch (JsonException)
+            {
+                mission.RunEvents.Clear();
+            }
+        }
+
         private void EventSeen(RunEventSeen seen)
         {
             var mission = _mission;

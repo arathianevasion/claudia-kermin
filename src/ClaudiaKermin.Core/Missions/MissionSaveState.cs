@@ -70,6 +70,12 @@ namespace ClaudiaKermin.Core.Missions
         public string ChildVessels = "";
         /// <summary>The ids of vessels the mod saw leave the craft (a JSON array written by MissionControl); "" for none.</summary>
         public string LeftTheCraft = "";
+        /// <summary>The current or last run's event log (JSON written by MissionControl); "" for none, and in older saves.</summary>
+        public string RunEvents = "";
+        /// <summary>Game time the current or last run began, s of UT; 0 in older saves.</summary>
+        public double RunStartUt;
+        /// <summary>The kOS terminal text of the last run that did not report, until its Debrief card; "" otherwise.</summary>
+        public string ScriptError = "";
         public MissionPlan MissionPlan;
         /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
         public SequencePlan SequencePlan;
@@ -116,6 +122,9 @@ namespace ClaudiaKermin.Core.Missions
             if (ProcessorPartId.HasValue) values["processorPartId"] = ProcessorPartId.Value.ToString(CultureInfo.InvariantCulture);
             if (ChildVessels.Length > 0) values["childVessels"] = ChildVessels;
             if (LeftTheCraft.Length > 0) values["leftTheCraft"] = LeftTheCraft;
+            if (RunEvents.Length > 0) values["runEvents"] = RunEvents;
+            if (RunStartUt != 0) values["runStartUt"] = RunStartUt.ToString("R", CultureInfo.InvariantCulture);
+            if (ScriptError.Length > 0) values["scriptError"] = ScriptError;
             foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
             for (var i = 0; i < UnsafeProblems.Count; i++) values[UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture)] = UnsafeProblems[i];
             if (MissionPlan != null || SequencePlan != null) values["plans"] = WritePlans(MissionPlan, SequencePlan);
@@ -156,7 +165,11 @@ namespace ClaudiaKermin.Core.Missions
                 ReducedGoal = Get(values, "reducedGoal"),
                 ChildVessels = Get(values, "childVessels"),
                 LeftTheCraft = Get(values, "leftTheCraft"),
+                RunEvents = Get(values, "runEvents"),
+                ScriptError = Get(values, "scriptError"),
             };
+            double runStart;
+            if (double.TryParse(Get(values, "runStartUt"), NumberStyles.Float, CultureInfo.InvariantCulture, out runStart)) state.RunStartUt = runStart;
             decimal cap;
             if (decimal.TryParse(Get(values, "spendingCap"), NumberStyles.Number, CultureInfo.InvariantCulture, out cap)) state.SpendingCap = cap;
             int number;

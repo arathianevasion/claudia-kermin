@@ -74,6 +74,14 @@ namespace ClaudiaKermin.Core.Missions
             _events.Add(new RunEvent { Ut = ut, Kind = kind, Text = text });
         }
 
+        /// <summary>Puts back a log that was saved: at most <see cref="Max"/> events, and how many were dropped.</summary>
+        public void Restore(IEnumerable<RunEvent> events, int dropped)
+        {
+            Clear();
+            foreach (var e in events.Take(Max)) _events.Add(e);
+            Dropped = System.Math.Max(0, dropped);
+        }
+
         public void Clear()
         {
             _events.Clear();
