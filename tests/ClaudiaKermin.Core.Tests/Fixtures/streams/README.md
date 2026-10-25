@@ -33,3 +33,4 @@ writes; replace or add captures from real play as they are taken.
   Sonnet 5.5; the big plan 100000 input, 100000 cache write and 20000 output, $0.80), for the Spending Cap tests.
 - `mission-alert-*.sse`: Alert verdicts in the Mission reply schema: recommend Abort, carry on with a follow-up
   threshold of 1000, and a plain carry on.
+- `compaction-extra-field.sse`: compaction blocks with an unknown field, one whole in its start event and one streamed through compaction deltas.

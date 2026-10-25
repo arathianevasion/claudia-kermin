@@ -90,9 +90,38 @@ namespace ClaudiaKermin.Core.Claude
         /// <summary>The summary, or null when the API returned none.</summary>
         public string Content;
 
+        /// <summary>The block as the API sent it, so fields this client does not know are echoed too; null when built here.</summary>
+        internal string RawJson;
+
+        /// <summary>True once streamed deltas changed <see cref="Content"/> after <see cref="RawJson"/> was taken.</summary>
+        internal bool ContentStreamed;
+
         internal override void Write(JsonWriter json)
         {
-            json.BeginObject().Field("type", "compaction").Field("content", Content).EndObject();
+            if (RawJson == null)
+            {
+                json.BeginObject().Field("type", "compaction").Field("content", Content).EndObject();
+                return;
+            }
+            if (!ContentStreamed)
+            {
+                json.Raw(RawJson);
+                return;
+            }
+            // Only the summary changed: every other member goes out as the API sent it, in its place.
+            json.BeginObject();
+            var wroteContent = false;
+            foreach (var member in JsonReader.Parse(RawJson).Members)
+            {
+                if (member.Key == "content")
+                {
+                    json.Field("content", Content);
+                    wroteContent = true;
+                }
+                else json.Name(member.Key).Raw(member.Value.Raw);
+            }
+            if (!wroteContent) json.Field("content", Content);
+            json.EndObject();
         }
     }
 
