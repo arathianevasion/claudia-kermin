@@ -558,7 +558,8 @@ namespace ClaudiaKermin.Adapter
         // "Chat", amber with what Claudia needs from the player, or the chevron back and "Collapse" when the docked panel is open.
         private void DrawTab(Rect row, bool expanded, bool above)
         {
-            var needs = !expanded && MissionWindowRules.TabNeeds(View, Pending).Length > 0;
+            var needed = MissionWindowRules.TabNeeds(View, Pending);
+            var needs = !expanded && needed.Length > 0;
             var text = MissionWindowRules.ExpandTab(View, expanded, Pending);
             var textStyle = needs ? _tabTextAttention : _tabText;
             var textWidth = Mathf.Min(textStyle.CalcSize(new GUIContent(text)).x, _width - 120);

@@ -584,7 +584,8 @@ namespace ClaudiaKermin.Core.Ui
                 case AttentionKind.Debrief: return "Debrief ready";
                 case AttentionKind.Abort: return "Claudia recommends Abort";
                 case AttentionKind.Pause: return "Paused";
-                default: return "Plan awaiting Approval";
+                case AttentionKind.Approval: return "Plan awaiting Approval";
+                default: return pending.Text;
             }
         }
 
