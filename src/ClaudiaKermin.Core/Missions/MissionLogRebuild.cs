@@ -156,7 +156,7 @@ namespace ClaudiaKermin.Core.Missions
             var open = line.IndexOf(" (", System.StringComparison.Ordinal);
             if (open < 0 || !line.EndsWith(").", System.StringComparison.Ordinal)) return "";
             var reason = line.Substring(open + 2, line.Length - open - 4);
-            var stop = reason == "timed out" || reason == "aborted by the player" || reason.StartsWith("blocked: ", System.StringComparison.Ordinal);
+            var stop = reason == RunawayStop.Reason || reason == "aborted by the player" || reason.StartsWith("blocked: ", System.StringComparison.Ordinal);
             return stop ? " (" + reason + ")" : "";
         }
 
