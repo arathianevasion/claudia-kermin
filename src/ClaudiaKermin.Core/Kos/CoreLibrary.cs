@@ -48,13 +48,24 @@ namespace ClaudiaKermin.Core.Kos
         public const string DocPrefix = "//|";
         public const string SharedFile = "claudia_lib";
         private const string ResourcePrefix = "ClaudiaKermin.Core.library.";
+        private const string VendoredPrefix = "ClaudiaKermin.Core.kslib.";
 
         private static readonly Lazy<IList<LibraryFile>> LoadedFiles = new Lazy<IList<LibraryFile>>(Load);
+        private static readonly Lazy<IList<LibraryFile>> LoadedVendored = new Lazy<IList<LibraryFile>>(LoadVendored);
 
         /// <summary>The shared helpers first, then every block by name.</summary>
         public static IList<LibraryFile> Files
         {
             get { return LoadedFiles.Value; }
+        }
+
+        /// <summary>
+        /// Third-party scripts (<c>kerboscript/kslib/</c>) bundled as they are: part of the compile unit,
+        /// but not Building Blocks, so they are not in <see cref="Files"/> and add nothing to the docs.
+        /// </summary>
+        public static IList<LibraryFile> Vendored
+        {
+            get { return LoadedVendored.Value; }
         }
 
         public static IEnumerable<LibraryFile> Blocks
@@ -66,18 +77,18 @@ namespace ClaudiaKermin.Core.Kos
         /// One compile unit: the Mission Script first (so kOS's line numbers in its errors match what
         /// Claudia wrote), then the Core Library, then <c>claudia_config()</c> with the player's wait
         /// caps. kOS hoists file-level functions, so the script can call blocks defined after it. The
-        /// library's own <c>@lazyglobal</c> lines are dropped: kOS allows the directive only at the top.
+        /// library's own <c>@lazyglobal</c> and <c>@clobberbuiltins</c> lines are dropped: kOS allows the directive only at the top.
         /// </summary>
         public static string Bundle(string missionScript, double waitCapOrbits, double waitCapGroundSeconds)
         {
             var text = new StringBuilder();
             text.Append((missionScript ?? "").Replace("\r\n", "\n").TrimEnd('\n')).Append("\n\n");
             text.Append("// ---- The Core Library, bundled by Claudia Kermin ----\n");
-            foreach (var file in Files)
+            foreach (var file in Files.Concat(Vendored))
             {
                 foreach (var line in file.Source.Split('\n'))
                 {
-                    if (line.TrimStart().StartsWith("@lazyglobal", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (IsDirective(line)) continue;
                     text.Append(line).Append('\n');
                 }
             }
@@ -108,6 +119,13 @@ namespace ClaudiaKermin.Core.Kos
                 .ToArray());
         }
 
+        private static bool IsDirective(string line)
+        {
+            var trimmed = line.TrimStart();
+            return trimmed.StartsWith("@lazyglobal", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("@clobberbuiltins", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static string Number(double value)
         {
             return value.ToString("0.###", CultureInfo.InvariantCulture);
@@ -115,21 +133,31 @@ namespace ClaudiaKermin.Core.Kos
 
         private static IList<LibraryFile> Load()
         {
+            return Read(ResourcePrefix)
+                .OrderBy(f => f.IsBlock ? 1 : 0)
+                .ThenBy(f => f.Name, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        private static IList<LibraryFile> LoadVendored()
+        {
+            return Read(VendoredPrefix).OrderBy(f => f.Name, StringComparer.Ordinal).ToList();
+        }
+
+        private static IEnumerable<LibraryFile> Read(string prefix)
+        {
             var assembly = typeof(CoreLibrary).Assembly;
             var files = new List<LibraryFile>();
-            foreach (var resource in assembly.GetManifestResourceNames().Where(n => n.StartsWith(ResourcePrefix, StringComparison.Ordinal)))
+            foreach (var resource in assembly.GetManifestResourceNames().Where(n => n.StartsWith(prefix, StringComparison.Ordinal)))
             {
                 using (var stream = assembly.GetManifestResourceStream(resource))
                 using (var reader = new StreamReader(stream))
                 {
-                    var name = resource.Substring(ResourcePrefix.Length);
+                    var name = resource.Substring(prefix.Length);
                     files.Add(new LibraryFile(name.Substring(0, name.Length - ".ks".Length), reader.ReadToEnd()));
                 }
             }
-            return files
-                .OrderBy(f => f.IsBlock ? 1 : 0)
-                .ThenBy(f => f.Name, StringComparer.Ordinal)
-                .ToList();
+            return files;
         }
     }
 }

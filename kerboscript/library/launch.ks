@@ -128,22 +128,6 @@ function launch_wrap {
   return deg - 360 * floor(deg / 360).
 }
 
-// The compass heading (degrees) to launch into an orbit of inclination inc (degrees; negative
-// launches southward) from latitude lat, for an orbital speed of v_orbit (m/s) over ground turning
-// eastward at v_eq (m/s at the equator). An inclination below the latitude can't be reached; it
-// gives the nearest, due east (or west for a retrograde one).
-// Clean-room stand-in for KSLib lib_lazcalc's launch azimuth, computed once at liftoff.
-function launch_azimuth {
-  parameter inc, lat, v_orbit, v_eq.
-  local inertial is arcsin(max(-1, min(1, cos(abs(inc)) / cos(lat)))).
-  if inc < 0 {
-    set inertial to 180 - inertial.
-  }
-  local east is v_orbit * sin(inertial) - v_eq * cos(lat).
-  local north is v_orbit * cos(inertial).
-  return launch_wrap(arctan2(east, north)).
-}
-
 // How long until a launch site at latitude lat (degrees) and celestial longitude site_lng
 // (degrees: its longitude plus the body's rotation angle) next passes under the plane of an orbit of
 // inclination inc and longitude of ascending node lan, on a body turning once in period s.
@@ -304,11 +288,16 @@ function launch {
     }
   }
 
+  // The heading is KSLib's LAZcalc (bundled lib_lazcalc.ks), set up for the pad and recomputed on the climb.
   local hdg is opt:heading.
-  if hdg:istype("String") {
-    local v_orbit is sqrt(ship:body:mu / (ship:body:radius + target_ap)).
-    local v_eq is 2 * constant:pi * ship:body:radius / ship:body:rotationperiod.
-    set hdg to launch_azimuth(go:inc, ship:latitude, v_orbit, v_eq).
+  local laz is list().
+  local laz_on is hdg:istype("String").
+  if laz_on {
+    set laz to LAZcalc_init(target_ap, go:inc).
+    set hdg to LAZcalc(laz).
+    if not hdg:istype("Scalar") {
+      set hdg to 90.
+    }
   }
   local max_q_pa is -1.
   if opt:throttle_max_q:istype("Scalar") {
@@ -393,6 +382,13 @@ function launch {
       local pitch is 90.
       if turn_start_alt >= 0 {
         set pitch to launch_pitch(altitude, turn_start_alt, turn_end, opt:turn_shape).
+      }
+      if laz_on {
+        // LAZcalc returns nothing for a southward launch in the middle of the compass; keep the last heading.
+        local az is LAZcalc(laz).
+        if az:istype("Scalar") {
+          set hdg to az.
+        }
       }
       set want to heading(hdg, pitch):vector.
     } else if spd > 30 {

@@ -27,7 +27,7 @@
       <_StagePlugin Include="@(ReferenceCopyLocalPaths)" Condition="'%(Extension)' == '.dll'" />
     </ItemGroup>
     <Copy SourceFiles="@(_StagePlugin)" DestinationFolder="$(GameDataStageDir)Plugins" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="$(RepoRoot)LICENSE" DestinationFolder="$(GameDataStageDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(RepoRoot)LICENSE;$(RepoRoot)THIRD-PARTY-NOTICES" DestinationFolder="$(GameDataStageDir)" SkipUnchangedFiles="true" />
   </Target>
 
   <!-- Static GameData files (trait config, icon) are copied as they are, under the staged mod folder. -->
