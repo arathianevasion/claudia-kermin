@@ -70,6 +70,10 @@ namespace ClaudiaKermin.Adapter
             ChevronDown,
             ChevronUp,
             Check,
+            Close,
+            Pencil,
+            ArrowUp,
+            Dot,
         }
 
         private static readonly Dictionary<string, Texture2D> Textures = new Dictionary<string, Texture2D>();
@@ -80,6 +84,8 @@ namespace ClaudiaKermin.Adapter
         private static GUIStyle _primary, _secondaryButton, _danger, _segment, _segmentOn, _card, _box;
         private static GUIStyle _chipInfo, _chipSuccess, _chipAttention, _chipDanger;
         private static GUIStyle _successText, _dangerText, _switchOn, _switchOff, _knobOn, _knobOff;
+        private static GUIStyle _bareWindow, _raised, _bar, _prompt, _bubble, _claudiaName, _notice, _cardHeader, _kindLabel, _titleAccent;
+        private static GUIStyle _textButton, _toggleOn, _small, _disabledButton, _sendOn, _sendOff;
 
         // ---- Styles ----
 
@@ -98,6 +104,33 @@ namespace ClaudiaKermin.Adapter
         public static GUIStyle TextField { get { Build(); return _textField; } }
         /// <summary>The card box (plans, Debriefs, Craft Check, settings groups).</summary>
         public static GUIStyle Card { get { Build(); return _card; } }
+
+        /// <summary>A <see cref="Window"/> whose body has no padding, for windows whose sections run edge to edge and pad themselves.</summary>
+        public static GUIStyle BareWindow { get { Build(); return _bareWindow; } }
+        /// <summary>A raised-background panel (pinned goal, prompt), padded like the window.</summary>
+        public static GUIStyle Raised { get { Build(); return _raised; } }
+        /// <summary>A bar-background panel (control bar), padded like the window.</summary>
+        public static GUIStyle Bar { get { Build(); return _bar; } }
+        /// <summary>The multi-line prompt: input background, wrapping, room on the right for a 32 px send button.</summary>
+        public static GUIStyle Prompt { get { Build(); return _prompt; } }
+        /// <summary>The player's message bubble: player-message colours, 8 px radius.</summary>
+        public static GUIStyle PlayerBubble { get { Build(); return _bubble; } }
+        /// <summary>"Claudia" above her lines: 12 px bold in Claudia blue.</summary>
+        public static GUIStyle ClaudiaName { get { Build(); return _claudiaName; } }
+        /// <summary>A notice line: 12 px muted, centred.</summary>
+        public static GUIStyle Notice { get { Build(); return _notice; } }
+        /// <summary>A card's header row.</summary>
+        public static GUIStyle CardHeaderRow { get { Build(); return _cardHeader; } }
+        /// <summary>A card's kind ("MISSION PLAN"): 11 px bold capitals, secondary.</summary>
+        public static GUIStyle KindLabel { get { Build(); return _kindLabel; } }
+        /// <summary>A window title in accent, 16 px bold.</summary>
+        public static GUIStyle TitleAccent { get { Build(); return _titleAccent; } }
+
+        public static GUIStyle ChipStyle(ChipKind kind)
+        {
+            Build();
+            return kind == ChipKind.Success ? _chipSuccess : kind == ChipKind.Attention ? _chipAttention : kind == ChipKind.Danger ? _chipDanger : _chipInfo;
+        }
 
         /// <summary>Secondary-size text in success green ("Key is valid.").</summary>
         public static GUIStyle SuccessText { get { Build(); return _successText; } }
@@ -131,6 +164,129 @@ namespace ClaudiaKermin.Adapter
         {
             Build();
             return GUILayout.Button(text, _danger, WithHeight(options));
+        }
+
+        /// <summary>A text-only button in accent ("Show all"); still at least <see cref="MinClickable"/> high.</summary>
+        public static bool TextButton(string text, params GUILayoutOption[] options)
+        {
+            Build();
+            return GUILayout.Button(text, _textButton, Prepend(GUILayout.Height(MinClickable), options));
+        }
+
+        /// <summary>A secondary button that stays pressed: accent border and fill while <paramref name="on"/>. Returns true when clicked.</summary>
+        public static bool ToggleButton(bool on, string text, params GUILayoutOption[] options)
+        {
+            Build();
+            return GUILayout.Button(text, on ? _toggleOn : _secondaryButton, WithHeight(options));
+        }
+
+        /// <summary>A small secondary button, 12 px text, <see cref="MinClickable"/> high.</summary>
+        public static bool SmallButton(string text, params GUILayoutOption[] options)
+        {
+            Build();
+            return GUILayout.Button(text, _small, Prepend(GUILayout.Height(MinClickable), options));
+        }
+
+        /// <summary>A small secondary button with an icon before its text, or only the icon when the text is "".</summary>
+        public static bool IconButton(IconShape shape, string text, params GUILayoutOption[] options)
+        {
+            Build();
+            // Spaces leave room for the icon in front of the text.
+            var content = new GUIContent(text.Length > 0 ? "      " + text : "");
+            var rect = GUILayoutUtility.GetRect(content, _small, Prepend(GUILayout.Height(MinClickable), options));
+            var clicked = GUI.Button(rect, content, _small);
+            const float size = 14;
+            var x = text.Length > 0 ? rect.x + _small.padding.left : rect.center.x - size / 2;
+            DrawIcon(new Rect(x, rect.center.y - size / 2, size, size), shape, GUI.enabled ? Text : TextMuted);
+            return clicked;
+        }
+
+        /// <summary>A button that can't be pressed now: secondary text in a dashed outline. It takes no clicks.</summary>
+        public static void DisabledButton(string text, params GUILayoutOption[] options)
+        {
+            Build();
+            var content = new GUIContent(text);
+            var rect = GUILayoutUtility.GetRect(content, _disabledButton, WithHeight(options));
+            if (Event.current.type != EventType.Repaint) return;
+            _disabledButton.Draw(rect, content, false, false, false, false);
+            DashedOutline(rect, BorderStrong);
+        }
+
+        /// <summary>The prompt's send button (an up arrow) drawn into <paramref name="rect"/>; the caller takes the click.</summary>
+        public static void DrawSendButton(Rect rect, bool enabled)
+        {
+            Build();
+            if (Event.current.type != EventType.Repaint) return;
+            (enabled ? _sendOn : _sendOff).Draw(rect, GUIContent.none, enabled && rect.Contains(Event.current.mousePosition), false, false, false);
+            DrawIcon(new Rect(rect.center.x - 8, rect.center.y - 8, 16, 16), IconShape.ArrowUp, enabled ? OnAccent : TextMuted);
+        }
+
+        /// <summary>A 1 px divider across the layout in the border colour.</summary>
+        public static void Divider()
+        {
+            var rect = GUILayoutUtility.GetRect(1, 1, GUILayout.ExpandWidth(true), GUILayout.Height(1));
+            if (Event.current.type == EventType.Repaint) GUI.DrawTexture(rect, Solid(Border));
+        }
+
+        /// <summary>A dashed 1 px outline just inside <paramref name="rect"/>; call on Repaint.</summary>
+        public static void DashedOutline(Rect rect, Color color)
+        {
+            const float dash = 5, gap = 4;
+            var texture = Solid(color);
+            for (var x = rect.x + 3; x < rect.xMax - 3; x += dash + gap)
+            {
+                var w = Mathf.Min(dash, rect.xMax - 3 - x);
+                GUI.DrawTexture(new Rect(x, rect.y, w, 1), texture);
+                GUI.DrawTexture(new Rect(x, rect.yMax - 1, w, 1), texture);
+            }
+            for (var y = rect.y + 3; y < rect.yMax - 3; y += dash + gap)
+            {
+                var h = Mathf.Min(dash, rect.yMax - 3 - y);
+                GUI.DrawTexture(new Rect(rect.x, y, 1, h), texture);
+                GUI.DrawTexture(new Rect(rect.xMax - 1, y, 1, h), texture);
+            }
+        }
+
+        /// <summary>The text cut to one line of <paramref name="width"/>, ending in an ellipsis when cut.</summary>
+        public static string Ellipsize(string text, GUIStyle style, float width)
+        {
+            if (style.CalcSize(new GUIContent(text)).x <= width) return text;
+            int low = 0, high = text.Length;
+            while (low < high)
+            {
+                var mid = (low + high + 1) / 2;
+                if (style.CalcSize(new GUIContent(Cut(text, mid))).x <= width) low = mid;
+                else high = mid - 1;
+            }
+            return Cut(text, low);
+        }
+
+        /// <summary>The wrapped text cut to <paramref name="lines"/> lines at <paramref name="width"/>, ending in an ellipsis when cut.</summary>
+        public static string ClampLines(string text, GUIStyle style, float width, int lines)
+        {
+            var most = style.CalcHeight(new GUIContent(Lines(lines)), width);
+            if (style.CalcHeight(new GUIContent(text), width) <= most) return text;
+            int low = 0, high = text.Length;
+            while (low < high)
+            {
+                var mid = (low + high + 1) / 2;
+                if (style.CalcHeight(new GUIContent(Cut(text, mid)), width) <= most) low = mid;
+                else high = mid - 1;
+            }
+            return Cut(text, low);
+        }
+
+        /// <summary>"A" on <paramref name="count"/> lines, for measuring the height of so many lines.</summary>
+        public static string Lines(int count)
+        {
+            var text = "A";
+            for (var i = 1; i < count; i++) text += "\nA";
+            return text;
+        }
+
+        private static string Cut(string text, int length)
+        {
+            return text.Substring(0, length).TrimEnd() + "…";
         }
 
         /// <summary>A segmented control of equal segments; returns the selected index.</summary>
@@ -179,8 +335,7 @@ namespace ClaudiaKermin.Adapter
         public static void Chip(string text, ChipKind kind)
         {
             Build();
-            var style = kind == ChipKind.Success ? _chipSuccess : kind == ChipKind.Attention ? _chipAttention : kind == ChipKind.Danger ? _chipDanger : _chipInfo;
-            GUILayout.Label(text, style, GUILayout.ExpandWidth(false));
+            GUILayout.Label(text, ChipStyle(kind), GUILayout.ExpandWidth(false));
         }
 
         /// <summary>Draws an icon in a fixed square in the layout.</summary>
@@ -271,8 +426,13 @@ namespace ClaudiaKermin.Adapter
 
         private static GUILayoutOption[] WithHeight(GUILayoutOption[] options)
         {
+            return Prepend(GUILayout.Height(ButtonHeight), options);
+        }
+
+        private static GUILayoutOption[] Prepend(GUILayoutOption first, GUILayoutOption[] options)
+        {
             var all = new GUILayoutOption[options.Length + 1];
-            all[0] = GUILayout.Height(ButtonHeight);
+            all[0] = first;
             Array.Copy(options, 0, all, 1, options.Length);
             return all;
         }
@@ -334,6 +494,53 @@ namespace ClaudiaKermin.Adapter
             _switchOff = Box(InputBackground, BorderStrong, 10);
             _knobOn = Box(OnAccent, OnAccent, 7);
             _knobOff = Box(TextSecondary, TextSecondary, 7);
+
+            _bareWindow = new GUIStyle(_window) { padding = new RectOffset(0, 0, TitleBarHeight, 0) };
+            _raised = new GUIStyle { padding = new RectOffset(Padding, Padding, 10, 10) };
+            _raised.normal.background = Solid(RaisedBackground);
+            _bar = new GUIStyle { padding = new RectOffset(Padding, Padding, 6, 6) };
+            _bar.normal.background = Solid(BarBackground);
+
+            _prompt = new GUIStyle(skin.textArea) { richText = false, wordWrap = true, fontSize = 14, padding = new RectOffset(10, 44, 10, 10), border = new RectOffset(4, 4, 4, 4), margin = new RectOffset(0, 0, 2, 2) };
+            _prompt.normal.background = _prompt.hover.background = Rounded(InputBackground, BorderStrong, 3);
+            _prompt.focused.background = _prompt.onFocused.background = Rounded(InputBackground, Accent, 3);
+            _prompt.normal.textColor = _prompt.hover.textColor = _prompt.focused.textColor = _prompt.onFocused.textColor = Text;
+
+            _bubble = TextStyle(skin, 14, Text, FontStyle.Normal);
+            _bubble.padding = new RectOffset(10, 10, 7, 7);
+            _bubble.margin = new RectOffset(0, 0, 4, 4);
+            _bubble.border = new RectOffset(9, 9, 9, 9);
+            _bubble.normal.background = _bubble.hover.background = _bubble.active.background = Rounded(PlayerFill, PlayerBorder, 8);
+            _claudiaName = TextStyle(skin, 12, Claudia, FontStyle.Bold);
+            _claudiaName.margin = new RectOffset(0, 0, 6, 0);
+            _notice = TextStyle(skin, 12, TextMuted, FontStyle.Normal);
+            _notice.alignment = TextAnchor.MiddleCenter;
+            _notice.margin = new RectOffset(0, 0, 4, 4);
+            _cardHeader = new GUIStyle { padding = new RectOffset(8, 8, 4, 4), margin = new RectOffset(0, 0, 0, 6), border = new RectOffset(4, 4, 4, 4) };
+            _cardHeader.normal.background = Rounded(CardHeader, CardHeader, 3);
+            _kindLabel = TextStyle(skin, 11, TextSecondary, FontStyle.Bold);
+            _kindLabel.wordWrap = false;
+            _kindLabel.alignment = TextAnchor.MiddleLeft;
+            _titleAccent = new GUIStyle(_heading);
+            _titleAccent.normal.textColor = Accent;
+
+            _textButton = TextStyle(skin, 12, Accent, FontStyle.Bold);
+            _textButton.wordWrap = false;
+            _textButton.alignment = TextAnchor.MiddleRight;
+            _textButton.hover.textColor = Hex(0xc8e65e);
+            _toggleOn = Button(skin, PlayerFill, Accent, Accent, PlayerFill);
+            _toggleOn.fontStyle = FontStyle.Bold;
+            _small = Button(skin, RaisedBackground, BorderStrong, Text, CardHeader);
+            _small.fontSize = 12;
+            _small.padding = new RectOffset(8, 8, 4, 4);
+            _disabledButton = TextStyle(skin, 14, TextSecondary, FontStyle.Normal);
+            _disabledButton.alignment = TextAnchor.MiddleCenter;
+            _disabledButton.wordWrap = false;
+            _disabledButton.padding = new RectOffset(10, 10, 6, 6);
+            _disabledButton.margin = new RectOffset(4, 4, 4, 4);
+            _sendOn = Box(Accent, Accent, 4);
+            _sendOn.hover.background = Rounded(Hex(0xc8e65e), Accent, 4);
+            _sendOff = Box(RaisedBackground, BorderStrong, 4);
         }
 
         private static GUIStyle TextStyle(GUISkin skin, int size, Color color, FontStyle fontStyle)
@@ -449,6 +656,15 @@ namespace ClaudiaKermin.Adapter
                     var shackle = Mathf.Abs(Vector2.Distance(p, new Vector2(0.5f, 0.42f)) - 0.2f) <= 0.07f && v <= 0.45f;
                     return body || shackle;
                 }
+                case IconShape.Close:
+                    return Segment(p, new Vector2(0.25f, 0.25f), new Vector2(0.75f, 0.75f)) <= 0.07f || Segment(p, new Vector2(0.75f, 0.25f), new Vector2(0.25f, 0.75f)) <= 0.07f;
+                case IconShape.Pencil:
+                    return Segment(p, new Vector2(0.3f, 0.7f), new Vector2(0.8f, 0.2f)) <= 0.1f || Segment(p, new Vector2(0.15f, 0.85f), new Vector2(0.24f, 0.76f)) <= 0.05f;
+                case IconShape.ArrowUp:
+                    return Segment(p, new Vector2(0.5f, 0.82f), new Vector2(0.5f, 0.2f)) <= 0.08f
+                        || Segment(p, new Vector2(0.24f, 0.46f), new Vector2(0.5f, 0.2f)) <= 0.08f || Segment(p, new Vector2(0.5f, 0.2f), new Vector2(0.76f, 0.46f)) <= 0.08f;
+                case IconShape.Dot:
+                    return Vector2.Distance(p, new Vector2(0.5f, 0.5f)) <= 0.45f;
                 case IconShape.ChevronDown:
                     return Segment(p, new Vector2(0.2f, 0.35f), new Vector2(0.5f, 0.65f)) <= 0.08f || Segment(p, new Vector2(0.5f, 0.65f), new Vector2(0.8f, 0.35f)) <= 0.08f;
                 case IconShape.ChevronUp:

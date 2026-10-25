@@ -99,7 +99,7 @@ namespace ClaudiaKermin.Adapter
             if (GUILayout.Button(DrawerOpen ? "Hide log" : "Show log", GUILayout.ExpandWidth(false))) DrawerOpen = !DrawerOpen;
             GUILayout.EndHorizontal();
 
-            if (DrawerOpen) _log.Draw(View, GUILayout.Height(DrawerHeight));
+            if (DrawerOpen) _log.Draw(View, Width - 40, GUILayout.Height(DrawerHeight));
             WindowFrame.DrawTooltip();
         }
 
