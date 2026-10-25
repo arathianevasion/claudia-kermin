@@ -16,15 +16,15 @@ namespace ClaudiaKermin.Core.Tests
     {
         // The API's grammar limit is internal (https://platform.claude.com/docs/en/build-with-claude/structured-outputs#schema-complexity-limits),
         // so these budgets come from probing it (tools/ClaudiaKermin.SchemaProbe, claude-haiku-5-5). By the
-        // SchemaComplexity.Size proxy, size 75 (11 unions, before #65) compiled and 89 (12 unions, main before the Child
-        // Vessels merge) worked in play; 95 (14 unions) and 97 (4 unions, every part with sentinels) were refused. Raise a
-        // budget only after the probe shows the bigger schema, plus one more nullable field, compiles.
+        // SchemaComplexity.Size proxy, sizes 64, 65, 75, 78 and 79 compiled (79 also on claude-sonnet-5-5); 89, 95 and 97
+        // were refused, whatever their union count (97 had only 4). Raise a budget only after the probe shows the bigger
+        // schema, plus one more nullable field, compiles.
 
         /// <summary>The flight schema's three nullable parts (sequence_plan, debrief, alert).</summary>
         private const int UnionBudget = 3;
 
-        /// <summary>Below the 89 that worked in play (not yet probed), with room under the 95 that was refused.</summary>
-        private const int SizeBudget = 85;
+        /// <summary>Just above the largest size probed to compile (79); 89 was refused.</summary>
+        private const int SizeBudget = 80;
 
         public static TheoryData<string, string> Schemas()
         {
