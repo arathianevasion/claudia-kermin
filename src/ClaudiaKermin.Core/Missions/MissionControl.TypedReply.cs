@@ -57,14 +57,7 @@ namespace ClaudiaKermin.Core.Missions
             var old = mission.Goal;
             mission.Goal = goal;
             Note(LogKind.Notice, "Mission Goal changed to: " + goal);
-            try
-            {
-                MissionStore.WriteInfo(mission.Folder, new MissionInfo { Id = mission.Id, Goal = mission.Goal, Model = mission.Model, SpendingCap = mission.SpendingCap });
-            }
-            catch (Exception e) when (IsFileError(e))
-            {
-                Note(LogKind.Notice, "Couldn't write the Mission's record: " + e.Message);
-            }
+            WriteInfo(mission);
             Event(mission, "goal_changed", goal + " (was: " + old + ")");
             return goal;
         }
