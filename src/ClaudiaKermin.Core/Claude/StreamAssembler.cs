@@ -48,7 +48,7 @@ namespace ClaudiaKermin.Core.Claude
 
     /// <summary>
     /// Builds an <see cref="AssistantMessage"/> from parsed stream events. Unknown events and
-    /// deltas are logged and ignored, unknown blocks are kept as raw JSON, and unknown fields are
+    /// deltas are logged and ignored, unknown blocks are kept as raw JSON (unless they streamed deltas, then they are dropped), and unknown fields are
     /// never read, so new API fields cannot break it.
     /// </summary>
     internal sealed class StreamAssembler
