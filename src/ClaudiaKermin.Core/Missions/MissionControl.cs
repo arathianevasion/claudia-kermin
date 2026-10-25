@@ -1635,7 +1635,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             var mission = _mission;
             if (mission == null || mission.Stage != MissionStage.Paused || !mission.PausedForCap || mission.InFlight) return;
-            if (mission.UnreadableCostLogRestore != null || ResumeRefusal(mission).Length > 0) return;
+            if (mission.Committed >= mission.SpendingCap || mission.UnreadableCostLogRestore != null || ResumeRefusal(mission).Length > 0) return;
             CarryOnIfCapCovers(mission);
         }
 

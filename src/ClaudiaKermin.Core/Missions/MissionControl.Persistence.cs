@@ -236,7 +236,8 @@ namespace ClaudiaKermin.Core.Missions
             _scene = scene;
             if (!leaving)
             {
-                CarryOnWhenSceneAllows();
+                // Entering Flight waits for its first snapshot, which says which vessel the player is in.
+                if (scene != GameScene.Flight) CarryOnWhenSceneAllows();
                 return;
             }
             _snapshot = null;
