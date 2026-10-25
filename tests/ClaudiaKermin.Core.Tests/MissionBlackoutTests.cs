@@ -109,7 +109,312 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Contains("delta-v used 100 m/s over 50 m/s: recorded in a Blackout, not judged", LastUserText(transport.Requests[2]));
         }
 
+        // ---- Approval stands; her messages wait for the link ----
+
+        [Fact]
+        public void InABlackoutEachSequenceFliesWithoutApprovalAndHerMessagesWaitForTheLinkWithEveryRevisionAndItsReasons()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                DebriefGoalNotMet(),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport);
+            ToSequencePlan(mission);
+            mission.TakeCommands();
+            var shown = mission.View.Log.Count;
+
+            // The link drops with a Sequence Plan waiting: the approved Mission Plan stands for it.
+            mission.Send(Snapshot(s => s.HasLink = false));
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+            var first = mission.TakeCommands().OfType<StartScript>().Single();
+
+            mission.Send(new KosRunEnded(Finished(), first.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Running);
+            var commands = mission.TakeCommands();
+            var second = commands.OfType<StartScript>().Single();
+            Assert.NotEqual(first.RunId, second.RunId);
+            // Her Debrief and her next plan are queued: not in the log, not on screen.
+            Assert.DoesNotContain(mission.View.Log.Skip(shown), e => e.Kind != LogKind.Notice);
+            // Her Debrief line and card, and her next Sequence Plan's line and card.
+            Assert.Equal(4, mission.View.QueuedMessages);
+            Assert.DoesNotContain(commands.OfType<PostScreenMessage>(), m => m.Text.StartsWith("Claudia"));
+            // Claudia is told she is in a Blackout and what she may do.
+            Assert.Contains("Blackout: there is no link to Kerbin", AllText(transport.Requests[3]));
+            Assert.Contains("within the Mission Goal and the Spending Cap", AllText(transport.Requests[3]));
+
+            // The link returns: her messages show, with each revision and her reasons.
+            mission.Send(Snapshot(s => s.HasLink = true));
+            Assert.False(mission.View.Blackout);
+            Assert.Contains(mission.View.Log, e => e.Kind == LogKind.Debrief);
+            var revisions = mission.View.Log.Single(e => e.Title == "While there was no link");
+            Assert.Equal(2, revisions.Text.Split('\n').Count(l => l.StartsWith("- Sequence Plan \"Link check\" flown without Approval: ")));
+            Assert.Contains(mission.TakeCommands().OfType<PostScreenMessage>(), m => m.Text.StartsWith("The link to Kerbin is back"));
+            Assert.Contains(QuickReply.Abort, mission.View.QuickReplies);
+        }
+
+        [Fact]
+        public void TheFirstMissionPlanWaitsForTheLinkBecauseThePlayerNeverApprovedOne()
+        {
+            var plan = ScriptedResponse.Fixture("mission-plan.sse", 64);
+            plan.PauseAt = 100;
+            var mission = Control(new StreamingFakeTransport(plan, ScriptedResponse.Fixture("mission-sequence-plan.sse")));
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
+            Assert.Equal(MissionStage.Planning, mission.View.Stage);
+
+            mission.Send(Snapshot(s => s.HasLink = false));
+            plan.Gate.Set();
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval && !v.Busy);
+            Assert.DoesNotContain(QuickReply.Approve, mission.View.QuickReplies);
+            Assert.DoesNotContain(mission.View.Log, e => e.Kind == LogKind.MissionPlan);
+            mission.Send(new Approve());
+            Assert.Equal(MissionStage.AwaitingPlanApproval, mission.View.Stage);
+
+            mission.Send(Snapshot(s => s.HasLink = true));
+            Assert.Contains(mission.View.Log, e => e.Kind == LogKind.MissionPlan);
+            Assert.Contains(QuickReply.Approve, mission.View.QuickReplies);
+        }
+
+        // ---- The player's words are held ----
+
+        [Fact]
+        public void ThePlayersWordsAreHeldInABlackoutAndGoToClaudiaWhenTheLinkReturns()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                ScriptedResponse.Fixture("mission-answer.sse"));
+            var mission = Control(transport);
+            ToRunning(mission);
+            mission.Send(Snapshot(s => s.HasLink = false));
+            Assert.True(mission.View.CanType);
+
+            mission.Send(new AskQuestion("How is it going?"));
+            _background.Drain();
+            Assert.Equal(2, transport.Requests.Count);
+            Assert.Equal(1, mission.View.HeldMessages);
+            Assert.Contains(mission.View.Log, e => e.Kind == LogKind.Player && e.Text == "How is it going?");
+
+            mission.Send(Snapshot(s => s.HasLink = true));
+            DrainUntil(mission, v => transport.Requests.Count == 3 && !v.Busy);
+            Assert.Contains("While the link to Kerbin was down the player said (quoted data): \"How is it going?\"", LastUserText(transport.Requests[2]));
+            Assert.Equal(0, mission.View.HeldMessages);
+        }
+
+        // ---- The Spending Cap ----
+
+        [Fact]
+        public void InABlackoutARequestThatWouldPassTheCapWaitsInsteadOfPausing()
+        {
+            // The priced plan and Sequence Plan cost $1.08, so the Debrief's worst case no longer fits a $1.20 cap.
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan-priced.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-priced.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission, 1.20m);
+            mission.Send(Snapshot(s => s.HasLink = false));
+
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            _background.Drain();
+
+            // Out of a Blackout this Debrief Pauses for Raise cap (story 124); here it waits.
+            Assert.Equal(MissionStage.Debriefing, mission.View.Stage);
+            Assert.Equal("", mission.View.PauseReason);
+            Assert.Contains("Spending Cap", mission.View.CapWait);
+            Assert.Contains(QuickReply.RaiseCap, mission.View.QuickReplies);
+            Assert.Equal(2, transport.Requests.Count);
+        }
+
+        // ---- A Failed Debrief ----
+
+        [Fact]
+        public void AFailedDebriefMakesTheCraftSafeAndEndsTheMissionWithALink()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                ScriptedResponse.Fixture("mission-debrief-failed.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission);
+
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
+            Assert.Single(mission.TakeCommands().OfType<MakeCraftSafe>());
+        }
+
+        [Fact]
+        public void AFailedDebriefInABlackoutMakesTheCraftSafeAndWaitsForTheLink()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                ScriptedResponse.Fixture("mission-debrief-failed.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission);
+            mission.Send(Snapshot(s => s.HasLink = false));
+
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingReducedGoal && !v.Busy);
+            Assert.Single(mission.TakeCommands().OfType<MakeCraftSafe>());
+            Assert.True(mission.View.CanEndMission);
+            Assert.DoesNotContain(mission.View.Log, e => e.Kind == LogKind.Debrief);
+            Assert.DoesNotContain(QuickReply.AcceptReducedGoal, mission.View.QuickReplies);
+
+            mission.Send(Snapshot(s => s.HasLink = true));
+            Assert.Equal(MissionStage.Ended, mission.View.Stage);
+            Assert.Equal("Failed", mission.View.Log.Single(e => e.Kind == LogKind.Debrief).Outcome);
+        }
+
+        // ---- Custom Scripts ----
+
+        [Fact]
+        public void InABlackoutACustomScriptFliesUnderTheSameScriptCheck()
+        {
+            var check = new QuicksaveCheck();
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                DebriefGoalNotMet(),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-rewritten.sse"));
+            var mission = Control(transport, check: check);
+            var start = ToRunning(mission);
+            mission.Send(Snapshot(s => s.HasLink = false));
+
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Running);
+            // The plan that failed the check never ran; its rewrite, a Custom Script, passed and ran without Approval.
+            var started = mission.TakeCommands().OfType<StartScript>().Single();
+            Assert.DoesNotContain("QUICKSAVE", started.Source.ToUpperInvariant());
+            Assert.Equal(5, transport.Requests.Count);
+
+            mission.Send(Snapshot(s => s.HasLink = true));
+            Assert.True(mission.View.Log.Last(e => e.Kind == LogKind.SequencePlan).CustomScript);
+        }
+
+        [Fact]
+        public void InABlackoutAScriptThatFailsTheCheckTwiceWaitsForTheLink()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                DebriefGoalNotMet(),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"));
+            var mission = Control(transport, check: new QuicksaveCheck());
+            var start = ToRunning(mission);
+            mission.Send(Snapshot(s => s.HasLink = false));
+
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.UnsafeScript && !v.Busy);
+            Assert.Empty(mission.TakeCommands().OfType<StartScript>());
+            Assert.Empty(mission.View.QuickReplies.Intersect(new[] { QuickReply.Retry, QuickReply.RetryWithNote, QuickReply.Replan }));
+
+            mission.Send(Snapshot(s => s.HasLink = true));
+            Assert.Equal(new[] { QuickReply.Retry, QuickReply.RetryWithNote, QuickReply.Replan }, mission.View.QuickReplies);
+        }
+
+        // ---- Link loss in Manual Control (#130) ----
+
+        [Fact]
+        public void LinkLossInManualControlWithNoOtherCrewFollowsTheBlackoutRules()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                ScriptedResponse.Fixture("mission-debrief-manual.sse"),
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport);
+            ToRunning(mission);
+            mission.Send(new TakeManualControl());
+            mission.TakeCommands();
+            var ut = OnPad().Ut;
+
+            mission.Send(Snapshot(s => { s.HasLink = false; s.Ut = ut + 1; }));
+            Assert.True(mission.View.Blackout);
+            Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
+            mission.Send(Snapshot(s => { s.HasLink = false; s.Ut = ut + 7; }));
+            Assert.Single(mission.TakeCommands().OfType<MakeCraftSafe>());
+
+            // Claudia takes the craft back, Debriefs the stretch, replans and flies on, all without the player.
+            DrainUntil(mission, v => v.Stage == MissionStage.Running);
+            Assert.Single(mission.TakeCommands().OfType<StartScript>());
+            Assert.Equal(5, transport.Requests.Count);
+            Assert.DoesNotContain(QuickReply.Abort, mission.View.QuickReplies);
+            Assert.DoesNotContain(mission.View.Log, e => e.Kind == LogKind.Debrief);
+            Assert.Single(mission.View.Log, e => e.Kind == LogKind.MissionPlan);
+
+            mission.Send(Snapshot(s => { s.HasLink = true; s.Ut = ut + 8; }));
+            var revisions = mission.View.Log.Single(e => e.Title == "While there was no link").Text;
+            Assert.Contains("- Mission Plan revised: The goal only needs the kOS link proven; nothing has to fly.", revisions);
+            Assert.Contains("- Sequence Plan \"Link check\" flown without Approval: ", revisions);
+            Assert.Contains(mission.View.Log, e => e.Kind == LogKind.Debrief);
+        }
+
+        // ---- An Abort recommendation (#120) ----
+
+        [Fact]
+        public void AnAbortRecommendationOutsideABlackoutNeedsThePlayerAndHoldsTheScriptsWarpUntilTheyDecide()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), DeltaVCheck(50)),
+                ScriptedResponse.Fixture("mission-alert-abort.sse"));
+            var mission = Control(transport);
+            ToRunning(mission);
+            var watch = new AttentionWatch();
+            watch.Observe(mission.View);
+
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            DrainUntil(mission, v => v.AbortRecommended.Length > 0);
+            // Replies arrive on the background drain; the next input checks the script's warp.
+            mission.Send(new UtAdvanced(OnPad().Ut + 1));
+
+            var attention = watch.Observe(mission.View);
+            Assert.Equal(AttentionKind.Abort, attention.Kind);
+            var commands = mission.TakeCommands();
+            Assert.Contains(commands, c => c is DropWarp);
+            Assert.Equal("Claudia recommends Abort", commands.OfType<HoldScriptWarp>().Last().Reason);
+            Assert.Equal(QuickReply.Abort, mission.View.QuickReplies.First());
+
+            mission.Send(new AbortSequence());
+            Assert.Equal("", mission.TakeCommands().OfType<HoldScriptWarp>().Single().Reason);
+        }
+
+        [Fact]
+        public void AnAbortVerdictThatComesBackInABlackoutIsNotOffered()
+        {
+            var alert = ScriptedResponse.Fixture("mission-alert-abort.sse", 64);
+            alert.PauseAt = 100;
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), DeltaVCheck(50)),
+                alert);
+            var mission = Control(transport);
+            ToRunning(mission);
+            var watch = new AttentionWatch();
+            watch.Observe(mission.View);
+
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            mission.Send(Snapshot(s => { s.HasLink = false; s.Stages[0].DeltaVVac = 3100; }));
+            alert.Gate.Set();
+            DrainUntil(mission, v => !v.Busy);
+            mission.Send(new UtAdvanced(OnPad().Ut + 1));
+
+            Assert.Equal("", mission.View.AbortRecommended);
+            Assert.DoesNotContain(QuickReply.Abort, mission.View.QuickReplies);
+            Assert.Null(watch.Observe(mission.View));
+            Assert.DoesNotContain(mission.TakeCommands().OfType<HoldScriptWarp>(), h => h.Reason == "Claudia recommends Abort");
+        }
+
         // ---- Helpers ----
+
+        private static string AllText(HttpRequestSpec request)
+        {
+            using (var doc = JsonDocument.Parse(request.Body))
+                return string.Join("\n", doc.RootElement.GetProperty("messages").EnumerateArray().Select(m => m.GetRawText()));
+        }
 
         private static string DeltaVCheck(double threshold)
         {
@@ -146,11 +451,22 @@ namespace ClaudiaKermin.Core.Tests
             return Edited(ScriptedResponse.Fixture("mission-debrief.sse"), "\\\"goal_reached\\\":true", "\\\"goal_reached\\\":false");
         }
 
-        private MissionControl Control(StreamingFakeTransport transport, PlayerConfig config = null)
+        /// <summary>Fails any script that quicksaves, the way the real check would.</summary>
+        private sealed class QuicksaveCheck : IScriptCheck
+        {
+            public ScriptCheckResult Check(string script)
+            {
+                return script.ToUpperInvariant().Contains("QUICKSAVE")
+                    ? new ScriptCheckResult(null, new List<string> { "line 1: :QUICKSAVE (quicksave)" })
+                    : ScriptCheckResult.Pass();
+            }
+        }
+
+        private MissionControl Control(StreamingFakeTransport transport, PlayerConfig config = null, IScriptCheck check = null)
         {
             var client = new ClaudeClient(new CraftCheckRouter(transport), () => "sk-ant-test", l => { });
             client.Timing.Wait = (d, c) => { };
-            var mission = new MissionControl(client, _background, config ?? new PlayerConfig(), () => true, new PassingScriptCheck());
+            var mission = new MissionControl(client, _background, config ?? new PlayerConfig(), () => true, check ?? new PassingScriptCheck());
             mission.Send(new SaveLoaded(_save.Path));
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(OnPad());
