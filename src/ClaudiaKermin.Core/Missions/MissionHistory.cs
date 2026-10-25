@@ -33,7 +33,7 @@ namespace ClaudiaKermin.Core.Missions
             if (!stage.HasValue || info == null) return null;
             var entry = Entry(folder, info, stage.Value == MissionStage.Succeeded ? MissionStatus.Succeeded : stage.Value == MissionStage.Lost ? MissionStatus.Lost : MissionStatus.Ended);
             entry.CanDelete = true;
-            var log = MissionLogRebuild.From(MissionStore.ReadTranscript(folder), info.Goal, entry.VesselName, config);
+            var log = MissionLogRebuild.From(MissionStore.ReadTranscript(folder), info.Goal, entry.VesselName, config, MissionStore.ReadNotices(folder));
             entry.FinalDebrief = MissionLogRebuild.FinalDebrief(log);
             // Claudia's death is the mod's own Debrief, which no transcript holds.
             if (entry.Status == MissionStatus.Lost)

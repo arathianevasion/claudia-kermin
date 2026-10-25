@@ -49,6 +49,13 @@ namespace ClaudiaKermin.Core.Missions
         public bool Unreadable;
     }
 
+    /// <summary>A notice the mod wrote in the Mission log, with how many messages the conversation held then, so a rebuilt log puts it back in place.</summary>
+    internal sealed class SavedNotice
+    {
+        public int Messages;
+        public string Text = "";
+    }
+
     /// <summary>The transcript as read back from the Mission folder: the frozen system layers and every message.</summary>
     internal sealed class StoredTranscript
     {
@@ -66,6 +73,7 @@ namespace ClaudiaKermin.Core.Missions
         public const string InfoFile = "mission.json";
         public const string UnansweredFile = "unanswered-turn.json";
         public const string EventsFile = "events.jsonl";
+        public const string NoticeEvent = "notice";
         public const string FinishedFile = "finished.json";
 
         private static readonly Encoding Utf8 = new UTF8Encoding(false);
@@ -144,6 +152,53 @@ namespace ClaudiaKermin.Core.Missions
                 .EndObject().ToString();
             Directory.CreateDirectory(folder);
             File.AppendAllText(Path.Combine(folder, EventsFile), line + "\n", Utf8);
+        }
+
+        /// <summary>Appends a notice of the mod's own (an approval, a script's start or end) to the event log, placed by the conversation's length.</summary>
+        public static void AppendNotice(string folder, double ut, int messages, string text)
+        {
+            var line = new JsonWriter().BeginObject()
+                .Field("ut", ut)
+                .Field("event", NoticeEvent)
+                .Field("text", text)
+                .Field("messages", messages)
+                .EndObject().ToString();
+            Directory.CreateDirectory(folder);
+            File.AppendAllText(Path.Combine(folder, EventsFile), line + "\n", Utf8);
+        }
+
+        /// <summary>The notices the event log holds, in the order written; empty without a log, a torn or unreadable line skipped.</summary>
+        public static List<SavedNotice> ReadNotices(string folder)
+        {
+            var notices = new List<SavedNotice>();
+            var path = Path.Combine(folder, EventsFile);
+            if (!File.Exists(path)) return notices;
+            string[] lines;
+            try
+            {
+                lines = File.ReadAllLines(path, Utf8);
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+            {
+                return notices;
+            }
+            foreach (var raw in lines)
+            {
+                JsonNode line;
+                try
+                {
+                    line = JsonReader.Parse(raw);
+                }
+                catch (JsonException)
+                {
+                    continue;
+                }
+                if (line.Kind != JsonKind.Object || JsonNode.Str(line["event"]) != NoticeEvent) continue;
+                var text = JsonNode.Str(line["text"]);
+                if (text == null) continue;
+                notices.Add(new SavedNotice { Messages = (int)(JsonNode.Long(line["messages"]) ?? 0), Text = text });
+            }
+            return notices;
         }
 
         /// <summary>Records that the Mission ran its course (goal met, or a Failed Debrief).</summary>

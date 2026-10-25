@@ -481,7 +481,7 @@ namespace ClaudiaKermin.Core.Missions
             }
             if (mission.Stage == MissionStage.AwaitingPlanApproval)
             {
-                Note(LogKind.Notice, "Mission Plan approved.");
+                Notice("Mission Plan approved.");
                 var newGoal = ApplyGoalChange(mission);
                 mission.Stage = MissionStage.Sequencing;
                 mission.SequenceCounted = false;
@@ -526,7 +526,7 @@ namespace ClaudiaKermin.Core.Missions
                 ShowUnsafeScript(mission, plan, check.Problems);
                 return;
             }
-            Note(LogKind.Notice, "Sequence Plan approved: the mod is starting the script.");
+            Notice("Sequence Plan approved: the mod is starting the script.");
             mission.Stage = MissionStage.Running;
             if (plan.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
             mission.RunningProcessor = processor.Value;
@@ -741,7 +741,7 @@ namespace ClaudiaKermin.Core.Missions
             // Paused from Running, the Mission stays Paused and Resume goes back to approval, not to Running.
             if (mission.Stage == MissionStage.Paused) mission.StageBeforePause = MissionStage.AwaitingSequenceApproval;
             else mission.Stage = MissionStage.AwaitingSequenceApproval;
-            Note(LogKind.Notice, "The script didn't start: " + reason);
+            Notice("The script didn't start: " + reason);
         }
 
         private void RunEnded(KosRunEnded ended)
@@ -756,7 +756,7 @@ namespace ClaudiaKermin.Core.Missions
             EndLive(mission);
             var outcome = StoppedOutcome(mission, ended.Outcome);
             NoteRunOutcome(mission, outcome);
-            Note(LogKind.Notice, "The script ended: " + outcome.Summary + ".");
+            Notice("The script ended: " + outcome.Summary + ".");
             if (DebriefOnReturn(mission, outcome)) return;
             var turn = new Turn
             {

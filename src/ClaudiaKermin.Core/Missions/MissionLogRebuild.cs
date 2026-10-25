@@ -12,7 +12,7 @@ namespace ClaudiaKermin.Core.Missions
     /// <summary>
     /// The Mission log (chat lines, plan cards and Debriefs) built again from a Mission's saved transcript, so a Mission
     /// loaded from a save, or read from the history, shows what it showed before. The player's words and Claudia's replies
-    /// are all in the transcript; the mod's own notices ("Mission Plan approved.") are not, and are not rebuilt.
+    /// are all in the transcript; the mod's own notices (approvals, a script's start and end) are not, and come from the Mission folder's event log.
     /// </summary>
     internal static class MissionLogRebuild
     {
@@ -22,15 +22,19 @@ namespace ClaudiaKermin.Core.Missions
         private const string CrossingsMarker = "Telemetry Checks crossed during the run, with your mid-run verdicts: ";
 
         /// <param name="craftName">The Mission's craft, so the plan cards mark what flies a Child Vessel as the loop's did.</param>
-        public static List<LogEntry> From(StoredTranscript transcript, string goal, string craftName, PlayerConfig config)
+        /// <param name="notices">The mod's own notices the Mission folder kept, each placed by the conversation's length when it was written.</param>
+        public static List<LogEntry> From(StoredTranscript transcript, string goal, string craftName, PlayerConfig config, IList<SavedNotice> notices = null)
         {
             var log = new List<LogEntry>();
             if (!string.IsNullOrEmpty(goal)) log.Add(new LogEntry { Kind = LogKind.Player, Text = "Mission Goal: " + goal });
             if (transcript == null) return log;
 
             var previousUser = "";
+            var next = 0;
+            var count = 0;
             foreach (var message in transcript.Messages)
             {
+                next = AddNotices(log, notices, next, count++);
                 if (message.Role == Role.User)
                 {
                     previousUser = Text(message);
@@ -43,7 +47,16 @@ namespace ClaudiaKermin.Core.Missions
                     if (reply != null) Add(log, reply, previousUser, craftName, config);
                 }
             }
+            AddNotices(log, notices, next, int.MaxValue);
             return log;
+        }
+
+        /// <summary>Puts the notices written while the conversation held at most <paramref name="messages"/> messages into the log; returns where the next unplaced one is.</summary>
+        private static int AddNotices(List<LogEntry> log, IList<SavedNotice> notices, int next, int messages)
+        {
+            while (notices != null && next < notices.Count && notices[next].Messages <= messages)
+                log.Add(new LogEntry { Kind = LogKind.Notice, Text = notices[next++].Text });
+            return next;
         }
 
         private static string Text(Message message)
