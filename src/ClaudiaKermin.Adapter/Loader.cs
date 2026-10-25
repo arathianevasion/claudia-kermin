@@ -39,6 +39,7 @@ namespace ClaudiaKermin.Adapter
         private Texture2D _icon;
         private Texture2D _iconAttention;
         private bool _attentionShown;
+        private bool _settingsSeen;
 
         private void Awake()
         {
@@ -106,6 +107,12 @@ namespace ClaudiaKermin.Adapter
                 var pressed = _button.toggleButton.CurrentState == KSP.UI.UIRadioButton.State.True;
                 if (open && !pressed) _button.SetTrue(false);
                 else if (!open && pressed) _button.SetFalse(false);
+
+                // The Space Center has no Mission panel: its button opens Settings, and opening that is the acknowledgement.
+                // Only the moment it opens counts, so a call that comes while it stays open still flashes; F2 hides it.
+                var settingsSeen = HighLogic.LoadedScene == GameScenes.SPACECENTER && _window.Visible && !_window.UiHidden;
+                if (settingsSeen && !_settingsSeen) _missions.AcknowledgeFlash();
+                _settingsSeen = settingsSeen;
 
                 // Claudia needs the player and the window is closed: the button flashes between its two frames.
                 var attention = _missions.Flashing && Mathf.FloorToInt(Time.realtimeSinceStartup * 2f) % 2 == 0;
