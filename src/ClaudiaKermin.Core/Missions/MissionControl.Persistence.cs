@@ -511,12 +511,11 @@ namespace ClaudiaKermin.Core.Missions
             else if (state.Stage == MissionStage.Sequencing) purpose = Purpose.SequencePlan;
             else return false;
 
-            // The turn (at least its message and the reply) came after the save: the reply is past the marker.
+            // The in-flight turn joined the conversation after the save, with its reply: the first assistant message past the marker.
             var messages = mission.Conversation;
-            if (messages.Count < state.TranscriptMarker + 2) return false;
-            var last = messages[messages.Count - 1];
-            if (last.Role != Role.Assistant) return false;
-            var reply = MissionReply.Parse(string.Concat(last.Content.OfType<TextBlock>().Select(b => b.Text)));
+            var first = messages.Skip(state.TranscriptMarker).FirstOrDefault(m => m.Role == Role.Assistant);
+            if (first == null) return false;
+            var reply = MissionReply.Parse(string.Concat(first.Content.OfType<TextBlock>().Select(b => b.Text)));
             if (reply == null || Mismatch(purpose, reply) != null) return false;
             if (purpose == Purpose.SequencePlan && !reply.SequencePlan.Manual && !CheckScript(reply.SequencePlan).Passed) return false;
 
