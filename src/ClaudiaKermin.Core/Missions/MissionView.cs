@@ -133,6 +133,8 @@ namespace ClaudiaKermin.Core.Missions
         public string AnsweredBy = "";
         /// <summary>The universal time the entry was made; stamped when the entry first reaches a view (so an entry from before a load reads as the load time); 0 until a UT has been reported.</summary>
         public double Ut;
+        /// <summary>Claudia's, made in a Blackout: it waits for the link before any view shows it.</summary>
+        internal bool Queued;
     }
 
     public enum CraftCheckState
@@ -329,6 +331,15 @@ namespace ClaudiaKermin.Core.Missions
         /// Mission carries on (a run is never Paused for it); the screen message's text, or "" when nothing waits.
         /// </summary>
         public string CapWait = "";
+        /// <summary>
+        /// Blackout: Claudia has no link to Kerbin. She flies on under the approved Mission Plan; her messages are queued (not
+        /// in <see cref="Log"/> until the link returns), the player's typed words are held, and Abort is not offered.
+        /// </summary>
+        public bool Blackout;
+        /// <summary>In a Blackout: how many of Claudia's messages wait for the link.</summary>
+        public int QueuedMessages;
+        /// <summary>In a Blackout: how many of the player's messages are held for the link.</summary>
+        public int HeldMessages;
         /// <summary>The question shown with Yes/Not yet after a typed reply; null otherwise.</summary>
         public string ConfirmPrompt;
 

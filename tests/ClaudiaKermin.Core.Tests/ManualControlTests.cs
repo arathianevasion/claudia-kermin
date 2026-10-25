@@ -441,8 +441,10 @@ namespace ClaudiaKermin.Core.Tests
 
             mission.Send(new Approve());
 
+            // With no link it is a Blackout: the stretch waits for the player and the link (MissionBlackoutTests).
             Assert.Equal(MissionStage.AwaitingSequenceApproval, mission.View.Stage);
-            Assert.Contains(mission.View.Log, e => e.Kind == LogKind.Notice && e.Text.StartsWith("Can't start the manual stretch"));
+            Assert.Contains(mission.View.Log, e => e.Kind == LogKind.Notice && e.Text.Contains("waits for you when the link returns"));
+            Assert.DoesNotContain(QuickReply.Approve, mission.View.QuickReplies);
         }
 
         // ---- Handing back ----
@@ -659,7 +661,7 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void ALinkThatComesBackWithinTheGraceDoesNotHandBackAndTheGraceStartsAgainWhenItDrops()
         {
-            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-manual.sse", "mission-plan.sse");
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-manual.sse", "mission-plan.sse", "mission-sequence-plan.sse");
             var mission = Control(transport);
             ToRunning(mission);
             mission.Send(new TakeManualControl());
@@ -680,7 +682,8 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 20; }));
             Assert.Single(mission.TakeCommands().OfType<MakeCraftSafe>());
             Assert.Single(mission.View.Log, e => e.Kind == LogKind.Player && e.Text.StartsWith("Hand back"));
-            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            // Still no link: a Blackout, so the revised Mission Plan flies without Approval (#130).
+            DrainUntil(mission, v => v.Stage == MissionStage.Running);
             Assert.Empty(mission.TakeCommands().OfType<MakeCraftSafe>());
         }
 
@@ -757,7 +760,7 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void LosingTheLinkInManualControlWithNoOtherCrewTakesTheCraftBackAndMakesItSafe()
         {
-            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-manual.sse", "mission-plan.sse");
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-manual.sse", "mission-plan.sse", "mission-sequence-plan.sse");
             var mission = Control(transport);
             ToRunning(mission);
             mission.Send(new TakeManualControl());
@@ -776,7 +779,8 @@ namespace ClaudiaKermin.Core.Tests
             Assert.True(message.Always);
             Assert.Contains(mission.View.Log, e => e.Kind == LogKind.Notice && e.Text == told);
             Assert.Equal(MissionStage.Debriefing, mission.View.Stage);
-            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            // A Blackout (#130): the revised Mission Plan and its next sequence fly without Approval.
+            DrainUntil(mission, v => v.Stage == MissionStage.Running);
             Assert.Contains("link dropped", AllText(transport.Requests[2]));
         }
 

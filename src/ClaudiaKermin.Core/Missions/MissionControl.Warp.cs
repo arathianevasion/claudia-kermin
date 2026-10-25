@@ -33,12 +33,13 @@ namespace ClaudiaKermin.Core.Missions
         {
             var mission = _mission;
             var running = mission != null && !MissionOver && IsRunning(mission);
-            var linked = _snapshot == null || _snapshot.Linked;
+            var linked = _craftLinked;
             if (running && _warpLinked && !linked) HoldFor(ScriptWarp.LinkLost);
             _warpLinked = linked;
 
             var reason = mission == null || MissionOver ? ""
-                : ScriptWarp.HoldReason(running, mission.Stage, mission.WaitingForCap, _ut < _warpMomentUntil ? _warpMoment : "");
+                : ScriptWarp.HoldReason(running, mission.Stage, mission.WaitingForCap, mission.AbortRecommendation.Length > 0,
+                    _ut < _warpMomentUntil ? _warpMoment : "");
             if (reason == _warpHold) return;
             if (reason.Length > 0)
             {

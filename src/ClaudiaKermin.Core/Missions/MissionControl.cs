@@ -76,7 +76,8 @@ namespace ClaudiaKermin.Core.Missions
 
         public void Send(MissionInput input)
         {
-            if (input is GameSnapshot) Snapshot((GameSnapshot)input);
+            if (HeldForLink(input)) { }
+            else if (input is GameSnapshot) Snapshot((GameSnapshot)input);
             else if (input is SaveLoaded) Loaded(((SaveLoaded)input).SaveDirectory);
             else if (input is MissionsRestored) Restored((MissionsRestored)input);
             else if (input is SceneChanged) SceneChanging(((SceneChanged)input).Scene);
@@ -118,7 +119,9 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is RunEventSeen) EventSeen((RunEventSeen)input);
             else if (input is AcceptReducedGoal) ReducedGoalAccepted();
             else if (input is StockAlarmFired) StockAlarmWentOff();
+            else if (input is CraftLinkSeen) CraftLinkReported((CraftLinkSeen)input);
             CheckDue();
+            CheckBlackout();
             CheckScriptWarp();
             CheckRunaway();
             CheckTelemetry();
@@ -396,6 +399,7 @@ namespace ClaudiaKermin.Core.Missions
             _saveDirectory = saveDirectory;
             _snapshot = null;
             _active = null;
+            _craftLinked = true;
             _pendingStart = null;
             _startRefusal = "";
             _craftCheck.Reset();
@@ -411,6 +415,7 @@ namespace ClaudiaKermin.Core.Missions
             if (!TakeSnapshot(snapshot)) return;
             var previous = _snapshot;
             _snapshot = snapshot;
+            _craftLinked = snapshot.Linked;
             _craftCheck.OnSnapshot(snapshot);
             LinkSeen(previous, snapshot);
             var mission = _mission;
@@ -861,7 +866,7 @@ namespace ClaudiaKermin.Core.Missions
                 turn.Messages = new List<Message>();
                 if (turn.Effort != mission.Effort) turn.Messages.Add(Message.SystemEffort(turn.Effort));
                 turn.Messages.Add(Message.UserText(turn.UserText));
-                turn.Messages.Add(Message.SystemText(turn.Notice));
+                turn.Messages.Add(Message.SystemText(turn.Notice + BlackoutNotice(mission)));
             }
 
             var request = new MessagesRequest
@@ -876,7 +881,8 @@ namespace ClaudiaKermin.Core.Missions
             request.Messages.AddRange(mission.Conversation);
             request.Messages.AddRange(turn.Messages);
             decimal worstCase;
-            if (!MaySend(mission, request, turn.Waits || IsRunning(mission), out worstCase)) return;
+            // In a Blackout nothing Pauses at the cap: the player couldn't answer, so the request waits (the waiting call).
+            if (!MaySend(mission, request, turn.Waits || IsRunning(mission) || mission.Blackout, out worstCase)) return;
             mission.WaitingForCap = false;
             mission.CapWaitText = "";
 
@@ -1013,6 +1019,7 @@ namespace ClaudiaKermin.Core.Missions
             if (mission.DeferredRestore != null) return;
 
             Apply(mission, turn, reply, message.FallbackRan ? message.Model ?? "" : "");
+            if (mission == _mission) FlyInBlackout(mission);
 
             SendQueued(mission);
         }
@@ -1168,7 +1175,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.ConfirmPrompt = null;
             mission.UnsafeProblems = problems;
             UnsafeScriptCard(mission, plan);
-            NeedsPlayer("Claudia couldn't produce a safe script.");
+            HerNews("Claudia couldn't produce a safe script.");
         }
 
         /// <summary>The card for "Couldn't produce a safe script"; <paramref name="plan"/> is null once the failed plan is gone (after a load).</summary>
@@ -1233,7 +1240,7 @@ namespace ClaudiaKermin.Core.Missions
             if (plan.Sequences.Count == 0)
             {
                 // Claudia can't fly this goal: her line is in the log, and there is nothing to approve.
-                NeedsPlayer("Claudia can't fly this Mission Goal as stated.");
+                HerNews("Claudia can't fly this Mission Goal as stated.");
                 return;
             }
             var body = new StringBuilder();
@@ -1248,7 +1255,7 @@ namespace ClaudiaKermin.Core.Missions
             body.Append("Total ").Append(MetresPerSecond(plan.TotalDeltaV)).Append(", ").Append(plan.ExpectedDuration).Append('.');
             if (plan.MissionTimeSeconds.HasValue) body.Append(" Total Mission time ").Append(MissionClock.Span(plan.MissionTimeSeconds.Value)).Append('.');
             AddCard(mission, LogKind.MissionPlan, "Mission Plan", body.ToString(), plan.Why);
-            NeedsPlayer("Claudia has a Mission Plan for your Approval.");
+            HerNews("Claudia has a Mission Plan for your Approval.");
         }
 
         /// <summary>Offers a Sequence Plan for Approval; its script has passed the Script Check (<see cref="Apply"/>).</summary>
@@ -1288,7 +1295,7 @@ namespace ClaudiaKermin.Core.Missions
             card.Script = plan.Script;
             card.CustomScript = plan.CustomScript;
             card.CustomScriptReason = plan.CustomScriptReason;
-            NeedsPlayer("Claudia has a Sequence Plan for your Approval.");
+            HerNews("Claudia has a Sequence Plan for your Approval.");
         }
 
         private void Debriefed(Mission mission, MissionReply reply)
@@ -1313,7 +1320,7 @@ namespace ClaudiaKermin.Core.Missions
                 + (crossings.Length > 0 ? "\nTelemetry Checks crossed: " + crossings : ""), debrief.Why);
             entry.Outcome = debrief.Outcome;
             entry.Debrief = DetailOf(mission, debrief);
-            NeedsPlayer("Claudia's Debrief: " + debrief.Outcome + ".");
+            HerNews("Claudia's Debrief: " + debrief.Outcome + ".");
             if (debrief.GoalReached)
             {
                 mission.Stage = MissionStage.Succeeded;
@@ -1474,7 +1481,7 @@ namespace ClaudiaKermin.Core.Missions
             if (mission.Committed < mission.SpendingCap || mission.PausedForCap || mission.WaitingForCap) return;
             // While Running the Mission is never Paused (story 125): the script finishes, a live call waits at the cap,
             // and the Debrief Pauses for Raise cap (story 124).
-            if (IsRunning(mission)) return;
+            if (IsRunning(mission) || mission.Blackout) return;
             var reason = "The Spending Cap is reached ($" + Dollars(mission.Committed) + " of $" + Dollars(mission.SpendingCap) + "). Raise cap to carry on, or End Mission.";
             if (mission.Stage == MissionStage.Paused) mission.PauseReason += " " + reason;
             else Pause(mission, reason);
@@ -1532,6 +1539,7 @@ namespace ClaudiaKermin.Core.Missions
         private LogEntry Note(LogKind kind, string text)
         {
             var entry = new LogEntry { Kind = kind, Text = text ?? "" };
+            QueueIfBlackout(_mission, entry);
             if (_mission != null) _mission.Log.Add(entry);
             return entry;
         }
@@ -1539,6 +1547,7 @@ namespace ClaudiaKermin.Core.Missions
         private static LogEntry AddCard(Mission mission, LogKind kind, string title, string body, string why)
         {
             var entry = new LogEntry { Kind = kind, Title = title, Text = body, Why = why ?? "" };
+            QueueIfBlackout(mission, entry);
             mission.Log.Add(entry);
             return entry;
         }
@@ -1669,6 +1678,7 @@ namespace ClaudiaKermin.Core.Missions
                     view.QuickReplies = new[] { QuickReply.Abort }.Concat(view.QuickReplies).ToList();
                 if (mission.WaitingForCap && !view.QuickReplies.Contains(QuickReply.RaiseCap))
                     view.QuickReplies = view.QuickReplies.Concat(new[] { QuickReply.RaiseCap }).ToList();
+                ShowBlackout(view, mission);
             }
             // The Craft Check is a request too, before a Mission and when one resumes.
             if (!view.Busy && view.CraftCheck.State == CraftCheckState.Running)
