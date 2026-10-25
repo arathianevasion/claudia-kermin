@@ -119,14 +119,6 @@ namespace ClaudiaKermin.Kerboscript.Tests
         // ---- reentry: measurements ----
 
         [Fact]
-        public void Temperature_is_the_hotter_of_core_and_skin_in_percent_of_its_limit()
-        {
-            Assert.Equal(50, Number("reentry_temp_pct(500, 1000, 100, 2000)"), 6);
-            Assert.Equal(80, Number("reentry_temp_pct(500, 1000, 1600, 2000)"), 6);
-            Assert.Equal(0, Number("reentry_temp_pct(500, 0, 100, 0)"), 6);
-        }
-
-        [Fact]
         public void A_craft_at_rest_on_the_ground_feels_its_own_weight()
         {
             // In free fall dv/dt = gravity: 0 g. At rest in a non-rotating frame dv/dt = 0: gravity alone, 1 g.

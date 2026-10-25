@@ -94,19 +94,6 @@ function reentry_touchdown_ok {
   return speed <= reentry_touchdown_limit().
 }
 
-// Peak percent of the limit for a part: the hotter of its core and its skin, each against its max.
-function reentry_temp_pct {
-  parameter temp, max_temp, skin, skin_max.
-  local pct is 0.
-  if max_temp > 0 {
-    set pct to 100 * temp / max_temp.
-  }
-  if skin_max > 0 {
-    set pct to max(pct, 100 * skin / skin_max).
-  }
-  return pct.
-}
-
 // The g felt, in g: the craft's change in velocity over dt (s) plus gravity's pull at position pos
 // (from the body's centre, m), all in the same non-rotating frame; mu is the body's gravitational
 // parameter. Vectors come as plain components (dv = v_now - v_prev) so this stays pure.
@@ -228,12 +215,9 @@ function reentry_agl {
   return ship:altitude - max(0, ship:geoposition:terrainheight).
 }
 
+// The hottest part in percent of its limit. kOS parts have no temperature suffixes, so the addon reads them.
 function reentry_hottest {
-  local hottest is 0.
-  for p in ship:parts {
-    set hottest to max(hottest, reentry_temp_pct(p:temperature, p:maxtemperature, p:skintemperature, p:skinmaxtemperature)).
-  }
-  return hottest.
+  return addons:claudia:hottestpart.
 }
 
 function reentry_geo {
