@@ -43,6 +43,8 @@ namespace ClaudiaKermin.Core.Missions
         public int Requests;
         /// <summary>The Spending Cap the last log line recorded; null when there is no log or the line has none (an older log).</summary>
         public decimal? Cap;
+        /// <summary>The log exists but could not be read: the totals are unknown, not zero.</summary>
+        public bool Unreadable;
     }
 
     /// <summary>The transcript as read back from the Mission folder: the frozen system layers and every message.</summary>
@@ -204,7 +206,8 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>
         /// Spent and Held as the cost log last recorded them: the log is append-only and never rewound, so it is
         /// the truth whatever save is loaded. A pending charge with no settlement after it (a crash mid-request)
-        /// counts as kept. A torn last line (a crash mid-append) is skipped. Zero when there is no log.
+        /// counts as kept. A torn last line (a crash mid-append) is skipped. Zero when there is no log; Unreadable when
+        /// there is one that can't be read (an IO or access error), which is not zero spend.
         /// </summary>
         public static CostTotals ReadCostTotals(string folder)
         {
@@ -216,8 +219,9 @@ namespace ClaudiaKermin.Core.Missions
             {
                 lines = File.ReadAllLines(path, Utf8);
             }
-            catch (IOException)
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
             {
+                totals.Unreadable = true;
                 return totals;
             }
             for (var i = lines.Length - 1; i >= 0; i--)

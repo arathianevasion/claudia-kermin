@@ -407,6 +407,14 @@ namespace ClaudiaKermin.Core.Missions
 
             // Spend is never the save's: the cost log is never rewound, so a load cannot refund anything.
             var cost = MissionStore.ReadCostTotals(mission.Folder);
+            // A Mission that is over sends nothing more, so its spend can't be refunded into anything.
+            if (cost.Unreadable && !Finished(restore.State.Stage))
+            {
+                // Unreadable is not zero spend (that would be a refund): nothing is sent until the log reads.
+                _mission = mission;
+                PauseForUnreadableCostLog(mission, restore, resumeAfterQuit);
+                return;
+            }
             mission.Spent = cost.Spent;
             mission.Held = cost.Held;
             mission.Requests = cost.Requests;
@@ -417,6 +425,25 @@ namespace ClaudiaKermin.Core.Missions
 
             if (restore.NoSnapshot) NoSnapshotMission(mission);
             else Reconcile(mission, state, resumeAfterQuit);
+        }
+
+        private const string CostLogUnreadableReason = "The Mission's cost log can't be read, so what it has spent isn't known. "
+            + "Fix the file (its permissions, or whatever else holds it open), then Resume; or End Mission.";
+
+        private void PauseForUnreadableCostLog(Mission mission, Restore restore, bool resumeAfterQuit)
+        {
+            var state = restore.State;
+            var before = state.Stage == MissionStage.Paused ? state.StageBeforePause : state.Stage;
+            mission.StageBeforePause = Settle(mission, before);
+            mission.Stage = MissionStage.Paused;
+            mission.PauseCause = PauseCause.Other;
+            mission.PauseReason = CostLogUnreadableReason;
+            mission.AwaitingResume = true;
+            mission.UnreadableCostLogRestore = restore;
+            mission.UnreadableCostLogResumeAfterQuit = resumeAfterQuit;
+            Note(LogKind.Notice, mission.PauseReason);
+            Event(mission, "cost_log_unreadable", "the cost log could not be read; the Mission is paused");
+            NeedsPlayer("Claudia's Mission is Paused.");
         }
 
         private void NoSnapshotMission(Mission mission)

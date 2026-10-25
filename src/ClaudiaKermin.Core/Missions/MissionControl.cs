@@ -240,6 +240,9 @@ namespace ClaudiaKermin.Core.Missions
             public Restore DeferredRestore;
             /// <summary>No snapshot in the loaded save: Paused until the player resumes it or ends it.</summary>
             public bool AwaitingResume;
+            /// <summary>The cost log couldn't be read at load: Paused, with the restore to carry out once it can be.</summary>
+            public Restore UnreadableCostLogRestore;
+            public bool UnreadableCostLogResumeAfterQuit;
             /// <summary>Flown remotely: Claudia stays at Mission Control. False is crewed (she flies aboard).</summary>
             public bool Remote;
             /// <summary>While Paused for EVA science: what the player is to do by hand; "" otherwise.</summary>
@@ -1460,6 +1463,17 @@ namespace ClaudiaKermin.Core.Missions
             if (mission == null || mission.Stage != MissionStage.Paused || mission.InFlight) return;
             // A retired model is only left by Choose model (or End Mission).
             if (mission.PauseCause == PauseCause.ModelGone) return;
+            if (mission.UnreadableCostLogRestore != null)
+            {
+                // Spend is unknown until the log reads; then the load goes ahead as it would have.
+                if (MissionStore.ReadCostTotals(mission.Folder).Unreadable)
+                {
+                    Note(LogKind.Notice, CostLogUnreadableReason);
+                    return;
+                }
+                Reinstate(mission.UnreadableCostLogRestore, mission.UnreadableCostLogResumeAfterQuit);
+                return;
+            }
             var refusal = ResumeRefusal(mission);
             if (refusal.Length > 0)
             {
