@@ -31,12 +31,14 @@
 //|   max_duration ["auto"]: the wait on the pad plus 900 s.
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block.
 //| In thick air (over a tenth of surface pressure) the throttle never drops below the weight of the
-//| craft until cutoff, and the craft never steers more than max_aoa off the airflow, so a craft with
-//| no fins doesn't flip. Engines are staged into from the pad, and launch clamps released.
+//| craft until cutoff, and the craft never steers more than max_aoa off the airflow. With no thrust (a
+//| hop's coast, between stages) only fins and reaction wheels hold it: a craft with neither tumbles in
+//| thick air. Engines are staged into from the pad, and launch clamps released.
 //| Extra results: ap_error (m, apoapsis minus target_ap when the block ended; a hop's shows drag
 //| loss), max_q (Pa, highest dynamic pressure), coast_ap (m, apoapsis at first engine cutoff).
 //| Fails with "launch starts on the ground", "no atmosphere on <body>: use ascend", "no thrust", a
-//| launch_at it can't use, a wait over the cap, "lost control: ...", "fell back into the
+//| launch_at it can't use, a wait over the cap, "lost control: ..." (saying whether it was burning or
+//| coasting, the throttle and q), "fell back into the
 //| atmosphere: ...", out of fuel, or an abort.
 //| Example: `local res is launch(lexicon("target_ap", 80000)). if res:success { set res to circularize(lexicon("at", "ap")). }
 //| addons:claudia:report(res).`
