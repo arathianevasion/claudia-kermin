@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Andrew Watson
 
 using System;
+using System.Collections.Generic;
 using ClaudiaKermin.Core.Missions;
 using ClaudiaKermin.Core.Ui;
 using UnityEngine;
@@ -9,21 +10,27 @@ using UnityEngine;
 namespace ClaudiaKermin.Adapter
 {
     /// <summary>
-    /// The Capcom strip: a bar under the altimeter in Flight. Collapsed, it shows Claudia's portrait, her status chip and
-    /// latest line, the spend meter, the Mission Plan's sequences as a segment track and the lock line, with a tab under
-    /// it that expands the docked <see cref="MissionPanel"/> (and turns amber with what Claudia needs from the player).
-    /// Docked and expanded, the panel hangs under the strip with a Collapse tab under it. Undocked, the tab opens the
-    /// floating Mission window instead. One <see cref="WindowFrame"/> covers the strip, the panel and the tab, so the
-    /// input locks hold over all of them.
+    /// The Capcom strip: a bar in Flight, under the altimeter until the player drags it by its status row (double-click
+    /// that row to put it back); where it sits is kept in windows.cfg as <c>flight.capcom</c>. Collapsed, it shows
+    /// Claudia's portrait, her status chip and latest line, the spend meter, the Mission Plan's sequences as a segment
+    /// track (scrolling sideways when they don't fit) and the lock line, with a tab that expands the docked
+    /// <see cref="MissionPanel"/> (and turns amber with what Claudia needs from the player). The tab and the panel are
+    /// below the strip, or above it when the panel has no room below (<see cref="CapcomStripLayout"/>). Undocked, the tab
+    /// opens the floating Mission window instead. One <see cref="WindowFrame"/> covers the strip, the panel and the tab,
+    /// so the input locks hold over all of them.
     /// </summary>
     public class CapcomStrip
     {
         private const float Width = 740;
         private const float Top = 70;
+        private const string MemoryName = "capcom";
         private static readonly float PortraitSize = ClaudiaSkin.Scaled(44);
         private const float PortraitRadius = 8;
         private const float SegmentGap = 6;
         private const float SegmentBarHeight = 6;
+        private static readonly float ArrowWidth = ClaudiaSkin.Scaled(20);
+        // A drag shorter than this was a click (the first of a double-click), not a move.
+        private const float DragThreshold = 3;
         private static readonly float MeterWidth = ClaudiaSkin.Scaled(72);
         private const float PanelHeight = 640;
         // Below this the prompt and the control bar leave the transcript no room; only a very short screen gets there.
@@ -45,6 +52,23 @@ namespace ClaudiaKermin.Adapter
         private string _shape = "";
         // The strip's own height last Repaint, for clamping the panel to the screen.
         private float _stripHeight = 120;
+
+        // Where the player put the strip (its top left); unmoved, it sits under the altimeter.
+        private bool _moved;
+        private Vector2 _position;
+        private bool _memoryApplied;
+        // A press on the status row; it becomes a move once the pointer has gone past the threshold.
+        private bool _dragging, _dragMoved;
+        private Vector2 _dragFromMouse, _dragFromStrip;
+        // This frame's placement: the strip kept on screen, the side its tab and panel are on.
+        private StripPlacement _place;
+
+        // How far the segment track is scrolled, and the current segment it last scrolled to show.
+        private float _scroll;
+        private string _followedKey, _followedMission;
+        private float _trackDragFromX, _trackDragFromScroll;
+        // The track's control while it is being dragged, 0 otherwise.
+        private int _trackDragId;
 
         public bool UiHidden;
 
@@ -86,12 +110,20 @@ namespace ClaudiaKermin.Adapter
             }
             GUI.skin = HighLogic.Skin;
             Styles();
+            ApplyRemembered();
+            if (_dragging) Drag();
             var expanded = PanelShowing;
-            var shape = expanded + "|" + (View.PlanSequences.Count > 0) + "|" + MissionWindowRules.LockLine(View) + "|" + Screen.height;
-            // Under the altimeter at the top centre; it grows to fit and can't be dragged off.
+            // Placed every frame from where the player left it, so a smaller screen re-clamps it and a larger one gives it back.
+            var at = _moved ? _position : new Vector2((Screen.width - Width) / 2f, Top);
+            _place = CapcomStripLayout.Place(at.x, at.y, new StripSize(Width, _stripHeight, TabHeight(), PanelHeight, MinPanelHeight), Screen.width, Screen.height);
+            var above = _place.Side == PanelSide.Above;
+
+            var shape = expanded + "|" + _place.Side + "|" + (View.PlanSequences.Count > 0) + "|" + MissionWindowRules.LockLine(View) + "|" + Screen.height;
+            // It grows to fit; with the tab (and panel) above, the window starts above the strip.
             var height = shape == _shape ? _frame.Rect.height : 0;
             _shape = shape;
-            _frame.Rect = new Rect((Screen.width - Width) / 2f, Top, Width, height);
+            var y = above ? _place.Y - TabHeight() - (expanded ? _place.PanelHeight : 0) : _place.Y;
+            _frame.Rect = new Rect(_place.X, y, Width, height);
             _frame.Style = _window;
             _frame.Show(Draw, GUILayout.Width(Width));
             // Keys typed into the docked prompt must not stage, throttle or rotate the craft.
@@ -101,12 +133,25 @@ namespace ClaudiaKermin.Adapter
         /// <summary>Releases the input locks; call when the strip goes away.</summary>
         public void Unlock()
         {
+            _dragging = false;
+            EndTrackDrag();
             _frame.Unlock();
+        }
+
+        // A track drag whose track went away (or stopped scrolling) mustn't keep the pointer captured.
+        private void EndTrackDrag()
+        {
+            if (_trackDragId != 0 && GUIUtility.hotControl == _trackDragId) GUIUtility.hotControl = 0;
+            _trackDragId = 0;
         }
 
         private void Draw(int id)
         {
             var expanded = PanelShowing;
+            var above = _place.Side == PanelSide.Above;
+            var tabRow = above ? TabRow() : default(Rect);
+            if (above && expanded) DrawPanel();
+
             GUILayout.BeginVertical(expanded ? _stripDocked : _strip);
             DrawStatusRow();
             GUILayout.Space(ClaudiaSkin.Gap);
@@ -115,21 +160,84 @@ namespace ClaudiaKermin.Adapter
             GUILayout.EndVertical();
             if (Event.current.type == EventType.Repaint) _stripHeight = GUILayoutUtility.GetLastRect().height;
 
-            if (expanded)
-            {
-                // About 640 px, less on a short screen: the strip, the panel and the tab all stay on it.
-                var room = Screen.height - Top - _stripHeight - TabHeight() - ClaudiaSkin.Gap;
-                GUILayout.BeginVertical(_panelBox, GUILayout.Height(Mathf.Clamp(room, MinPanelHeight, PanelHeight)));
-                _panel.Draw(View, Width - 2, true, ClaudiaSkin.Padding);
-                GUILayout.EndVertical();
-            }
-            DrawTab(expanded);
+            if (!above && expanded) DrawPanel();
+            if (!above) tabRow = TabRow();
+            // Drawn last, over the edge of what it joins.
+            DrawTab(tabRow, expanded, above);
             WindowFrame.DrawTooltip();
+        }
+
+        // About 640 px, less where the strip leaves less room: the strip, the panel and the tab all stay on screen.
+        private void DrawPanel()
+        {
+            GUILayout.BeginVertical(_panelBox, GUILayout.Height(_place.PanelHeight));
+            _panel.Draw(View, Width - 2, true, ClaudiaSkin.Padding);
+            GUILayout.EndVertical();
+        }
+
+        // ---- Moving the strip ----
+
+        // On the first draw, where the player last left it.
+        private void ApplyRemembered()
+        {
+            if (_memoryApplied) return;
+            _memoryApplied = true;
+            WindowBox box;
+            _moved = WindowMemory.TryGet(MemoryName, out box);
+            if (_moved) _position = new Vector2(box.X, box.Y);
+        }
+
+        // Follows the pointer while the button is held; saved once it is let go, if it moved.
+        private void Drag()
+        {
+            var delta = GuiMouse() - _dragFromMouse;
+            if (!Input.GetMouseButton(0))
+            {
+                _dragging = false;
+                if (!_dragMoved) return;
+                // Kept as placed on this screen, so a later, smaller screen doesn't remember it squeezed.
+                _position = new Vector2(_place.X, _place.Y);
+                WindowMemory.Store(MemoryName, new WindowBox(_position.x, _position.y, Width, _stripHeight));
+                return;
+            }
+            if (!_dragMoved && delta.magnitude < DragThreshold) return;
+            _dragMoved = _moved = true;
+            _position = _dragFromStrip + delta;
+        }
+
+        // Back under the altimeter, and forgotten, so it follows the screen's centre again.
+        private void ResetPosition()
+        {
+            _dragging = false;
+            _moved = false;
+            WindowMemory.Forget(MemoryName);
+        }
+
+        // A press in the status row starts a drag; a double-click resets.
+        private void HandleStatusRowInput(Rect row)
+        {
+            GUI.Label(row, new GUIContent("", "Drag to move the strip; double-click to put it back under the altimeter"), GUIStyle.none);
+            var e = Event.current;
+            if (e.type != EventType.MouseDown || e.button != 0 || !row.Contains(e.mousePosition)) return;
+            if (e.clickCount == 2) ResetPosition();
+            else
+            {
+                _dragging = true;
+                _dragMoved = false;
+                _dragFromMouse = GuiMouse();
+                _dragFromStrip = new Vector2(_place.X, _place.Y);
+            }
+            e.Use();
+        }
+
+        private static Vector2 GuiMouse()
+        {
+            return new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
         }
 
         // ---- Status row ----
 
-        // The portrait; "Claudia", the status chip and her latest line; the spend text over its meter on the right.
+        // The portrait; "Claudia", the status chip and her latest line; the spend text over its meter on the right. The row is the strip's handle.
         private void DrawStatusRow()
         {
             GUILayout.BeginHorizontal();
@@ -157,6 +265,7 @@ namespace ClaudiaKermin.Adapter
             GUILayout.FlexibleSpace();
             GUILayout.EndVertical();
             GUILayout.EndHorizontal();
+            HandleStatusRowInput(GUILayoutUtility.GetLastRect());
         }
 
         // The chip's dot and text: the chip style with a dot drawn in its left padding.
@@ -182,25 +291,115 @@ namespace ClaudiaKermin.Adapter
 
         // ---- Segment track ----
 
-        // One segment per sequence of the Mission Plan in an equal-width grid: a bar over "N · name".
+        // One segment per sequence of the Mission Plan, a bar over "N · name", sharing the track equally down to
+        // ClaudiaSkin's minimum width; past that the track scrolls by drag, wheel or the arrows at its ends.
         private void DrawTrack()
         {
             var segments = MissionWindowRules.Segments(View);
+            // Taken on every event, so the drag's id stays the same from one event to the next.
+            var id = GUIUtility.GetControlID(FocusType.Passive);
             if (segments.Count == 0)
             {
+                EndTrackDrag();
                 GUILayout.Label(MissionWindowRules.NoPlanYet, ClaudiaSkin.Secondary);
                 return;
             }
             var labelHeight = _segmentCurrent.CalcHeight(new GUIContent("A"), 100);
             var row = GUILayoutUtility.GetRect(1, SegmentBarHeight + 4 + labelHeight, GUILayout.ExpandWidth(true));
+            // The layout pass has no width yet.
+            if (Event.current.type == EventType.Layout) return;
+            var track = new SegmentTrack(segments.Count, row.width, ClaudiaSkin.MinSegmentWidth, SegmentGap);
+            FollowCurrent(track, segments);
+            HandleTrackInput(id, row, track);
             if (Event.current.type != EventType.Repaint) return;
-            var width = (row.width - SegmentGap * (segments.Count - 1)) / segments.Count;
-            for (var i = 0; i < segments.Count; i++)
+
+            GUI.BeginClip(row);
+            var visible = track.Visible(_scroll);
+            for (var i = visible.First; i <= visible.Last; i++)
             {
-                var x = row.x + i * (width + SegmentGap);
-                DrawBar(new Rect(x, row.y, width, SegmentBarHeight), segments[i].Bar);
-                DrawSegmentLabel(new Rect(x, row.y + SegmentBarHeight + 4, width, labelHeight), segments[i]);
+                var x = track.X(i) - _scroll;
+                DrawBar(new Rect(x, 0, track.SegmentWidth, SegmentBarHeight), segments[i].Bar);
+                DrawSegmentLabel(new Rect(x, SegmentBarHeight + 4, track.SegmentWidth, labelHeight), segments[i]);
             }
+            GUI.EndClip();
+            if (_scroll > 0) DrawArrow(LeftArrow(row), ClaudiaSkin.IconShape.ChevronLeft);
+            if (_scroll < track.MaxScroll) DrawArrow(RightArrow(row), ClaudiaSkin.IconShape.ChevronRight);
+        }
+
+        // When the current sequence changes (and on first sight of the plan), it scrolls into view with the next one;
+        // in between, the player's scroll is kept, only clamped to the track.
+        private void FollowCurrent(SegmentTrack track, IList<PlanSegment> segments)
+        {
+            var current = -1;
+            for (var i = 0; i < segments.Count; i++)
+                if (segments[i].State == SegmentState.Current) current = i;
+            var key = View.MissionId + "|" + segments.Count + "|" + current;
+            if (key == _followedKey)
+            {
+                _scroll = track.Clamp(_scroll);
+                return;
+            }
+            // A new Mission starts its track from the left.
+            if (View.MissionId != _followedMission) _scroll = 0;
+            _scroll = track.ScrollToShow(_scroll, current);
+            _followedKey = key;
+            _followedMission = View.MissionId;
+        }
+
+        private void HandleTrackInput(int id, Rect row, SegmentTrack track)
+        {
+            var e = Event.current;
+            var step = track.SegmentWidth + track.Gap;
+            switch (e.GetTypeForControl(id))
+            {
+                case EventType.MouseDown:
+                    if (!track.Scrolls || e.button != 0 || !row.Contains(e.mousePosition)) return;
+                    if (_scroll > 0 && LeftArrow(row).Contains(e.mousePosition)) _scroll = track.Clamp(_scroll - step);
+                    else if (_scroll < track.MaxScroll && RightArrow(row).Contains(e.mousePosition)) _scroll = track.Clamp(_scroll + step);
+                    else
+                    {
+                        GUIUtility.hotControl = _trackDragId = id;
+                        _trackDragFromX = e.mousePosition.x;
+                        _trackDragFromScroll = _scroll;
+                    }
+                    e.Use();
+                    break;
+                case EventType.MouseDrag:
+                    if (GUIUtility.hotControl != id) return;
+                    _scroll = track.Clamp(_trackDragFromScroll - (e.mousePosition.x - _trackDragFromX));
+                    e.Use();
+                    break;
+                case EventType.MouseUp:
+                    if (GUIUtility.hotControl != id) return;
+                    EndTrackDrag();
+                    e.Use();
+                    break;
+                case EventType.ScrollWheel:
+                    if (!track.Scrolls || !row.Contains(e.mousePosition)) return;
+                    // A notch (about 3) moves about a segment; a sideways wheel or trackpad works too.
+                    var delta = Mathf.Abs(e.delta.x) > Mathf.Abs(e.delta.y) ? e.delta.x : e.delta.y;
+                    _scroll = track.Clamp(_scroll + delta * step / 3f);
+                    e.Use();
+                    break;
+            }
+        }
+
+        private static Rect LeftArrow(Rect row)
+        {
+            return new Rect(row.x, row.y, ArrowWidth, row.height);
+        }
+
+        private static Rect RightArrow(Rect row)
+        {
+            return new Rect(row.xMax - ArrowWidth, row.y, ArrowWidth, row.height);
+        }
+
+        // A small chevron on the strip's background over the track's end: there is more that way.
+        private static void DrawArrow(Rect rect, ClaudiaSkin.IconShape shape)
+        {
+            GUI.DrawTexture(rect, ClaudiaSkin.Solid(ClaudiaSkin.BarBackground));
+            var hover = rect.Contains(Event.current.mousePosition);
+            ClaudiaSkin.DrawIcon(new Rect(rect.center.x - 7, rect.center.y - 7, 14, 14), shape, hover ? ClaudiaSkin.Text : ClaudiaSkin.TextSecondary);
         }
 
         private static void DrawBar(Rect bar, SegmentBar kind)
@@ -265,30 +464,37 @@ namespace ClaudiaKermin.Adapter
             return Mathf.Max(ClaudiaSkin.MinClickable + 4, _tabText.CalcHeight(new GUIContent("A"), 200) + 12);
         }
 
-        // A tab centred under the strip (or the panel), joined to it: a down chevron and "Chat", amber with what Claudia
-        // needs from the player, or an up chevron and "Collapse" when the docked panel is open.
-        private void DrawTab(bool expanded)
+        // The tab's row across the window, taken in layout order: above the strip (and panel) or below.
+        private Rect TabRow()
+        {
+            var height = TabHeight();
+            return GUILayoutUtility.GetRect(Width, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
+        }
+
+        // A tab centred on the strip's (or the panel's) edge, joined to it: a chevron pointing the way the panel opens and
+        // "Chat", amber with what Claudia needs from the player, or the chevron back and "Collapse" when the docked panel is open.
+        private void DrawTab(Rect row, bool expanded, bool above)
         {
             var needs = !expanded && MissionWindowRules.NeedsYou(View).Length > 0;
             var text = MissionWindowRules.ExpandTab(View, expanded);
             var textStyle = needs ? _tabTextAttention : _tabText;
-            var height = TabHeight();
             var textWidth = Mathf.Min(textStyle.CalcSize(new GUIContent(text)).x, Width - 120);
             var tabWidth = textWidth + 14 + 6 + 2 * ClaudiaSkin.Padding;
 
-            var row = GUILayoutUtility.GetRect(Width, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
-            var tab = new Rect(row.x + (row.width - tabWidth) / 2f, row.y, tabWidth, height);
+            var tab = new Rect(row.x + (row.width - tabWidth) / 2f, row.y, tabWidth, row.height);
             if (GUI.Button(tab, GUIContent.none, GUIStyle.none) && TabClicked != null) TabClicked();
             if (Event.current.type != EventType.Repaint) return;
 
-            // The box runs up under the strip so only its bottom corners show; the strip's bottom border is cleared where they join.
+            // The box runs under what it joins so only its outer corners show; that edge's border is cleared where they join.
             var style = needs ? _tabAttention : _tab;
-            style.Draw(new Rect(tab.x, tab.y - TabRadius - 2, tab.width, tab.height + TabRadius + 2), false, false, false, false);
-            GUI.DrawTexture(new Rect(tab.x + 1, tab.y - TabRadius - 2, tab.width - 2, TabRadius + 2), ClaudiaSkin.Solid(needs ? ClaudiaSkin.AttentionFill : ClaudiaSkin.BarBackground));
+            var join = TabRadius + 2;
+            style.Draw(new Rect(tab.x, above ? tab.y : tab.y - join, tab.width, tab.height + join), false, false, false, false);
+            GUI.DrawTexture(new Rect(tab.x + 1, above ? tab.yMax : tab.y - join, tab.width - 2, join), ClaudiaSkin.Solid(needs ? ClaudiaSkin.AttentionFill : ClaudiaSkin.BarBackground));
 
             var color = needs ? ClaudiaSkin.Attention : ClaudiaSkin.TextSecondary;
             var x = tab.x + ClaudiaSkin.Padding;
-            ClaudiaSkin.DrawIcon(new Rect(x, tab.center.y - 7, 14, 14), expanded ? ClaudiaSkin.IconShape.ChevronUp : ClaudiaSkin.IconShape.ChevronDown, color);
+            var pointsUp = expanded != above;
+            ClaudiaSkin.DrawIcon(new Rect(x, tab.center.y - 7, 14, 14), pointsUp ? ClaudiaSkin.IconShape.ChevronUp : ClaudiaSkin.IconShape.ChevronDown, color);
             var shown = ClaudiaSkin.Ellipsize(text, textStyle, textWidth);
             textStyle.Draw(new Rect(x + 14 + 6, tab.y, textWidth, tab.height), new GUIContent(shown), tab.Contains(Event.current.mousePosition), false, false, false);
         }

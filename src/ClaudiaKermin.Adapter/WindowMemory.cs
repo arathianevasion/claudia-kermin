@@ -42,5 +42,11 @@ namespace ClaudiaKermin.Adapter
         {
             if (_directory != null && _layouts.Set(Scene(), window, box)) _layouts.Save(_directory);
         }
+
+        /// <summary>Forgets where the window sat in this scene, so it goes back to its default.</summary>
+        public static void Forget(string window)
+        {
+            if (_directory != null && _layouts.Remove(Scene(), window)) _layouts.Save(_directory);
+        }
     }
 }

@@ -70,6 +70,8 @@ namespace ClaudiaKermin.Adapter
         public static readonly float CheckboxHeight = Scaled(32);
         /// <summary>The height of the title bar <see cref="Window"/> leaves for <see cref="DrawTitleBar"/>.</summary>
         public static readonly int TitleBarHeight = Scaled(36);
+        /// <summary>The Capcom strip's segment track never squeezes a segment narrower than this; past it the track scrolls.</summary>
+        public static readonly float MinSegmentWidth = Scaled(110);
 
         public enum ChipKind
         {
@@ -85,6 +87,8 @@ namespace ClaudiaKermin.Adapter
             Lock,
             ChevronDown,
             ChevronUp,
+            ChevronLeft,
+            ChevronRight,
             Check,
             Close,
             Pencil,
@@ -786,6 +790,10 @@ namespace ClaudiaKermin.Adapter
                     return Segment(p, new Vector2(0.2f, 0.35f), new Vector2(0.5f, 0.65f)) <= 0.08f || Segment(p, new Vector2(0.5f, 0.65f), new Vector2(0.8f, 0.35f)) <= 0.08f;
                 case IconShape.ChevronUp:
                     return Segment(p, new Vector2(0.2f, 0.65f), new Vector2(0.5f, 0.35f)) <= 0.08f || Segment(p, new Vector2(0.5f, 0.35f), new Vector2(0.8f, 0.65f)) <= 0.08f;
+                case IconShape.ChevronLeft:
+                    return Segment(p, new Vector2(0.65f, 0.2f), new Vector2(0.35f, 0.5f)) <= 0.08f || Segment(p, new Vector2(0.35f, 0.5f), new Vector2(0.65f, 0.8f)) <= 0.08f;
+                case IconShape.ChevronRight:
+                    return Segment(p, new Vector2(0.35f, 0.2f), new Vector2(0.65f, 0.5f)) <= 0.08f || Segment(p, new Vector2(0.65f, 0.5f), new Vector2(0.35f, 0.8f)) <= 0.08f;
                 default:
                     return Segment(p, new Vector2(0.15f, 0.52f), new Vector2(0.4f, 0.78f)) <= 0.08f || Segment(p, new Vector2(0.4f, 0.78f), new Vector2(0.86f, 0.25f)) <= 0.08f;
             }

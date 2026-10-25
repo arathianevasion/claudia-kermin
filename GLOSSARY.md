@@ -123,7 +123,7 @@ The outcome of a Mission that ends because Claudia was killed aboard the craft.
 _Avoid_: failed, crashed, KIA (for the Mission)
 
 **Capcom strip**:
-The slim bar under the altimeter in Flight through which the player follows a Mission without leaving the flight view: Claudia's portrait and latest line, where the Mission is in its Mission Plan, the Spending Cap, what is locked, and a tab that expands the Mission window docked under it (amber when Claudia needs the player).
+The slim bar in Flight (under the altimeter unless the player drags it elsewhere) through which the player follows a Mission without leaving the flight view: Claudia's portrait and latest line, where the Mission is in its Mission Plan, the Spending Cap, what is locked, and a tab that expands the Mission window docked to it (amber when Claudia needs the player).
 _Avoid_: HUD, status bar, ticker
 
 ### Scripts

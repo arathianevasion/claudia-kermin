@@ -49,6 +49,12 @@ namespace ClaudiaKermin.Core.Ui
             return true;
         }
 
+        /// <summary>Forgets a box, so the window goes back to its default; returns false when none was remembered.</summary>
+        public bool Remove(string scene, string window)
+        {
+            return _boxes.Remove(Key(scene, window));
+        }
+
         public static WindowLayouts Load(string directory)
         {
             var layouts = new WindowLayouts();
