@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Andrew Watson
 //
 // Building Block launch: flies from the ground of a body with an atmosphere to a coast out of it.
-// Built on claudia_lib.ks and KSLib's lib_lazcalc.ks (bundled, kerboscript/kslib/) for its heading;
+// Built on claudia_lib.ks and KSLib's lib_lazcalc.ks (bundled with a recorded patch, kerboscript/kslib/NOTE.md) for its heading;
 // block-only helpers are prefixed launch_. The "//|" lines are Claudia's docs for it; the first is
 // its summary.
 
@@ -320,9 +320,6 @@ function launch {
   if laz_on {
     set laz to LAZcalc_init(target_ap, launch_laz_inc(go:inc, ship:latitude)).
     set hdg to LAZcalc(laz).
-    if not hdg:istype("Scalar") {
-      set hdg to 90.
-    }
   }
   local max_q_pa is -1.
   if opt:throttle_max_q:istype("Scalar") {
@@ -409,11 +406,7 @@ function launch {
         set pitch to launch_pitch(altitude, turn_start_alt, turn_end, opt:turn_shape).
       }
       if laz_on {
-        // LAZcalc returns nothing for a southward launch in the middle of the compass; keep the last heading.
-        local az is LAZcalc(laz).
-        if az:istype("Scalar") {
-          set hdg to az.
-        }
+        set hdg to LAZcalc(laz).
       }
       set want to heading(hdg, pitch):vector.
     } else if spd > 30 {

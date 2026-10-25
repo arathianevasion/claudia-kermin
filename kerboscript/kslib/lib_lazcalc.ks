@@ -65,10 +65,14 @@ FUNCTION LAZcalc_init {
     RETURN data.
 }.
 
-FUNCTION LAZcalc {
+// Claudia Kermin patch (see NOTE.md): LAZcalc's arithmetic, split out so it can run without a ship.
+// lat is the latitude and northSpeed the orbital velocity along north, m/s (LAZcalc passes SHIP's).
+FUNCTION LAZcalc_azimuth {
     PARAMETER
-        data. //pointer to the list created by LAZcalc_init
-    LOCAL inertialAzimuth IS ARCSIN(MAX(MIN(COS(data[0]) / COS(SHIP:LATITUDE), 1), -1)).
+        data, //pointer to the list created by LAZcalc_init
+        lat,
+        northSpeed.
+    LOCAL inertialAzimuth IS ARCSIN(MAX(MIN(COS(data[0]) / COS(lat), 1), -1)).
     LOCAL VXRot IS data[3] * SIN(inertialAzimuth) - data[2] * COS(data[1]).
     LOCAL VYRot IS data[3] * COS(inertialAzimuth).
     
@@ -76,10 +80,9 @@ FUNCTION LAZcalc {
     LOCAL Azimuth IS MOD(ARCTAN2(VXRot, VYRot) + 360, 360).
 
     IF data[5] {
-        LOCAL NorthComponent IS VDOT(SHIP:VELOCITY:ORBIT, SHIP:NORTH:VECTOR).
-        IF NorthComponent > data[5] {
+        IF northSpeed > data[5] {
             SET data[4] TO "Ascending".
-        } ELSE IF NorthComponent < -data[5] {
+        } ELSE IF northSpeed < -data[5] {
             SET data[4] to "Descending".
         }.
     }.
@@ -87,15 +90,22 @@ FUNCTION LAZcalc {
     //Returns northerly azimuth if launching from the ascending node
     IF data[4] = "Ascending" {
         RETURN Azimuth.
-        
-    //Returns southerly azimuth if launching from the descending node
-    } ELSE IF data[4] = "Descending" {
-        IF Azimuth <= 90 {
-            RETURN 180 - Azimuth.
-            
-        } ELSE IF Azimuth >= 270 {
-            RETURN 540 - Azimuth.
-            
-        }.
     }.
+
+    //Returns southerly azimuth if launching from the descending node
+    IF Azimuth <= 90 {
+        RETURN 180 - Azimuth.
+    }.
+    IF Azimuth >= 270 {
+        RETURN 540 - Azimuth.
+    }.
+    // Claudia Kermin patch: the original returned nothing for an azimuth of 90 to 270, which is
+    // already southward.
+    RETURN Azimuth.
+}.
+
+FUNCTION LAZcalc {
+    PARAMETER
+        data. //pointer to the list created by LAZcalc_init
+    RETURN LAZcalc_azimuth(data, SHIP:LATITUDE, VDOT(SHIP:VELOCITY:ORBIT, SHIP:NORTH:VECTOR)).
 }.

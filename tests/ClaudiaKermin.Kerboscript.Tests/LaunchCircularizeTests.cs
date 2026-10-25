@@ -100,6 +100,23 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.DoesNotContain("LAZcalc", CoreLibrary.FullDocs() + CoreLibrary.Summaries());
         }
 
+        // LAZcalc_azimuth is the patched lib_lazcalc's arithmetic without the ship: Kerbin, 80 km orbit,
+        // on the equator (latitude 0); the list is what LAZcalc_init builds: inclination, latitude,
+        // equatorial speed, orbital speed, node, node epsilon (m/s of north speed that switches the node).
+        [Theory]
+        [InlineData(45, "Ascending", 0, 0, "41.7")]
+        [InlineData(45, "Descending", 0, 0, "138.3")]
+        [InlineData(135, "Ascending", 0, 0, "312.1")]
+        [InlineData(135, "Descending", 0, 0, "227.9")]
+        [InlineData(45, "Descending", 10, 50, "41.7")]
+        [InlineData(45, "Ascending", 10, -50, "138.3")]
+        [InlineData(45, "Descending", 10, -3, "138.3")]
+        public void A_northward_and_a_southward_launch_both_get_a_heading(double inc, string node, double epsilon, double northSpeed, string azimuth)
+        {
+            var data = "list(" + inc + ", 0, 174.94, 2278.9, \"" + node + "\", " + epsilon + ")";
+            Assert.Equal(azimuth, One("round(LAZcalc_azimuth(" + data + ", 0, " + northSpeed + "), 1)"));
+        }
+
         [Theory]
         [InlineData(0, 40, 30, 100, 21549.425, "3591.6", "True")]
         [InlineData(0, 150, 30, 100, 21549.425, "7781.74", "False")]
