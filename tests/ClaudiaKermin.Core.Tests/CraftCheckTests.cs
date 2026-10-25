@@ -368,6 +368,21 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void TogglingCommNetMakesTheResultStale()
+        {
+            var mission = Checked(Replies("craft-check-pass.sse"));
+            Assert.False(mission.View.CraftCheck.Stale);
+
+            var commNetOff = Craft();
+            commNetOff.CommNetEnabled = false;
+            mission.Send(commNetOff);
+            Assert.True(mission.View.CraftCheck.Stale);
+
+            mission.Send(Craft());
+            Assert.False(mission.View.CraftCheck.Stale);
+        }
+
+        [Fact]
         public void ADeltaVShortfallIsABlockerThatClosesStartMission()
         {
             var mission = Checked(Replies("craft-check-fail.sse"));
