@@ -1405,6 +1405,15 @@ namespace ClaudiaKermin.Core.Missions
                 MissionCards.DebriefBody(debrief, crossings), debrief.Why);
             entry.Outcome = debrief.Outcome;
             entry.Debrief = DetailOf(mission, debrief);
+            // A card rebuilt from the transcript knows nothing of the crossings: this one replaces it.
+            var rebuilt = mission.SuppressCards ? mission.Log.LastOrDefault(e => e.Kind == LogKind.Debrief) : null;
+            if (rebuilt != null)
+            {
+                rebuilt.Title = entry.Title;
+                rebuilt.Text = entry.Text;
+                rebuilt.Outcome = entry.Outcome;
+                rebuilt.Debrief = entry.Debrief;
+            }
             HerNews("Claudia's Debrief: " + debrief.Outcome + ".");
             if (debrief.GoalReached)
             {
