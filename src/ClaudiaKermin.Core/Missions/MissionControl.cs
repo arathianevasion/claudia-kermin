@@ -1401,10 +1401,22 @@ namespace ClaudiaKermin.Core.Missions
                 debrief.Outcome = "Off-Nominal";
                 Note(LogKind.Notice, "Rated Off-Nominal, not Nominal: a Telemetry Check was crossed during the run.");
             }
+            var rebuiltLog = mission.SuppressCards;
             var entry = AddCard(mission, LogKind.Debrief, "Debrief: " + debrief.Outcome + TakeStopReason(mission),
                 MissionCards.DebriefBody(debrief, crossings), debrief.Why);
+            // Only this card is already in a log rebuilt from the transcript; what follows the Debrief is new.
+            mission.SuppressCards = false;
             entry.Outcome = debrief.Outcome;
             entry.Debrief = DetailOf(mission, debrief);
+            // A card rebuilt from the transcript knows nothing of the crossings: this one replaces it.
+            var rebuilt = rebuiltLog ? mission.Log.LastOrDefault(e => e.Kind == LogKind.Debrief) : null;
+            if (rebuilt != null)
+            {
+                rebuilt.Title = entry.Title;
+                rebuilt.Text = entry.Text;
+                rebuilt.Outcome = entry.Outcome;
+                rebuilt.Debrief = entry.Debrief;
+            }
             HerNews("Claudia's Debrief: " + debrief.Outcome + ".");
             if (debrief.GoalReached)
             {

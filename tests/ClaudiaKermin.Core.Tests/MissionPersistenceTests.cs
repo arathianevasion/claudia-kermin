@@ -412,6 +412,36 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AQuickloadOfASaveMadeDuringADebriefRequestThatHasSinceCompletedAppliesItsDebriefInsteadOfAskingAgain()
+        {
+            var debrief = ScriptedResponse.Fixture("mission-debrief.sse", 64);
+            debrief.PauseAt = 100;
+            _gates.Add(debrief);
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                debrief);
+            var mission = Control(transport);
+            var start = ToRunning(mission);
+            var report = new Dictionary<string, object> { { "success", true }, { "reason", "link check" }, { "situation", "PRELAUNCH" } };
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Finished, report, "", "", false), start.RunId));
+            DrainUntil(mission, v => transport.Requests.Count >= 3);
+            var saved = Saved(mission);
+            Assert.Equal(MissionStage.Debriefing, saved[0].Stage);
+
+            debrief.Gate.Set();
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+            Assert.Equal(3, transport.Requests.Count);
+
+            mission.Send(new MissionsRestored(_save.Path, saved));
+            DrainUntil(mission, v => !v.Busy);
+            Assert.Equal(MissionStage.Succeeded, mission.View.Stage);
+            Assert.Equal(3, transport.Requests.Count);
+            Assert.Single(mission.View.Log, e => e.Kind == LogKind.Debrief);
+            Assert.Empty(Started(mission));
+        }
+
+        [Fact]
         public void LoadingASaveDuringARequestLetsItCompleteThenAppendsTheNotice()
         {
             var sequence = ScriptedResponse.Fixture("mission-sequence-plan.sse", 64);
