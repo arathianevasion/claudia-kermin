@@ -1484,6 +1484,7 @@ namespace ClaudiaKermin.Core.Missions
                 view.StartForm.Estimates[model] = Math.Round(_config.Prices.EstimateMission(model), 2);
             view.StartForm.CanStart = _saveDirectory != null && MissionOver;
             view.StartForm.DefaultSettings = MissionSettingsValues.Defaults(_config);
+            view.StartForm.DefaultRemote = _config.DefaultRemote;
             view.StartForm.Refusal = _startRefusal;
             _craftCheck.Populate(view.CraftCheck, _snapshot);
 

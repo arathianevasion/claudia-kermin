@@ -44,6 +44,9 @@ namespace ClaudiaKermin.Adapter
         /// <summary>Where the window opens in the VAB/SPH when nothing is remembered; unset means the same as elsewhere.</summary>
         public Rect? EditorDefault;
 
+        /// <summary>The window's style (e.g. <see cref="ClaudiaSkin.Window"/>); unset uses the current skin's window.</summary>
+        public GUIStyle Style;
+
         /// <param name="lockId">Unique per window; the keyboard and mouse locks get their own suffixes.</param>
         /// <param name="min">Smallest size the grip allows; ignored when the window isn't resizable.</param>
         public WindowFrame(int windowId, string title, string lockId, Rect initial, Vector2 min, bool resizable)
@@ -69,9 +72,10 @@ namespace ClaudiaKermin.Adapter
         {
             ApplyRemembered();
             if (_resizing) Resize();
+            var style = Style ?? GUI.skin.window;
             Rect = _resizable
-                ? GUILayout.Window(_windowId, Rect, draw, _title, GUILayout.Width(Rect.width), GUILayout.Height(Rect.height))
-                : GUILayout.Window(_windowId, Rect, draw, _title, options);
+                ? GUILayout.Window(_windowId, Rect, draw, _title, style, GUILayout.Width(Rect.width), GUILayout.Height(Rect.height))
+                : GUILayout.Window(_windowId, Rect, draw, _title, style, options);
             Rect = KeepOnScreen(Rect);
             StoreWhenSettled();
             // A held button keeps the lock, so a fast window drag can't outrun the pointer and drop it.

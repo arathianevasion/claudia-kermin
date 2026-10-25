@@ -212,6 +212,8 @@ namespace ClaudiaKermin.Core.Missions
         public IDictionary<string, decimal> Estimates = new Dictionary<string, decimal>();
         /// <summary>The Mission Settings the form starts with (from the player config).</summary>
         public MissionSettingsValues DefaultSettings = new MissionSettingsValues();
+        /// <summary>The Mission type the form starts with (from the player config): remote, or crewed when false.</summary>
+        public bool DefaultRemote;
         /// <summary>Why the last Start Mission was turned away before the Craft Check (Claudia Missing for a crewed Mission, no link for a remote one); "" otherwise.</summary>
         public string Refusal = "";
     }

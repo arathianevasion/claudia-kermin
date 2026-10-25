@@ -53,8 +53,6 @@ namespace ClaudiaKermin.Adapter
             WindowMemory.Init(directory);
             var store = new ApiKeyStore(directory, System.Environment.GetEnvironmentVariable);
             var client = new ClaudeClient(new HttpWebRequestTransport(), store.Load, Debug.Log);
-            _window = new SettingsWindow(new KeySettings(store, client, _background));
-
             // Raw stream dumps are a debug tool: offered only with debug_tools = true in the player config.
             var dumpFolder = config.DebugTools ? Path.Combine(directory, "stream-dumps") : null;
             var chat = new ChatSession(client, _background, () => store.Load() != null)
@@ -68,6 +66,8 @@ namespace ClaudiaKermin.Adapter
             // The real Script Check (ADR 0003) reads kOS.Safe, which kOS loads; without kOS it fails every script.
             var missions = new MissionControl(client, _background, config, () => store.Load() != null, new KosScriptCheck());
             _missions = new MissionDriver(missions, config.DebugTools);
+            _window = new SettingsWindow(new KeySettings(store, client, _background), _missions, config, directory, _chatWindow);
+            _missions.Window.OpenSettings = () => _window.Visible = true;
 
             GameEvents.onGUIApplicationLauncherReady.Add(AddButtons);
             GameEvents.onGUIApplicationLauncherDestroyed.Add(RemoveButtons);
@@ -101,6 +101,14 @@ namespace ClaudiaKermin.Adapter
             _background.Drain();
             _missions.Update();
 
+            if (_button != null)
+            {
+                // Settings is also opened from the Mission window and closed by its own Cancel and Apply.
+                var pressed = _button.toggleButton.CurrentState == KSP.UI.UIRadioButton.State.True;
+                if (_window.Visible && !pressed) _button.SetTrue(false);
+                else if (!_window.Visible && pressed) _button.SetFalse(false);
+            }
+
             if (_missionButton != null)
             {
                 // The window can be opened from elsewhere (Raise cap, Change something): keep its button in step.
@@ -121,14 +129,15 @@ namespace ClaudiaKermin.Adapter
         private void OnGUI()
         {
             _window.OnGUI();
+            // The chat also opens in the Space Center, from Settings' Basic chat (debug).
+            if (SettingsSceneLoaded()) _chatWindow.OnGUI();
+            else _chatWindow.Unlock();
             if (ChatSceneLoaded())
             {
-                _chatWindow.OnGUI();
                 _missions.OnGUI();
             }
             else
             {
-                _chatWindow.Unlock();
                 _missions.Window.Unlock();
                 _missions.Strip.Unlock();
             }

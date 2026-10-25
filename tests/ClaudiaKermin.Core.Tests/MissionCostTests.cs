@@ -345,5 +345,37 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(2.40m, estimates["claude-sonnet-5-5"]);
             Assert.InRange(estimates["claude-opus-5-5"], 4.5m, 5.5m);
         }
+
+        [Fact]
+        public void TheStartFormOffersTheSavedMissionDefaults()
+        {
+            using (var dir = new TempDir())
+            {
+                var config = PlayerConfig.LoadOrCreate(dir.Sub);
+                var mission = Control(new StreamingFakeTransport(), config);
+
+                // Saved from the Space Center while the game runs: the next start form has them.
+                config.SetDefaultModel("claude-opus-5-5");
+                config.DefaultSpendingCap = 6m;
+                config.DefaultDaylightLanding = false;
+                config.DefaultTimeVersusDeltaV = TimeVersusDeltaV.MostEfficient;
+                config.DefaultRemote = true;
+                config.SaveDefaults(dir.Sub);
+                mission.Send(new UtAdvanced(1));
+
+                var form = mission.View.StartForm;
+                Assert.Equal("claude-opus-5-5", form.DefaultModel);
+                Assert.Equal(new[] { "claude-opus-5-5", "claude-sonnet-5-5" }, form.Models);
+                Assert.Equal(6m, form.DefaultSpendingCap);
+                Assert.False(form.DefaultSettings.DaylightLanding);
+                Assert.Equal(TimeVersusDeltaV.MostEfficient, form.DefaultSettings.TimeVersusDeltaV);
+                Assert.True(form.DefaultRemote);
+
+                // And after a restart, from the file.
+                var restarted = Control(new StreamingFakeTransport(), PlayerConfig.LoadOrCreate(dir.Sub));
+                Assert.Equal("claude-opus-5-5", restarted.View.StartForm.DefaultModel);
+                Assert.True(restarted.View.StartForm.DefaultRemote);
+            }
+        }
     }
 }
