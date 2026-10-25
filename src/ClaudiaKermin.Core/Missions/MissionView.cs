@@ -351,6 +351,10 @@ namespace ClaudiaKermin.Core.Missions
         /// from it, when it unloads, and asks first before a far switch that would unload it while Running.
         /// </summary>
         public string CraftVesselId = "";
+        /// <summary>The Mission Plan's Child Vessels while the Mission lasts; empty once it is over (they are ordinary vessels again).</summary>
+        public IList<ChildVesselView> ChildVessels = new List<ChildVesselView>();
+        /// <summary>The vessel id of the Child Vessel a sequence is running on; "" when the run flies the craft or nothing runs.</summary>
+        public string RunningChildVesselId = "";
         /// <summary>The controls locked now because Claudia has the craft; <see cref="ControlLocks.None"/> in Manual Control and when no Mission is active.</summary>
         public ControlLocks Locks;
         /// <summary>

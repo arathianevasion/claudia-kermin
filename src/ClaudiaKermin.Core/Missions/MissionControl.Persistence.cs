@@ -73,6 +73,7 @@ namespace ClaudiaKermin.Core.Missions
                 InterruptReason = mission.InterruptReason,
                 ProcessorPartId = mission.ProcessorPartId,
                 ReducedGoal = mission.ReducedGoal,
+                ChildVessels = ChildVesselsJson(mission),
                 MissionPlan = mission.Plan,
                 SequencePlan = mission.PendingSequence,
             };
@@ -108,6 +109,7 @@ namespace ClaudiaKermin.Core.Missions
                 // Still finished in memory; a later load may offer it as a Paused Mission.
             }
             Event(mission, "finished", mission.Stage.ToString());
+            ReleaseChildVessels(mission);
         }
 
         /// <summary>The turn about to be sent goes to the Mission folder first, so a quit or crash before the reply can re-send it.</summary>
@@ -353,6 +355,7 @@ namespace ClaudiaKermin.Core.Missions
                 ReducedGoal = state.ReducedGoal ?? "",
             };
             foreach (var setting in state.Settings) mission.Settings[setting.Key] = setting.Value;
+            RestoreChildVessels(mission, state.ChildVessels);
 
             // The conversation is the transcript's, whole: turns past the save's marker are kept.
             var transcript = MissionStore.ReadTranscript(mission.Folder);

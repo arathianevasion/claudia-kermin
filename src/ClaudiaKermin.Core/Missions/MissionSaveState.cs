@@ -64,6 +64,8 @@ namespace ClaudiaKermin.Core.Missions
         public uint? ProcessorPartId;
         /// <summary>A Failed Debrief's reduced Mission Goal awaiting the player's Approval; "" otherwise.</summary>
         public string ReducedGoal = "";
+        /// <summary>The Mission's Child Vessels and what the mod knows of each (JSON written by MissionControl); "" for none.</summary>
+        public string ChildVessels = "";
         public MissionPlan MissionPlan;
         /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
         public SequencePlan SequencePlan;
@@ -107,6 +109,7 @@ namespace ClaudiaKermin.Core.Missions
             if (StopReason != null) values["stopReason"] = StopReason;
             if (InterruptReason != null) values["interruptReason"] = InterruptReason;
             if (ProcessorPartId.HasValue) values["processorPartId"] = ProcessorPartId.Value.ToString(CultureInfo.InvariantCulture);
+            if (ChildVessels.Length > 0) values["childVessels"] = ChildVessels;
             foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
             for (var i = 0; i < UnsafeProblems.Count; i++) values[UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture)] = UnsafeProblems[i];
             if (MissionPlan != null || SequencePlan != null) values["plans"] = WritePlans(MissionPlan, SequencePlan);
@@ -144,6 +147,7 @@ namespace ClaudiaKermin.Core.Missions
                 HandBack = Get(values, "handBack") == "true",
                 HandBackMessage = Get(values, "handBackMessage"),
                 ReducedGoal = Get(values, "reducedGoal"),
+                ChildVessels = Get(values, "childVessels"),
             };
             decimal cap;
             if (decimal.TryParse(Get(values, "spendingCap"), NumberStyles.Number, CultureInfo.InvariantCulture, out cap)) state.SpendingCap = cap;
@@ -241,9 +245,12 @@ namespace ClaudiaKermin.Core.Missions
             {
                 json.BeginObject().Field("why", mission.Why).Name("sequences").BeginArray();
                 foreach (var s in mission.Sequences)
-                    json.BeginObject().Field("name", s.Name).Field("intent", s.Intent).Field("delta_v", s.DeltaV).Field("timing", s.Timing).Field("due_time_ut", s.DueTimeUt).Field("manual", s.Manual).EndObject();
+                    json.BeginObject().Field("name", s.Name).Field("intent", s.Intent).Field("delta_v", s.DeltaV).Field("timing", s.Timing).Field("due_time_ut", s.DueTimeUt).Field("manual", s.Manual).Field("vessel", s.Vessel).EndObject();
                 json.EndArray().Field("total_delta_v", mission.TotalDeltaV).Field("expected_duration", mission.ExpectedDuration)
-                    .Field("mission_time_s", mission.MissionTimeSeconds).Field("new_goal", mission.NewGoal).EndObject();
+                    .Field("mission_time_s", mission.MissionTimeSeconds).Field("new_goal", mission.NewGoal).Name("child_vessels").BeginArray();
+                foreach (var c in mission.ChildVessels)
+                    json.BeginObject().Field("name", c.Name).Field("separation_stage", c.SeparationStage).Field("vessel_id", c.VesselId).EndObject();
+                json.EndArray().EndObject();
             }
             json.Name("sequence_plan");
             if (sequence == null) json.Null();
@@ -261,7 +268,7 @@ namespace ClaudiaKermin.Core.Missions
                 Strings(json, "risks", sequence.Risks);
                 json.Field("custom_script", sequence.CustomScript).Field("custom_script_reason", sequence.CustomScriptReason)
                     .Field("script", sequence.Script).Field("due_time_ut", sequence.DueTimeUt)
-                    .Field("window_closes_ut", sequence.WindowClosesUt).Field("late_window_dv", sequence.LateWindowDeltaV).Field("manual", sequence.Manual).EndObject();
+                    .Field("window_closes_ut", sequence.WindowClosesUt).Field("late_window_dv", sequence.LateWindowDeltaV).Field("manual", sequence.Manual).Field("vessel", sequence.Vessel).EndObject();
             }
             return json.EndObject().ToString();
         }
