@@ -118,6 +118,18 @@ _Avoid_: autonomous mode, offline, comms loss
 The state of a Mission while the player flies the craft and Claudia only advises; it ends when the player hands the craft back. A Mission in Manual Control is not Paused.
 _Avoid_: takeover, override, manual mode
 
+**Interrupted**:
+Of a Maneuver Sequence: it was Running when the scene changed, a save was loaded, or the game quit or crashed, so its script is gone. It is never restarted; Claudia gives it an interrupted-sequence Debrief when the player is back in Flight, judging from the craft as it now is. Not a Debrief outcome: the Debrief still ends Nominal, Off-Nominal or Failed.
+_Avoid_: restarted, resumed (an interrupted sequence is Debriefed, never run again)
+
+**Hand back**:
+The player's act, with an optional message about what they did, of giving the craft back to Claudia and ending Manual Control. Claudia gives the manual stretch a short Debrief (judged against its target if it was planned, a plain account if not), then revises the Mission Plan for Approval.
+_Avoid_: give back, return control, release
+
+**Manual stretch**:
+A Maneuver Sequence in the Mission Plan that the player flies by hand (e.g. docking, EVA science), so it has no script. Approving it starts Manual Control; the player's Hand back ends it.
+_Avoid_: manual sequence, manual mode (Manual Control is the state)
+
 **Lost**:
 The outcome of a Mission that ends because Claudia was killed aboard the craft.
 _Avoid_: failed, crashed, KIA (for the Mission)
@@ -151,3 +163,7 @@ _Avoid_: report (as a noun), outcome (which is a Debrief's), return value
 **Script Check**:
 The mod's check of a compiled script against a forbidden list (e.g. save and load, file operations, changing other vessels) before Approval; a script that fails is rewritten or never offered.
 _Avoid_: sandbox, validation
+
+**Couldn't produce a safe script**:
+The state of a Mission when a Sequence Plan's script failed the Script Check, was rewritten once automatically (billed under the Spending Cap), and failed again. The plan is dropped, nothing can be approved, and the player needs to act: **Retry** asks Claudia for the script again, **Retry with a note** does so with the player's guidance, and **Re-plan** has her plan the Maneuver Sequence afresh.
+_Avoid_: script error, unsafe script (as a name for the state), rejected script
