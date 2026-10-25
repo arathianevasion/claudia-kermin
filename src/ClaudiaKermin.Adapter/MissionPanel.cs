@@ -48,6 +48,7 @@ namespace ClaudiaKermin.Adapter
         private bool _confirmingEnd;
         // Raise cap asked for a new Spending Cap and awaits the amount.
         private bool _raising;
+        private bool _choosingModel;
         private string _raiseTo = "";
 
         // The prompt.
@@ -138,6 +139,7 @@ namespace ClaudiaKermin.Adapter
                 case QuickReply.Approve: _send(new Approve()); break;
                 case QuickReply.Retry: _send(new Retry()); break;
                 case QuickReply.RaiseCap: _raising = true; break;
+                case QuickReply.ChooseModel: _choosingModel = true; break;
                 case QuickReply.EndMission: _confirmingEnd = true; break;
                 case QuickReply.Resume: _send(new Resume()); break;
                 case QuickReply.Replan: _send(new Replan()); break;
@@ -379,6 +381,7 @@ namespace ClaudiaKermin.Adapter
                 GUILayout.EndHorizontal();
             }
             DrawRaiseCap(raising);
+            DrawChooseModel();
         }
 
         // End Mission is always in the control bar during a Mission, so the row doesn't repeat it; confirming an Approval is a checkbox in the transcript.
@@ -439,6 +442,25 @@ namespace ClaudiaKermin.Adapter
             }
             GUI.enabled = true;
             if (ClaudiaSkin.SecondaryButton("Cancel", GUILayout.ExpandWidth(false))) _raising = false;
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+        }
+
+        // Choose model: the Mission is Paused because its model is retired or not found; the player picks another and it resumes.
+        private void DrawChooseModel()
+        {
+            if (!_view.QuickReplies.Contains(QuickReply.ChooseModel)) _choosingModel = false;
+            if (!_choosingModel) return;
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(ClaudiaSkin.Padding);
+            GUILayout.Label("Carry on with", ClaudiaSkin.Body, GUILayout.ExpandWidth(false));
+            foreach (var model in _view.StartForm.Models)
+            {
+                if (model == _view.Model || !ClaudiaSkin.PrimaryButton(model, GUILayout.ExpandWidth(false))) continue;
+                _send(new ChooseModel(model));
+                _choosingModel = false;
+            }
+            if (ClaudiaSkin.SecondaryButton("Cancel", GUILayout.ExpandWidth(false))) _choosingModel = false;
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
         }

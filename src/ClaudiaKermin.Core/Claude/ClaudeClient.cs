@@ -240,7 +240,8 @@ namespace ClaudiaKermin.Core.Claude
             }
             catch (StreamErrorEventException e)
             {
-                attempt.Failure = e.ErrorType == "billing_error" ? StreamFailure.LowCredit : StreamFailure.StreamError;
+                attempt.Failure = e.ErrorType == "billing_error" ? StreamFailure.LowCredit
+                    : e.ErrorType == "not_found_error" ? StreamFailure.ModelNotFound : StreamFailure.StreamError;
                 attempt.ErrorType = e.ErrorType;
                 attempt.ErrorMessage = e.Message;
                 attempt.Retryable = RetryableErrorType(e.ErrorType);
@@ -305,6 +306,8 @@ namespace ClaudiaKermin.Core.Claude
                 attempt.Failure = StreamFailure.Unauthorized;
             else if (attempt.ErrorMessage != null && attempt.ErrorMessage.IndexOf("credit balance", StringComparison.OrdinalIgnoreCase) >= 0)
                 attempt.Failure = StreamFailure.LowCredit;
+            else if (status == 404 || attempt.ErrorType == "not_found_error")
+                attempt.Failure = StreamFailure.ModelNotFound;
             else
             {
                 attempt.Failure = StreamFailure.HttpStatus;

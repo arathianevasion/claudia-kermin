@@ -117,7 +117,14 @@ namespace ClaudiaKermin.Core.Missions
     {
     }
 
-    /// <summary>After "Couldn't produce a safe script": Claudia writes the script again, with the player's note.</summary>
+    /// <summary>Choose model, from a Mission Paused because its model is retired or not found: the Mission carries on with <see cref="Model"/>.</summary>
+    public sealed class ChooseModel : MissionInput
+    {
+        public readonly string Model;
+        public ChooseModel(string model) { Model = model; }
+    }
+
+    /// <summary>After "Couldn't produce a safe script" or a refusal: Claudia tries again, with the player's note.</summary>
     public sealed class RetryWithNote : MissionInput
     {
         public readonly string Note;

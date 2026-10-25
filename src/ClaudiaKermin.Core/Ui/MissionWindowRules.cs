@@ -130,7 +130,7 @@ namespace ClaudiaKermin.Core.Ui
                 return new PromptState { For = PromptFor.Goal, Caption = "Mission Goal", Hint = KeysHint, Placeholder = "Load a save to set up a Mission" };
 
             var awaiting = view.Stage == MissionStage.AwaitingPlanApproval || view.Stage == MissionStage.AwaitingSequenceApproval;
-            var unsafeScript = view.Stage == MissionStage.UnsafeScript;
+            var unsafeScript = view.Stage == MissionStage.UnsafeScript || view.QuickReplies.Contains(QuickReply.RetryWithNote);
             var mode = chosen;
             if (mode == PromptFor.Goal || (mode == PromptFor.Change && !awaiting) || (mode == PromptFor.Note && !unsafeScript)) mode = PromptFor.Reply;
             if (mode == PromptFor.Reply && !awaiting) mode = PromptFor.Question;
@@ -145,7 +145,7 @@ namespace ClaudiaKermin.Core.Ui
                     : mode == PromptFor.Question ? "Ask Claudia" : "Reply to Claudia",
                 Hint = manual ? "Hand back sends what you typed with it" : KeysHint,
                 Placeholder = view.CanType ? "" : Unavailable(view),
-                Enabled = view.CanType,
+                Enabled = view.CanType && (view.Stage != MissionStage.Paused || mode == PromptFor.Note),
             };
         }
 
@@ -190,6 +190,7 @@ namespace ClaudiaKermin.Core.Ui
                 case QuickReply.Resume: return "Resume";
                 case QuickReply.RetryWithNote: return "Retry with a note";
                 case QuickReply.Replan: return "Re-plan";
+                case QuickReply.ChooseModel: return "Choose model";
                 case QuickReply.WarpToDueTime: return "Warp to Due Time";
                 case QuickReply.GoToVessel: return "Go to vessel";
                 case QuickReply.ManualControl: return "Take controls";
