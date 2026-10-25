@@ -18,13 +18,14 @@ namespace ClaudiaKermin.KOS
     /// </summary>
     [kOSAddon("CLAUDIA")]
     [KOSNomenclature("ClaudiaAddon")]
-    public class ClaudiaAddon : kOS.Suffixed.Addon
+    public partial class ClaudiaAddon : kOS.Suffixed.Addon
     {
         private static readonly Dictionary<uint, ClaudiaAddon> ByPart = new Dictionary<uint, ClaudiaAddon>();
 
         public ClaudiaAddon(SharedObjects shared) : base(shared)
         {
             AddSuffix("REPORT", new OneArgsSuffix<Lexicon>(Report, "Report a Claudia script's result"));
+            AddTerrainSuffixes();
             if (shared.KSPPart != null) ByPart[shared.KSPPart.persistentId] = this;
         }
 
