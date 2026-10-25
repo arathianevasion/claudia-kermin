@@ -30,6 +30,8 @@ namespace ClaudiaKermin.Core.Missions
         public string ExpectedDuration = "";
         /// <summary>The expected total Mission time in seconds, waits between sequences included; null when Claudia gave none.</summary>
         public double? MissionTimeSeconds;
+        /// <summary>The player asked to change the Mission Goal: the new goal in their words, applied on Approval; null when the goal stays.</summary>
+        public string NewGoal;
     }
 
     /// <summary>Claudia's proposal for the next Maneuver Sequence, with its Mission Script.</summary>
@@ -150,7 +152,7 @@ namespace ClaudiaKermin.Core.Missions
             + "\"reply_intent\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"approve\",\"revise\",\"question\",\"unclear\"]},{\"type\":\"null\"}],"
             + "\"description\":\"Only when classifying the player's typed reply to a pending plan; otherwise null.\"},"
             + "\"mission_plan\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"why\",\"sequences\",\"total_delta_v\",\"expected_duration\",\"mission_time_s\"],\"properties\":{"
+            + "\"required\":[\"why\",\"sequences\",\"total_delta_v\",\"expected_duration\",\"mission_time_s\",\"new_goal\"],\"properties\":{"
             + "\"why\":{\"type\":\"string\",\"description\":\"One short sentence.\"},"
             + "\"sequences\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"additionalProperties\":false,"
             + "\"required\":[\"name\",\"intent\",\"delta_v\",\"timing\",\"due_time_ut\",\"manual\"],\"properties\":{"
@@ -161,7 +163,8 @@ namespace ClaudiaKermin.Core.Missions
             + "\"manual\":{\"type\":\"boolean\",\"description\":\"True for a stretch the player flies by hand.\"}}}},"
             + "\"total_delta_v\":{\"type\":\"number\",\"description\":\"m/s\"},"
             + "\"expected_duration\":{\"type\":\"string\"},"
-            + "\"mission_time_s\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"description\":\"Expected total Mission time in seconds, waits between sequences included.\"}}},{\"type\":\"null\"}]},"
+            + "\"mission_time_s\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"description\":\"Expected total Mission time in seconds, waits between sequences included.\"},"
+            + "\"new_goal\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Only when the player asked to change the Mission Goal itself: the new Mission Goal in their words, which replaces the old one if they approve this plan; otherwise null.\"}}},{\"type\":\"null\"}]},"
             + "\"sequence_plan\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":false,"
             + "\"required\":[\"name\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"telemetry_checks\",\"risks\",\"custom_script\",\"custom_script_reason\",\"script\",\"due_time_ut\",\"window_closes_ut\",\"late_window_dv\",\"manual\"],"
             + "\"properties\":{"
@@ -240,6 +243,7 @@ namespace ClaudiaKermin.Core.Missions
                     TotalDeltaV = JsonNode.Double(plan["total_delta_v"]) ?? 0,
                     ExpectedDuration = JsonNode.Str(plan["expected_duration"]) ?? "",
                     MissionTimeSeconds = JsonNode.Double(plan["mission_time_s"]),
+                    NewGoal = Goal(JsonNode.Str(plan["new_goal"])),
                 };
                 var sequences = plan["sequences"];
                 if (sequences != null)
@@ -355,6 +359,12 @@ namespace ClaudiaKermin.Core.Missions
                 if (text.Length > 0) items.Add(new GoalItem { Item = text, Done = JsonNode.Bool(item["done"]) ?? false });
             }
             return items;
+        }
+
+        private static string Goal(string text)
+        {
+            text = (text ?? "").Trim();
+            return text.Length == 0 ? null : text;
         }
 
         private static JsonNode Object(JsonNode node)

@@ -243,7 +243,7 @@ namespace ClaudiaKermin.Core.Missions
                 foreach (var s in mission.Sequences)
                     json.BeginObject().Field("name", s.Name).Field("intent", s.Intent).Field("delta_v", s.DeltaV).Field("timing", s.Timing).Field("due_time_ut", s.DueTimeUt).Field("manual", s.Manual).EndObject();
                 json.EndArray().Field("total_delta_v", mission.TotalDeltaV).Field("expected_duration", mission.ExpectedDuration)
-                    .Field("mission_time_s", mission.MissionTimeSeconds).EndObject();
+                    .Field("mission_time_s", mission.MissionTimeSeconds).Field("new_goal", mission.NewGoal).EndObject();
             }
             json.Name("sequence_plan");
             if (sequence == null) json.Null();
