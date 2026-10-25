@@ -25,8 +25,9 @@
 @lazyglobal off.
 
 //| Building Blocks: shared rules. Each block is a function taking one options lexicon, e.g.
-//| `local r is exec_node(lexicon("max_residual", 0.2)).` Options are snake_case in SI units (m, m/s,
-//| s, degrees); leave an option out to get its default. An unknown option fails the block at once
+//| `local res is exec_node(lexicon("max_residual", 0.2)).` Options are snake_case in SI units (m, m/s,
+//| s, degrees); leave an option out to get its default. Don't name a variable after a kOS built-in
+//| (r, v, q, node, transfer, ...): kOS won't compile the script. An unknown option fails the block at once
 //| with reason "unknown option <name>". Every block also takes the common options:
 //|   min_ec_pct [10]: abort when electric charge falls below this percent of capacity.
 //|   max_duration [per block]: abort when the block has run this many seconds, waits included.
@@ -365,6 +366,15 @@ function claudia_tick {
   // Auto-staging may already have moved last_ut past now.
   set ctx:last_ut to max(now, ctx:last_ut).
   return claudia_abort_reason(ctx:opt, claudia_ec_pct(), now - ctx:start_ut, max(0, ctx:parts - ship:parts:length)).
+}
+
+// After a block calls another block (e.g. exec_node for a burn): folds the inner result's delta-v
+// into ctx and takes the craft as it now is, so the inner block's staging isn't counted as part loss.
+function claudia_add_result {
+  parameter ctx, inner.
+  set ctx:dv_used to ctx:dv_used + inner:dv_used.
+  set ctx:parts to ship:parts:length.
+  set ctx:last_ut to time:seconds.
 }
 
 // The block's result lexicon: the Script Result's common fields plus extra (the block's own).
