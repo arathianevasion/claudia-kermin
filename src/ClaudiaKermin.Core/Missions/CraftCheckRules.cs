@@ -69,6 +69,9 @@ namespace ClaudiaKermin.Core.Missions
                 "the craft generates no electric charge, or its batteries are small for the Mission Goal."),
             new CraftCheckRule("weak_control_authority", Warning, "Weak control authority",
                 "the craft has little to steer with for its mass (few or no reaction wheels, RCS or gimbals)."),
+            new CraftCheckRule("no_attitude_control", Warning, "No way to hold attitude",
+                "no part has the reaction_wheel, rcs or aero_stabiliser tag, so the craft can't hold attitude unpowered in thick air or point for a burn in vacuum "
+                + "(gimbals only steer while an engine burns). Applies on top of weak_control_authority, which is for a craft with a little to steer with, not nothing."),
             new CraftCheckRule("no_heat_shield", Warning, "No heat shield on a high-speed return",
                 "the Mission Goal returns to Kerbin at high speed (from the Mun or farther) and the craft has no heat shield."),
             new CraftCheckRule("eva_science_required", Warning, "EVA science required",

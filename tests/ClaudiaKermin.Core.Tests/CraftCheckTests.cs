@@ -118,7 +118,7 @@ namespace ClaudiaKermin.Core.Tests
                 "no_parachutes_for_return", "required_experiments_missing", "child_vessel_problem" })
                 Assert.Contains(blocker, system);
             foreach (var warning in new[] { "launch_twr_low", "landing_twr_low", "margin_under_25", "no_landing_legs", "no_electric_generation_or_low_battery",
-                "weak_control_authority", "no_heat_shield", "eva_science_required", "boot_file_set", "manual_stretches_without_crew" })
+                "weak_control_authority", "no_attitude_control", "no_heat_shield", "eva_science_required", "boot_file_set", "manual_stretches_without_crew" })
                 Assert.Contains(warning, system);
             Assert.DoesNotContain("aerodynamically", system, StringComparison.OrdinalIgnoreCase);
 
@@ -134,6 +134,24 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Contains("\"Mun\":8.45", facts);
             using (var doc = JsonDocument.Parse(request.Body))
                 Assert.Equal("json_schema", doc.RootElement.GetProperty("output_config").GetProperty("format").GetProperty("type").GetString());
+        }
+
+        [Fact]
+        public void NoReactionWheelRcsOrStabiliserIsAWarningNotABlocker()
+        {
+            var transport = Replies("craft-check-pass.sse");
+            Checked(transport);
+
+            // It sits under the Warnings heading, never the Blockers, and names the three part tags the adapter writes.
+            var system = SystemText(transport.Requests.Single());
+            var split = system.IndexOf("Warnings (", StringComparison.Ordinal);
+            Assert.DoesNotContain("no_attitude_control", system.Substring(0, split));
+            var line = system.Substring(split).Split('\n').Single(l => l.StartsWith("- no_attitude_control:", StringComparison.Ordinal));
+            foreach (var tag in new[] { "reaction_wheel", "rcs", "aero_stabiliser" })
+                Assert.Contains(tag, line);
+            // The request schema lets Claude report it.
+            using (var doc = JsonDocument.Parse(transport.Requests.Single().Body))
+                Assert.Contains("no_attitude_control", doc.RootElement.GetProperty("output_config").GetProperty("format").GetProperty("schema").ToString());
         }
 
         [Fact]
