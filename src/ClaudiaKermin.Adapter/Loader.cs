@@ -86,12 +86,20 @@ namespace ClaudiaKermin.Adapter
             var loaded = new List<KeyValuePair<string, Version>>();
             foreach (var entry in AssemblyLoader.loadedAssemblies)
             {
-                if (entry.assembly == null) continue;
-                var version = entry.assembly.GetName().Version;
-                // kOS declares its version to KSP with KSPAssembly: the one KSPAssemblyDependency is checked against.
-                foreach (KSPAssembly declared in entry.assembly.GetCustomAttributes(typeof(KSPAssembly), false))
-                    version = new Version(declared.versionMajor, declared.versionMinor);
-                loaded.Add(new KeyValuePair<string, Version>(entry.name, version));
+                // Only kOS is inspected: other mods' assemblies may not reflect cleanly.
+                if (entry.assembly == null || !string.Equals(entry.name, "kOS", StringComparison.OrdinalIgnoreCase)) continue;
+                try
+                {
+                    var version = entry.assembly.GetName().Version;
+                    // kOS declares its version to KSP with KSPAssembly: the one KSPAssemblyDependency is checked against.
+                    foreach (KSPAssembly declared in entry.assembly.GetCustomAttributes(typeof(KSPAssembly), false))
+                        version = new Version(declared.versionMajor, declared.versionMinor);
+                    loaded.Add(new KeyValuePair<string, Version>(entry.name, version));
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                }
             }
             _kosProblem = KosPresence.Check(KosPresence.Find(loaded));
             if (_kosProblem.Length > 0) Debug.LogError(ModInfo.LogTag + " " + _kosProblem);
@@ -229,14 +237,14 @@ namespace ClaudiaKermin.Adapter
                 _iconAttention = LoadIcon(AttentionIconUrl, ClaudiaSkin.Attention);
             }
             _attentionShown = false;
-            if (_kosProblem.Length > 0 && !_kosProblemShown)
+            _button = ApplicationLauncher.Instance.AddModApplication(
+                ButtonOn, ButtonOff, null, null, null, null, ButtonScenes, _icon);
+            if (Toggled) _button.SetTrue(false);
+            if (_kosProblem.Length > 0 && !_kosProblemShown && ScreenMessages.Instance != null)
             {
                 _kosProblemShown = true;
                 ScreenMessages.PostScreenMessage(_kosProblem, 15f, ScreenMessageStyle.UPPER_CENTER);
             }
-            _button = ApplicationLauncher.Instance.AddModApplication(
-                ButtonOn, ButtonOff, null, null, null, null, ButtonScenes, _icon);
-            if (Toggled) _button.SetTrue(false);
         }
 
         private void RemoveButtons()
