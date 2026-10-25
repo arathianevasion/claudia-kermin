@@ -28,6 +28,10 @@
 //| target_pe_actual (m, the periapsis predicted at the target), correction_dv (m/s the correction
 //| burned; 0 when the prediction was already within 1 km of target_pe, the fix was under 0.1 m/s,
 //| or correction is false).
+//| ejection_node_dv (m/s the ejection node asked for: RSVP's choice), ejection_dv_used (m/s the
+//| ejection burn used) and ejection_burn_time (s the engines burned): a dv_used well above the node
+//| means the burn wasted thrust; a node well above the delta-v a Hohmann transfer needs means RSVP
+//| chose it. All -1 when the block failed before the ejection burn was flown.
 //| Fails with "target is required", "target_pe is required", an option value it can't read, "no body
 //| named <x>", a target that doesn't orbit the craft's body, "not in orbit", "a maneuver node is
 //| already planned: remove it first", "rsvp found no transfer: <why>", "no encounter with
@@ -284,7 +288,8 @@ function transfer_to_correct {
 
 function transfer_to {
   parameter options is lexicon().
-  local extra is lexicon("encounter_ut", -1, "target_pe_actual", -1, "correction_dv", 0).
+  local extra is lexicon("encounter_ut", -1, "target_pe_actual", -1, "correction_dv", 0,
+    "ejection_node_dv", -1, "ejection_dv_used", -1, "ejection_burn_time", -1).
   local ctx is claudia_begin("transfer_to", options, transfer_to_defaults(), "auto").
   if ctx:error <> "" {
     return claudia_finish(ctx, false, ctx:error, extra).
@@ -331,6 +336,9 @@ function transfer_to {
   }
 
   local ejected is transfer_to_burn(ctx, nextnode).
+  set extra:ejection_node_dv to ejected:node_dv.
+  set extra:ejection_dv_used to round(ejected:dv_used, 1).
+  set extra:ejection_burn_time to ejected:burn_time.
   if not ejected:success {
     return claudia_finish(ctx, false, ejected:reason, extra).
   }
