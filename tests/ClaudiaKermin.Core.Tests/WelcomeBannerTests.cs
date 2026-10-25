@@ -53,6 +53,16 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void BasicChatBannerHasNoMissionLines()
+        {
+            var lines = WelcomeBanner.ChatLines("claude-sonnet-5-5", "0.9.0");
+            Assert.Equal(new[] { "Claudia Kermin  v0.9.0", "I fly, you clean up", "claude-sonnet-5-5" }, lines.Select(l => l.Text).ToArray());
+            Assert.Equal(BannerTone.Title, lines[0].Tone);
+            Assert.Equal(BannerTone.Tagline, lines[1].Tone);
+            Assert.Equal(BannerTone.Text, lines[2].Tone);
+        }
+
+        [Fact]
         public void LinesAreStyledTitleTaglineTextSecondary()
         {
             var lines = WelcomeBanner.Lines(new MissionView(), "m", true, BannerSite.None, false, "1.0.0");

@@ -26,8 +26,18 @@ namespace ClaudiaKermin.Adapter
         public void Draw(MissionView view, float width, string setupModel, bool setupRemote, bool goalSet)
         {
             if (!WelcomeBanner.Shows(view.Stage)) return;
+            Draw(WelcomeBanner.Lines(view, setupModel, setupRemote, Site(), goalSet, ModInfo.Version), width);
+        }
+
+        /// <summary>Draws the basic chat's banner: the same art and closing line, without the Mission lines.</summary>
+        public void DrawChat(float width, string model)
+        {
+            Draw(WelcomeBanner.ChatLines(model, ModInfo.Version), width);
+        }
+
+        private void Draw(System.Collections.Generic.IList<BannerLine> lines, float width)
+        {
             Styles();
-            var lines = WelcomeBanner.Lines(view, setupModel, setupRemote, Site(), goalSet, ModInfo.Version);
             // Measured, not counted: the art's width plus the widest text line, against the card's inner width.
             var gap = ClaudiaSkin.Gap * 2;
             var widest = 0f;

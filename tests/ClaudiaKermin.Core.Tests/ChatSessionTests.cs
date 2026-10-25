@@ -186,6 +186,17 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AFullContextWindowPointsAtClear()
+        {
+            var chat = Session(new StreamingFakeTransport(ScriptedResponse.Fixture("context-window.sse")));
+            chat.Send("One more thing");
+            DrainUntil(() => !chat.Busy);
+
+            Assert.Equal(ChatSpeaker.Notice, chat.Lines[1].Speaker);
+            Assert.Equal("This chat has grown too long for Claudia to read. Clear it to start a new conversation.", chat.Lines[1].Text);
+        }
+
+        [Fact]
         public void AFallbackServedReplySaysWhoAnswered()
         {
             var chat = Session(new StreamingFakeTransport(ScriptedResponse.Fixture("compaction-fallback.sse")));

@@ -90,6 +90,18 @@ namespace ClaudiaKermin.Core.Ui
             return artWidth + gap + widestTextWidth <= available ? BannerLayout.Wide : BannerLayout.Narrow;
         }
 
+        /// <summary>The basic chat's text lines: name and version, tagline and model. No Mission, craft or start line.</summary>
+        public static IList<BannerLine> ChatLines(string model, string version)
+        {
+            var lines = new List<BannerLine>
+            {
+                new BannerLine(ModInfo.Name + "  v" + version, BannerTone.Title),
+                new BannerLine(Tagline, BannerTone.Tagline),
+            };
+            if (model.Length > 0) lines.Add(new BannerLine(model, BannerTone.Text));
+            return lines;
+        }
+
         /// <summary>
         /// The text lines. The model and type are the Mission's when one exists, otherwise the pending setup's
         /// (<paramref name="setupModel"/>, <paramref name="setupRemote"/>). <paramref name="goalSet"/> is the Mission
