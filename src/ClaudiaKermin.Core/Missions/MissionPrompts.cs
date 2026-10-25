@@ -224,8 +224,12 @@ namespace ClaudiaKermin.Core.Missions
             + "clearly approve it as it stands, \"revise\" if they want it changed (or want a different Mission Goal), and \"question\" "
             + "for a plain question. Do not revise the plan in this reply; if it is a revision, say a short line and the mod will ask for it.";
 
-        private const string GoalHint =
-            " If the player asks to change the Mission Goal itself, set new_goal to the new goal in their words and plan for it; otherwise new_goal is null.";
+        private static string GoalHint(bool missionPlan)
+        {
+            return " If the player asks to change the Mission Goal itself, "
+                + (missionPlan ? "" : "reply with kind \"mission_plan\" instead, planning for the new goal, and ")
+                + "set new_goal to the new goal in their words; otherwise new_goal is null.";
+        }
 
         public static string ReplyNotice(bool missionPlan)
         {
@@ -235,7 +239,7 @@ namespace ClaudiaKermin.Core.Missions
                 + "it clearly approves the " + plan + " as it stands, \"revise\" if they want something changed, \"question\" "
                 + "if they ask something, and \"unclear\" if you can't tell. For \"revise\", reply with kind \"" + kind
                 + "\" and the revised " + plan + ". Otherwise reply with kind \"answer\" and say a short line (answering any question)."
-                + ManualHint(missionPlan) + (missionPlan ? GoalHint : "");
+                + ManualHint(missionPlan) + GoalHint(missionPlan);
         }
 
         public static string ChangeNotice(bool missionPlan)
@@ -244,7 +248,7 @@ namespace ClaudiaKermin.Core.Missions
             var kind = missionPlan ? MissionReply.MissionPlanKind : MissionReply.SequencePlanKind;
             return "The player wants a change to your pending " + plan + ". Revise it: reply with kind \"" + kind
                 + "\" and the revised " + plan + ". If the change can't be done, reply with kind \"answer\" and say why."
-                + ManualHint(missionPlan) + (missionPlan ? GoalHint : "");
+                + ManualHint(missionPlan) + GoalHint(missionPlan);
         }
 
         private static string ManualHint(bool missionPlan)
