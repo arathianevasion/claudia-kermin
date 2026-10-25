@@ -137,13 +137,21 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void TheThrottleIsLockedWhilePlanningAwaitingApprovalAndRunningAndFreeInManualControlAndOnceTheMissionIsOver()
         {
-            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief.sse");
+            // The Mission Plan is held part-way, so the Mission is surely still Planning when checked: the Craft Check's
+            // drain would otherwise run a fast stream to its end and carry the Mission on to AwaitingPlanApproval.
+            var plan = ScriptedResponse.Fixture("mission-plan.sse", 64);
+            plan.PauseAt = 100;
+            var transport = new StreamingFakeTransport(
+                plan,
+                ScriptedResponse.Fixture("mission-sequence-plan.sse", 64),
+                ScriptedResponse.Fixture("mission-debrief.sse", 64));
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(Pad());
             CraftCheckRouter.StartChecked(mission, _background, Pad(), new StartMission(Goal, 10m, "claude-sonnet-5-5"));
             Assert.Equal(MissionStage.Planning, mission.View.Stage);
             Assert.NotEqual(ControlLocks.None, mission.View.Locks & ControlLocks.Throttle);
+            plan.Gate.Set();
 
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             Assert.NotEqual(ControlLocks.None, mission.View.Locks & ControlLocks.Throttle);
