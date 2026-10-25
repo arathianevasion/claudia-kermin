@@ -252,7 +252,7 @@ namespace ClaudiaKermin.Core.Missions
         /// </summary>
         private void FailedDebrief(Mission mission, Debrief debrief)
         {
-            _commands.Add(new MakeCraftSafe("a Failed Debrief"));
+            _commands.Add(new MakeCraftSafe("a Failed Debrief", mission.VesselId, mission.ProcessorPartId));
             if (debrief.FollowUp == FollowUps.ReducedGoal && debrief.FollowUpText.Length > 0)
             {
                 mission.ReducedGoal = debrief.FollowUpText;
