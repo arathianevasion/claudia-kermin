@@ -49,15 +49,27 @@ namespace ClaudiaKermin.Adapter
 
         // ---- Spacing ----
 
+        /// <summary>
+        /// The one place the text size is set: every font size and every fixed height that holds text is its design
+        /// value (14 px body, 36 px button...) times this, rounded to whole pixels. 1.2 is the 20% bump from the #138 feedback.
+        /// </summary>
+        public const float FontScale = 1.2f;
+
+        /// <summary><paramref name="designPx"/> times <see cref="FontScale"/>, rounded to whole pixels (14 gives 17, 12 gives 14, 11 gives 13, 16 gives 19).</summary>
+        public static int Scaled(float designPx)
+        {
+            return Mathf.RoundToInt(designPx * FontScale);
+        }
+
         public const int Padding = 12;
         public const float Gap = 8;
-        public const float ButtonHeight = 36;
-        /// <summary>Nothing clickable is smaller than this.</summary>
-        public const float MinClickable = 28;
+        public static readonly float ButtonHeight = Scaled(36);
+        /// <summary>Nothing clickable is smaller than this (28 px before scaling, so never under 28).</summary>
+        public static readonly float MinClickable = Scaled(28);
         /// <summary>The height of a checkbox row.</summary>
-        public const float CheckboxHeight = 32;
+        public static readonly float CheckboxHeight = Scaled(32);
         /// <summary>The height of the title bar <see cref="Window"/> leaves for <see cref="DrawTitleBar"/>.</summary>
-        public const int TitleBarHeight = 36;
+        public static readonly int TitleBarHeight = Scaled(36);
 
         public enum ChipKind
         {
@@ -101,11 +113,11 @@ namespace ClaudiaKermin.Adapter
 
         /// <summary>The window: body background with a bar-coloured title strip; draw the title with <see cref="DrawTitleBar"/>.</summary>
         public static GUIStyle Window { get { Build(); return _window; } }
-        /// <summary>Body text, 14 px, wrapping.</summary>
+        /// <summary>Body text, 14 px (times FontScale), wrapping.</summary>
         public static GUIStyle Body { get { Build(); return _body; } }
-        /// <summary>Secondary text, 12 px, wrapping.</summary>
+        /// <summary>Secondary text, 12 px (times FontScale), wrapping.</summary>
         public static GUIStyle Secondary { get { Build(); return _secondary; } }
-        /// <summary>Muted text, 12 px, wrapping.</summary>
+        /// <summary>Muted text, 12 px (times FontScale), wrapping.</summary>
         public static GUIStyle Muted { get { Build(); return _muted; } }
         /// <summary>16 px bold, for names and headers.</summary>
         public static GUIStyle Heading { get { Build(); return _heading; } }
@@ -522,20 +534,20 @@ namespace ClaudiaKermin.Adapter
             // The title is drawn by DrawTitleBar, beside its icon.
             _window.normal.textColor = _window.onNormal.textColor = Color.clear;
 
-            _body = TextStyle(skin, 14, Text, FontStyle.Normal);
-            _secondary = TextStyle(skin, 12, TextSecondary, FontStyle.Normal);
-            _muted = TextStyle(skin, 12, TextMuted, FontStyle.Normal);
-            _section = TextStyle(skin, 11, Accent, FontStyle.Bold);
+            _body = TextStyle(skin, Scaled(14), Text, FontStyle.Normal);
+            _secondary = TextStyle(skin, Scaled(12), TextSecondary, FontStyle.Normal);
+            _muted = TextStyle(skin, Scaled(12), TextMuted, FontStyle.Normal);
+            _section = TextStyle(skin, Scaled(11), Accent, FontStyle.Bold);
             _section.wordWrap = false;
-            _heading = TextStyle(skin, 16, Text, FontStyle.Bold);
+            _heading = TextStyle(skin, Scaled(16), Text, FontStyle.Bold);
             _heading.alignment = TextAnchor.MiddleLeft;
             _heading.wordWrap = false;
-            _mono14 = TextStyle(skin, 14, Text, FontStyle.Normal);
+            _mono14 = TextStyle(skin, Scaled(14), Text, FontStyle.Normal);
             _mono14.wordWrap = false;
             var mono = MonoFont();
             if (mono != null) _mono14.font = mono;
 
-            _textField = new GUIStyle(skin.textField) { richText = false, fontSize = 14, padding = new RectOffset(8, 8, 8, 8), border = new RectOffset(4, 4, 4, 4) };
+            _textField = new GUIStyle(skin.textField) { richText = false, fontSize = Scaled(14), padding = new RectOffset(8, 8, 8, 8), border = new RectOffset(4, 4, 4, 4) };
             _textField.normal.background = _textField.hover.background = Rounded(InputBackground, BorderStrong, 3);
             _textField.focused.background = _textField.onFocused.background = Rounded(InputBackground, Accent, 3);
             _textField.normal.textColor = _textField.hover.textColor = _textField.focused.textColor = _textField.onFocused.textColor = Text;
@@ -561,8 +573,8 @@ namespace ClaudiaKermin.Adapter
             _chipAttention = Chip(skin, AttentionFillStrong, AttentionBorder, Attention);
             _chipDanger = Chip(skin, WindowBackground, DangerBorder, Danger);
 
-            _successText = TextStyle(skin, 12, Success, FontStyle.Normal);
-            _dangerText = TextStyle(skin, 12, Danger, FontStyle.Normal);
+            _successText = TextStyle(skin, Scaled(12), Success, FontStyle.Normal);
+            _dangerText = TextStyle(skin, Scaled(12), Danger, FontStyle.Normal);
             _switchOn = Box(Accent, Accent, 10);
             _switchOff = Box(InputBackground, BorderStrong, 10);
             _knobOn = Box(OnAccent, OnAccent, 7);
@@ -574,39 +586,39 @@ namespace ClaudiaKermin.Adapter
             _bar = new GUIStyle { padding = new RectOffset(Padding, Padding, 6, 6) };
             _bar.normal.background = Solid(BarBackground);
 
-            _prompt = new GUIStyle(skin.textArea) { richText = false, wordWrap = true, fontSize = 14, padding = new RectOffset(10, 44, 10, 10), border = new RectOffset(4, 4, 4, 4), margin = new RectOffset(0, 0, 2, 2) };
+            _prompt = new GUIStyle(skin.textArea) { richText = false, wordWrap = true, fontSize = Scaled(14), padding = new RectOffset(10, Scaled(44), 10, 10), border = new RectOffset(4, 4, 4, 4), margin = new RectOffset(0, 0, 2, 2) };
             _prompt.normal.background = _prompt.hover.background = Rounded(InputBackground, BorderStrong, 3);
             _prompt.focused.background = _prompt.onFocused.background = Rounded(InputBackground, Accent, 3);
             _prompt.normal.textColor = _prompt.hover.textColor = _prompt.focused.textColor = _prompt.onFocused.textColor = Text;
 
-            _bubble = TextStyle(skin, 14, Text, FontStyle.Normal);
+            _bubble = TextStyle(skin, Scaled(14), Text, FontStyle.Normal);
             _bubble.padding = new RectOffset(10, 10, 7, 7);
             _bubble.margin = new RectOffset(0, 0, 4, 4);
             _bubble.border = new RectOffset(9, 9, 9, 9);
             _bubble.normal.background = _bubble.hover.background = _bubble.active.background = Rounded(PlayerFill, PlayerBorder, 8);
-            _claudiaName = TextStyle(skin, 12, Claudia, FontStyle.Bold);
+            _claudiaName = TextStyle(skin, Scaled(12), Claudia, FontStyle.Bold);
             _claudiaName.margin = new RectOffset(0, 0, 6, 0);
-            _notice = TextStyle(skin, 12, TextMuted, FontStyle.Normal);
+            _notice = TextStyle(skin, Scaled(12), TextMuted, FontStyle.Normal);
             _notice.alignment = TextAnchor.MiddleCenter;
             _notice.margin = new RectOffset(0, 0, 4, 4);
             _cardHeader = new GUIStyle { padding = new RectOffset(8, 8, 4, 4), margin = new RectOffset(0, 0, 0, 6), border = new RectOffset(4, 4, 4, 4) };
             _cardHeader.normal.background = Rounded(CardHeader, CardHeader, 3);
-            _kindLabel = TextStyle(skin, 11, TextSecondary, FontStyle.Bold);
+            _kindLabel = TextStyle(skin, Scaled(11), TextSecondary, FontStyle.Bold);
             _kindLabel.wordWrap = false;
             _kindLabel.alignment = TextAnchor.MiddleLeft;
             _titleAccent = new GUIStyle(_heading);
             _titleAccent.normal.textColor = Accent;
 
-            _textButton = TextStyle(skin, 12, Accent, FontStyle.Bold);
+            _textButton = TextStyle(skin, Scaled(12), Accent, FontStyle.Bold);
             _textButton.wordWrap = false;
             _textButton.alignment = TextAnchor.MiddleRight;
             _textButton.hover.textColor = Hex(0xc8e65e);
             _toggleOn = Button(skin, PlayerFill, Accent, Accent, PlayerFill);
             _toggleOn.fontStyle = FontStyle.Bold;
             _small = Button(skin, RaisedBackground, BorderStrong, Text, CardHeader);
-            _small.fontSize = 12;
+            _small.fontSize = Scaled(12);
             _small.padding = new RectOffset(8, 8, 4, 4);
-            _disabledButton = TextStyle(skin, 14, TextSecondary, FontStyle.Normal);
+            _disabledButton = TextStyle(skin, Scaled(14), TextSecondary, FontStyle.Normal);
             _disabledButton.alignment = TextAnchor.MiddleCenter;
             _disabledButton.wordWrap = false;
             _disabledButton.padding = new RectOffset(10, 10, 6, 6);
@@ -621,8 +633,8 @@ namespace ClaudiaKermin.Adapter
             _warningBox = Box(AttentionFill, AttentionBorder, 4);
             _blockerBox = Box(Hex(0x2a2020), DangerBorder, 4);
             _askBox = Box(CardBackground, BorderStrong, 4);
-            _warningLabel = TextStyle(skin, 11, Attention, FontStyle.Bold);
-            _blockerLabel = TextStyle(skin, 11, Danger, FontStyle.Bold);
+            _warningLabel = TextStyle(skin, Scaled(11), Attention, FontStyle.Bold);
+            _blockerLabel = TextStyle(skin, Scaled(11), Danger, FontStyle.Bold);
         }
 
         private static GUIStyle TextStyle(GUISkin skin, int size, Color color, FontStyle fontStyle)
@@ -635,7 +647,7 @@ namespace ClaudiaKermin.Adapter
 
         private static GUIStyle Button(GUISkin skin, Color fill, Color border, Color text, Color hover)
         {
-            var style = new GUIStyle(skin.button) { richText = false, fontSize = 14, alignment = TextAnchor.MiddleCenter, wordWrap = false, border = new RectOffset(5, 5, 5, 5), padding = new RectOffset(10, 10, 6, 6) };
+            var style = new GUIStyle(skin.button) { richText = false, fontSize = Scaled(14), alignment = TextAnchor.MiddleCenter, wordWrap = false, border = new RectOffset(5, 5, 5, 5), padding = new RectOffset(10, 10, 6, 6) };
             style.normal.background = style.onNormal.background = Rounded(fill, border, 4);
             style.hover.background = style.onHover.background = Rounded(hover, border, 4);
             style.active.background = style.onActive.background = Rounded(hover, border, 4);
@@ -647,7 +659,7 @@ namespace ClaudiaKermin.Adapter
 
         private static GUIStyle Chip(GUISkin skin, Color fill, Color border, Color text)
         {
-            var style = new GUIStyle(skin.label) { richText = false, fontSize = 12, fontStyle = FontStyle.Bold, wordWrap = false, alignment = TextAnchor.MiddleCenter, padding = new RectOffset(8, 8, 3, 3), border = new RectOffset(5, 5, 5, 5) };
+            var style = new GUIStyle(skin.label) { richText = false, fontSize = Scaled(12), fontStyle = FontStyle.Bold, wordWrap = false, alignment = TextAnchor.MiddleCenter, padding = new RectOffset(8, 8, 3, 3), border = new RectOffset(5, 5, 5, 5) };
             style.normal.background = Rounded(fill, border, 4);
             style.normal.textColor = text;
             return style;
@@ -688,7 +700,7 @@ namespace ClaudiaKermin.Adapter
             if (_mono != null) return _mono;
             try
             {
-                _mono = Font.CreateDynamicFontFromOSFont(new[] { "Menlo", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Courier New" }, 14);
+                _mono = Font.CreateDynamicFontFromOSFont(new[] { "Menlo", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Courier New" }, Scaled(14));
             }
             catch (Exception e)
             {

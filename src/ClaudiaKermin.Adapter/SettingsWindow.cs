@@ -43,7 +43,7 @@ namespace ClaudiaKermin.Adapter
         private readonly string _configDirectory;
         private readonly ChatWindow _chat;
         private readonly WindowFrame _frame =
-            new WindowFrame(0x434B01, "Settings", "ClaudiaKerminSettings", new Rect(200, 90, 380, 640), new Vector2(380, 360), true);
+            new WindowFrame(0x434B01, "Settings", "ClaudiaKerminSettings", new Rect(200, 90, 450, 700), new Vector2(450, 400), true);
 
         private MissionView _view;
         private Context _context;
@@ -422,7 +422,7 @@ namespace ClaudiaKermin.Adapter
         private void DrawClaudiaKermin()
         {
             var expanded = _context == Context.SettingUp ? _expandedSettingUp : _expandedDefaults;
-            GUILayout.BeginHorizontal(expanded ? _headerOpen : _header, GUILayout.MinHeight(52));
+            GUILayout.BeginHorizontal(expanded ? _headerOpen : _header, GUILayout.MinHeight(ClaudiaSkin.Scaled(52)));
             var portrait = GUILayoutUtility.GetRect(30, 30, GUILayout.Width(30), GUILayout.Height(30));
             if (Event.current.type == EventType.Repaint) GUI.DrawTexture(portrait, Portrait(), ScaleMode.ScaleToFit);
             GUILayout.Space(ClaudiaSkin.Gap);
@@ -582,7 +582,7 @@ namespace ClaudiaKermin.Adapter
         {
             if (_label != null) return;
             _label = new GUIStyle(ClaudiaSkin.Body) { fontStyle = FontStyle.Bold };
-            _dangerLabel = new GUIStyle(ClaudiaSkin.DangerText) { fontSize = 11, fontStyle = FontStyle.Bold };
+            _dangerLabel = new GUIStyle(ClaudiaSkin.DangerText) { fontSize = ClaudiaSkin.Scaled(11), fontStyle = FontStyle.Bold };
             _note = new GUIStyle(ClaudiaSkin.Muted) { padding = new RectOffset(ClaudiaSkin.Padding, ClaudiaSkin.Padding, 10, 10) };
             _row = ClaudiaSkin.Box(ClaudiaSkin.InputBackground, ClaudiaSkin.Border);
             _rowOn = ClaudiaSkin.Box(Color.Lerp(ClaudiaSkin.InputBackground, ClaudiaSkin.Accent, 0.08f), ClaudiaSkin.Accent);

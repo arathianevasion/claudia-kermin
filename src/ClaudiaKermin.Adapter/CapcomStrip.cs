@@ -18,13 +18,13 @@ namespace ClaudiaKermin.Adapter
     /// </summary>
     public class CapcomStrip
     {
-        private const float Width = 620;
+        private const float Width = 740;
         private const float Top = 70;
-        private const float PortraitSize = 44;
+        private static readonly float PortraitSize = ClaudiaSkin.Scaled(44);
         private const float PortraitRadius = 8;
         private const float SegmentGap = 6;
         private const float SegmentBarHeight = 6;
-        private const float MeterWidth = 72;
+        private static readonly float MeterWidth = ClaudiaSkin.Scaled(72);
         private const float PanelHeight = 640;
         // Below this the prompt and the control bar leave the transcript no room; only a very short screen gets there.
         private const float MinPanelHeight = 200;
