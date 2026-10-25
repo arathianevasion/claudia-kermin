@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using ClaudiaKermin.Core.Missions;
 using ClaudiaKermin.Core.Ui;
 using UnityEngine;
 
@@ -78,6 +79,10 @@ namespace ClaudiaKermin.Adapter
             Warning,
             ArrowUp,
             Dot,
+            /// <summary>A box with an arrow leaving it: Undock.</summary>
+            ExternalLink,
+            /// <summary>An arrow into a tray along the top: Dock.</summary>
+            Dock,
         }
 
         private static readonly Dictionary<string, Texture2D> Textures = new Dictionary<string, Texture2D>();
@@ -247,6 +252,26 @@ namespace ClaudiaKermin.Adapter
             if (Event.current.type != EventType.Repaint) return;
             (enabled ? _sendOn : _sendOff).Draw(rect, GUIContent.none, enabled && rect.Contains(Event.current.mousePosition), false, false, false);
             DrawIcon(new Rect(rect.center.x - 8, rect.center.y - 8, 16, 16), IconShape.ArrowUp, enabled ? OnAccent : TextMuted);
+        }
+
+        /// <summary>The spend meter's 4 px bar, <paramref name="width"/> wide: accent, amber from 80% of the Spending Cap.</summary>
+        public static void SpendBar(MissionView view, float width)
+        {
+            var bar = GUILayoutUtility.GetRect(width, 4, GUILayout.Width(width), GUILayout.Height(4));
+            if (Event.current.type != EventType.Repaint) return;
+            GUI.DrawTexture(bar, Solid(Border));
+            var fill = new Rect(bar.x, bar.y, bar.width * MissionWindowRules.SpendFraction(view), bar.height);
+            GUI.DrawTexture(fill, Solid(view.CapWarning ? Attention : Accent));
+        }
+
+        /// <summary>A 1 px outline just inside <paramref name="rect"/>; call on Repaint.</summary>
+        public static void Outline(Rect rect, Color color)
+        {
+            var texture = Solid(color);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, 1), texture);
+            GUI.DrawTexture(new Rect(rect.x, rect.yMax - 1, rect.width, 1), texture);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, 1, rect.height), texture);
+            GUI.DrawTexture(new Rect(rect.xMax - 1, rect.y, 1, rect.height), texture);
         }
 
         /// <summary>A 1 px divider across the layout in the border colour.</summary>
@@ -729,6 +754,22 @@ namespace ClaudiaKermin.Adapter
                 }
                 case IconShape.Dot:
                     return Vector2.Distance(p, new Vector2(0.5f, 0.5f)) <= 0.45f;
+                case IconShape.ExternalLink:
+                {
+                    // The box is open at its top right, where the arrow leaves.
+                    var inBox = u >= 0.15f && u <= 0.75f && v >= 0.25f && v <= 0.85f;
+                    var edge = u <= 0.22f || u >= 0.68f || v <= 0.32f || v >= 0.78f;
+                    var box = inBox && edge && !(u > 0.42f && v < 0.58f);
+                    var arrow = Segment(p, new Vector2(0.45f, 0.55f), new Vector2(0.85f, 0.15f)) <= 0.07f
+                        || Segment(p, new Vector2(0.55f, 0.15f), new Vector2(0.85f, 0.15f)) <= 0.07f
+                        || Segment(p, new Vector2(0.85f, 0.15f), new Vector2(0.85f, 0.45f)) <= 0.07f;
+                    return box || arrow;
+                }
+                case IconShape.Dock:
+                    return (v <= 0.22f && v >= 0.12f && u >= 0.12f && u <= 0.88f)
+                        || Segment(p, new Vector2(0.5f, 0.88f), new Vector2(0.5f, 0.36f)) <= 0.07f
+                        || Segment(p, new Vector2(0.28f, 0.58f), new Vector2(0.5f, 0.36f)) <= 0.07f
+                        || Segment(p, new Vector2(0.5f, 0.36f), new Vector2(0.72f, 0.58f)) <= 0.07f;
                 case IconShape.ChevronDown:
                     return Segment(p, new Vector2(0.2f, 0.35f), new Vector2(0.5f, 0.65f)) <= 0.08f || Segment(p, new Vector2(0.5f, 0.65f), new Vector2(0.8f, 0.35f)) <= 0.08f;
                 case IconShape.ChevronUp:

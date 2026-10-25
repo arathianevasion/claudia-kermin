@@ -64,7 +64,7 @@ namespace ClaudiaKermin.Adapter
             var missions = new MissionControl(client, _background, config, () => store.Load() != null, new KosScriptCheck());
             _missions = new MissionDriver(missions, config.DebugTools);
             _window = new SettingsWindow(new KeySettings(store, client, _background), _missions, config, directory, _chatWindow);
-            _missions.Window.OpenSettings = () => _window.Visible = true;
+            _missions.Panel.OpenSettings = () => _window.Visible = true;
 
             GameEvents.onGUIApplicationLauncherReady.Add(AddButtons);
             GameEvents.onGUIApplicationLauncherDestroyed.Add(RemoveButtons);
@@ -117,23 +117,23 @@ namespace ClaudiaKermin.Adapter
             }
         }
 
-        // The Space Center button toggles Settings (in its Space Center context); the VAB/SPH and Flight/Map
-        // toggle the Mission window.
+        // The Space Center button toggles Settings (in its Space Center context); the VAB/SPH toggle the Mission
+        // window, and Flight/Map expand and collapse the docked Mission panel (or toggle the floating window when undocked).
         private bool Toggled
         {
-            get { return HighLogic.LoadedScene == GameScenes.SPACECENTER ? _window.Visible : _missions.Window.Visible; }
+            get { return HighLogic.LoadedScene == GameScenes.SPACECENTER ? _window.Visible : _missions.PanelOpen; }
         }
 
         private void ButtonOn()
         {
             if (HighLogic.LoadedScene == GameScenes.SPACECENTER) _window.Visible = true;
-            else _missions.Window.Visible = true;
+            else _missions.PanelOpen = true;
         }
 
         private void ButtonOff()
         {
             if (HighLogic.LoadedScene == GameScenes.SPACECENTER) _window.Visible = false;
-            else _missions.Window.Visible = false;
+            else _missions.PanelOpen = false;
         }
 
         private void OnGUI()
@@ -187,11 +187,7 @@ namespace ClaudiaKermin.Adapter
             _missions.Window.UiHidden = false;
             _missions.Strip.UiHidden = false;
             // Each time Flight loads (including a revert), the Craft Check starts collapsed.
-            if (scene == GameScenes.FLIGHT)
-            {
-                _missions.Window.FlightLoading();
-                _missions.Strip.FlightLoading();
-            }
+            if (scene == GameScenes.FLIGHT) _missions.Panel.FlightLoading();
         }
 
         private static bool SettingsSceneLoaded()

@@ -13,8 +13,8 @@ namespace ClaudiaKermin.Adapter
     /// Draws the transcript: the player's lines as bubbles, Claudia's under her name, notices as muted lines, and the
     /// Mission Plan, Sequence Plans and Debriefs as cards with a "Why" expander and, for a Sequence Plan, "Show script";
     /// then the Busy line. Given a send, it leads with the Craft Check as a card (its Warnings are checkboxes that acknowledge
-    /// them) and ends with the checkbox that confirms a typed approval. Used by the Mission window and by the Capcom
-    /// strip's Show log drawer, so an entry looks and behaves the same in both. Plain text only:
+    /// them) and ends with the checkbox that confirms a typed approval. Used by the <see cref="MissionPanel"/>, which the
+    /// floating Mission window and the docked Capcom strip both draw. Plain text only:
     /// Claude's replies may contain '&lt;', which rich text would misread.
     /// </summary>
     public class LogDrawer
@@ -363,8 +363,8 @@ namespace ClaudiaKermin.Adapter
 
         // ---- Approval: a typed reply that reads like an approval ends the transcript with a checkbox ----
 
-        /// <summary>Claudia's ask and the box with the checkbox and Not yet; the strip draws it itself while its drawer is closed.</summary>
-        public void DrawApproval(MissionView view)
+        /// <summary>Claudia's ask and the box with the checkbox and Not yet.</summary>
+        private void DrawApproval(MissionView view)
         {
             Styles();
             DrawClaudiaLine(MissionWindowRules.ApprovalAsk);

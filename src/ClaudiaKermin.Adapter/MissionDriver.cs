@@ -31,8 +31,13 @@ namespace ClaudiaKermin.Adapter
 
         private readonly ManualInputWatcher _inputWatcher = new ManualInputWatcher();
 
+        /// <summary>The Mission window's body, drawn by the floating window or, docked in Flight, under the Capcom strip.</summary>
+        public readonly MissionPanel Panel;
         public readonly MissionWindow Window;
         public readonly CapcomStrip Strip;
+
+        /// <summary>The player undocked the Mission panel in Flight: it shows as the floating window. Kept for the session.</summary>
+        public bool Undocked { get; private set; }
         /// <summary>The Mission being set up, shared by the Mission window and the Settings window.</summary>
         public readonly MissionSetup Setup = new MissionSetup();
 
@@ -45,18 +50,63 @@ namespace ClaudiaKermin.Adapter
         public readonly CraftLocks Locks = new CraftLocks();
 
         /// <summary>
-        /// Claudia needs the player (a Debrief, an Approval or a Pause) and the Mission window was closed when
-        /// she did: the toolbar button flashes until the window or the strip's log is opened.
+        /// Claudia needs the player (a Debrief, an Approval or a Pause) and the Mission panel was closed when
+        /// she did: the toolbar button flashes until the floating window or the docked panel is opened.
         /// </summary>
         public bool Flashing { get; private set; }
 
-        /// <summary>The player can read Claudia now: the Mission window or the strip's log drawer is up and not hidden by F2.</summary>
+        /// <summary>The player can read Claudia now: the floating window or the docked panel is up and not hidden by F2.</summary>
         private bool Watching
         {
             get
             {
                 return !Window.UiHidden
-                    && (Window.Visible || (HighLogic.LoadedSceneIsFlight && Strip.Showing && Strip.DrawerOpen));
+                    && (Window.Visible || (HighLogic.LoadedSceneIsFlight && Strip.PanelShowing));
+            }
+        }
+
+        /// <summary>In Flight with a Mission under way and the panel docked, the panel lives under the Capcom strip; otherwise in the floating window.</summary>
+        private bool DockedNow
+        {
+            get { return HighLogic.LoadedSceneIsFlight && !Undocked && _mission.View.Stage != MissionStage.None; }
+        }
+
+        /// <summary>
+        /// The Mission panel is open where it shows now: the docked panel under the Capcom strip, or the floating window.
+        /// The toolbar button and the strip's tab toggle it.
+        /// </summary>
+        public bool PanelOpen
+        {
+            get { return DockedNow ? Strip.Expanded : Window.Visible; }
+            set
+            {
+                if (DockedNow) Strip.Expanded = value;
+                else Window.Visible = value;
+            }
+        }
+
+        // Undock shows the panel as the floating window; Dock puts it back under the strip. It was open to be clicked, so it stays open.
+        private void SetDocked(bool docked)
+        {
+            Undocked = !docked;
+            Strip.Expanded = false;
+            Window.Visible = false;
+            PanelOpen = true;
+        }
+
+        // The panel moves between its two homes as the Mission comes and goes in Flight, staying open or closed:
+        // a Mission started from the floating window docks, and one that ends falls back to the floating window.
+        private void HandOver()
+        {
+            if (DockedNow && Window.Visible)
+            {
+                Window.Visible = false;
+                Strip.Expanded = true;
+            }
+            else if (!DockedNow && Strip.Expanded)
+            {
+                Strip.Expanded = false;
+                Window.Visible = true;
             }
         }
 
@@ -79,8 +129,9 @@ namespace ClaudiaKermin.Adapter
         {
             Current = this;
             _mission = mission;
-            Window = new MissionWindow(Send, Setup, debugTools);
-            Strip = new CapcomStrip(Window, Send);
+            Panel = new MissionPanel(Send, Setup, debugTools) { SetDocked = SetDocked };
+            Window = new MissionWindow(Panel);
+            Strip = new CapcomStrip(Panel) { TabClicked = () => PanelOpen = !PanelOpen };
             GameEvents.onKerbalStatusChange.Add(OnKerbalStatusChange);
         }
 
@@ -152,6 +203,9 @@ namespace ClaudiaKermin.Adapter
         {
             Window.View = _mission.View;
             Strip.View = _mission.View;
+            HandOver();
+            Strip.Docked = !Undocked;
+            Panel.OfferDock = Undocked && HighLogic.LoadedSceneIsFlight && _mission.View.Stage != MissionStage.None;
             Window.OnGUI();
             if (HighLogic.LoadedScene == GameScenes.FLIGHT) Strip.OnGUI();
             else Strip.Unlock();
