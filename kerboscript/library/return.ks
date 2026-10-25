@@ -108,7 +108,7 @@ function return_ejection_time {
   local samples is 90.
   for i in range(samples + 1) {
     local t is from_ut + (to_ut - from_ut) * i / samples.
-    local pos is positionat(ship, t) - positionat(moon, t).
+    local pos is positionat(ship, t) - moon:position.
     local vel is velocityat(ship, t):orbit.
     local back is -velocityat(moon, t):orbit.
     local normal is vcrs(pos, vel):normalized.

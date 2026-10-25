@@ -13,5 +13,8 @@ wait until ship:unpacked.
 local site is latlng(0, land_wrap_lng(ship:geoposition:lng + 270)).
 print "land test: aiming for " + round(site:lat, 3) + ", " + round(site:lng, 3).
 local result is land(lexicon("target", site, "daylight", false)).
+// The checker compares a field with a literal only: braking was planned to start before the orbit
+// meets the ground (impact_ut -1: it clears the ground). #214's landers hit the Mun before braking.
+set result["brakes_before_impact"] to result:burn_start_ut > 0 and (result:impact_ut < 0 or result:burn_start_ut < result:impact_ut).
 print "land test: success " + result:success + ", " + result:distance_to_target + " m off, " + result:touchdown_speed_actual + " m/s, " + result:reason.
 addons:claudia:report(result).

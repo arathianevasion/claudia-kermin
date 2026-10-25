@@ -37,7 +37,9 @@
 //| Extra results: slope (degrees where it came to rest), touchdown_speed_actual (m/s),
 //| distance_to_target (m from the site asked for, or the spot chosen for "any"), best_effort
 //| (true if nothing within max_divert was flat enough and it landed on the least steep spot
-//| found); geo (lat, lng, alt) is the common field once landed. Fails with "land flies airless
+//| found), burn_start_ut (when the braking burn was planned to start; -1 if it never got that far),
+//| impact_ut (when the orbit after the deorbit burn meets the ground at the site's height; -1 if it
+//| clears it or it never got that far); geo (lat, lng, alt) is the common field once landed. Fails with "land flies airless
 //| bodies only", an orbit it can't land from, a site off the ground track, no daylight pass,
 //| not enough delta-v, "tipped over", out of fuel, or an abort; a failure in the
 //| descent leaves the craft safe but falling, so give it the delta-v (and TWR over 1.5) it needs.
@@ -320,7 +322,7 @@ function land_plan_from {
     // Anywhere: the first burn whose arrival point (opposite the burn) is in daylight if wanted.
     for i in range(steps) {
       local burn_ut is earliest + i * step.
-      local here is positionat(ship, burn_ut) - positionat(body, burn_ut).
+      local here is positionat(ship, burn_ut) - body:position.
       local arrive_ut is burn_ut + land_transfer_time(mu, here:mag, body:radius + approach).
       local arrival is -here:normalized * body:radius.
       if not opt:daylight or land_sun_elevation(arrival, arrive_ut) >= 5 {
@@ -352,7 +354,7 @@ function land_plan_from {
   local prev is 1e9.
   for i in range(steps + 1) {
     local burn_ut is earliest + i * step.
-    local here is positionat(ship, burn_ut) - positionat(body, burn_ut).
+    local here is positionat(ship, burn_ut) - body:position.
     local there is land_site_vector(site, burn_ut + fall_s).
     local apart is vang(-here, there).
     // A pass: the previous step was closest.
@@ -385,7 +387,7 @@ function land_plan_from {
 function land_node_for {
   parameter ut, dv.
   local vel is velocityat(ship, ut):orbit.
-  local pos is positionat(ship, ut) - positionat(body, ut).
+  local pos is positionat(ship, ut) - body:position.
   local pro is vel:normalized.
   local rad is vxcl(pro, pos):normalized.
   local nrm is vcrs(pro, rad):normalized.
@@ -413,7 +415,7 @@ function land_node_for {
 
 function land {
   parameter options is lexicon().
-  local extra is lexicon("slope", -1, "touchdown_speed_actual", -1, "distance_to_target", -1, "best_effort", false).
+  local extra is lexicon("slope", -1, "touchdown_speed_actual", -1, "distance_to_target", -1, "best_effort", false, "burn_start_ut", -1, "impact_ut", -1).
   local ctx is claudia_begin("land", options, land_defaults(), "auto").
   if ctx:error <> "" {
     return claudia_finish(ctx, false, ctx:error, extra).
@@ -456,7 +458,7 @@ function land {
   }
   local aim is plan:site.
   local mu is body:mu.
-  local burn_pos is positionat(ship, plan:burn_ut) - positionat(body, plan:burn_ut).
+  local burn_pos is positionat(ship, plan:burn_ut) - body:position.
   local burn_vel is velocityat(ship, plan:burn_ut):orbit.
   local deorbit_dv is land_deorbit_dv(mu, burn_pos:mag, burn_vel:mag, plan:r_pe).
   local needed is abs(deorbit_dv) + 1.2 * land_periapsis_speed(mu, burn_pos:mag, plan:r_pe) + 100.
@@ -484,7 +486,7 @@ function land {
   local pe_ut is time:seconds + eta:periapsis.
   local fix_ut is time:seconds + eta:periapsis / 2.
   if fix_ut > time:seconds + 90 {
-    local fix_pos is positionat(ship, fix_ut) - positionat(body, fix_ut).
+    local fix_pos is positionat(ship, fix_ut) - body:position.
     local fix_vel is velocityat(ship, fix_ut):orbit.
     local up_dir is fix_pos:normalized.
     local plane is vcrs(fix_pos, land_site_vector(aim, pe_ut)):normalized.
@@ -510,6 +512,14 @@ function land {
   local a_brake is sqrt(max(0.01, a_max ^ 2 - g_pe ^ 2)).
   local v_pe is land_periapsis_speed(mu, ship:orbit:apoapsis + body:radius, ship:orbit:periapsis + body:radius).
   local brake_ut is time:seconds + eta:periapsis - v_pe * opt:burn_margin / (2 * a_brake).
+  // When braking is planned to start, and when this orbit meets the ground at the site's height (-1:
+  // it clears it), so a braking burn planned after the impact shows in the result.
+  set extra:burn_start_ut to round(brake_ut, 1).
+  local ground_r is body:radius + max(0, body:geopositionlatlng(aim:lat, aim:lng):terrainheight).
+  local fall_s is claudia_fall_eta(ship:orbit:eccentricity, ship:orbit:semimajoraxis, mu, ground_r, ship:orbit:trueanomaly).
+  if fall_s >= 0 {
+    set extra:impact_ut to round(time:seconds + fall_s, 1).
+  }
   if brake_ut - 90 > time:seconds {
     local coasted is claudia_wait_until(ctx, brake_ut - 90).
     if coasted <> "" {

@@ -57,6 +57,7 @@ namespace ClaudiaKermin.KOS
                 return;
             }
             DontDestroyOnLoad(this);
+            Debug.Log(ModInfo.LogTag + " block test: shipped " + string.Join(", ", TestNames().ToArray()));
         }
 
         private static string SaveDirectory
@@ -98,13 +99,23 @@ namespace ClaudiaKermin.KOS
 
         private void Draw(int id)
         {
-            GUILayout.BeginHorizontal();
-            foreach (var test in TestNames())
+            // Rows of a few buttons: one row of every test runs wider than the screen, and the count
+            // below says how many there are to run, so a skipped test is easy to spot.
+            const int PerRow = 5;
+            var tests = TestNames().ToList();
+            for (var row = 0; row < tests.Count; row += PerRow)
             {
-                GUI.enabled = _stage == Stage.Idle && HighLogic.LoadedScene != GameScenes.FLIGHT;
-                if (GUILayout.Button("Run " + test)) Begin(test);
+                GUILayout.BeginHorizontal();
+                foreach (var test in tests.Skip(row).Take(PerRow))
+                {
+                    GUI.enabled = _stage == Stage.Idle && HighLogic.LoadedScene != GameScenes.FLIGHT;
+                    if (GUILayout.Button("Run " + test)) Begin(test);
+                }
+                GUI.enabled = true;
+                GUILayout.EndHorizontal();
             }
-            GUI.enabled = true;
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(tests.Count + " tests shipped");
             if (GUILayout.Button("Hide", GUILayout.Width(50))) _visible = false;
             GUILayout.EndHorizontal();
             GUILayout.Label(_stage == Stage.Idle
