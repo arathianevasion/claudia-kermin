@@ -197,6 +197,8 @@ namespace ClaudiaKermin.Core.Missions
         public bool Stale;
         public IList<ProcessorOption> Processors = new List<ProcessorOption>();
         public uint? ChosenProcessor;
+        /// <summary>The player picked <see cref="ChosenProcessor"/>; false when it is the default, the one nearest the root.</summary>
+        public bool ChosenExplicitly;
         /// <summary>
         /// Start Mission may be pressed: there is a craft, no Craft Check is in the way, and a current result has
         /// no Blocker and every Warning acknowledged. With no current result, pressing it runs the Craft Check.
