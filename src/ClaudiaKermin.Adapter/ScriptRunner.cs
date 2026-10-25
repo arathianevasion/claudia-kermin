@@ -30,6 +30,9 @@ namespace ClaudiaKermin.Adapter
 
         /// <summary>Aborts the program on that processor only if it is still run <paramref name="runId"/>.</summary>
         void Abort(uint partId, int runId, string reason);
+
+        /// <summary>Releases the kOS steering and throttle locks on that processor, so kOS stops flying the craft by wire.</summary>
+        void ReleaseControls(uint partId);
     }
 
     public static class ScriptRunner

@@ -284,7 +284,7 @@ namespace ClaudiaKermin.Adapter
                 var safe = command as MakeCraftSafe;
                 if (safe != null)
                 {
-                    CraftSafety.MakeSafe(FlightGlobals.ActiveVessel);
+                    CraftSafety.MakeSafe(safe);
                     continue;
                 }
                 if (command is SeatClaudia)

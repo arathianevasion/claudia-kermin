@@ -63,13 +63,33 @@ namespace ClaudiaKermin.Core.Missions
     }
 
     /// <summary>
-    /// Make the active craft safe with no script to abort: throttle 0 and steering held (the make-safe the abort path
-    /// uses). Issued when Claudia takes the craft back from Manual Control because the link dropped.
+    /// Make the Mission's craft safe with no script to abort: throttle 0, SAS on, and the kOS steering and throttle
+    /// locks released on its processor. Issued when Claudia takes the craft back from Manual Control because the link
+    /// dropped, and on a Failed Debrief. It acts on the Mission's craft, not whichever vessel the player is in.
     /// </summary>
     public sealed class MakeCraftSafe : AdapterCommand
     {
         public readonly string Reason;
-        public MakeCraftSafe(string reason) { Reason = reason; }
+        /// <summary>The Mission's craft (<see cref="MissionCraft"/>); "" when none is on record, which means the active vessel.</summary>
+        public readonly string VesselId;
+        /// <summary>The craft's original kOS processor part, whose locks are released; null when none is on record.</summary>
+        public readonly uint? ProcessorPartId;
+        public MakeCraftSafe(string reason, string vesselId = "", uint? processorPartId = null)
+        {
+            Reason = reason;
+            VesselId = vesselId ?? "";
+            ProcessorPartId = processorPartId;
+        }
+
+        /// <summary>
+        /// The vessel id to make safe: the Mission's craft when one is on record, else the active vessel's; null when
+        /// there is nothing to act on.
+        /// </summary>
+        public string Target(string activeVesselId)
+        {
+            if (VesselId.Length > 0) return VesselId;
+            return string.IsNullOrEmpty(activeVesselId) ? null : activeVesselId;
+        }
     }
 
     /// <summary>A short on-screen message, for when Claudia needs the player (a plan to approve, a Debrief).</summary>

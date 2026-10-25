@@ -239,7 +239,19 @@ namespace ClaudiaKermin.Core.Tests
 
             mission.Send(new KosRunEnded(Finished(), start.RunId));
             DrainUntil(mission, v => v.Stage == MissionStage.Ended);
-            Assert.Single(mission.TakeCommands().OfType<MakeCraftSafe>());
+            var safe = mission.TakeCommands().OfType<MakeCraftSafe>().Single();
+            // Aimed at the Mission's craft, so it holds with the player in another vessel (#191).
+            Assert.Equal(CraftId, safe.VesselId);
+            Assert.Equal(CraftId, safe.Target("another-vessel"));
+        }
+
+        [Fact]
+        public void MakeCraftSafeFallsBackToTheActiveVesselOnlyWithNoCraftOnRecord()
+        {
+            Assert.Equal("active", new MakeCraftSafe("x").Target("active"));
+            Assert.Null(new MakeCraftSafe("x").Target(""));
+            Assert.Null(new MakeCraftSafe("x", null, 7).Target(null));
+            Assert.Equal("craft", new MakeCraftSafe("x", "craft", 7).Target("active"));
         }
 
         [Fact]

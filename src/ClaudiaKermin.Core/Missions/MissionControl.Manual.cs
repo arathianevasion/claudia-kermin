@@ -254,7 +254,7 @@ namespace ClaudiaKermin.Core.Missions
             Note(LogKind.Notice, text);
             // Off warp first, so the make-safe's throttle and steering apply to a craft off rails.
             _commands.Add(new DropWarp());
-            _commands.Add(new MakeCraftSafe("the link dropped during Manual Control with no other crew aboard"));
+            _commands.Add(new MakeCraftSafe("the link dropped during Manual Control with no other crew aboard", mission.VesselId, mission.ProcessorPartId));
             _commands.Add(new PostScreenMessage(text, always: true));
             mission.ManualOrigin += "; then the link dropped with no other crew aboard, so you took the craft back and the mod made it safe";
             HandedBack("");

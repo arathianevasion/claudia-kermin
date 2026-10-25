@@ -81,6 +81,16 @@ namespace ClaudiaKermin.KOS
             Abort(partId, (int?)runId, reason);
         }
 
+        /// <summary>UNLOCK STEERING and UNLOCK THROTTLE on that processor, without running any Kerboscript.</summary>
+        public void ReleaseControls(uint partId)
+        {
+            var addon = ClaudiaAddon.ForPart(partId);
+            if (addon == null) return;
+            var bindings = addon.Shared.BindingMgr;
+            bindings.ToggleFlyByWire("steering", false);
+            bindings.ToggleFlyByWire("throttle", false);
+        }
+
         /// <summary>With <paramref name="runId"/>, only that run is stopped: a newer one on the processor is left alone.</summary>
         private void Abort(uint partId, int? runId, string reason)
         {
