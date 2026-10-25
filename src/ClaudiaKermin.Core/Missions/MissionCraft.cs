@@ -4,6 +4,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using ClaudiaKermin.Core.Kos;
 
 namespace ClaudiaKermin.Core.Missions
 {
@@ -127,6 +128,8 @@ namespace ClaudiaKermin.Core.Missions
         public bool HasKosProcessor;
         /// <summary>The <c>persistentId</c>s of its parts with a kOS processor.</summary>
         public List<uint> ProcessorPartIds = new List<uint>();
+        /// <summary>Its parts with their parents, for choosing a processor by distance from the root; empty when the adapter didn't read them.</summary>
+        public List<VesselPart> Parts = new List<VesselPart>();
         /// <summary>Part titles, filled only for docking and separation (<see cref="VesselsDocked"/>, <see cref="VesselsSeparated"/>).</summary>
         public List<string> PartTitles = new List<string>();
         /// <summary>KSP's situation name, e.g. ORBITING or SUB_ORBITAL; "" when not read.</summary>
