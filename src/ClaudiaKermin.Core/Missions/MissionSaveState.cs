@@ -18,6 +18,8 @@ namespace ClaudiaKermin.Core.Missions
     public sealed class MissionSaveState
     {
         public string Id = "";
+        /// <summary>The Mission in play; a save holds several Missions, one active, the rest Paused at a sequence boundary. A save from before Missions were several reads as active.</summary>
+        public bool Active = true;
         public string Goal = "";
         public string Model = "";
         public MissionStage Stage;
@@ -83,6 +85,7 @@ namespace ClaudiaKermin.Core.Missions
             var values = new Dictionary<string, string>
             {
                 { "id", Id },
+                { "active", Active ? "true" : "false" },
                 { "goal", Goal },
                 { "model", Model },
                 { "stage", Stage.ToString() },
@@ -128,6 +131,7 @@ namespace ClaudiaKermin.Core.Missions
             var state = new MissionSaveState
             {
                 Id = values["id"],
+                Active = Get(values, "active") != "false",
                 Goal = Get(values, "goal"),
                 Model = Get(values, "model"),
                 Stage = ParseStage(Get(values, "stage")),

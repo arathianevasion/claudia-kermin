@@ -38,6 +38,8 @@ namespace ClaudiaKermin.Adapter
         public readonly MissionPanel Panel;
         public readonly MissionWindow Window;
         public readonly CapcomStrip Strip;
+        /// <summary>The read-only Missions list: in the Space Center, the Tracking Station and wherever the toolbar button is.</summary>
+        public readonly MissionsWindow MissionsList;
 
         /// <summary>The player undocked the Mission panel in Flight: it shows as the floating window. Kept for the session.</summary>
         public bool Undocked { get; private set; }
@@ -143,6 +145,7 @@ namespace ClaudiaKermin.Adapter
             _mission = mission;
             Panel = new MissionPanel(Send, Setup, debugTools) { SetDocked = SetDocked };
             Window = new MissionWindow(Panel);
+            MissionsList = new MissionsWindow(Send);
             Strip = new CapcomStrip(Panel) { TabClicked = () => PanelOpen = !PanelOpen };
             GameEvents.onKerbalStatusChange.Add(OnKerbalStatusChange);
             _vessels = new VesselWatch(Send);

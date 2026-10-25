@@ -17,8 +17,6 @@ namespace ClaudiaKermin.Core.Missions
         {
             var mission = _mission;
             if (mission == null || !MissionOver) return;
-            if (mission.InFlight) mission.Pending.Cancel.Cancel();
-            if (mission.PendingSequence != null && mission.PendingSequence.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
             try
             {
                 if (!File.Exists(Path.Combine(mission.Folder, MissionFolder.EndedFile)))
@@ -28,6 +26,17 @@ namespace ClaudiaKermin.Core.Missions
             {
                 // The Mission is still dismissed in memory; the folder just lacks the marker.
             }
+            DropFinished(mission);
+        }
+
+        /// <summary>
+        /// A finished Mission stops being the current one, whether dismissed (its folder stays as history) or deleted
+        /// from the Missions list (its folder goes): a late reply is cancelled and a leftover Due Time alarm cleared.
+        /// </summary>
+        private void DropFinished(Mission mission)
+        {
+            if (mission.InFlight) mission.Pending.Cancel.Cancel();
+            if (mission.PendingSequence != null && mission.PendingSequence.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
             _mission = null;
         }
 

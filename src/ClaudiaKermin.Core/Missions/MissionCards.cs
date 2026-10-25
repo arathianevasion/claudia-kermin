@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Andrew Watson
+
+using System.Globalization;
+using System.Linq;
+using System.Text;
+using ClaudiaKermin.Core.Config;
+using ClaudiaKermin.Core.Ui;
+
+namespace ClaudiaKermin.Core.Missions
+{
+    /// <summary>
+    /// The text of the Mission log's cards, shared by the loop (which builds a card when a plan or Debrief arrives)
+    /// and by <see cref="MissionLogRebuild"/> (which builds the same cards again from the saved transcript).
+    /// </summary>
+    internal static class MissionCards
+    {
+        public static string MetresPerSecond(double value)
+        {
+            return value.ToString("#,0", CultureInfo.InvariantCulture) + " m/s";
+        }
+
+        public static string MissionPlanBody(MissionPlan plan)
+        {
+            var body = new StringBuilder();
+            for (var i = 0; i < plan.Sequences.Count; i++)
+            {
+                var s = plan.Sequences[i];
+                body.Append(i + 1).Append(". ").Append(s.Name).Append(s.Manual ? " [you fly this by hand]" : "").Append(": ").Append(s.Intent)
+                    .Append(" (").Append(MetresPerSecond(s.DeltaV)).Append(", ").Append(s.Timing);
+                if (s.DueTimeUt.HasValue) body.Append("; Due Time ").Append(KerbinTime.Date(s.DueTimeUt.Value));
+                body.Append(")\n");
+            }
+            body.Append("Total ").Append(MetresPerSecond(plan.TotalDeltaV)).Append(", ").Append(plan.ExpectedDuration).Append('.');
+            if (plan.MissionTimeSeconds.HasValue) body.Append(" Total Mission time ").Append(KerbinTime.Span(plan.MissionTimeSeconds.Value)).Append('.');
+            return body.ToString();
+        }
+
+        /// <param name="ut">The game time to say a Due Time is "in" or "reached" against; null leaves it out (a card rebuilt from the transcript has no "now").</param>
+        public static string SequencePlanBody(SequencePlan plan, double? ut, PlayerConfig config)
+        {
+            var body = new StringBuilder();
+            if (plan.DueTimeUt.HasValue)
+            {
+                body.Append("Due Time: ").Append(KerbinTime.Date(plan.DueTimeUt.Value));
+                if (ut.HasValue)
+                    body.Append(plan.DueTimeUt.Value > ut.Value ? " (in " + KerbinTime.Span(plan.DueTimeUt.Value - ut.Value) + ")" : " (reached)");
+                body.Append('\n');
+            }
+            if (plan.Manual) body.Append("Manual stretch: you fly this one by hand; Approve gives you the controls.\n");
+            body.Append(plan.Intent).Append('\n')
+                .Append("Target: ").Append(plan.Target).Append(" (tolerances: ").Append(plan.Tolerances).Append(")\n")
+                .Append("Expected: ").Append(MetresPerSecond(plan.ExpectedDeltaV)).Append(", ")
+                .Append(plan.ExpectedDurationSeconds.ToString("0", CultureInfo.InvariantCulture)).Append(" s");
+            if (plan.AbortConditions.Count > 0) body.Append("\nAbort if: ").Append(string.Join("; ", plan.AbortConditions.ToArray()));
+            // The checks the run will watch, as Approval shows them: Claudia's, then the config defaults filling the gaps.
+            if (!plan.Manual)
+                body.Append("\nTelemetry Checks: ").Append(string.Join("; ", TelemetryDefaults.Fill(plan, config)
+                    .Select(c => c.Describe() + (c.Default ? " (default)" : "")).ToArray()));
+            if (plan.Risks.Count > 0) body.Append("\nRisks: ").Append(string.Join("; ", plan.Risks.ToArray()));
+            return body.ToString();
+        }
+
+        public const string LostTitle = "Final Debrief: Lost";
+        public const string LostWhy = "Claudia was killed aboard the craft.";
+
+        /// <summary>The final Debrief from Mission Control for a Lost Mission; <paramref name="doing"/> is what it was in the middle of, or "".</summary>
+        public static string LostBody(string goal, string doing, decimal spent, decimal cap)
+        {
+            return "Claudia Kermin was killed aboard the craft" + (doing.Length > 0 ? " " + doing : "") + ".\n"
+                + "Mission Goal not met: " + goal + "\n"
+                + "Spent $" + spent.ToString("0.00", CultureInfo.InvariantCulture) + " of the $" + cap.ToString("0.00", CultureInfo.InvariantCulture)
+                + " Spending Cap. The Mission is Lost.";
+        }
+
+        public static string DebriefBody(Debrief debrief, string crossings)
+        {
+            return debrief.WhatHappened + (debrief.Next.Length > 0 ? "\nNext: " + debrief.Next : "")
+                + (crossings.Length > 0 ? "\nTelemetry Checks crossed: " + crossings : "");
+        }
+    }
+}
