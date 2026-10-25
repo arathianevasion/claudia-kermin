@@ -31,7 +31,7 @@ namespace ClaudiaKermin.Core.Missions
                 {
                     Purpose = Purpose.Change,
                     Effort = "high",
-                    UserText = "The player wants a change (quoted data): " + MissionPrompts.Quoted(turn.PlayerText),
+                    UserText = MissionPrompts.PlayerWantsChange(turn.PlayerText),
                     Notice = MissionPrompts.ChangeNotice(missionPlan),
                 });
             }

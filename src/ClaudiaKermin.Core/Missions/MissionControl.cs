@@ -548,7 +548,7 @@ namespace ClaudiaKermin.Core.Missions
             {
                 Purpose = Purpose.Reply,
                 Effort = "high",
-                UserText = "The player replied (quoted data): " + MissionPrompts.Quoted(text),
+                UserText = MissionPrompts.PlayerReplied(text),
                 Notice = MissionPrompts.ReplyNotice(_mission.Stage == MissionStage.AwaitingPlanApproval),
             });
         }
@@ -563,7 +563,7 @@ namespace ClaudiaKermin.Core.Missions
             {
                 Purpose = Purpose.Change,
                 Effort = "high",
-                UserText = "The player wants a change (quoted data): " + MissionPrompts.Quoted(text),
+                UserText = MissionPrompts.PlayerWantsChange(text),
                 Notice = MissionPrompts.ChangeNotice(_mission.Stage == MissionStage.AwaitingPlanApproval),
             });
         }
@@ -583,7 +583,7 @@ namespace ClaudiaKermin.Core.Missions
                 Purpose = Purpose.Question,
                 Effort = "low",
                 // While Running it carries a compact craft snapshot; it never touches the run.
-                UserText = "The player asks (quoted data): " + MissionPrompts.Quoted(text) + (running ? "\n" + CompactFacts(mission) : ""),
+                UserText = MissionPrompts.PlayerAsks(text) + (running ? "\n" + CompactFacts(mission) : ""),
                 Notice = mission.AwaitingApproval ? MissionPrompts.QuestionWithPlanPendingNotice : MissionPrompts.QuestionNotice,
                 PlayerText = mission.AwaitingApproval ? text : null,
                 Waits = running,
