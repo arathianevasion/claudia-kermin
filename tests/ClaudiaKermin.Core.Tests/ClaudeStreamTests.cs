@@ -172,6 +172,30 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void CompactionBlockKeepsUnknownFieldsByteExactOnTheEcho()
+        {
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("compaction-extra-field.sse"), ScriptedResponse.Fixture("text.sse"));
+            var client = Client(transport);
+            var request = Ask();
+            var first = Run(client, request);
+
+            Assert.Equal(StreamStatus.Completed, first.Status);
+            Assert.Equal("Summary: café / \"quoted\"", Assert.IsType<CompactionBlock>(first.Message.Content[0]).Content);
+            Assert.Equal("Streamed summary.", Assert.IsType<CompactionBlock>(first.Message.Content[1]).Content);
+
+            request.Messages.Add(first.Message.ToMessage());
+            request.Messages.Add(Message.UserText("Thanks"));
+            Run(client, request);
+
+            // Whole in its start event: the API's bytes, spacing and escapes included.
+            const string whole = "{\"type\":\"compaction\" , \"content\":\"Summary: café \\/ \\\"quoted\\\"\",\"brand_new_field\":{\"kept\":[1, 2.50e1]}}";
+            Assert.Contains(whole, Fixtures.Text("compaction-extra-field.sse"));
+            // Streamed: the extra member and member order survive, only the summary is filled in.
+            const string streamed = "{\"type\":\"compaction\",\"extra\":{\"a\": 1},\"content\":\"Streamed summary.\"}";
+            Assert.Contains("\"content\":[" + whole + "," + streamed + "]", transport.Requests[1].Body);
+        }
+
+        [Fact]
         public void UnknownBlockThatStreamedDeltasIsDroppedFromTheEchoedTurnAndLogged()
         {
             var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("unknown-block-streamed.sse", 5), ScriptedResponse.Fixture("text.sse"));

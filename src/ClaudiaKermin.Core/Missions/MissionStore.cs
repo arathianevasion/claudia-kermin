@@ -275,7 +275,7 @@ namespace ClaudiaKermin.Core.Missions
                 case "tool_result":
                     return new ToolResultBlock { ToolUseId = JsonNode.Str(node["tool_use_id"]), Content = JsonNode.Str(node["content"]) ?? "", IsError = JsonNode.Bool(node["is_error"]) ?? false };
                 case "compaction":
-                    return new CompactionBlock { Content = JsonNode.Str(node["content"]) };
+                    return new CompactionBlock { Content = JsonNode.Str(node["content"]), RawJson = node.Raw };
                 default:
                     return new UnknownBlock { Type = type, RawJson = node.Raw };
             }

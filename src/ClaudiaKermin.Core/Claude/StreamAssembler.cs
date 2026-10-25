@@ -162,7 +162,7 @@ namespace ClaudiaKermin.Core.Claude
                     };
                     break;
                 case "compaction":
-                    typed = new CompactionBlock { Content = JsonNode.Str(block["content"]) };
+                    typed = new CompactionBlock { Content = JsonNode.Str(block["content"]), RawJson = block.Raw };
                     break;
                 default:
                     typed = new UnknownBlock { Type = type, RawJson = block.Raw };
@@ -219,7 +219,12 @@ namespace ClaudiaKermin.Core.Claude
             else if (type == "compaction_delta" && block is CompactionBlock)
             {
                 var content = JsonNode.Str(delta["content"]);
-                if (content != null) ((CompactionBlock)block).Content = (((CompactionBlock)block).Content ?? "") + content;
+                if (content != null)
+                {
+                    var compaction = (CompactionBlock)block;
+                    compaction.Content = (compaction.Content ?? "") + content;
+                    compaction.ContentStreamed = true;
+                }
             }
             else
             {
