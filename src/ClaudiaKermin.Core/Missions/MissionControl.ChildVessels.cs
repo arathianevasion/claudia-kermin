@@ -81,6 +81,11 @@ namespace ClaudiaKermin.Core.Missions
                 }
                 else if (planned.SeparationStage.HasValue && child.ProcessorPartIds.Count == 0)
                     child.ProcessorPartIds = staging.CandidatesAt(planned.SeparationStage.Value).SelectMany(s => s.ProcessorPartIds).ToList();
+                // Known neither way, it could never be flown: the player hears so now, not at Approval.
+                if (child.ProcessorPartIds.Count == 0 && child.VesselId.Length == 0)
+                    Note(LogKind.Notice, "Child Vessel " + child.Name + ": nothing with a kOS processor separates "
+                        + (planned.SeparationStage.HasValue ? "at stage " + planned.SeparationStage.Value.ToString(CultureInfo.InvariantCulture) : "as the plan says")
+                        + ", so the mod can't recognise it to fly it. Change the plan if Claudia is to fly it.");
                 children.Add(child);
             }
             mission.Children = children;
@@ -191,9 +196,14 @@ namespace ClaudiaKermin.Core.Missions
         private string LeftBehindUnstable(Mission mission, ChildVessel flown)
         {
             if (flown != null && _snapshot != null && !ChildVessels.Stable(_snapshot.Situation))
-                return "the craft would be left behind " + _snapshot.Situation + "; it must be stable (in orbit, landed or splashed down) first";
+                return Unstable("the craft", _snapshot.Situation);
             var unstable = mission.Children.FirstOrDefault(c => c != flown && c.Separated && !ChildVessels.Stable(c.Situation));
-            return unstable == null ? "" : unstable.Name + " would be left behind " + unstable.Situation + "; it must be stable (in orbit, landed or splashed down) first";
+            return unstable == null ? "" : Unstable(unstable.Name, unstable.Situation);
+        }
+
+        private static string Unstable(string vessel, string situation)
+        {
+            return vessel + " would be left behind " + situation + "; it must be stable (in orbit, landed or splashed down) first";
         }
 
         /// <summary>A run started on the vessel the plan names: a Child Vessel's run has no Telemetry Checks, which read the craft.</summary>

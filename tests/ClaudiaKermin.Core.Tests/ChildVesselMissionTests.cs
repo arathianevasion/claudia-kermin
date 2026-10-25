@@ -148,6 +148,18 @@ namespace ClaudiaKermin.Core.Tests
             Assert.False(child.Separated);
         }
 
+        [Fact]
+        public void AChildVesselAtAStageWhereNothingWithAProcessorSeparatesIsFlaggedWhenThePlanIsOffered()
+        {
+            var transport = new StreamingFakeTransport(MissionPlan("[{\"name\":\"Probe\",\"separation_stage\":7,\"vessel_id\":null}]"));
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            CraftCheckRouter.StartChecked(mission, _background, Mothership.WithProbe(), new StartMission(Goal, 10m, Sonnet, false));
+            mission.Send(Mothership.WithProbe());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            Assert.Contains(mission.View.Log, e => e.Text.StartsWith("Child Vessel Probe: nothing with a kOS processor separates at stage 7"));
+        }
+
         // ---- Flying one ----
 
         [Fact]

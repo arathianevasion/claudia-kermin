@@ -472,6 +472,8 @@ namespace ClaudiaKermin.Core.Missions
             if (WindowMissed(plan) && !TakeNextWindow(mission, plan)) return;
             if (plan.Manual)
             {
+                // The player flies a manual stretch in whatever vessel they are in: no Child Vessel run.
+                mission.RunningChild = "";
                 StartPlannedManual(mission, plan);
                 return;
             }

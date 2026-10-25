@@ -94,7 +94,7 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>
         /// A separated vessel's figures. Delta-v is one burn of all its engines on all the propellant it carries (its wet
-        /// mass less its dry mass), at their combined vacuum Isp: rough, but enough to see a probe that can't manoeuvre.
+        /// mass less its dry mass), at their combined vacuum Isp: rough, but enough to see a Child Vessel that can't manoeuvre.
         /// </summary>
         private static Separation Describe(int stage, List<SnapshotPart> parts)
         {

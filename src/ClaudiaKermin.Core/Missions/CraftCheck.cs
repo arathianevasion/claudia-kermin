@@ -347,7 +347,7 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>
         /// The child_vessel_problem Blocker from the mod's own figures (#100): each Child Vessel Claude says the Mission Goal
         /// plans is judged at its separation stage, and a staging plan that strands Claudia without a processor always counts.
-        /// Claude's own finding keeps her words and fix, with the mod's facts added.
+        /// Claude's own finding keeps its words and fix, with the mod's facts added.
         /// </summary>
         private void JudgeChildVessels(IList<int> plannedStages)
         {
