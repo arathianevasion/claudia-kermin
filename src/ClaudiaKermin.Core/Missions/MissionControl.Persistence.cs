@@ -531,6 +531,12 @@ namespace ClaudiaKermin.Core.Missions
             // A Paused save keeps its unanswered turn through a quickload too: Retry, Retry with a note and Choose model resend it.
             if (resumeAfterQuit || state.Stage == MissionStage.Paused) unanswered = ValidUnanswered(mission);
             else ClearUnanswered(mission);
+            // The file is the latest turn sent, not the save's: a Paused save only owns it when it is the request it paused from.
+            if (unanswered != null && !resumeAfterQuit && state.Stage == MissionStage.Paused)
+            {
+                var kept = StageOf((Purpose)Enum.Parse(typeof(Purpose), unanswered.Purpose));
+                if (kept != MissionStage.None && kept != state.StageBeforePause) unanswered = null;
+            }
 
             if (count > state.TranscriptMarker)
             {
@@ -616,7 +622,7 @@ namespace ClaudiaKermin.Core.Missions
             var inFlight = paused ? state.StageBeforePause : state.Stage;
             if (inFlight == MissionStage.Planning) purpose = Purpose.MissionPlan;
             else if (inFlight == MissionStage.Sequencing) purpose = Purpose.SequencePlan;
-            // A Debrief would move the Mission on past its Pause, so a Paused one is asked again as before (applying it while Paused is #213's open follow-up).
+            // A Debrief would move the Mission on past its Pause, so a Paused one is asked again as before (applying it while Paused is still open in #213).
             else if (inFlight == MissionStage.Debriefing && !paused) purpose = Purpose.Debrief;
             else return false;
 

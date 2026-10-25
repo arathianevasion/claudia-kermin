@@ -931,7 +931,7 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("claude-opus-5-5", resumed.View.Model);
         }
 
-        private MissionControl PausedMissionBy(ScriptedResponse failure, StreamingFakeTransport transport)
+        private MissionControl PausedMissionBy(StreamingFakeTransport transport)
         {
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Flight));
@@ -945,7 +945,7 @@ namespace ClaudiaKermin.Core.Tests
         public void AQuickloadOfARefusalPauseKeepsTheUnansweredTurnSoRetryResendsItOnce()
         {
             var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("refusal.sse"), ScriptedResponse.Fixture("mission-plan.sse"));
-            var mission = PausedMissionBy(null, transport);
+            var mission = PausedMissionBy(transport);
             var saved = Saved(mission);
             Assert.Equal("Refusal", saved[0].PauseCause);
 
@@ -968,7 +968,7 @@ namespace ClaudiaKermin.Core.Tests
             var transport = new StreamingFakeTransport(
                 ScriptedResponse.Error(404, "not_found_error", "model: claude-sonnet-5-5"),
                 ScriptedResponse.Fixture("mission-plan.sse"));
-            var mission = PausedMissionBy(null, transport);
+            var mission = PausedMissionBy(transport);
             var saved = Saved(mission);
             Assert.Equal("ModelGone", saved[0].PauseCause);
 
@@ -979,14 +979,15 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(new ChooseModel("claude-opus-5-5"));
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             Assert.Equal(2, transport.Requests.Count);
-            Assert.Contains("Goal", transport.Requests[1].Body.Substring(0, Math.Min(transport.Requests[1].Body.Length, 100000)));
+            // The same turn went again, on the model chosen.
+            Assert.Equal(transport.Requests[0].Body.Replace("claude-sonnet-5-5", "claude-opus-5-5"), transport.Requests[1].Body);
         }
 
         [Fact]
         public void AQuickloadOfARefusalPauseThenRetryWithANoteSendsTheOriginalTurnPlusTheNote()
         {
             var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("refusal.sse"), ScriptedResponse.Fixture("mission-plan.sse"));
-            var mission = PausedMissionBy(null, transport);
+            var mission = PausedMissionBy(transport);
             var saved = Saved(mission);
 
             mission.Send(new MissionsRestored(_save.Path, saved));
