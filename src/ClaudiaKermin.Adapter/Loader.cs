@@ -31,6 +31,12 @@ namespace ClaudiaKermin.Adapter
             | ApplicationLauncher.AppScenes.MAPVIEW | ApplicationLauncher.AppScenes.VAB
             | ApplicationLauncher.AppScenes.SPH;
 
+        // The Missions list button: also in the Tracking Station, where the list is the one thing the mod shows.
+        private const ApplicationLauncher.AppScenes MissionsButtonScenes =
+            ApplicationLauncher.AppScenes.SPACECENTER | ApplicationLauncher.AppScenes.TRACKSTATION
+            | ApplicationLauncher.AppScenes.FLIGHT | ApplicationLauncher.AppScenes.MAPVIEW
+            | ApplicationLauncher.AppScenes.VAB | ApplicationLauncher.AppScenes.SPH;
+
         private const string IconUrl = "ClaudiaKermin/Icons/ClaudiaIcon";
         private const string AttentionIconUrl = "ClaudiaKermin/Icons/ClaudiaIconAttention";
 
@@ -39,6 +45,7 @@ namespace ClaudiaKermin.Adapter
         private ChatWindow _chatWindow;
         private MissionDriver _missions;
         private ApplicationLauncherButton _button;
+        private ApplicationLauncherButton _missionsButton;
         private Texture2D _icon;
         private Texture2D _iconAttention;
         private bool _attentionShown;
@@ -123,6 +130,7 @@ namespace ClaudiaKermin.Adapter
             _chatWindow.Unlock();
             _missions.Window.Unlock();
             _missions.Strip.Unlock();
+            _missions.MissionsList.Unlock();
             _missions.Locks.Release();
         }
 
@@ -130,6 +138,15 @@ namespace ClaudiaKermin.Adapter
         {
             _background.Drain();
             _missions.Update();
+
+            // The Missions list button follows the window, which Close and a scene change can shut from elsewhere.
+            if (_missionsButton != null)
+            {
+                var listOpen = _missions.MissionsList.Visible;
+                var listPressed = _missionsButton.toggleButton.CurrentState == KSP.UI.UIRadioButton.State.True;
+                if (listOpen && !listPressed) _missionsButton.SetTrue(false);
+                else if (!listOpen && listPressed) _missionsButton.SetFalse(false);
+            }
 
             if (_button != null)
             {
@@ -190,6 +207,13 @@ namespace ClaudiaKermin.Adapter
                 _missions.Window.Unlock();
                 _missions.Strip.Unlock();
             }
+            if (MissionsSceneLoaded()) _missions.MissionsList.OnGUI(_missions.View);
+            else _missions.MissionsList.Unlock();
+        }
+
+        private static bool MissionsSceneLoaded()
+        {
+            return HighLogic.LoadedScene == GameScenes.TRACKSTATION || SettingsSceneLoaded();
         }
 
         private static bool ChatSceneLoaded()
@@ -203,6 +227,7 @@ namespace ClaudiaKermin.Adapter
             _chatWindow.UiHidden = true;
             _missions.Window.UiHidden = true;
             _missions.Strip.UiHidden = true;
+            _missions.MissionsList.UiHidden = true;
         }
 
         private void ShowUI()
@@ -211,6 +236,7 @@ namespace ClaudiaKermin.Adapter
             _chatWindow.UiHidden = false;
             _missions.Window.UiHidden = false;
             _missions.Strip.UiHidden = false;
+            _missions.MissionsList.UiHidden = false;
         }
 
         // The chat and the Mission keep running across the change; only the input locks are released.
@@ -220,11 +246,13 @@ namespace ClaudiaKermin.Adapter
         {
             RemoveButtons();
             _window.Visible = false;
+            _missions.MissionsList.Visible = false;
             UnlockAll();
             _window.UiHidden = false;
             _chatWindow.UiHidden = false;
             _missions.Window.UiHidden = false;
             _missions.Strip.UiHidden = false;
+            _missions.MissionsList.UiHidden = false;
             // Each time Flight loads (including a revert), the Craft Check starts collapsed.
             if (scene == GameScenes.FLIGHT) _missions.Panel.FlightLoading();
         }
@@ -237,12 +265,16 @@ namespace ClaudiaKermin.Adapter
         private void AddButtons()
         {
             RemoveButtons();
-            if (!SettingsSceneLoaded()) return;
+            if (!MissionsSceneLoaded()) return;
             if (_icon == null)
             {
                 _icon = LoadIcon(IconUrl, ClaudiaSkin.IconGreen);
                 _iconAttention = LoadIcon(AttentionIconUrl, ClaudiaSkin.Attention);
             }
+            _missionsButton = ApplicationLauncher.Instance.AddModApplication(
+                () => _missions.MissionsList.Visible = true, () => _missions.MissionsList.Visible = false, null, null, null, null, MissionsButtonScenes, _icon);
+            if (_missions.MissionsList.Visible) _missionsButton.SetTrue(false);
+            if (!SettingsSceneLoaded()) return;
             _attentionShown = false;
             _button = ApplicationLauncher.Instance.AddModApplication(
                 ButtonOn, ButtonOff, null, null, null, null, ButtonScenes, _icon);
@@ -258,6 +290,8 @@ namespace ClaudiaKermin.Adapter
         {
             if (ApplicationLauncher.Instance != null && _button != null) ApplicationLauncher.Instance.RemoveModApplication(_button);
             _button = null;
+            if (ApplicationLauncher.Instance != null && _missionsButton != null) ApplicationLauncher.Instance.RemoveModApplication(_missionsButton);
+            _missionsButton = null;
         }
 
         // The Winged glare artwork from GameData; a plain tile in the icon colour if the PNG didn't load.

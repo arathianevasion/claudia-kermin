@@ -122,6 +122,10 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is RunEventSeen) EventSeen((RunEventSeen)input);
             else if (input is AcceptReducedGoal) ReducedGoalAccepted();
             else if (input is StockAlarmFired) StockAlarmWentOff();
+            else if (input is ResumeMission) ResumeRequested(((ResumeMission)input).Id);
+            else if (input is PauseMission) PauseRequested();
+            else if (input is DeleteMission) DeleteRequested(((DeleteMission)input).Id);
+            else if (input is GoToMissionVessel) GoToMissionVesselRequested(((GoToMissionVessel)input).Id);
             else if (input is CraftLinkSeen) CraftLinkReported((CraftLinkSeen)input);
             CheckDue();
             CheckBlackout();
@@ -283,9 +287,10 @@ namespace ClaudiaKermin.Core.Missions
 
         private void Start(StartMission start)
         {
-            if (!MissionOver) return;
             var goal = (start.Goal ?? "").Trim();
             if (goal.Length == 0 || start.SpendingCap <= 0 || !_config.Models.Contains(start.Model) || _saveDirectory == null) return;
+            // Another Mission in play pauses at its next sequence boundary first, before the new craft is checked (MissionControl.Missions.cs).
+            if (!MissionOver && !MakeRoom(new QueuedSwitch { Kind = SwitchKind.Start, Start = start })) return;
 
             // A remote Mission needs a link (or the pad); a crewed one can't have Claudia while she is Missing. No request is spent on either.
             _startRefusal = StartRefusal(start);
@@ -307,8 +312,7 @@ namespace ClaudiaKermin.Core.Missions
             if (!_craftCheck.Cleared) return;
             _pendingStart = null;
 
-            var id = "m" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-"
-                + Guid.NewGuid().ToString("N").Substring(0, 4);
+            var id = NewMissionId();
             var mission = new Mission
             {
                 Id = id,
@@ -371,7 +375,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             var start = _pendingStart;
             _pendingStart = null;
-            if (start != null && MissionOver && _craftCheck.Passed) Start(start);
+            if (start != null && _craftCheck.Passed) Start(start);
             TryPlan();
             Rebuild();
         }
@@ -412,6 +416,10 @@ namespace ClaudiaKermin.Core.Missions
             _pendingStart = null;
             _startRefusal = "";
             _craftCheck.Reset();
+            _parked.Clear();
+            _finishedCache.Clear();
+            _switch = null;
+            _historyVersion++;
             if (_mission == null) return;
             if (_mission.InFlight) _mission.Pending.Cancel.Cancel();
             _mission = null;
@@ -820,10 +828,7 @@ namespace ClaudiaKermin.Core.Missions
         /// </summary>
         private void LostDebrief(Mission mission, string doing)
         {
-            var body = "Claudia Kermin was killed aboard the craft" + (doing.Length > 0 ? " " + doing : "") + ".\n"
-                + "Mission Goal not met: " + mission.Goal + "\n"
-                + "Spent $" + Dollars(mission.Spent) + " of the $" + Dollars(mission.SpendingCap) + " Spending Cap. The Mission is Lost.";
-            var card = AddCard(mission, LogKind.Debrief, "Final Debrief: Lost", body, "Claudia was killed aboard the craft.");
+            var card = AddCard(mission, LogKind.Debrief, MissionCards.LostTitle, MissionCards.LostBody(mission.Goal, doing, mission.Spent, mission.SpendingCap), MissionCards.LostWhy);
             card.Outcome = "Failed";
         }
 
@@ -846,6 +851,7 @@ namespace ClaudiaKermin.Core.Missions
             try
             {
                 MissionFolder.WriteEnded(mission.Folder, mission.Id, mission.Stage.ToString());
+                MissionStore.WriteVessel(mission.Folder, mission.VesselId, mission.VesselName);
             }
             catch (Exception e) when (IsFileError(e))
             {
@@ -1270,20 +1276,7 @@ namespace ClaudiaKermin.Core.Missions
                 HerNews("Claudia can't fly this Mission Goal as stated.");
                 return;
             }
-            var body = new StringBuilder();
-            for (var i = 0; i < plan.Sequences.Count; i++)
-            {
-                var s = plan.Sequences[i];
-                body.Append(i + 1).Append(". ").Append(s.Name).Append(s.Manual ? " [you fly this by hand]" : "")
-                    .Append(FliesCraft(mission, s.Vessel) ? "" : " [" + s.Vessel + "]").Append(": ").Append(s.Intent)
-                    .Append(" (").Append(MetresPerSecond(s.DeltaV)).Append(", ").Append(s.Timing);
-                if (s.DueTimeUt.HasValue) body.Append("; Due Time ").Append(KerbinTime.Date(s.DueTimeUt.Value));
-                body.Append(")\n");
-            }
-            body.Append(ChildVesselLines(plan));
-            body.Append("Total ").Append(MetresPerSecond(plan.TotalDeltaV)).Append(", ").Append(plan.ExpectedDuration).Append('.');
-            if (plan.MissionTimeSeconds.HasValue) body.Append(" Total Mission time ").Append(KerbinTime.Span(plan.MissionTimeSeconds.Value)).Append('.');
-            AddCard(mission, LogKind.MissionPlan, "Mission Plan", body.ToString(), plan.Why);
+            AddCard(mission, LogKind.MissionPlan, "Mission Plan", MissionCards.MissionPlanBody(plan, mission.VesselName), plan.Why);
             HerNews("Claudia has a Mission Plan for your Approval.");
         }
 
@@ -1299,29 +1292,14 @@ namespace ClaudiaKermin.Core.Missions
             mission.PlanBaseline = _snapshot;
             PlanOffered(mission);
             mission.Stage = MissionStage.AwaitingSequenceApproval;
-            var body = new StringBuilder();
             if (plan.DueTimeUt.HasValue)
             {
-                body.Append("Due Time: ").Append(KerbinTime.Date(plan.DueTimeUt.Value)).Append(plan.DueTimeUt.Value > _ut
-                    ? " (in " + KerbinTime.Span(plan.DueTimeUt.Value - _ut) + ")" : " (reached)").Append('\n');
                 // A stock Alarm Clock alarm at the Due Time; the mod itself never warps between sequences.
                 if (plan.DueTimeUt.Value > _ut) _commands.Add(new SetDueTimeAlarm(mission.Id, plan.DueTimeUt.Value, "Claudia: " + plan.Name));
                 mission.DueNotified = plan.DueTimeUt.Value <= _ut;
             }
             else mission.DueNotified = false;
-            if (plan.Manual) body.Append("Manual stretch: you fly this one by hand; Approve gives you the controls.\n");
-            if (!FliesCraft(mission, plan.Vessel)) body.Append("Flies the Child Vessel ").Append(plan.Vessel).Append('\n');
-            body.Append(plan.Intent).Append('\n')
-                .Append("Target: ").Append(plan.Target).Append(" (tolerances: ").Append(plan.Tolerances).Append(")\n")
-                .Append("Expected: ").Append(MetresPerSecond(plan.ExpectedDeltaV)).Append(", ")
-                .Append(plan.ExpectedDurationSeconds.ToString("0", CultureInfo.InvariantCulture)).Append(" s");
-            if (plan.AbortConditions.Count > 0) body.Append("\nAbort if: ").Append(string.Join("; ", plan.AbortConditions.ToArray()));
-            // The checks the run will watch, as Approval shows them: Claudia's, then the config defaults filling the gaps.
-            if (!plan.Manual)
-                body.Append("\nTelemetry Checks: ").Append(string.Join("; ", TelemetryDefaults.Fill(plan, _config)
-                    .Select(c => c.Describe() + (c.Default ? " (default)" : "")).ToArray()));
-            if (plan.Risks.Count > 0) body.Append("\nRisks: ").Append(string.Join("; ", plan.Risks.ToArray()));
-            var card = AddCard(mission, LogKind.SequencePlan, plan.Name, body.ToString(), plan.Why);
+            var card = AddCard(mission, LogKind.SequencePlan, plan.Name, MissionCards.SequencePlanBody(plan, mission.VesselName, _ut, _config), plan.Why);
             card.Script = plan.Script;
             card.CustomScript = plan.CustomScript;
             card.CustomScriptReason = plan.CustomScriptReason;
@@ -1346,8 +1324,7 @@ namespace ClaudiaKermin.Core.Missions
                 Note(LogKind.Notice, "Rated Off-Nominal, not Nominal: a Telemetry Check was crossed during the run.");
             }
             var entry = AddCard(mission, LogKind.Debrief, "Debrief: " + debrief.Outcome + TakeStopReason(mission),
-                debrief.WhatHappened + (debrief.Next.Length > 0 ? "\nNext: " + debrief.Next : "")
-                + (crossings.Length > 0 ? "\nTelemetry Checks crossed: " + crossings : ""), debrief.Why);
+                MissionCards.DebriefBody(debrief, crossings), debrief.Why);
             entry.Outcome = debrief.Outcome;
             entry.Debrief = DetailOf(mission, debrief);
             HerNews("Claudia's Debrief: " + debrief.Outcome + ".");
@@ -1577,6 +1554,7 @@ namespace ClaudiaKermin.Core.Missions
         private static LogEntry AddCard(Mission mission, LogKind kind, string title, string body, string why)
         {
             var entry = new LogEntry { Kind = kind, Title = title, Text = body, Why = why ?? "" };
+            if (mission.SuppressCards) return entry;
             QueueIfBlackout(mission, entry);
             mission.Log.Add(entry);
             return entry;
@@ -1584,11 +1562,12 @@ namespace ClaudiaKermin.Core.Missions
 
         private static string MetresPerSecond(double value)
         {
-            return value.ToString("#,0", CultureInfo.InvariantCulture) + " m/s";
+            return MissionCards.MetresPerSecond(value);
         }
 
         private void Rebuild()
         {
+            SwitchIfReady();
             var mission = _mission;
             var view = new MissionView
             {
@@ -1596,6 +1575,9 @@ namespace ClaudiaKermin.Core.Missions
                 Ut = _ut,
                 CanCaptureSnapshot = _snapshot != null && _saveDirectory != null,
                 CanEndMission = !MissionOver,
+                CanPauseMission = !MissionOver && _switch == null,
+                SwitchQueued = _switch != null,
+                Missions = Missions(),
             };
             view.StartForm.Models = _config.Models.ToList();
             view.StartForm.DefaultModel = _config.DefaultModel;

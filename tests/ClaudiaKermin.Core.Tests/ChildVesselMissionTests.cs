@@ -363,6 +363,29 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void TheChildVesselTextOnThePlanCardsIsTheSameInTheLogRebuiltAfterALoad()
+        {
+            var transport = new StreamingFakeTransport(MissionPlan(), SequencePlan("Release", "craft"), Debrief(false), SequencePlan("Probe burn", "Probe"), Debrief(true));
+            var mission = Control(transport);
+            ToProbeSequence(mission);
+            mission.Send(new VesselsSeen(new List<SeenVessel> { CraftSeen(), ProbeSeen() }));
+            mission.Send(new Approve());
+            var script = mission.TakeCommands().OfType<StartScript>().Single();
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Finished, new Dictionary<string, object> { { "success", true } }, "", "", false), script.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+            var live = mission.View.Log.Where(e => e.Kind == LogKind.MissionPlan || e.Kind == LogKind.SequencePlan).Select(e => e.Title + "|" + e.Text).ToList();
+            Assert.Contains(live, c => c.Contains("2. Probe burn [Probe]") && c.Contains("Child Vessels: Probe (separates at stage 2)"));
+            Assert.Contains(live, c => c.StartsWith("Probe burn|") && c.Contains("Flies the Child Vessel Probe"));
+            Assert.DoesNotContain(live, c => c.StartsWith("Release|") && c.Contains("Flies the Child Vessel"));
+
+            // A quit and a fresh game over the same save: the cards are built again from the transcript.
+            var reloaded = Control(new StreamingFakeTransport());
+            reloaded.Send(new MissionsRestored(_save.Path, mission.ExportStates()));
+            Assert.Equal(MissionStage.Succeeded, reloaded.View.Stage);
+            Assert.Equal(live, reloaded.View.Log.Where(e => e.Kind == LogKind.MissionPlan || e.Kind == LogKind.SequencePlan).Select(e => e.Title + "|" + e.Text).ToList());
+        }
+
+        [Fact]
         public void AMissionPlanWithBothANewGoalAndChildVesselsParsesIsSavedAndRestored()
         {
             const string newGoal = "Release the probe and fly it past the Mun.";

@@ -387,5 +387,12 @@ namespace ClaudiaKermin.Core.Missions
         public DueTimeView DueTime = new DueTimeView();
 
         public IList<LogEntry> Log = new List<LogEntry>();
+
+        /// <summary>The read-only Missions list for the KSC and Tracking Station: the Mission in play, Paused Missions, then finished ones (history).</summary>
+        public IList<MissionListEntry> Missions = new List<MissionListEntry>();
+        /// <summary>A Mission is in play and not over, so Pause Mission is offered (to make way for starting another).</summary>
+        public bool CanPauseMission;
+        /// <summary>A Start or Resume of another Mission, or a Pause, waits for the active Mission's next sequence boundary.</summary>
+        public bool SwitchQueued;
     }
 }
