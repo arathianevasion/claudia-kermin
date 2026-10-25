@@ -25,7 +25,7 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void NoBundledFileOrBlockTestScriptDeclaresANameThatHidesAKosBuiltin()
         {
-            var bad = KosBuiltinNames.Clashes("bundle", CoreLibrary.Bundle(Script, 1, 10800));
+            var bad = KosBuiltinNames.Clashes("bundle", CoreLibrary.Bundle(Script));
             var root = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory);
             while (root != null && !System.IO.File.Exists(System.IO.Path.Combine(root.FullName, "ClaudiaKermin.sln"))) root = root.Parent;
             Assert.NotNull(root);
@@ -59,24 +59,42 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void TheBundleKeepsTheMissionScriptFirstSoItsLineNumbersStayRight()
         {
-            var bundle = CoreLibrary.Bundle(Script, 1, 10800);
+            var bundle = CoreLibrary.Bundle(Script);
             Assert.StartsWith("@lazyglobal off.\nlocal res is exec_node().\naddons:claudia:report(res).\n", bundle);
         }
 
         [Fact]
         public void TheBundleHoldsEveryLibraryFileWithOnlyTheScriptsLazyglobalDirective()
         {
-            var bundle = CoreLibrary.Bundle(Script, 1, 10800);
+            var bundle = CoreLibrary.Bundle(Script);
             Assert.Contains("function claudia_finish {", bundle);
             Assert.Contains("function exec_node {", bundle);
             Assert.Single(Regex.Matches(bundle, "(?m)^\\s*@lazyglobal"));
         }
 
         [Fact]
-        public void TheBundleCarriesThePlayersWaitCaps()
+        public void TheBundleCarriesNoWaitCapAndItsWaitsWarpOnRails()
         {
-            var bundle = CoreLibrary.Bundle(Script, 1.5, 7200);
-            Assert.Contains("function claudia_config {\n  return lexicon(\"wait_cap_orbits\", 1.5, \"wait_cap_ground_s\", 7200).\n}", bundle);
+            // ADR 0004: a wait longer than an orbit stays inside the sequence; nothing in the bundle refuses it.
+            var bundle = CoreLibrary.Bundle(Script);
+            Assert.DoesNotContain("claudia_config", bundle);
+            Assert.DoesNotContain("wait_cap", bundle);
+            Assert.DoesNotContain("claudia_check_wait", bundle);
+            Assert.DoesNotContain("plan a Due Time", bundle);
+            Assert.Contains("function claudia_wait_until {", bundle);
+            Assert.Contains("set kuniverse:timewarp:mode to \"RAILS\".", bundle);
+        }
+
+        [Fact]
+        public void TheSharedDocsTellClaudiaWaitsWarpInsideTheScriptWithNoCap()
+        {
+            var shared = CoreLibrary.Summaries();
+            Assert.Contains("on-rails warp", shared);
+            Assert.Contains("1x at least 30 s before", shared);
+            Assert.DoesNotContain("plan a Due Time instead", shared);
+            Assert.Contains("\n- coast(options): ", shared);
+            foreach (var text in new[] { "until [required]", "lead [30]" })
+                Assert.Contains(text, CoreLibrary.FullDocs(new[] { "coast" }));
         }
 
         [Fact]
@@ -146,7 +164,7 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void TheBundleHoldsEachRsvpFileAsAFunctionAfterTheLibrary()
         {
-            var bundle = CoreLibrary.Bundle(Script, 1, 10800);
+            var bundle = CoreLibrary.Bundle(Script);
             foreach (var name in new[] { "hill_climb", "lambert", "main", "maneuver", "orbit", "refine", "search", "transfer", "validate" })
                 Assert.Contains("\nfunction rsvp_file_" + name + " {\n", bundle);
             Assert.True(bundle.IndexOf("function rsvp_file_main {", System.StringComparison.Ordinal) > bundle.IndexOf("function exec_node {", System.StringComparison.Ordinal));

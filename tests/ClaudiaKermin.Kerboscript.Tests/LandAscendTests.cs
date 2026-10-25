@@ -17,12 +17,12 @@ namespace ClaudiaKermin.Kerboscript.Tests
 
         private static string One(string expression)
         {
-            return KosHarness.Run(CoreLibrary.Bundle("print " + expression + ".", 1, 10800)).Single();
+            return KosHarness.Run(CoreLibrary.Bundle("print " + expression + ".")).Single();
         }
 
         private static string[] Run(string missionScript)
         {
-            return KosHarness.Run(CoreLibrary.Bundle(missionScript, 1, 10800)).ToArray();
+            return KosHarness.Run(CoreLibrary.Bundle(missionScript)).ToArray();
         }
 
         // ---- land: options ----
@@ -35,6 +35,27 @@ namespace ClaudiaKermin.Kerboscript.Tests
                 + "print o:target. print o:daylight. print o:max_slope. print o:max_divert.\n"
                 + "print o:touchdown_speed. print o:gear_alt. print o:burn_margin. print o:max_duration.");
             Assert.Equal(new[] { "any", "True", "8", "300", "2", "1000", "1.1", "auto" }, printed);
+        }
+
+        // ---- land: daylight past the old one-orbit cap (#122, ADR 0004) ----
+
+        [Fact]
+        public void Land_looks_a_whole_day_of_the_body_ahead_for_a_daylight_pass()
+        {
+            // The Mun's day is 138984 s, about 70 of a low orbit's 2000 s: far past the old one-orbit cap.
+            Assert.Equal("166781.376", One("round(land_daylight_horizon(138984.48), 3)"));
+            Assert.Equal("True", One("land_daylight_horizon(138984.48) > 138984.48"));
+        }
+
+        [Theory]
+        [InlineData(0, 30, "True")]
+        [InlineData(20000, 5, "True")]
+        [InlineData(20001, 30, "False")]
+        [InlineData(0, 4.9, "False")]
+        [InlineData(0, -40, "False")]
+        public void A_daylight_pass_is_within_20_km_of_the_track_with_the_sun_5_degrees_up(double cross, double sun, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(System.Globalization.CultureInfo.InvariantCulture, "land_lit_near({0}, {1})", cross, sun)));
         }
 
         [Fact]

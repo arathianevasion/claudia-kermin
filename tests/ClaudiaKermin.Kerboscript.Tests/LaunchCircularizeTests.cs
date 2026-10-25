@@ -12,7 +12,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
     {
         private static string[] Run(string missionScript)
         {
-            return KosHarness.Run(CoreLibrary.Bundle(missionScript, 1, 10800)).ToArray();
+            return KosHarness.Run(CoreLibrary.Bundle(missionScript)).ToArray();
         }
 
         private static string One(string expression)
@@ -91,7 +91,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [Fact]
         public void The_heading_comes_from_the_bundled_lib_lazcalc_which_is_not_a_Building_Block()
         {
-            var bundle = CoreLibrary.Bundle("", 1, 10800);
+            var bundle = CoreLibrary.Bundle("");
             Assert.Contains("FUNCTION LAZcalc_init {", bundle);
             Assert.DoesNotContain("@CLOBBERBUILTINS", bundle);
             Assert.DoesNotContain("function launch_azimuth", bundle);

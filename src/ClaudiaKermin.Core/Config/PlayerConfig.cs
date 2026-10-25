@@ -11,9 +11,10 @@ namespace ClaudiaKermin.Core.Config
 {
     /// <summary>
     /// The player config file (outside the save). Holds <c>debug_tools</c>, the models offered at Mission
-    /// start (the first is the default), the default Spending Cap, the compaction trigger, the wait caps and the runaway multiplier; later tickets
+    /// start (the first is the default), the default Spending Cap, the compaction trigger and the runaway multiplier; later tickets
     /// add the price table and the rest of the spec's settings. Format: <c>name = value</c> lines,
-    /// <c>#</c> comments. A missing or unreadable value keeps its default. The Mission defaults are written back by
+    /// <c>#</c> comments. A missing or unreadable value keeps its default; a name it doesn't know is ignored, such as
+    /// the <c>wait_cap_orbits</c> and <c>wait_cap_ground_s</c> an older file may still hold (ADR 0004). The Mission defaults are written back by
     /// <see cref="SaveDefaults"/> (the Settings window, in the Space Center).
     /// </summary>
     public sealed class PlayerConfig
@@ -38,12 +39,6 @@ namespace ClaudiaKermin.Core.Config
 
         /// <summary>The delta-v margin the Craft Check wants over the Delta-v Map, in percent.</summary>
         public int CraftCheckMarginPercent = 15;
-
-        /// <summary>The longest wait a Building Block sits through in orbit, in orbits; longer waits become a Due Time.</summary>
-        public double WaitCapOrbits = 1;
-
-        /// <summary>The longest wait a Building Block sits through on the ground (or with no closed orbit), in seconds.</summary>
-        public double WaitCapGroundSeconds = 10800;
 
         /// <summary>Prefilled in the Mission start form: prefer to land in daylight.</summary>
         public bool DefaultDaylightLanding = true;
@@ -110,9 +105,6 @@ namespace ClaudiaKermin.Core.Config
             + "price.claude-opus-5 = 5, 25\n"
             + "price.claude-opus-4-8 = 5, 25\n"
             + "price.claude-fable-5-1 = 10, 50\n"
-            + "# Longest wait inside a Maneuver Sequence: orbits in orbit, seconds on the ground. Longer waits become a Due Time.\n"
-            + "wait_cap_orbits = 1\n"
-            + "wait_cap_ground_s = 10800\n"
             + "# Mission Settings prefilled in the start form: daylight landing (true/false) and time versus delta-v (Fastest, Balanced, MostEfficient).\n"
             + "daylight_landing = true\n"
             + "time_vs_dv = Balanced\n"
@@ -191,11 +183,6 @@ namespace ClaudiaKermin.Core.Config
                         if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out trigger) && trigger >= MinCompactionTriggerTokens)
                             config.CompactionTriggerTokens = trigger;
                         break;
-                    case "wait_cap_orbits":
-                        double orbits;
-                        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out orbits) && orbits > 0)
-                            config.WaitCapOrbits = orbits;
-                        break;
                     case "manual_hold_s":
                         double hold;
                         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out hold) && hold > 0)
@@ -210,11 +197,6 @@ namespace ClaudiaKermin.Core.Config
                         int tolerance;
                         if (int.TryParse(value.TrimEnd('%'), NumberStyles.Integer, CultureInfo.InvariantCulture, out tolerance) && tolerance >= 0 && tolerance <= 200)
                             config.ReplanTolerancePercent = tolerance;
-                        break;
-                    case "wait_cap_ground_s":
-                        double ground;
-                        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out ground) && ground > 0)
-                            config.WaitCapGroundSeconds = ground;
                         break;
                     case "daylight_landing":
                         config.DefaultDaylightLanding = !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);

@@ -37,7 +37,7 @@
 //| Extra results: ap_error (m, apoapsis minus target_ap when the block ended; a hop's shows drag
 //| loss), max_q (Pa, highest dynamic pressure), coast_ap (m, apoapsis at first engine cutoff).
 //| Fails with "launch starts on the ground", "no atmosphere on <body>: use ascend", "no thrust", a
-//| launch_at it can't use, a wait over the cap, "lost control: ..." (saying whether it was burning or
+//| launch_at it can't use, "lost control: ..." (saying whether it was burning or
 //| coasting, the throttle, q and the nose's angle off the airflow), "fell back into the
 //| atmosphere: ...", out of fuel, or an abort.
 //| Example: `local res is launch(lexicon("target_ap", 80000)). if res:success { set res to circularize(lexicon("at", "ap")). }
@@ -304,10 +304,6 @@ function launch {
   }
   if opt:max_duration:istype("String") {
     set opt:max_duration to go:wait + 900.
-  }
-  local waiting is claudia_check_wait(go:wait).
-  if waiting <> "" {
-    return claudia_finish(ctx, false, waiting, extra).
   }
   if go:wait > 0 {
     local waited is claudia_wait_until(ctx, time:seconds + go:wait).

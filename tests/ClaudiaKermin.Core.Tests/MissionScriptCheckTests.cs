@@ -155,7 +155,7 @@ namespace ClaudiaKermin.Core.Tests
             // The script that starts is the one that passed, bundled with the Core Library, and the bundle is what was checked.
             mission.Send(new Approve());
             var start = Assert.Single(mission.TakeCommands().OfType<StartScript>());
-            Assert.Equal(CoreLibrary.Bundle(card.Script, 1, 10800), start.Source);
+            Assert.Equal(CoreLibrary.Bundle(card.Script), start.Source);
             Assert.Contains(start.Source, _check.Checked);
         }
 
@@ -309,7 +309,7 @@ namespace ClaudiaKermin.Core.Tests
             ApproveMissionPlan(mission);
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
             var card = Assert.Single(SequenceCards(mission.View));
-            Assert.Equal(new[] { CoreLibrary.Bundle(card.Script, 1, 10800) }, _check.Checked);
+            Assert.Equal(new[] { CoreLibrary.Bundle(card.Script) }, _check.Checked);
         }
 
         // ---- The Spending Cap: the rewrite, Retry and Re-plan are Mission requests ----
@@ -392,10 +392,10 @@ namespace ClaudiaKermin.Core.Tests
 
             var resumed = Resumed(Replies(), saved);
             Assert.Equal(MissionStage.AwaitingSequenceApproval, resumed.View.Stage);
-            Assert.Contains(CoreLibrary.Bundle(script, 1, 10800), _check.Checked);
+            Assert.Contains(CoreLibrary.Bundle(script), _check.Checked);
             resumed.Send(new Approve());
             var start = Assert.Single(resumed.TakeCommands().OfType<StartScript>());
-            Assert.Equal(CoreLibrary.Bundle(script, 1, 10800), start.Source);
+            Assert.Equal(CoreLibrary.Bundle(script), start.Source);
             // The checked script keeps the run id (#89) and the chosen processor (#55).
             Assert.Equal(3102u, start.ProcessorPartId);
             Assert.True(start.RunId > 0);

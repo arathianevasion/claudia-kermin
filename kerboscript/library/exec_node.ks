@@ -17,7 +17,7 @@
 //|   max_duration ["auto"]: the wait to the burn plus twice the burn time plus 300 s.
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block.
 //| Extra results: residual (m/s the node still needed when the block ended), burn_time (s the
-//| engines burned). Fails with "no maneuver node", "no thrust", a node or lead it can't read, a wait over the cap, "residual
+//| engines burned). Fails with "no maneuver node", "no thrust", a node or lead it can't read, "residual
 //| <x> m/s is over max_residual", out of fuel, or an abort; on failure the node is left in place.
 //| Plan the node yourself first (ADD NODE(time, radial, normal, prograde)); the node must be far
 //| enough ahead to turn and start the burn (lead plus about 30 s).
@@ -101,11 +101,6 @@ function exec_node {
   if opt:max_duration:istype("String") {
     set opt:max_duration to max(0, timing:start_in) + 2 * timing:burn_time + 300.
   }
-  local waiting is claudia_check_wait(timing:start_in).
-  if waiting <> "" {
-    return claudia_finish(ctx, false, waiting, extra).
-  }
-
   // Point at the burn as it is now (raw-frame vectors drift during warp); the craft turns once warp
   // drops to 1x, 30 s before the start.
   lock steering to nd:deltav.

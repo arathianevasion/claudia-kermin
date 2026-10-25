@@ -25,7 +25,7 @@
 //| Extra results: max_g (peak g felt, in g), max_temp_pct (hottest part, in percent of its limit),
 //| geo (lexicon lat, lng, alt where it ended), splashed (true if it ended in water), touchdown_speed
 //| (m/s just before contact; over 15 m/s fails the block). Fails with "body has no atmosphere", an
-//| orbit that never reaches the atmosphere, a wait over the cap, an option it can't read, a hard
+//| orbit that never reaches the atmosphere, an option it can't read, a hard
 //| touchdown, or an abort (a mid-air abort still opens the parachutes if that is safe).
 //| Fly it after a return or a de-orbit burn, with the orbit's periapsis inside the atmosphere. It does
 //| not plan or burn anything. Example: `local res is reentry(). addons:claudia:report(res).`
@@ -267,11 +267,6 @@ function reentry {
   if opt:max_duration:istype("String") {
     set opt:max_duration to entry_in + 1800.
   }
-  local waiting is claudia_check_wait(entry_in).
-  if waiting <> "" {
-    return claudia_finish(ctx, false, waiting, extra).
-  }
-
   local held is opt:hold = "retrograde".
   if held {
     lock steering to srfretrograde.

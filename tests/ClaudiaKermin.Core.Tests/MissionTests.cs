@@ -180,7 +180,7 @@ namespace ClaudiaKermin.Core.Tests
             var start = Assert.Single(Started(mission));
             Assert.Equal(3102u, start.ProcessorPartId);
             // It runs as one compile unit: the Mission Script first, then the Core Library it calls.
-            Assert.Equal(CoreLibrary.Bundle(sequenceCard.Script, 1, 10800), start.Source);
+            Assert.Equal(CoreLibrary.Bundle(sequenceCard.Script), start.Source);
             Assert.StartsWith(sequenceCard.Script.TrimEnd('\n'), start.Source);
             Assert.Contains("function exec_node {", start.Source);
             Assert.Equal(MissionStage.Running, mission.View.Stage);

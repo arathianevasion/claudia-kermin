@@ -17,7 +17,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
 
         private static string One(string expression)
         {
-            return KosHarness.Run(CoreLibrary.Bundle("print " + expression + ".", 1, 10800)).Single();
+            return KosHarness.Run(CoreLibrary.Bundle("print " + expression + ".")).Single();
         }
 
         private static double Number(string expression)

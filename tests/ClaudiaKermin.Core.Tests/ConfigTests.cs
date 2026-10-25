@@ -175,24 +175,21 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
-        public void PlayerConfigReadsTheWaitCapsWithOneOrbitAndThreeHoursOnTheGroundByDefault()
+        public void PlayerConfigHasNoWaitCapsAndIgnoresTheWaitCapKeysAnOlderFileStillHolds()
         {
             using (var dir = new TempDir())
             {
+                PlayerConfig.LoadOrCreate(dir.Sub);
+                Assert.DoesNotContain("wait_cap", File.ReadAllText(Path.Combine(dir.Sub, PlayerConfig.FileName)));
+
+                // An older config.cfg (ADR 0004): the keys are ignored, not errors, and the lines around them still read.
+                File.WriteAllText(Path.Combine(dir.Sub, PlayerConfig.FileName),
+                    "craft_check_margin = 20\nwait_cap_orbits = 2.5\nwait_cap_ground_s = soon\nreplan_tolerance = 30\n");
                 var config = PlayerConfig.LoadOrCreate(dir.Sub);
-                Assert.Equal(1.0, config.WaitCapOrbits);
-                Assert.Equal(10800.0, config.WaitCapGroundSeconds);
-                Assert.Contains("wait_cap_orbits = 1", File.ReadAllText(Path.Combine(dir.Sub, PlayerConfig.FileName)));
-
-                File.WriteAllText(Path.Combine(dir.Sub, PlayerConfig.FileName), "wait_cap_orbits = 2.5\nwait_cap_ground_s = 3600\n");
-                config = PlayerConfig.LoadOrCreate(dir.Sub);
-                Assert.Equal(2.5, config.WaitCapOrbits);
-                Assert.Equal(3600.0, config.WaitCapGroundSeconds);
-
-                File.WriteAllText(Path.Combine(dir.Sub, PlayerConfig.FileName), "wait_cap_orbits = 0\nwait_cap_ground_s = soon\n");
-                config = PlayerConfig.LoadOrCreate(dir.Sub);
-                Assert.Equal(1.0, config.WaitCapOrbits);
-                Assert.Equal(10800.0, config.WaitCapGroundSeconds);
+                Assert.Equal(20, config.CraftCheckMarginPercent);
+                Assert.Equal(30, config.ReplanTolerancePercent);
+                Assert.Null(typeof(PlayerConfig).GetField("WaitCapOrbits"));
+                Assert.Null(typeof(PlayerConfig).GetField("WaitCapGroundSeconds"));
             }
         }
 

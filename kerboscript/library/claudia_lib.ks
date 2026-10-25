@@ -3,8 +3,7 @@
 //
 // The Core Library's shared helpers: every Building Block is built on these. The mod bundles this
 // file, every block and the Mission Script into one compile unit (Mission Script first, so its line
-// numbers stay right), and adds claudia_config() with the player's wait caps. Lines starting "//|"
-// are the docs Claudia reads in her prompt; keep them true.
+// numbers stay right). Lines starting "//|" are the docs Claudia reads in her prompt; keep them true.
 //
 // Conventions every block follows (the contract later blocks copy):
 // - A block is one global function named as in the spec (exec_node, launch, ...) taking one options
@@ -20,7 +19,8 @@
 // - An abort makes the craft safe (claudia_make_safe) and returns success false with reason
 //   "abort <option>: <detail>"; there is no in-block recovery.
 // - Block loops call claudia_tick() each physics tick: it measures delta-v used, auto-stages and
-//   checks the common aborts. Waits go through claudia_wait_until().
+//   checks the common aborts. Waits go through claudia_wait_until() (or claudia_warp_to() for a
+//   longer lead), which warp on rails with no cap.
 // - A block that flies another block (e.g. a burn through exec_node) passes on its common options
 //   and folds the result into its own with claudia_add_result (claudia_fly_node does both for nodes).
 // - Helpers are prefixed claudia_. Pure helpers (no ship, no time) take plain values so they can be
@@ -43,9 +43,10 @@
 //| situation (e.g. "ORBITING"), orbit (lexicon ap, pe in m, inc in degrees) or, when landed,
 //| splashed or on the pad, geo (lexicon lat, lng, alt), and stage (current stage number); plus the
 //| block's extra results. An abort leaves the craft safe (throttle 0, SAS holding attitude) and
-//| sets reason "abort <option>: <detail>". Waits use on-rails warp only, dropping to 1x 30 s before
-//| a burn; the player may cancel warp. A wait longer than one orbit (3 h on the ground) fails the
-//| block: plan a Due Time instead. Report the Script Result yourself, once, at the end, e.g.
+//| sets reason "abort <option>: <detail>". Waits use on-rails warp only, back at 1x at least 30 s before
+//| a burn, and have no cap: a block waits for its window or daylight however long, and coast holds
+//| until a UT. Warp drops to 1x when the Mission needs the player and resumes after; the player may
+//| cancel it. Don't warp yourself (physics warp is blocked). Report the Script Result yourself, once, at the end, e.g.
 //| `addons:claudia:report(res).`, or a lexicon of your own with at least success and reason.
 
 // ---- Options ----
@@ -224,48 +225,60 @@ function claudia_autostage {
 
 // ---- Waits and warp ----
 
-// The longest wait a block may sit through: orbits_cap orbits, or ground_cap_s on the ground (or
-// when there is no closed orbit, period <= 0).
-function claudia_wait_cap {
-  parameter on_ground, period, orbits_cap, ground_cap_s.
-  if on_ground or period <= 0 {
-    return ground_cap_s.
-  }
-  return period * orbits_cap.
-}
+// A wait has no cap (ADR 0004): it warps on rails inside the sequence, however long, and the
+// player's Approval of the sequence approved it.
 
 function claudia_on_ground {
   return status = "LANDED" or status = "SPLASHED" or status = "PRELAUNCH".
 }
 
-// "" if a wait of wait_s seconds is allowed now, else the reason the block fails.
-function claudia_check_wait {
-  parameter wait_s.
-  local caps is claudia_config().
-  local period is 0.
-  if ship:orbit:eccentricity < 1 {
-    set period to ship:orbit:period.
-  }
-  local cap is claudia_wait_cap(claudia_on_ground(), period, caps:wait_cap_orbits, caps:wait_cap_ground_s).
-  if wait_s > cap {
-    return "wait of " + round(wait_s) + " s exceeds the cap of " + round(cap) + " s: plan a Due Time instead".
-  }
-  return "".
+// The UT warp must be over by for a wait ending at ut: lead seconds before it, never less than 30,
+// so whatever comes at ut (a burn) starts at 1x.
+function claudia_warp_end {
+  parameter ut, lead.
+  return ut - max(30, lead).
 }
 
-// Waits until ut on rails warp, dropping to 1x 30 s before it. Warp is asked for once, so a player
-// who cancels it is never overridden. Keeps ticking, so the common aborts still apply.
-// Returns "" or an abort reason.
-function claudia_wait_until {
-  parameter ctx, ut.
-  local warp_end is ut - 30.
-  if warp_end > time:seconds + 5 {
-    set kuniverse:timewarp:mode to "RAILS".
-    kuniverse:timewarp:warpto(warp_end).
+// What a wait does this tick; pure, so it is tested off KSP. now: UT; warp_end: from
+// claudia_warp_end; rate: the warp rate now; held: the mod holds warp at 1x because the Mission
+// needs the player (ADDONS:CLAUDIA:WARPHOLD); want: warp is still to be asked for. Returns "drop"
+// (cancel warp), "warp" (ask for warp to warp_end) or "none". Warp under 5 s from its end isn't
+// worth asking for.
+function claudia_warp_step {
+  parameter now, warp_end, rate, held, want.
+  if held or now >= warp_end {
+    if rate > 1 {
+      return "drop".
+    }
+    return "none".
   }
+  if want and warp_end > now + 5 {
+    return "warp".
+  }
+  return "none".
+}
+
+// Waits until ut, warping on rails and back at 1x lead seconds before it (at least 30). Warp is
+// asked for once, so a player who cancels it is never overridden; but once the mod has held warp at
+// 1x (a Pause, link loss, the Spending Cap, a stock alarm) it is asked for again when the hold ends.
+// Physics warp is never used: the mode is set to rails first (and the runtime gates refuse physics
+// warp anyway). Keeps ticking, so the common aborts still apply. Returns "" or an abort reason.
+function claudia_warp_to {
+  parameter ctx, ut, lead.
+  local warp_end is claudia_warp_end(ut, lead).
+  local want is true.
   until time:seconds >= ut {
-    if time:seconds >= warp_end and kuniverse:timewarp:rate > 1 {
+    local held is addons:claudia:warphold.
+    local action is claudia_warp_step(time:seconds, warp_end, kuniverse:timewarp:rate, held, want).
+    if action = "drop" {
       kuniverse:timewarp:cancelwarp().
+    } else if action = "warp" {
+      set kuniverse:timewarp:mode to "RAILS".
+      kuniverse:timewarp:warpto(warp_end).
+      set want to false.
+    }
+    if held {
+      set want to true.
     }
     local reason is claudia_tick(ctx, 0).
     if reason <> "" {
@@ -276,6 +289,12 @@ function claudia_wait_until {
   }
   wait until kuniverse:timewarp:issettled and ship:unpacked.
   return "".
+}
+
+// claudia_warp_to with the 30 s lead every burn needs.
+function claudia_wait_until {
+  parameter ctx, ut.
+  return claudia_warp_to(ctx, ut, 30).
 }
 
 // ---- Burns ----

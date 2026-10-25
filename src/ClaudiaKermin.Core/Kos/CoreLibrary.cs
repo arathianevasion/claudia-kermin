@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -87,11 +86,11 @@ namespace ClaudiaKermin.Core.Kos
         /// <summary>
         /// One compile unit: the Mission Script first (so kOS's line numbers in its errors match what
         /// Claudia wrote), then the Core Library, then RSVP (each file as a function
-        /// <c>rsvp_file_&lt;name&gt;</c>), then <c>claudia_config()</c> with the player's wait
-        /// caps. kOS hoists file-level functions, so the script can call blocks defined after it. The
+        /// <c>rsvp_file_&lt;name&gt;</c>). There is no wait cap to pass in: waits warp inside the script (ADR 0004).
+        /// kOS hoists file-level functions, so the script can call blocks defined after it. The
         /// library's own <c>@lazyglobal</c> and <c>@clobberbuiltins</c> lines are dropped: kOS allows the directive only at the top.
         /// </summary>
-        public static string Bundle(string missionScript, double waitCapOrbits, double waitCapGroundSeconds)
+        public static string Bundle(string missionScript)
         {
             var text = new StringBuilder();
             text.Append((missionScript ?? "").Replace("\r\n", "\n").TrimEnd('\n')).Append("\n\n");
@@ -117,11 +116,6 @@ namespace ClaudiaKermin.Core.Kos
                 }
                 text.Append("}\n");
             }
-            text.Append("// The player's wait caps (player config).\n")
-                .Append("function claudia_config {\n")
-                .Append("  return lexicon(\"wait_cap_orbits\", ").Append(Number(waitCapOrbits))
-                .Append(", \"wait_cap_ground_s\", ").Append(Number(waitCapGroundSeconds)).Append(").\n")
-                .Append("}\n");
             return text.ToString();
         }
 
@@ -149,11 +143,6 @@ namespace ClaudiaKermin.Core.Kos
             var trimmed = line.TrimStart();
             return trimmed.StartsWith("@lazyglobal", StringComparison.OrdinalIgnoreCase)
                 || trimmed.StartsWith("@clobberbuiltins", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string Number(double value)
-        {
-            return value.ToString("0.###", CultureInfo.InvariantCulture);
         }
 
         private static IList<LibraryFile> Load()
