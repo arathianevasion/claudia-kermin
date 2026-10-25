@@ -83,6 +83,9 @@ namespace ClaudiaKermin.Core.Missions
                 ChildVessels = ChildVesselsJson(mission),
                 LeftTheCraft = LeftTheCraftJson(mission),
                 Crossings = CrossingsJson(mission),
+                RunEvents = RunEventsJson(mission),
+                RunStartUt = mission.RunStartUt,
+                ScriptError = mission.ScriptError ?? "",
                 MissionPlan = mission.Plan,
                 SequencePlan = mission.PendingSequence,
             };
@@ -386,6 +389,9 @@ namespace ClaudiaKermin.Core.Missions
             RestoreChildVessels(mission, state.ChildVessels);
             RestoreLeftTheCraft(mission, state.LeftTheCraft);
             RestoreCrossings(mission, state.Crossings);
+            RestoreRunEvents(mission, state.RunEvents);
+            mission.RunStartUt = state.RunStartUt;
+            mission.ScriptError = state.ScriptError ?? "";
 
             // The conversation is the transcript's, whole: turns past the save's marker are kept.
             var transcript = MissionStore.ReadTranscript(mission.Folder);
@@ -589,7 +595,7 @@ namespace ClaudiaKermin.Core.Missions
                 case MissionStage.Running:
                 case MissionStage.Debriefing:
                     mission.Owed = Owed.Debrief;
-                    mission.OwedOutcome = new RunOutcome(RunOutcomeKind.Interrupted, null, "", mission.InterruptReason ?? "the game was loaded, quit or crashed while it ran", false);
+                    mission.OwedOutcome = new RunOutcome(RunOutcomeKind.Interrupted, null, mission.ScriptError, mission.InterruptReason ?? "the game was loaded, quit or crashed while it ran", false);
                     return MissionStage.Debriefing;
                 case MissionStage.Sequencing:
                     mission.Owed = Owed.SequencePlan;

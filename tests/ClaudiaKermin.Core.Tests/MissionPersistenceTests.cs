@@ -718,6 +718,96 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void TheRunsEventsAndStartTimeSurviveACrashAndReachTheInterruptedDebrief()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport);
+            ToRunning(mission);
+            var startUt = Saved(mission)[0].RunStartUt;
+            Assert.True(startUt > 0);
+            mission.Send(new RunEventSeen(RunEventKind.Staging, "stage 1 fired", startUt + 12));
+            mission.Send(new RunEventSeen(RunEventKind.Science, "Mystery Goo on the pad: 3.0 science", startUt + 20));
+            var saved = Saved(mission);
+            // Through the plain values a ConfigNode holds, as a real save does.
+            var loaded = new List<MissionSaveState> { MissionSaveState.FromValues(saved[0].ToValues()) };
+            Assert.Equal(startUt, loaded[0].RunStartUt);
+
+            var after = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-debrief.sse"));
+            var resumed = Control(after);
+            resumed.Send(new MissionsRestored(_save.Path, loaded));
+            resumed.Send(new SceneChanged(GameScene.Flight));
+            resumed.Send(OnPad());
+            DrainUntil(resumed, v => v.Stage == MissionStage.Succeeded);
+            var turn = Messages(after.Requests[0]).Where(m => m.GetProperty("role").GetString() == "user").Select(Text).Last();
+            Assert.Contains("+12 s staging: stage 1 fired", turn);
+            Assert.Contains("+20 s Mystery Goo on the pad: 3.0 science", turn);
+        }
+
+        [Fact]
+        public void TheEventLogStaysCappedAndTheScriptErrorTextRoundTrips()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport);
+            ToRunning(mission);
+            for (var i = 0; i < RunEventLog.Max + 5; i++) mission.Send(new RunEventSeen(RunEventKind.PartLost, "part " + i + " broke off", 100 + i));
+            var state = Saved(mission)[0];
+            state.ScriptError = "undefined variable \"x\"\non line 3 {here}";
+
+            var again = MissionSaveState.FromValues(state.ToValues());
+            Assert.Equal(state.ScriptError, again.ScriptError);
+            Assert.Equal(state.RunEvents, again.RunEvents);
+            var other = Control(new StreamingFakeTransport());
+            other.Send(new MissionsRestored(_save.Path, new List<MissionSaveState> { again }));
+            var restored = Saved(other)[0];
+            Assert.Equal(state.RunEvents, restored.RunEvents);
+            Assert.Equal(state.ScriptError, restored.ScriptError);
+            Assert.Contains("\"dropped\":5", restored.RunEvents);
+        }
+
+        [Fact]
+        public void ASavedScriptErrorReachesTheOwedDebriefAfterALoad()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport);
+            ToRunning(mission);
+            var state = Saved(mission)[0];
+            state.ScriptError = "undefined variable xyzzy";
+
+            var after = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-debrief.sse"));
+            var resumed = Control(after);
+            resumed.Send(new MissionsRestored(_save.Path, new List<MissionSaveState> { MissionSaveState.FromValues(state.ToValues()) }));
+            resumed.Send(new SceneChanged(GameScene.Flight));
+            resumed.Send(OnPad());
+            DrainUntil(resumed, v => v.Stage == MissionStage.Succeeded);
+            var turn = Messages(after.Requests[0]).Where(m => m.GetProperty("role").GetString() == "user").Select(Text).Last();
+            Assert.Contains("undefined variable xyzzy", turn);
+        }
+
+        [Fact]
+        public void AnOlderSaveWithoutRunEventsLoadsEmpty()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport);
+            ToRunning(mission);
+            var values = Saved(mission)[0].ToValues();
+            values.Remove("runEvents");
+            values.Remove("runStartUt");
+            values.Remove("scriptError");
+            var old = MissionSaveState.FromValues(values);
+            Assert.Equal("", old.RunEvents);
+            Assert.Equal(0, old.RunStartUt);
+            Assert.Equal("", old.ScriptError);
+        }
+
+        [Fact]
         public void AQuickloadToARunningSaveInterruptsTheSequenceToo()
         {
             var transport = new StreamingFakeTransport(
