@@ -44,9 +44,16 @@ namespace ClaudiaKermin.Core.Missions
         {
             var states = new List<MissionSaveState>();
             var mission = _mission;
-            if (mission == null) return states;
+            if (mission != null) states.Add(StateOf(mission));
+            // The Missions paused at a sequence boundary to make room for the active one.
+            states.AddRange(_parked);
+            return states;
+        }
+
+        private static MissionSaveState StateOf(Mission mission)
+        {
             // A load that is waiting for a request to finish has already decided the state.
-            if (mission.DeferredRestore != null && mission.DeferredRestore.State != null) return new List<MissionSaveState> { mission.DeferredRestore.State };
+            if (mission.DeferredRestore != null && mission.DeferredRestore.State != null) return mission.DeferredRestore.State;
             var state = new MissionSaveState
             {
                 Id = mission.Id,
@@ -77,8 +84,7 @@ namespace ClaudiaKermin.Core.Missions
             };
             if (mission.UnsafeProblems != null) state.UnsafeProblems.AddRange(mission.UnsafeProblems);
             foreach (var setting in mission.Settings) state.Settings[setting.Key] = setting.Value;
-            states.Add(state);
-            return states;
+            return state;
         }
 
         // ---- The Mission folder ----
@@ -101,6 +107,7 @@ namespace ClaudiaKermin.Core.Missions
             try
             {
                 MissionStore.WriteFinished(mission.Folder, mission.Id, mission.Stage.ToString());
+                MissionStore.WriteVessel(mission.Folder, mission.VesselId, mission.VesselName);
             }
             catch (Exception e) when (IsFileError(e))
             {
@@ -260,7 +267,17 @@ namespace ClaudiaKermin.Core.Missions
             _active = null;
 
             var restore = Choose(restored.States, existing);
-            if (restore == null)
+            // The save's other unfinished Missions wait Paused at the boundary they were parked at; finished ones are history, kept in their folders.
+            _parked.Clear();
+            _switch = null;
+            _historyVersion++;
+            foreach (var state in restored.States)
+                if ((restore == null || state.Id != restore.State.Id) && !Finished(state.Stage) && _parked.All(p => p.Id != state.Id))
+                {
+                    state.Active = false;
+                    _parked.Add(state);
+                }
+            if (restore == null && restored.States.Count == 0)
             {
                 // A Mission folder this save knows nothing of, if there is one the player hasn't finished with.
                 var info = MissionStore.NewestResumable(_saveDirectory);
@@ -290,9 +307,14 @@ namespace ClaudiaKermin.Core.Missions
         {
             MissionSaveState state = null;
             if (existing != null) state = states.FirstOrDefault(s => s.Id == existing.Id);
-            if (state == null) state = states.FirstOrDefault(s => s.Stage != MissionStage.Succeeded && s.Stage != MissionStage.Ended && s.Stage != MissionStage.Lost);
-            if (state == null) state = states.FirstOrDefault();
+            // The Mission in play when the save was made, finished or not; a save with only parked Missions has none.
+            if (state == null) state = states.FirstOrDefault(s => s.Active);
             return state == null ? null : new Restore { State = state };
+        }
+
+        private static bool Finished(MissionStage stage)
+        {
+            return stage == MissionStage.Succeeded || stage == MissionStage.Ended || stage == MissionStage.Lost;
         }
 
         private static Restore NoSnapshot(MissionInfo info)
@@ -359,6 +381,9 @@ namespace ClaudiaKermin.Core.Missions
                 mission.Conversation.AddRange(transcript.Messages);
                 foreach (var m in transcript.Messages)
                     if (m.Effort != null) mission.Effort = m.Effort;
+                // The Mission log is the transcript's again: the player's words, Claudia's lines, the plan cards and the Debriefs.
+                mission.Log.AddRange(MissionLogRebuild.From(transcript, state.Goal, _config));
+                mission.LogRebuilt = transcript.Messages.Count > 0;
             }
             else
             {
@@ -521,16 +546,21 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The plan awaiting Approval is shown again as a card, so the player sees what they approve.</summary>
         private void OfferCards(Mission mission, MissionStage stage, MissionSaveState state)
         {
+            // A log rebuilt from the transcript already holds the plan's card (and Claudia's line when it had none): offering the plan again adds no second one.
             if (stage == MissionStage.AwaitingPlanApproval && mission.Plan != null)
             {
                 // A Mission Plan with no sequences has no card: Claudia's line is what the player needs to see again.
-                if (mission.Plan.Sequences.Count == 0 && !string.IsNullOrEmpty(state.LatestLine)) Note(LogKind.Claudia, state.LatestLine);
+                if (mission.Plan.Sequences.Count == 0 && !string.IsNullOrEmpty(state.LatestLine) && !mission.LogRebuilt) Note(LogKind.Claudia, state.LatestLine);
+                mission.SuppressCards = mission.LogRebuilt;
                 OfferMissionPlan(mission, mission.Plan);
+                mission.SuppressCards = false;
             }
             else if (stage == MissionStage.AwaitingSequenceApproval && mission.PendingSequence != null)
             {
                 mission.Stage = MissionStage.AwaitingSequenceApproval;
+                mission.SuppressCards = mission.LogRebuilt;
                 OfferSequencePlan(mission, mission.PendingSequence);
+                mission.SuppressCards = false;
                 mission.DueNotified = state.DueNotified;
             }
             else if (stage == MissionStage.UnsafeScript) UnsafeScriptCard(mission, null);

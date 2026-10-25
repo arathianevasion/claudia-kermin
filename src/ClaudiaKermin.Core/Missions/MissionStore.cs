@@ -148,6 +148,36 @@ namespace ClaudiaKermin.Core.Missions
             MissionFolder.ReplaceAtomically(Path.Combine(folder, FinishedFile), json.ToString());
         }
 
+        public const string VesselFile = "vessel.json";
+
+        /// <summary>The Mission's craft as last known, kept in the folder so the Missions list can switch to it whatever the save holds.</summary>
+        public static void WriteVessel(string folder, string vesselId, string vesselName)
+        {
+            if (string.IsNullOrEmpty(vesselId)) return;
+            var json = new JsonWriter().BeginObject().Field("vessel_id", vesselId).Field("vessel_name", vesselName ?? "").EndObject();
+            MissionFolder.ReplaceAtomically(Path.Combine(folder, VesselFile), json.ToString());
+        }
+
+        public static void ReadVessel(string folder, out string vesselId, out string vesselName)
+        {
+            var root = ReadJson(Path.Combine(folder, VesselFile));
+            vesselId = root == null ? "" : JsonNode.Str(root["vessel_id"]) ?? "";
+            vesselName = root == null ? "" : JsonNode.Str(root["vessel_name"]) ?? "";
+        }
+
+        /// <summary>How a Mission that is over finished: Succeeded or Lost from <c>finished.json</c>, Ended for a Failed Debrief or the player ending it; null when it is not over.</summary>
+        public static MissionStage? FinishedStage(string folder)
+        {
+            var root = ReadJson(Path.Combine(folder, FinishedFile));
+            if (root != null)
+            {
+                MissionStage stage;
+                if (Enum.TryParse(JsonNode.Str(root["stage"]) ?? "", out stage) && (stage == MissionStage.Succeeded || stage == MissionStage.Lost)) return stage;
+                return MissionStage.Ended;
+            }
+            return File.Exists(Path.Combine(folder, MissionFolder.EndedFile)) ? MissionStage.Ended : (MissionStage?)null;
+        }
+
         /// <summary>The player ended it, or it finished: a read-only history entry rather than something to resume.</summary>
         public static bool IsOver(string folder)
         {
