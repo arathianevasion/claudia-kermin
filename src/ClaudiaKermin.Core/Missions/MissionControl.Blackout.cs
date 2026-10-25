@@ -24,6 +24,8 @@ namespace ClaudiaKermin.Core.Missions
         {
             /// <summary>No link to Kerbin: the Mission is in a Blackout (not saved: the next link fact after a load decides).</summary>
             public bool Blackout;
+            /// <summary>The Blackout came back from a save and the craft's link has not been seen since: it neither ends nor goes on a guess.</summary>
+            public bool BlackoutRestored;
             /// <summary>What Claudia decided without Approval in this Blackout, with her reasons, for the player when the link returns.</summary>
             public readonly List<string> BlackoutRevisions = new List<string>();
             /// <summary>The player's words typed in this Blackout, held until the link returns.</summary>
@@ -56,6 +58,11 @@ namespace ClaudiaKermin.Core.Missions
         {
             var mission = _mission;
             if (mission == null) return;
+            if (mission.BlackoutRestored && !MissionOver)
+            {
+                if (_craftLink == null) return;
+                mission.BlackoutRestored = false;
+            }
             var dark = !MissionOver && FollowsCraft(mission) && _craftLink == false;
             if (dark && !mission.Blackout) BlackoutBegins(mission);
             else if (!dark && mission.Blackout && _craftLink != false) BlackoutEnds(mission);

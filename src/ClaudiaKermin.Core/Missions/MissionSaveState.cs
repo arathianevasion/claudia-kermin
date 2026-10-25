@@ -72,12 +72,20 @@ namespace ClaudiaKermin.Core.Missions
         public string LeftTheCraft = "";
         /// <summary>The Telemetry Check crossings of the run since the last Debrief, with their verdicts (JSON written by MissionControl); "" for none or in older saves.</summary>
         public string Crossings = "";
+        /// <summary>What Claudia decided without Approval in a Blackout still running, with her reasons, for the link-back summary; empty for none or in older saves.</summary>
+        public readonly List<string> BlackoutRevisions = new List<string>();
+        /// <summary>The player's words held in a Blackout still running until the link returns; empty for none or in older saves.</summary>
+        public readonly List<string> HeldWords = new List<string>();
+        /// <summary>How many of Claudia's log entries wait for the link (LogEntry.Queued): the latest of her entries in the log, since her entries before a Blackout were shown.</summary>
+        public int QueuedEntries;
         public MissionPlan MissionPlan;
         /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
         public SequencePlan SequencePlan;
 
         private const string SettingPrefix = "setting.";
         private const string UnsafeProblemPrefix = "unsafeProblem.";
+        private const string BlackoutRevisionPrefix = "blackoutRevision.";
+        private const string HeldWordPrefix = "heldWord.";
 
         public IDictionary<string, string> ToValues()
         {
@@ -121,6 +129,9 @@ namespace ClaudiaKermin.Core.Missions
             if (Crossings.Length > 0) values["crossings"] = Crossings;
             foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
             for (var i = 0; i < UnsafeProblems.Count; i++) values[UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture)] = UnsafeProblems[i];
+            if (QueuedEntries > 0) values["queuedEntries"] = QueuedEntries.ToString(CultureInfo.InvariantCulture);
+            for (var i = 0; i < BlackoutRevisions.Count; i++) values[BlackoutRevisionPrefix + i.ToString(CultureInfo.InvariantCulture)] = BlackoutRevisions[i];
+            for (var i = 0; i < HeldWords.Count; i++) values[HeldWordPrefix + i.ToString(CultureInfo.InvariantCulture)] = HeldWords[i];
             if (MissionPlan != null || SequencePlan != null) values["plans"] = WritePlans(MissionPlan, SequencePlan);
             return values;
         }
@@ -178,6 +189,11 @@ namespace ClaudiaKermin.Core.Missions
             // In order: unsafeProblem.0, unsafeProblem.1, ... up to the first one missing.
             string problem;
             for (var i = 0; values.TryGetValue(UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture), out problem); i++) state.UnsafeProblems.Add(problem);
+            if (int.TryParse(Get(values, "queuedEntries"), NumberStyles.Integer, CultureInfo.InvariantCulture, out number) && number > 0) state.QueuedEntries = number;
+            string revision;
+            for (var i = 0; values.TryGetValue(BlackoutRevisionPrefix + i.ToString(CultureInfo.InvariantCulture), out revision); i++) state.BlackoutRevisions.Add(revision);
+            string held;
+            for (var i = 0; values.TryGetValue(HeldWordPrefix + i.ToString(CultureInfo.InvariantCulture), out held); i++) state.HeldWords.Add(held);
             string plans;
             if (values.TryGetValue("plans", out plans))
             {
