@@ -76,8 +76,14 @@ namespace ClaudiaKermin.Adapter
             Rect resized;
             if (_resizable && TryResize(out resized)) Rect = resized;
             var style = Style ?? GUI.skin.window;
+            // A press in a resize zone is taken before the window's controls, so one at the edge can't swallow it.
+            GUI.WindowFunction first = id =>
+            {
+                if (_resizable) HandleResize(new Rect(0, 0, Rect.width, Rect.height), ResizeZone.All);
+                draw(id);
+            };
             Rect = _resizable
-                ? GUILayout.Window(_windowId, Rect, draw, _title, style, GUILayout.Width(Rect.width), GUILayout.Height(Rect.height))
+                ? GUILayout.Window(_windowId, Rect, first, _title, style, GUILayout.Width(Rect.width), GUILayout.Height(Rect.height))
                 : GUILayout.Window(_windowId, Rect, draw, _title, style, options);
             Rect = KeepOnScreen(Rect);
             StoreWhenSettled();
@@ -86,15 +92,14 @@ namespace ClaudiaKermin.Adapter
         }
 
         /// <summary>
-        /// Call at the end of the draw function, before <c>GUI.DragWindow</c>: the whole window can be resized from any edge
-        /// or corner. A press in a zone starts the resize and is used up, so it neither drags the window nor reaches the game.
+        /// Call at the end of the draw function, before <c>GUI.DragWindow</c>: the hover hint of a resizable window, which
+        /// can be resized from any edge or corner. A press in a zone is taken before the window's controls (see
+        /// <see cref="Show"/>) and used up, so it neither drags the window nor reaches the game.
         /// </summary>
         public void DrawResizeZones()
         {
             if (!_resizable) return;
-            var all = new Rect(0, 0, Rect.width, Rect.height);
-            HandleResize(all, ResizeZone.All);
-            DrawResizeHint(all, ResizeZone.All);
+            DrawResizeHint(new Rect(0, 0, Rect.width, Rect.height), ResizeZone.All);
         }
 
         /// <summary>

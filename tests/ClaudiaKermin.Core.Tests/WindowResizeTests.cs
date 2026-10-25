@@ -59,6 +59,14 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void InATinyAreaTheFarSideStillResolvesToItsOwnEdge()
+        {
+            // 20 wide: the right half is the right edge, not the left one.
+            Assert.Equal(ResizeZone.Right, WindowResize.Hit(20, 300, 18, 150, Edge, Corner, ResizeZone.All));
+            Assert.Equal(ResizeZone.Left, WindowResize.Hit(20, 300, 2, 150, Edge, Corner, ResizeZone.All));
+        }
+
+        [Fact]
         public void AnEdgeThatCannotMoveIsNotAZone()
         {
             // A docked panel opening below its strip can't move its top edge.

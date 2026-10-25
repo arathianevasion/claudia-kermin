@@ -33,6 +33,9 @@ namespace ClaudiaKermin.Core.Ui
         public static ResizeZone Hit(float width, float height, float x, float y, float edge, float corner, ResizeZone allowed)
         {
             if (x < 0 || y < 0 || x > width || y > height) return ResizeZone.None;
+            // In a small area the two zones of a side never overlap: each gets at most half.
+            edge = Math.Min(edge, Math.Min(width, height) / 2);
+            corner = Math.Min(corner, Math.Min(width, height) / 2);
             var horizontal = ResizeZone.None;
             var vertical = ResizeZone.None;
             if (Has(allowed, ResizeZone.Left) && x < corner) horizontal = ResizeZone.Left;
