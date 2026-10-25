@@ -482,6 +482,30 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void HandingBackTurnsSasOffOnTheMissionsCraftAndSaysSoInTheLog()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-manual.sse", "mission-plan.sse", "mission-sequence-plan.sse");
+            var mission = Control(transport);
+            ToRunning(mission);
+            mission.Send(new TakeManualControl());
+            mission.TakeCommands();
+
+            mission.Send(new HandBack("done"));
+
+            var sas = Assert.Single(mission.TakeCommands().OfType<TurnSasOff>());
+            Assert.Equal("active", sas.Target("active"));
+            Assert.Contains(mission.View.Log, e => e.Text == "SAS turned off for Claudia's steering.");
+        }
+
+        [Fact]
+        public void TurnSasOffActsOnTheMissionsCraftWhenOneIsOnRecordElseTheActiveVessel()
+        {
+            Assert.Equal("craft", new TurnSasOff("craft").Target("active"));
+            Assert.Equal("active", new TurnSasOff().Target("active"));
+            Assert.Null(new TurnSasOff().Target(null));
+        }
+
+        [Fact]
         public void HandingBackAPlannedStretchIsJudgedAgainstItsTargetAndTheMessageIsOptional()
         {
             var transport = Replies("mission-plan.sse", "mission-sequence-plan-manual.sse", "mission-debrief-manual.sse", "mission-plan.sse");
@@ -680,7 +704,10 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 12.5; }));
             mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 13.5; }));
             mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 20; }));
-            Assert.Single(mission.TakeCommands().OfType<MakeCraftSafe>());
+            var taken = mission.TakeCommands();
+            Assert.Single(taken.OfType<MakeCraftSafe>());
+            // The make-safe's SAS stays on: only the player's own hand back turns it off.
+            Assert.Empty(taken.OfType<TurnSasOff>());
             Assert.Single(mission.View.Log, e => e.Kind == LogKind.Player && e.Text.StartsWith("Hand back"));
             // Still no link: a Blackout, so the revised Mission Plan flies without Approval (#130).
             DrainUntil(mission, v => v.Stage == MissionStage.Running);

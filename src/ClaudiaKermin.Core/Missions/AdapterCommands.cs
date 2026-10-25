@@ -92,6 +92,23 @@ namespace ClaudiaKermin.Core.Missions
         }
     }
 
+    /// <summary>
+    /// Turn SAS off on the Mission's craft, so the player's SAS doesn't fight kOS steering on the next run. Issued when
+    /// the player hands back from Manual Control. It acts on the Mission's craft, not whichever vessel the player is in.
+    /// </summary>
+    public sealed class TurnSasOff : AdapterCommand
+    {
+        /// <summary>The Mission's craft (<see cref="MissionCraft"/>); "" when none is on record, which means the active vessel.</summary>
+        public readonly string VesselId;
+        public TurnSasOff(string vesselId = "") { VesselId = vesselId ?? ""; }
+
+        public string Target(string activeVesselId)
+        {
+            if (VesselId.Length > 0) return VesselId;
+            return string.IsNullOrEmpty(activeVesselId) ? null : activeVesselId;
+        }
+    }
+
     /// <summary>A short on-screen message, for when Claudia needs the player (a plan to approve, a Debrief).</summary>
     public sealed class PostScreenMessage : AdapterCommand
     {

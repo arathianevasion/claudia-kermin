@@ -272,6 +272,7 @@ namespace ClaudiaKermin.Core.Missions
                 detail.Margin = MarginBar.Compute(left, RestOfPlan(mission).Sum(s => s.DeltaV), _config.CraftCheckMarginPercent);
                 detail.ResourcesLeft = snapshot.Resources.Where(r => r.Max > 0)
                     .Select(r => r.Name + " " + (100 * r.Amount / r.Max).ToString("0", CultureInfo.InvariantCulture) + "%").ToList();
+                if (snapshot.RcsOn.HasValue) detail.RcsState = snapshot.RcsOn.Value ? "RCS on" : "RCS off";
             }
             mission.RunEvents.Clear();
             mission.ScriptError = "";
