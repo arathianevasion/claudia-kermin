@@ -271,7 +271,17 @@ namespace ClaudiaKermin.Core.Claude
             foreach (var index in _toolInputs.Keys.ToList())
                 FinishToolInput(index, (ToolUseBlock)_blocks[index]);
             Message.Content.Clear();
-            Message.Content.AddRange(_blocks.Values);
+            foreach (var block in _blocks.Values)
+            {
+                // Its starting JSON is only the empty shell of what streamed, so echoing it would send the API a corrupt turn.
+                var unknown = block as UnknownBlock;
+                if (unknown != null && unknown.IgnoredDeltas > 0)
+                {
+                    _ignored("block type " + Safe(unknown.Type) + " dropped from the echoed turn: it streamed " + unknown.IgnoredDeltas + " deltas");
+                    continue;
+                }
+                Message.Content.Add(block);
+            }
             Stopped = true;
         }
 

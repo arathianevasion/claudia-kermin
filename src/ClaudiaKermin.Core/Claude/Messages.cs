@@ -102,7 +102,7 @@ namespace ClaudiaKermin.Core.Claude
         public string Type;
         public string RawJson;
 
-        /// <summary>Deltas the API streamed into this block; the client cannot apply them, so they are only counted.</summary>
+        /// <summary>Deltas the API streamed into this block; the client cannot apply them, so they are only counted, and a block with any is dropped from the finished turn.</summary>
         public int IgnoredDeltas;
 
         internal override void Write(JsonWriter json)
