@@ -335,7 +335,7 @@ namespace ClaudiaKermin.Core.Ui
         /// <summary>The state's line comes with a Check again action.</summary>
         public static bool OffersCheckAgain(CraftCheckState state)
         {
-            return state == CraftCheckState.NeedsSimulator || state == CraftCheckState.Error;
+            return state == CraftCheckState.None || state == CraftCheckState.NeedsSimulator || state == CraftCheckState.Error;
         }
 
         /// <summary>"WARNING" or "BLOCKER" over a finding's box.</summary>

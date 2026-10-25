@@ -377,6 +377,7 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("It broke", MissionWindowRules.StateLine(new CraftCheckView { State = CraftCheckState.Error, Message = "It broke" }));
             Assert.True(MissionWindowRules.OffersCheckAgain(CraftCheckState.NeedsSimulator));
             Assert.True(MissionWindowRules.OffersCheckAgain(CraftCheckState.Error));
+            Assert.True(MissionWindowRules.OffersCheckAgain(CraftCheckState.None));
             Assert.False(MissionWindowRules.OffersCheckAgain(CraftCheckState.Running));
         }
 

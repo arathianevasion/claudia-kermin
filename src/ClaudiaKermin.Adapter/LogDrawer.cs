@@ -241,21 +241,27 @@ namespace ClaudiaKermin.Adapter
         private void DrawStateLine(CraftCheckView check)
         {
             var line = MissionWindowRules.StateLine(check);
-            if (check.State == CraftCheckState.None)
-            {
-                GUILayout.Label(line, ClaudiaSkin.Notice);
-                return;
-            }
-            DrawClaudiaLine(line);
-            if (!MissionWindowRules.OffersCheckAgain(check.State)) return;
-            var input = CheckAgain != null ? CheckAgain() : null;
-            var old = GUI.enabled;
-            GUI.enabled = input != null;
+            var none = check.State == CraftCheckState.None;
+            if (none) GUILayout.Label(line, ClaudiaSkin.Notice);
+            else DrawClaudiaLine(line);
+
+            // Check again needs the pinned goal, which only the Mission window knows; the strip's drawer has no button.
+            var offer = MissionWindowRules.OffersCheckAgain(check.State) && CheckAgain != null;
+            // An expanded "not checked yet" in Flight can be put away again.
+            var collapsible = none && HighLogic.LoadedSceneIsFlight;
+            if (!offer && !collapsible) return;
             GUILayout.BeginHorizontal();
-            if (ClaudiaSkin.SecondaryButton("Check again", GUILayout.ExpandWidth(false)) && input != null) _send(input);
+            if (offer)
+            {
+                var input = CheckAgain();
+                var wasEnabled = GUI.enabled;
+                GUI.enabled = input != null;
+                if (ClaudiaSkin.SecondaryButton("Check again", GUILayout.ExpandWidth(false)) && input != null) _send(input);
+                GUI.enabled = wasEnabled;
+            }
+            if (collapsible && ClaudiaSkin.SmallButton("Collapse", GUILayout.ExpandWidth(false))) _checkCollapsed = true;
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
-            GUI.enabled = old;
         }
 
         private static void DrawClaudiaLine(string text)
@@ -310,7 +316,8 @@ namespace ClaudiaKermin.Adapter
         // Small chips that wrap onto further lines when the row is full.
         private void DrawFacts(IList<StatusChip> facts)
         {
-            var room = _width - 2 * ClaudiaSkin.Padding;
+            // The card's own padding comes off the entry width too.
+            var room = _width - 4 * ClaudiaSkin.Padding;
             var used = 0f;
             var open = false;
             foreach (var chip in facts)
