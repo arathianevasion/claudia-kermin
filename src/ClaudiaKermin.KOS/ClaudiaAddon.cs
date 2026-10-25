@@ -75,7 +75,7 @@ namespace ClaudiaKermin.KOS
             if (available && tracked)
             {
                 var subject = ResearchAndDevelopment.GetExperimentSubject(definition, situation, vessel.mainBody, biome, biome);
-                left = Math.Max(0, subject.scienceCap - subject.science);
+                left = subject == null ? -1 : Math.Max(0, subject.scienceCap - subject.science);
             }
             var result = new Lexicon();
             result.Add(new StringValue("experiment"), new StringValue(module == null ? "" : module.experimentID ?? ""));

@@ -19,7 +19,7 @@
 //|     if the craft has no antenna or no link); "auto" transmits unless the craft is returning
 //|     (it carries crew or parachutes) and transmitting would lose value, then keeps it.
 //|   max_duration [1800]: seconds, transmission waits included.
-//|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block (this block never stages).
+//|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block (this block never stages: it holds no burn, so auto-staging never fires).
 //|   Data is never transmitted while electric charge is under min_ec_pct; it is kept.
 //| Extra results: results (a list with one lexicon per experiment part: experiment, part, action
 //| "ran" or "skipped", detail, and transmit "transmitted", "kept" or "" when it did not run).

@@ -21,7 +21,7 @@
 //|   hold ["retrograde"]: "retrograde" points the craft's forward axis at surface retrograde, so a
 //|     pod's heat shield leads; "none" leaves the attitude alone.
 //|   max_duration ["auto"]: the wait for the atmosphere plus 1800 s.
-//|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block (this block never stages).
+//|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block (this block never stages: it holds no burn, so auto-staging never fires).
 //| Extra results: max_g (peak g felt, in g), max_temp_pct (hottest part, in percent of its limit),
 //| geo (lexicon lat, lng, alt where it ended), splashed (true if it ended in water), touchdown_speed
 //| (m/s just before contact; over 15 m/s fails the block). Fails with "body has no atmosphere", an
