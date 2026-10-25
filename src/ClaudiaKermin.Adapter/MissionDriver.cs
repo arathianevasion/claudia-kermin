@@ -149,7 +149,8 @@ namespace ClaudiaKermin.Adapter
             Strip = new CapcomStrip(Panel) { TabClicked = () => PanelOpen = !PanelOpen };
             GameEvents.onKerbalStatusChange.Add(OnKerbalStatusChange);
             _vessels = new VesselWatch(Send);
-            _events = new RunEventWatcher(Send, () => _mission.View.Stage == MissionStage.Running);
+            _events = new RunEventWatcher(Send, () => _mission.View.Stage == MissionStage.Running,
+                () => _mission.View.CraftVesselId, () => _mission.View.RunningChildVesselId);
             // Any stock alarm drops a running script's in-script warp (ADR 0004); the core ignores it when nothing runs.
             GameEvents.onAlarmTriggered.Add(alarm => Send(new StockAlarmFired()));
             // Building Block progress, for the strip and the log, with no Claude call behind it.
