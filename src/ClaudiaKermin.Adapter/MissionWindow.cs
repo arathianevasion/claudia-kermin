@@ -15,9 +15,14 @@ namespace ClaudiaKermin.Adapter
     {
         private const string LockId = "ClaudiaKerminMission";
 
+        internal static Rect DefaultRect(WindowBox box)
+        {
+            return new Rect(box.X, box.Y, box.Width, box.Height);
+        }
+
         private readonly MissionPanel _panel;
         private readonly WindowFrame _frame =
-            new WindowFrame(0x434B03, "", LockId, new Rect(260, 80, 500, 800), new Vector2(430, 460), true);
+            new WindowFrame(0x434B03, "", LockId, DefaultRect(DefaultSizes.Mission(ClaudiaSkin.FontScale, 260, 80)),new Vector2(430, 460), true);
 
         public bool Visible;
         public bool UiHidden;
