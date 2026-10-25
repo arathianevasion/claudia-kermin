@@ -70,6 +70,8 @@ namespace ClaudiaKermin.Core.Missions
                 HandBack = mission.HandBack,
                 HandBackMessage = mission.HandBackMessage,
                 StopReason = mission.StopReason,
+                InterruptReason = mission.InterruptReason,
+                ProcessorPartId = mission.ProcessorPartId,
                 MissionPlan = mission.Plan,
                 SequencePlan = mission.PendingSequence,
             };
@@ -187,6 +189,7 @@ namespace ClaudiaKermin.Core.Missions
             _scene = scene;
             if (!leaving) return;
             _snapshot = null;
+            _active = null;
             if (_mission != null && IsRunning(_mission)) Interrupt(_mission, "the player left Flight");
         }
 
@@ -197,7 +200,9 @@ namespace ClaudiaKermin.Core.Missions
             EndLive(mission);
             mission.Owed = Owed.Debrief;
             mission.OwedOutcome = new RunOutcome(RunOutcomeKind.Interrupted, null, "", reason, false);
-            Note(LogKind.Notice, "The sequence was interrupted (" + reason + "). Claudia will Debrief it when you are back in Flight.");
+            mission.InterruptReason = reason;
+            Note(LogKind.Notice, "The sequence was interrupted (" + reason + "). Claudia will Debrief it when you are back in "
+                + (_scene == GameScene.Flight && mission.VesselName.Length > 0 ? mission.VesselName : "Flight") + ".");
             Event(mission, "interrupted", reason);
         }
 
@@ -206,7 +211,8 @@ namespace ClaudiaKermin.Core.Missions
         {
             var mission = _mission;
             if (mission == null || mission.Owed == Owed.None || mission.Pending != null || mission.InFlight) return;
-            if (mission.Stage == MissionStage.Paused || _scene != GameScene.Flight || _snapshot == null) return;
+            // It needs the craft's own facts: with the player in another vessel it waits until they are back in the craft.
+            if (mission.Stage == MissionStage.Paused || !CraftActive) return;
 
             Turn turn;
             if (mission.Owed == Owed.Debrief && mission.Stage == MissionStage.Debriefing)
@@ -237,6 +243,7 @@ namespace ClaudiaKermin.Core.Missions
             }
             mission.Owed = Owed.None;
             mission.OwedOutcome = null;
+            mission.InterruptReason = null;
             Begin(turn);
         }
 
@@ -249,6 +256,7 @@ namespace ClaudiaKermin.Core.Missions
             var existing = _mission;
             // The craft was reloaded: the last Game Snapshot is the old craft's. Facts wait for a fresh one.
             _snapshot = null;
+            _active = null;
 
             var restore = Choose(restored.States, existing);
             if (restore == null)
@@ -337,6 +345,8 @@ namespace ClaudiaKermin.Core.Missions
                 ManualOrigin = state.ManualOrigin,
                 HandBack = state.HandBack,
                 HandBackMessage = state.HandBackMessage,
+                ProcessorPartId = state.ProcessorPartId,
+                InterruptReason = state.InterruptReason,
             };
             foreach (var setting in state.Settings) mission.Settings[setting.Key] = setting.Value;
 
@@ -466,7 +476,7 @@ namespace ClaudiaKermin.Core.Missions
                 case MissionStage.Running:
                 case MissionStage.Debriefing:
                     mission.Owed = Owed.Debrief;
-                    mission.OwedOutcome = new RunOutcome(RunOutcomeKind.Interrupted, null, "", "the game was loaded, quit or crashed while it ran", false);
+                    mission.OwedOutcome = new RunOutcome(RunOutcomeKind.Interrupted, null, "", mission.InterruptReason ?? "the game was loaded, quit or crashed while it ran", false);
                     return MissionStage.Debriefing;
                 case MissionStage.Sequencing:
                     mission.Owed = Owed.SequencePlan;
