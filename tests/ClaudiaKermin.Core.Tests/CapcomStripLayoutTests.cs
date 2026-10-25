@@ -98,5 +98,70 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(130, Track(8).ScrollToShow(130, -1));
             Assert.Equal(360, Track(8).ScrollToShow(900, 8));
         }
+
+        // ---- Placing the strip and its panel ----
+
+        // A 620 px strip 120 high, a 32 px tab, a 640 px panel that can shrink to 200.
+        private static readonly StripSize Size = new StripSize(620, 120, 32, 640, 200);
+
+        [Fact]
+        public void UnderTheAltimeterThePanelOpensBelow()
+        {
+            var place = CapcomStripLayout.Place(650, 70, Size, 1920, 1080);
+            Assert.Equal(PanelSide.Below, place.Side);
+            Assert.Equal(640, place.PanelHeight);
+            Assert.Equal(650, place.X);
+            Assert.Equal(70, place.Y);
+        }
+
+        [Fact]
+        public void NearTheBottomThePanelOpensAbove()
+        {
+            // 128 px below the strip and its tab, 768 above.
+            var place = CapcomStripLayout.Place(650, 800, Size, 1920, 1080);
+            Assert.Equal(PanelSide.Above, place.Side);
+            Assert.Equal(640, place.PanelHeight);
+        }
+
+        [Fact]
+        public void WithRoomForTheWholePanelOnNeitherSideItTakesTheRoomierOneAndShrinks()
+        {
+            // 428 px below, 468 above.
+            var place = CapcomStripLayout.Place(650, 500, Size, 1920, 1080);
+            Assert.Equal(PanelSide.Above, place.Side);
+            Assert.Equal(468, place.PanelHeight);
+        }
+
+        [Fact]
+        public void OnAShortScreenThePanelShrinksBelowTheStrip()
+        {
+            var place = CapcomStripLayout.Place(650, 70, Size, 1280, 720);
+            Assert.Equal(PanelSide.Below, place.Side);
+            Assert.Equal(498, place.PanelHeight);
+        }
+
+        [Fact]
+        public void ThePanelNeverShrinksUnderItsFloor()
+        {
+            Assert.Equal(200, CapcomStripLayout.Place(650, 70, Size, 1280, 400).PanelHeight);
+        }
+
+        [Fact]
+        public void TheStripAndItsTabStayOnScreen()
+        {
+            var place = CapcomStripLayout.Place(-100, -5, Size, 1920, 1080);
+            Assert.Equal(0, place.X);
+            Assert.Equal(0, place.Y);
+            place = CapcomStripLayout.Place(1500, 2000, Size, 1920, 1080);
+            Assert.Equal(1300, place.X);
+            Assert.Equal(928, place.Y);
+            Assert.Equal(PanelSide.Above, place.Side);
+        }
+
+        [Fact]
+        public void AStripWiderThanTheScreenSticksToItsLeftEdge()
+        {
+            Assert.Equal(0, CapcomStripLayout.Place(300, 70, Size, 500, 1080).X);
+        }
     }
 }

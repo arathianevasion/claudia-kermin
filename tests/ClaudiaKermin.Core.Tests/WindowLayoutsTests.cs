@@ -83,5 +83,19 @@ namespace ClaudiaKermin.Core.Tests
         {
             Assert.Equal("windows.cfg", WindowLayouts.FileName);
         }
+
+        [Fact]
+        public void ForgettingABoxPutsTheWindowBackToItsDefaultInThatSceneOnly()
+        {
+            var layouts = new WindowLayouts();
+            layouts.Set("flight", "capcom", new WindowBox(10, 600, 620, 120));
+            layouts.Set("vab", "capcom", new WindowBox(10, 600, 620, 120));
+            Assert.True(layouts.Remove("flight", "capcom"));
+            Assert.False(layouts.Remove("flight", "capcom"));
+            WindowBox box;
+            Assert.False(layouts.TryGet("flight", "capcom", out box));
+            Assert.True(layouts.TryGet("vab", "capcom", out box));
+            Assert.DoesNotContain("flight.capcom", layouts.Format());
+        }
     }
 }

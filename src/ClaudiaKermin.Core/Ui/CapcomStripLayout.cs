@@ -83,6 +83,62 @@ namespace ClaudiaKermin.Core.Ui
         }
     }
 
+    /// <summary>Which side of the Capcom strip the docked panel opens on; the expand tab sits on the same side.</summary>
+    public enum PanelSide
+    {
+        Below,
+        Above,
+    }
+
+    /// <summary>The Capcom strip's sizes in pixels: the strip itself, its expand tab, and the docked panel's preferred and smallest height.</summary>
+    public struct StripSize
+    {
+        public readonly float Width, StripHeight, TabHeight, PanelHeight, MinPanelHeight;
+
+        public StripSize(float width, float stripHeight, float tabHeight, float panelHeight, float minPanelHeight)
+        {
+            Width = width;
+            StripHeight = stripHeight;
+            TabHeight = tabHeight;
+            PanelHeight = panelHeight;
+            MinPanelHeight = minPanelHeight;
+        }
+    }
+
+    /// <summary>Where the strip's top left goes, the side its panel and tab are on, and how high the panel is.</summary>
+    public struct StripPlacement
+    {
+        public float X, Y;
+        public PanelSide Side;
+        public float PanelHeight;
+    }
+
+    public static class CapcomStripLayout
+    {
+        /// <summary>
+        /// Places the strip the player dragged to (<paramref name="x"/>, <paramref name="y"/>, screen pixels from the top
+        /// left): the strip and a tab under it are kept on screen. The panel opens below when it fits there whole, otherwise
+        /// on the side with more room, shrunk to that room but never under its floor. The side doesn't depend on whether
+        /// the panel is open, so the tab doesn't jump when it is clicked.
+        /// </summary>
+        public static StripPlacement Place(float x, float y, StripSize size, float screenWidth, float screenHeight)
+        {
+            x = Math.Max(0, Math.Min(x, screenWidth - size.Width));
+            y = Math.Max(0, Math.Min(y, screenHeight - size.StripHeight - size.TabHeight));
+            var below = screenHeight - y - size.StripHeight - size.TabHeight;
+            var above = y - size.TabHeight;
+            var side = below >= size.PanelHeight || below >= above ? PanelSide.Below : PanelSide.Above;
+            var room = side == PanelSide.Below ? below : above;
+            return new StripPlacement
+            {
+                X = x,
+                Y = y,
+                Side = side,
+                PanelHeight = Math.Max(size.MinPanelHeight, Math.Min(size.PanelHeight, room)),
+            };
+        }
+    }
+
     /// <summary>The first and last segment (inclusive) that show.</summary>
     public struct VisibleRange : IEquatable<VisibleRange>
     {
