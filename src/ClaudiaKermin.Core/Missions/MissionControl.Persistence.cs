@@ -91,6 +91,7 @@ namespace ClaudiaKermin.Core.Missions
                 RecheckSince = mission.RecheckSince,
                 PendingNotice = mission.LoadNotice ?? "",
                 PausedCannotFly = mission.PausedCannotFly,
+                PausedForCap = mission.PausedForCap && mission.Stage == MissionStage.Paused,
                 MissionPlan = mission.Plan,
                 SequencePlan = mission.PendingSequence,
             };
@@ -439,7 +440,12 @@ namespace ClaudiaKermin.Core.Missions
             _mission = mission;
 
             if (restore.NoSnapshot) NoSnapshotMission(mission);
-            else Reconcile(mission, state, resumeAfterQuit);
+            else
+            {
+                Reconcile(mission, state, resumeAfterQuit);
+                // A cap raised after the save is the log's: if it now covers a cap-paused Mission, the waiting request goes as a live raise would send it.
+                CarryOnIfCapCovers(mission);
+            }
         }
 
         private const string CostLogUnreadableReason = "The Mission's cost log can't be read, so what it has spent isn't known. "
@@ -505,6 +511,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.PauseCause = state.Stage == MissionStage.Paused && Enum.TryParse(state.PauseCause, out cause) && Enum.IsDefined(typeof(PauseCause), cause)
                 ? cause : PauseCause.Other;
             mission.PausedCannotFly = state.PausedCannotFly && state.Stage == MissionStage.Paused;
+            mission.PausedForCap = state.PausedForCap && state.Stage == MissionStage.Paused;
             // A run the mod stopped itself is Debriefed with its reason even after a load (no timer: no run survives one).
             mission.StopReason = state.StopReason;
             mission.RunDeadlineUt = null;

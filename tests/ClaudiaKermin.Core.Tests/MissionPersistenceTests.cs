@@ -651,6 +651,52 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(0m, resumed.View.PendingCharge);
         }
 
+        [Fact]
+        public void PausedForCapRoundTripsAndOldSavesLoadWithItUnset()
+        {
+            var again = MissionSaveState.FromValues(new MissionSaveState { Id = "m1", PausedForCap = true }.ToValues());
+            Assert.True(again.PausedForCap);
+            var old = MissionSaveState.FromValues(new Dictionary<string, string> { { "id", "m1" }, { "stage", "Paused" } });
+            Assert.False(old.PausedForCap);
+        }
+
+        [Fact]
+        public void ACapPausedMissionRaisedAfterASaveCarriesOnWhenLoaded()
+        {
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-big.sse"));
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            StartChecked(mission, new StartMission(Goal, 0.50m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.Paused);
+            var saved = Saved(mission);
+            Assert.True(saved[0].PausedForCap);
+
+            // Raised after the save; the load puts the Pause back, and the raised cap now covers the waiting request.
+            mission.Send(new RaiseCap(25m));
+            var resumed = Control(new StreamingFakeTransport());
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Equal(25m, resumed.View.SpendingCap);
+            Assert.Equal(MissionStage.AwaitingPlanApproval, resumed.View.Stage);
+            Assert.DoesNotContain(QuickReply.RaiseCap, resumed.View.QuickReplies);
+        }
+
+        [Fact]
+        public void ACapPausedMissionWhoseCapIsStillReachedStaysPausedWhenLoaded()
+        {
+            var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-big.sse")));
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            StartChecked(mission, new StartMission(Goal, 0.50m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.Paused);
+            var saved = Saved(mission);
+
+            var resumed = Control(new StreamingFakeTransport());
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Equal(MissionStage.Paused, resumed.View.Stage);
+            Assert.Contains(QuickReply.RaiseCap, resumed.View.QuickReplies);
+        }
+
         // ---- Crash or quit mid-request ----
 
         [Fact]
