@@ -67,6 +67,9 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The body whose system the Delta-v Map covers.</summary>
         public const string HomeBody = DeltaVMap.DefaultHome;
 
+        /// <summary>Why a crewed Mission can't have Claudia: the editor's no-seat Blocker and the Flight start refusal both say it.</summary>
+        public const string NoSeatReason = "Claudia isn't aboard and every crew seat on the craft is taken (or the craft has none).";
+
         private readonly ClaudeClient _client;
         private readonly Background _background;
         private readonly PlayerConfig _config;
@@ -331,7 +334,7 @@ namespace ClaudiaKermin.Core.Missions
                     Code = rule.Code,
                     Severity = rule.Severity,
                     Title = rule.Title,
-                    Explanation = "Claudia isn't aboard and every crew seat on the craft is taken (or the craft has none).",
+                    Explanation = NoSeatReason,
                     Fix = "Add a crew seat, or take another Kerbal out of the crew manifest so she can have the seat. A craft with no one aboard can fly as a remote Mission.",
                 });
             }

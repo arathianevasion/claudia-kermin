@@ -353,6 +353,9 @@ namespace ClaudiaKermin.Core.Missions
             }
             if (snapshot.ClaudiaStanding == "Missing" || snapshot.ClaudiaStanding == "Dead")
                 return "Claudia is " + snapshot.ClaudiaStanding + " and can't fly aboard. A remote Mission can still start; a crewed one waits until she returns.";
+            // Seating happens only in the editor: in Flight she has to be aboard the active vessel already (not Assigned elsewhere).
+            if (_scene != GameScene.Editor && !snapshot.ClaudiaAboard)
+                return CraftCheckFlow.NoSeatReason + " Seating happens in the editor; a crewed Mission started in Flight needs her already aboard this vessel. A remote Mission can still start.";
             return "";
         }
 
