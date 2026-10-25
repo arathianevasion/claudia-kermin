@@ -93,6 +93,9 @@ namespace ClaudiaKermin.Adapter
         /// <summary>Set before each OnGUI.</summary>
         public MissionView View;
 
+        /// <summary>The alert behind the toolbar flash, not yet seen: it lights the expand tab too.</summary>
+        public Attention Pending;
+
         public CapcomStrip(MissionPanel panel)
         {
             _panel = panel;
@@ -555,8 +558,8 @@ namespace ClaudiaKermin.Adapter
         // "Chat", amber with what Claudia needs from the player, or the chevron back and "Collapse" when the docked panel is open.
         private void DrawTab(Rect row, bool expanded, bool above)
         {
-            var needs = !expanded && MissionWindowRules.NeedsYou(View).Length > 0;
-            var text = MissionWindowRules.ExpandTab(View, expanded);
+            var needs = !expanded && MissionWindowRules.TabNeeds(View, Pending).Length > 0;
+            var text = MissionWindowRules.ExpandTab(View, expanded, Pending);
             var textStyle = needs ? _tabTextAttention : _tabText;
             var textWidth = Mathf.Min(textStyle.CalcSize(new GUIContent(text)).x, _width - 120);
             var tabWidth = textWidth + 14 + 6 + 2 * ClaudiaSkin.Padding;
