@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using ClaudiaKermin.Core.Kos;
 
 namespace ClaudiaKermin.Core.Missions
@@ -18,11 +19,11 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>Blocks almost every flight uses, whatever the goal says.</summary>
         private static readonly string[] Always = { "coast", "exec_node", "circularize" };
 
-        /// <summary>Each block's trigger words, matched as lower-case substrings of the Mission Goal.</summary>
+        /// <summary>Each block's trigger words, matched at the start of a word of the Mission Goal ("land" finds "landing", not "island").</summary>
         private static readonly KeyValuePair<string, string[]>[] Triggers =
         {
             Rule("launch", "launch", "lift off", "liftoff", "take off", "takeoff", "orbit", "space", "apoapsis", "periapsis", "kerbin"),
-            Rule("transfer_to", "mun", "minmus", "moon", "transfer", "encounter", "flyby", "fly by", "fly-by", "intercept"),
+            Rule("transfer_to", "mun", "minmus", "moon", "duna", "eve", "ike", "gilly", "dres", "jool", "laythe", "eeloo", "transfer", "encounter", "flyby", "fly by", "fly-by", "intercept"),
             Rule("land", "land", "touch down", "touchdown", "set down", "surface"),
             Rule("ascend", "ascend", "leave the", "lift off from", "take off from", "launch from", "back to orbit", "return", "come back", "home"),
             Rule("return", "return", "come back", "home", "back to kerbin", "bring", "recover"),
@@ -40,8 +41,9 @@ namespace ClaudiaKermin.Core.Missions
         {
             var all = allBlocks.ToList();
             var text = (goal ?? "").ToLowerInvariant();
-            var picked = new HashSet<string>(Triggers.Where(t => t.Value.Any(text.Contains)).Select(t => t.Key));
-            if (picked.Count == 0) return all;
+            var picked = new HashSet<string>(Triggers.Where(t => t.Value.Any(w => Regex.IsMatch(text, @"(?<![a-z0-9])" + Regex.Escape(w)))).Select(t => t.Key));
+            // One thin match is not enough to leave blocks out: a goal that points at fewer than two blocks gets them all.
+            if (picked.Count < 2) return all;
             picked.UnionWith(Always);
             var known = new HashSet<string>(Always.Concat(Triggers.Select(t => t.Key)));
             return all.Where(b => picked.Contains(b) || !known.Contains(b)).ToList();

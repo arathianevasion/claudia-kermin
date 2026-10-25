@@ -40,6 +40,31 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void WordsInsideOtherWordsDoNotCount()
+        {
+            var picked = BlockSelection.For("Orbit the Mun and update the community", Shipped);
+            Assert.DoesNotContain("science", picked);
+            Assert.DoesNotContain("land", picked);
+        }
+
+        [Fact]
+        public void AThinMatchGetsEveryBlock()
+        {
+            Assert.Equal(Shipped.Length, BlockSelection.For("Collect a goo sample", Shipped).Count);
+        }
+
+        [Fact]
+        public void TheShippedBlocksAreSelectedByName()
+        {
+            var names = CoreLibrary.Blocks.Select(b => b.Name).ToList();
+            var narrow = BlockSelection.For("Land on the Mun", names);
+            Assert.Contains("transfer_to", narrow);
+            Assert.Contains("land", narrow);
+            Assert.DoesNotContain("reentry", narrow);
+            Assert.Equal(names.Count, BlockSelection.For("", names).Count);
+        }
+
+        [Fact]
         public void ABlockTheTableDoesNotKnowIsAlwaysIncluded()
         {
             Assert.Contains("future_block", BlockSelection.For("Do the science", Shipped));
