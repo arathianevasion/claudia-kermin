@@ -278,7 +278,7 @@ namespace ClaudiaKermin.Core.Missions
             if (!_craftCheck.IsCurrent(goal, _snapshot, start.Remote))
             {
                 _pendingStart = start;
-                _craftCheck.Run(goal, start.Model, _snapshot, start.Remote);
+                _craftCheck.Run(goal, start.Model, _snapshot, start.SpendingCap, start.Remote);
                 if (!_craftCheck.Running) _pendingStart = null;
                 return;
             }
@@ -308,6 +308,7 @@ namespace ClaudiaKermin.Core.Missions
             _mission = mission;
             Note(LogKind.Player, "Mission Goal: " + goal);
             RecordStart(mission);
+            FoldCraftCheckCost(mission, _craftCheck.TakeCost());
             // Started from the editor with her not aboard: the mod puts her in a free seat (the Craft Check made sure there is one).
             if (!mission.Remote && _scene == GameScene.Editor && _snapshot != null && !_snapshot.ClaudiaAboard && _snapshot.FreeSeats > 0)
             {
@@ -337,7 +338,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             _pendingStart = null;
             _startRefusal = "";
-            _craftCheck.Run(run.Goal, run.Model, _snapshot, run.Remote);
+            _craftCheck.Run(run.Goal, run.Model, _snapshot, run.SpendingCap, run.Remote);
         }
 
         /// <summary>A Craft Check request ended: if Start Mission asked for it and it passed outright, the Mission starts now.</summary>
@@ -881,9 +882,7 @@ namespace ClaudiaKermin.Core.Missions
         /// </summary>
         private bool MaySend(Mission mission, MessagesRequest request, bool waits, out decimal worstCase)
         {
-            // About 3 characters a token, rounded up: the estimate leans high.
-            var estimatedInput = (request.ToJson().Length + 2) / 3;
-            worstCase = _config.Prices.WorstCase(mission.Model, estimatedInput, request.MaxTokens);
+            worstCase = RequestCharge.WorstCase(_config.Prices, mission.Model, request);
             if (mission.Committed + worstCase <= mission.SpendingCap) return true;
             LogCost(mission, "blocked", worstCase, "over_cap");
             if (waits) WaitForCap(mission);
@@ -1417,36 +1416,16 @@ namespace ClaudiaKermin.Core.Missions
 
         // ---- Spending Cap and cost ----
 
-        /// <summary>
-        /// Replaces the request's pending charge with what it really cost (refused, cut-off and off-schema
-        /// replies are paid too). A cancelled or lost request keeps its worst case instead; only a request
-        /// that was turned away before any reply began (the key rejected, no credit, no network, an HTTP
-        /// error status) is released, because nothing was billed.
-        /// </summary>
+        /// <summary>Settles the request's pending charge by <see cref="RequestCharge.Settle"/>, the rules the Craft Check shares.</summary>
         private void Settle(Mission mission, Turn turn, StreamResult result)
         {
-            var pending = mission.PendingCharge;
+            var settlement = RequestCharge.Settle(_config.Prices, mission.PendingCharge, result, mission.Model);
             mission.PendingCharge = 0m;
-            if (result != null && result.Status == StreamStatus.Completed && result.Message != null)
-            {
-                var usage = result.Message.Usage;
-                var model = usage.Iterations.Count > 0 ? mission.Model : result.Message.Model ?? mission.Model;
-                mission.Settled = _config.Prices.CostOf(usage, model);
-                mission.Spent += mission.Settled;
-                mission.Settlement = "paid";
-                mission.Outcome = PaidOutcome(turn, result.Message);
-                return;
-            }
-            mission.Settled = pending;
-            if (result != null && result.Status == StreamStatus.Failed && !MayHaveBilled(result.Failure))
-            {
-                mission.Settlement = "released";
-                mission.Outcome = "rejected";
-                return;
-            }
-            mission.Held += pending;
-            mission.Settlement = "kept";
-            mission.Outcome = result != null && result.Status == StreamStatus.Cancelled ? "cancelled" : "lost";
+            mission.Settled = settlement.Amount;
+            mission.Spent += settlement.Spent;
+            mission.Held += settlement.Held;
+            mission.Settlement = settlement.Kind;
+            mission.Outcome = settlement.Outcome ?? PaidOutcome(turn, result.Message);
         }
 
         /// <summary>How a paid reply ended, for the cost log: completed, or refused, cut off or off the Mission reply schema.</summary>
@@ -1456,21 +1435,6 @@ namespace ClaudiaKermin.Core.Missions
             if (message.StopReason == StopReason.MaxTokens) return "cut_off";
             var reply = MissionReply.Parse(message.Text);
             return reply == null || Mismatch(turn.Purpose, reply) != null ? "off_schema" : "completed";
-        }
-
-        private static bool MayHaveBilled(StreamFailure failure)
-        {
-            switch (failure)
-            {
-                case StreamFailure.Unauthorized:
-                case StreamFailure.LowCredit:
-                case StreamFailure.ModelNotFound:
-                case StreamFailure.NoNetwork:
-                case StreamFailure.HttpStatus:
-                    return false;
-                default:
-                    return true;
-            }
         }
 
         /// <summary>After a request settled: the 80% warning (once), and Paused at the cap.</summary>

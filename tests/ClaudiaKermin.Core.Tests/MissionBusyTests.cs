@@ -99,7 +99,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             mission.Send(new SceneChanged(GameScene.Editor));
             mission.Send(OnPad());
-            mission.Send(new RunCraftCheck(Goal, Sonnet));
+            mission.Send(new RunCraftCheck(Goal, 10m, Sonnet));
 
             Assert.Equal(CraftCheckState.Running, mission.View.CraftCheck.State);
             AssertBusyWith(mission.View, "Claudia is checking the craft…");
@@ -117,7 +117,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport, routed: false);
             mission.Send(new SceneChanged(GameScene.Editor));
             mission.Send(OnPad());
-            mission.Send(new RunCraftCheck(Goal, Sonnet));
+            mission.Send(new RunCraftCheck(Goal, 10m, Sonnet));
 
             DrainUntil(mission, v => v.CraftCheck.State != CraftCheckState.Running);
             Assert.Equal(CraftCheckState.Error, mission.View.CraftCheck.State);

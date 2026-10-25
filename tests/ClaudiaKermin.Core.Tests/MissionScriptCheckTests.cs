@@ -102,7 +102,8 @@ namespace ClaudiaKermin.Core.Tests
         {
             var path = Path.Combine(_save.Path, "ClaudiaKermin", "missions", mission.View.MissionId, "cost-log.jsonl");
             return File.ReadAllLines(path).Where(l => l.Length > 0)
-                .Select(l => JsonDocument.Parse(l).RootElement.GetProperty("event").GetString()).ToArray();
+                .Select(l => JsonDocument.Parse(l).RootElement.GetProperty("event").GetString())
+                .Where(e => !e.StartsWith("craft_check_")).ToArray();
         }
 
         private static GameSnapshot OnPad()

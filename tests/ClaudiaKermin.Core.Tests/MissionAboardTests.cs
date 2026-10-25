@@ -93,7 +93,7 @@ namespace ClaudiaKermin.Core.Tests
         private void Check(MissionControl mission, GameSnapshot snapshot, bool remote = false)
         {
             mission.Send(snapshot);
-            mission.Send(new RunCraftCheck(Goal, Sonnet, remote));
+            mission.Send(new RunCraftCheck(Goal, 10m, Sonnet, remote));
             DrainUntil(mission, v => v.CraftCheck.State != CraftCheckState.Running);
         }
 

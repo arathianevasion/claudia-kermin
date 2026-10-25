@@ -67,7 +67,8 @@ namespace ClaudiaKermin.Core.Tests
         private static string[] Events(string log)
         {
             return log.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(line => JsonDocument.Parse(line).RootElement.GetProperty("event").GetString()).ToArray();
+                .Select(line => JsonDocument.Parse(line).RootElement.GetProperty("event").GetString())
+                .Where(e => !e.StartsWith("craft_check_")).ToArray();
         }
 
         // ---- Price table ----
@@ -202,8 +203,9 @@ namespace ClaudiaKermin.Core.Tests
             }
 
             var lines = CostLog(id).Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(l => JsonDocument.Parse(l).RootElement.Clone()).ToArray();
-            Assert.Equal(new[] { "pending", "kept" }, lines.Select(l => l.GetProperty("event").GetString()).ToArray());
+                .Select(l => JsonDocument.Parse(l).RootElement.Clone())
+                .Where(l => !l.GetProperty("event").GetString().StartsWith("craft_check_")).ToArray();
+            Assert.Equal(new[] { "pending", "kept" },lines.Select(l => l.GetProperty("event").GetString()).ToArray());
             Assert.Equal(pending, lines[1].GetProperty("amount").GetDecimal());
             Assert.Equal("cancelled", lines[1].GetProperty("outcome").GetString());
         }

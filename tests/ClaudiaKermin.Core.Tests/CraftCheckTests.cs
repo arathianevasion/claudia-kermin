@@ -21,6 +21,7 @@ namespace ClaudiaKermin.Core.Tests
     {
         private const string Goal = "Land on the Mun and come home.";
         private const string Model = "claude-sonnet-5-5";
+        private const decimal Cap = 10m;
         private readonly Background _background = new Background(e => throw new Exception("background error", e));
         private readonly TempDir _save = new TempDir();
 
@@ -83,7 +84,7 @@ namespace ClaudiaKermin.Core.Tests
         {
             var mission = Control(transport, config);
             mission.Send(craft ?? Craft());
-            mission.Send(new RunCraftCheck(Goal, Model));
+            mission.Send(new RunCraftCheck(Goal, Cap, Model));
             DrainUntil(mission, v => v.CraftCheck.State != CraftCheckState.Running);
             return mission;
         }
@@ -205,7 +206,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Checked(Replies("craft-check-warnings.sse", "craft-check-warnings.sse"));
             mission.Send(new AcknowledgeWarning("boot_file_set"));
 
-            mission.Send(new RunCraftCheck(Goal, Model));
+            mission.Send(new RunCraftCheck(Goal, Cap, Model));
             DrainUntil(mission, v => v.CraftCheck.State == CraftCheckState.Done);
             var findings = mission.View.CraftCheck.Findings.ToDictionary(f => f.Code, f => f.Acknowledged);
             Assert.True(findings["boot_file_set"]);
@@ -263,7 +264,7 @@ namespace ClaudiaKermin.Core.Tests
             var craft = Craft();
             craft.DeltaVSimulator = false;
             mission.Send(craft);
-            mission.Send(new RunCraftCheck(Goal, Model));
+            mission.Send(new RunCraftCheck(Goal, Cap, Model));
 
             var check = mission.View.CraftCheck;
             Assert.Equal(CraftCheckState.NeedsSimulator, check.State);
@@ -279,7 +280,7 @@ namespace ClaudiaKermin.Core.Tests
             // Once the player has enabled it, the next Craft Check runs.
             craft.DeltaVSimulator = true;
             mission.Send(craft);
-            mission.Send(new RunCraftCheck(Goal, Model));
+            mission.Send(new RunCraftCheck(Goal, Cap, Model));
             DrainUntil(mission, v => v.CraftCheck.State == CraftCheckState.Done);
         }
 
@@ -404,7 +405,7 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(3105u, mission.View.CraftCheck.ChosenProcessor);
             // The choice changes what is checked, so the old result is stale.
             Assert.True(mission.View.CraftCheck.Stale);
-            mission.Send(new RunCraftCheck(Goal, Model));
+            mission.Send(new RunCraftCheck(Goal, Cap, Model));
             DrainUntil(mission, v => v.CraftCheck.State == CraftCheckState.Done);
             var facts = UserFacts(transport.Requests[1]).Replace(" ", "");
             Assert.Contains("\"chosen_processor\":{\"id\":3105", facts);
@@ -425,13 +426,13 @@ namespace ClaudiaKermin.Core.Tests
                 ScriptedResponse.Fixture("craft-check-pass.sse", 64));
             var mission = Control(transport);
             mission.Send(Craft());
-            mission.Send(new RunCraftCheck(Goal, Model));
+            mission.Send(new RunCraftCheck(Goal, Cap, Model));
             DrainUntil(mission, v => v.CraftCheck.State != CraftCheckState.Running);
             Assert.Equal(CraftCheckState.Error, mission.View.CraftCheck.State);
             Assert.Contains("API key", mission.View.CraftCheck.Message);
             Assert.False(mission.View.CraftCheck.StartAllowed);
 
-            mission.Send(new RunCraftCheck(Goal, Model));
+            mission.Send(new RunCraftCheck(Goal, Cap, Model));
             DrainUntil(mission, v => v.CraftCheck.State == CraftCheckState.Done);
             Assert.True(mission.View.CraftCheck.StartAllowed);
         }
@@ -441,7 +442,7 @@ namespace ClaudiaKermin.Core.Tests
         {
             var transport = Replies("craft-check-pass.sse");
             var mission = Control(transport);
-            mission.Send(new RunCraftCheck(Goal, Model));
+            mission.Send(new RunCraftCheck(Goal, Cap, Model));
             mission.Send(new StartMission(Goal, 10m, Model));
             Assert.Equal(CraftCheckState.None, mission.View.CraftCheck.State);
             Assert.False(mission.View.CraftCheck.StartAllowed);
