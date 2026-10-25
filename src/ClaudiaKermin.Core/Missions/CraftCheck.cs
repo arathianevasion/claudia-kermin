@@ -17,6 +17,8 @@ namespace ClaudiaKermin.Core.Missions
     {
         public string Summary = "";
         public readonly List<CraftFinding> Findings = new List<CraftFinding>();
+        /// <summary>The separation stages whose vessels the Mission Goal plans as Child Vessels.</summary>
+        public readonly List<int> ChildVesselStages = new List<int>();
 
         /// <summary>The reply in a message's text, or null when it isn't in the schema or names a finding outside the fixed lists.</summary>
         public static CraftCheckReply Parse(string text)
@@ -32,6 +34,10 @@ namespace ClaudiaKermin.Core.Missions
             }
             if (root.Kind != JsonKind.Object || root["findings"] == null) return null;
             var reply = new CraftCheckReply { Summary = JsonNode.Str(root["summary"]) ?? "" };
+            var stages = root["child_vessel_stages"];
+            if (stages != null)
+                foreach (var stage in stages.Items.Select(JsonNode.Long).Where(s => s.HasValue))
+                    if (!reply.ChildVesselStages.Contains((int)stage.Value)) reply.ChildVesselStages.Add((int)stage.Value);
             foreach (var node in root["findings"].Items)
             {
                 var rule = CraftCheckRules.Find(JsonNode.Str(node["code"]) ?? "");
@@ -78,6 +84,8 @@ namespace ClaudiaKermin.Core.Missions
         private bool _remote;
         /// <summary>The mod saw for itself that this crewed Mission has no seat for Claudia, so that Blocker doesn't wait on Claude.</summary>
         private bool _noSeat;
+        /// <summary>What the checked craft's staging plan separates, so planned Child Vessels are judged on the mod's own figures.</summary>
+        private StagingPlan _staging = new StagingPlan();
         private uint? _preferredProcessor;
         private List<string> _keptAcknowledgements = new List<string>();
         private CancellationTokenSource _cancel;
@@ -206,6 +214,7 @@ namespace ClaudiaKermin.Core.Missions
             _goal = goal;
             _remote = remote;
             _noSeat = !remote && !snapshot.ClaudiaAboard && snapshot.FreeSeats == 0;
+            _staging = ChildVessels.Staging(snapshot, remote, ProcessorFor(snapshot));
             _craftKey = CraftKey(snapshot);
             var charge = new CraftCheckCharge { Model = request.Model, Pending = worstCase };
             var cancel = new CancellationTokenSource();
@@ -326,12 +335,52 @@ namespace ClaudiaKermin.Core.Missions
                     Fix = "Add a crew seat, or take another Kerbal out of the crew manifest so she can have the seat. A craft with no one aboard can fly as a remote Mission.",
                 });
             }
+            JudgeChildVessels(reply.ChildVesselStages);
             foreach (var finding in _findings.Where(f => f.Severity == CraftFindingSeverity.Warning && _keptAcknowledgements.Contains(f.Code)))
                 finding.Acknowledged = true;
             _summary = reply.Summary;
             _verdict = _findings.Any(f => f.Severity == CraftFindingSeverity.Blocker) ? CraftVerdict.Fail
                 : _findings.Count > 0 ? CraftVerdict.PassWithWarnings : CraftVerdict.Pass;
             _state = CraftCheckState.Done;
+        }
+
+        /// <summary>
+        /// The child_vessel_problem Blocker from the mod's own figures (#100): each Child Vessel Claude says the Mission Goal
+        /// plans is judged at its separation stage, and a staging plan that strands Claudia without a processor always counts.
+        /// Claude's own finding keeps her words and fix, with the mod's facts added.
+        /// </summary>
+        private void JudgeChildVessels(IList<int> plannedStages)
+        {
+            var problems = new List<string>();
+            if (_staging.Strands.Length > 0) problems.Add("the staging plan strands Claudia: " + _staging.Strands);
+            foreach (var stage in plannedStages)
+            {
+                var candidates = _staging.CandidatesAt(stage).ToList();
+                if (candidates.Count == 0) problems.Add("nothing that could be a Child Vessel separates at stage " + stage.ToString(CultureInfo.InvariantCulture));
+                foreach (var vessel in candidates)
+                {
+                    var found = vessel.Problems();
+                    if (found.Count > 0)
+                        problems.Add(vessel.Name + ", separating at stage " + stage.ToString(CultureInfo.InvariantCulture) + ": " + string.Join("; ", found.ToArray()));
+                }
+            }
+            if (problems.Count == 0) return;
+            var text = "Mod check: " + string.Join(". ", problems.ToArray()) + ".";
+            var existing = _findings.FirstOrDefault(f => f.Code == "child_vessel_problem");
+            if (existing != null)
+            {
+                existing.Explanation = existing.Explanation.Length > 0 ? existing.Explanation + " " + text : text;
+                return;
+            }
+            var rule = CraftCheckRules.Find("child_vessel_problem");
+            _findings.Add(new CraftFinding
+            {
+                Code = rule.Code,
+                Severity = rule.Severity,
+                Title = rule.Title,
+                Explanation = text,
+                Fix = "Give each Child Vessel a kOS processor, an antenna and a battery or generator, and keep a kOS processor with Claudia through every stage.",
+            });
         }
 
         private void Fail(string message)
@@ -441,8 +490,40 @@ namespace ClaudiaKermin.Core.Missions
             else json.BeginObject().Field("id", chosen.Id).Field("title", chosen.Title).Field("boot_file", chosen.BootFile).EndObject();
             json.Field("total_delta_v_vac", Math.Round(snapshot.Stages.Sum(s => s.DeltaVVac)));
             json.EndObject();
-            text.Append("Claudia's processor and totals (JSON data): ").Append(json.ToString());
+            text.Append("Claudia's processor and totals (JSON data): ").Append(json.ToString()).Append('\n');
+            text.Append(Separations(snapshot, remote, chosenId, home));
             return text.ToString();
+        }
+
+        /// <summary>
+        /// What leaves the craft at each separation stage, with its own figures (the mod's, from the part data: delta-v is one
+        /// burn of all its engines on all its propellant), the problems the mod already sees, and any stranding of Claudia.
+        /// </summary>
+        private static string Separations(GameSnapshot snapshot, bool remote, uint? chosenId, string home)
+        {
+            var staging = ChildVessels.Staging(snapshot, remote, chosenId);
+            var bodies = snapshot.Bodies.Where(b => b.Name == home || b.Parent == home).ToList();
+            var json = new JsonWriter().BeginArray();
+            foreach (var vessel in staging.Separations.Where(s => s.Candidate))
+            {
+                json.BeginObject().Field("stage", vessel.Stage).Field("name", vessel.Name).Field("kos", vessel.ProcessorPartIds.Count > 0)
+                    .Field("antenna_power", vessel.AntennaPower).Field("ec_max", vessel.ChargeMax).Field("generates_ec", vessel.Generates)
+                    .Field("mass_t", Math.Round(vessel.MassT, 3)).Field("dv_vac", Math.Round(vessel.DeltaVVac)).Name("twr").BeginObject();
+                foreach (var body in bodies)
+                {
+                    var weight = vessel.MassT * body.SurfaceGravity;
+                    var thrust = body.AtmosphereHeight > 0 ? vessel.ThrustAslKn : vessel.ThrustVacKn;
+                    json.Field(body.Name, weight > 0 ? Math.Round(thrust / weight, 2) : 0);
+                }
+                json.EndObject().Name("problems").BeginArray();
+                foreach (var problem in vessel.Problems()) json.String(problem);
+                json.EndArray().EndObject();
+            }
+            var text = "Separations: the vessels the staging plan releases that have a kOS processor or command part, each with its own "
+                + "figures after it separates (JSON data; list the stages the Mission Goal plans to fly in child_vessel_stages): "
+                + json.EndArray() + "\n";
+            if (staging.Strands.Length > 0) text += "The staging plan strands Claudia: " + staging.Strands + ".\n";
+            return text;
         }
 
         private static string Twr(GameSnapshot snapshot, string home)

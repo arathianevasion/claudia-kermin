@@ -114,7 +114,7 @@ namespace ClaudiaKermin.Core.Missions
             var named = parts.FirstOrDefault(p => p.Tags.Contains("command")) ?? parts.FirstOrDefault(p => !p.Tags.Contains("decoupler")) ?? parts[0];
             separation.Name = named.Title.Length > 0 ? named.Title : named.Name;
             var flow = parts.Where(p => p.ThrustVacKn > 0 && p.IspVac > 0).Sum(p => p.ThrustVacKn / p.IspVac);
-            var dry = parts.Sum(p => p.DryMassT);
+            var dry = parts.Sum(p => p.DryMassT > 0 ? p.DryMassT : p.MassT);
             if (flow > 0 && dry > 0 && separation.MassT > dry)
                 separation.DeltaVVac = separation.ThrustVacKn / flow * G0 * Math.Log(separation.MassT / dry);
             return separation;

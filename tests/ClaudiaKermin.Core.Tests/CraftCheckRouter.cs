@@ -31,7 +31,7 @@ namespace ClaudiaKermin.Core.Tests
 
         public IHttpStream Open(HttpRequestSpec request, CancellationToken cancel)
         {
-            return request.Body.Contains("\"required\":[\"summary\",\"findings\"]") ? _checks.Open(request, cancel) : _mission.Open(request, cancel);
+            return request.Body.Contains("\"required\":[\"summary\",\"findings\"") ? _checks.Open(request, cancel) : _mission.Open(request, cancel);
         }
 
         /// <summary>

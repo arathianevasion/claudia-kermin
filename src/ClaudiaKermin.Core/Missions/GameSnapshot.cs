@@ -36,7 +36,7 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>Mass with its resources, tonnes.</summary>
         public double MassT;
-        /// <summary>Mass without its resources, tonnes.</summary>
+        /// <summary>Mass without its resources, tonnes; 0 means it carries none (the same as <see cref="MassT"/>).</summary>
         public double DryMassT;
         /// <summary>An engine's thrust in vacuum and at sea level (kN) and vacuum Isp (s); 0 for other parts.</summary>
         public double ThrustVacKn;
