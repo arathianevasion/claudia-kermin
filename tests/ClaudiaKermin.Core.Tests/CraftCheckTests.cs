@@ -494,6 +494,59 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void TheChosenProcessorSurvivesLaunchReassigningPartIds()
+        {
+            var editor = Craft();
+            editor.Craft.Parts.Add(new SnapshotPart { Id = 3105, ParentId = 3104, Name = "kOSMachine1m", Title = "Second processor", HasKosProcessor = true });
+            foreach (var part in editor.Craft.Parts) part.CraftId = part.Id + 100;
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("craft-check-pass.sse", 64),
+                ScriptedResponse.Fixture("mission-plan.sse", 64),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse", 64));
+            var mission = Control(transport);
+            mission.Send(editor);
+            mission.Send(new ChooseProcessor(3105));
+            mission.Send(new StartMission(Goal, 10m, Model));
+            DrainUntil(mission, v => v.Stage == MissionStage.WaitingForFlight);
+            mission.Send(new SceneChanged(GameScene.Flight));
+
+            // Launch gave every part a new persistentId (same craftIDs, parent links follow).
+            var flight = Craft();
+            flight.Craft.Parts.Add(new SnapshotPart { Id = 3105, ParentId = 3104, Name = "kOSMachine1m", Title = "Second processor", HasKosProcessor = true });
+            foreach (var part in flight.Craft.Parts)
+            {
+                part.CraftId = part.Id + 100;
+                part.Id += 5000;
+                if (part.ParentId.HasValue) part.ParentId += 5000;
+            }
+            mission.Send(flight);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+            mission.Send(new Approve());
+            Assert.Equal(8105u, mission.TakeCommands().OfType<StartScript>().Single().ProcessorPartId);
+        }
+
+        [Fact]
+        public void AChoiceWhoseProcessorIsGoneFallsBackToTheDefaultEvenIfItsOldIdIsAnotherProcessorNow()
+        {
+            var editor = Craft();
+            editor.Craft.Parts.Add(new SnapshotPart { Id = 3105, ParentId = 3104, Name = "kOSMachine1m", HasKosProcessor = true });
+            foreach (var part in editor.Craft.Parts) part.CraftId = part.Id + 100;
+            var mission = Control(new StreamingFakeTransport());
+            mission.Send(editor);
+            mission.Send(new ChooseProcessor(3105));
+
+            // Same craft, but the chosen processor is gone and 3105 now names a different processor.
+            var later = Craft();
+            later.Craft.Parts.Add(new SnapshotPart { Id = 3105, ParentId = 3104, Name = "kOSMachine1m", HasKosProcessor = true, CraftId = 999 });
+            foreach (var part in later.Craft.Parts.Where(p => p.CraftId == 0)) part.CraftId = part.Id + 100;
+            mission.Send(later);
+            Assert.Equal(3102u, mission.View.CraftCheck.ChosenProcessor);
+            Assert.False(mission.View.CraftCheck.ChosenExplicitly);
+        }
+
+        [Fact]
         public void TheDeltaVMapAndStageFactsRoundTripThroughTheSnapshotJson()
         {
             var craft = Craft();
