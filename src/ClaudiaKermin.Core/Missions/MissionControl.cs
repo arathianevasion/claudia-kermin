@@ -1598,6 +1598,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.Warned = mission.Committed >= cap * 0.8m;
             Note(LogKind.Notice, "Spending Cap raised to $" + Dollars(cap) + ".");
             LogCost(mission, "cap_raised", cap, "");
+            WriteInfo(mission);
             if (mission.Stage == MissionStage.Paused && mission.PausedForCap && mission.Committed < cap)
             {
                 if (mission.EvaScience.Length == 0) Retried();
