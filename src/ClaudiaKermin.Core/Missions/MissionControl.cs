@@ -1221,8 +1221,9 @@ namespace ClaudiaKermin.Core.Missions
                 Effort = "high",
                 ChildVesselRetry = true,
                 Waits = turn.Waits,
-                UserText = MissionPrompts.ChildVesselNotLeft(ids),
-                Notice = MissionPrompts.ChildVesselNotice + (typed ? MissionPrompts.ChildVesselTypedNotice : ""),
+                // The refused turn was never committed to the conversation, so what it asked (the player's words, the new settings) goes again.
+                UserText = turn.UserText + "\n" + MissionPrompts.ChildVesselNotLeft(ids),
+                Notice = MissionPrompts.ChildVesselNotice +(typed ? MissionPrompts.ChildVesselTypedNotice : ""),
             });
         }
 

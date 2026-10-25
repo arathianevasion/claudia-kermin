@@ -304,6 +304,7 @@ namespace ClaudiaKermin.Core.Tests
             var correction = Messages(transport.Requests[2]);
             Assert.Contains("no such vessel has left the craft", correction);
             Assert.Contains("still the player's revision", correction);
+            Assert.Contains("Use the other vessel.", correction);
             Assert.Contains(mission.View.Log, e => e.Text.Contains("Claudia is revising it"));
             Assert.Empty(mission.View.ChildVessels);
         }
