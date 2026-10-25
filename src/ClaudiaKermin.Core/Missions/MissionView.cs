@@ -268,6 +268,8 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>The Mission Plan's Maneuver Sequences, for the stepper.</summary>
         public IList<string> PlanSequences = new List<string>();
+        /// <summary>Parallel to <see cref="PlanSequences"/>: the Maneuver Sequence is a manual stretch the player flies by hand.</summary>
+        public IList<bool> PlanSequencesManual = new List<bool>();
         /// <summary>Index into <see cref="PlanSequences"/> of the Maneuver Sequence in hand; -1 before the first.</summary>
         public int CurrentSequence = -1;
 

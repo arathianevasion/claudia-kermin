@@ -317,6 +317,23 @@ namespace ClaudiaKermin.Core.Tests
         // ---- A planned manual stretch ----
 
         [Fact]
+        public void TheViewMarksTheMissionPlansManualStretchesNextToTheirNamesAndKeepsThemOverALoad()
+        {
+            var transport = Replies("mission-plan-manual.sse");
+            var mission = Control(transport);
+            Assert.Empty(mission.View.PlanSequencesManual);
+
+            ToMissionPlan(mission);
+
+            Assert.Equal(new[] { "Link check", "Hop" }, mission.View.PlanSequences);
+            Assert.Equal(new[] { false, true }, mission.View.PlanSequencesManual);
+
+            var loaded = Control(Replies());
+            loaded.Send(new MissionsRestored(_save.Path, mission.ExportStates()));
+            Assert.Equal(new[] { false, true }, loaded.View.PlanSequencesManual);
+        }
+
+        [Fact]
         public void AManualStretchInTheSequencePlanStartsManualControlOnApprovalWithNoScript()
         {
             var transport = Replies("mission-plan.sse", "mission-sequence-plan-manual.sse");

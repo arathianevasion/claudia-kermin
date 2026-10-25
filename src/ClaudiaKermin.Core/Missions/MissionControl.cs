@@ -1511,7 +1511,11 @@ namespace ClaudiaKermin.Core.Missions
                 foreach (var entry in mission.Log)
                     if (entry.Ut <= 0) entry.Ut = _ut;
                 view.Log = mission.Log.ToList();
-                if (mission.Plan != null) view.PlanSequences = mission.Plan.Sequences.Select(s => s.Name).ToList();
+                if (mission.Plan != null)
+                {
+                    view.PlanSequences = mission.Plan.Sequences.Select(s => s.Name).ToList();
+                    view.PlanSequencesManual = mission.Plan.Sequences.Select(s => s.Manual).ToList();
+                }
                 view.CurrentSequence = Math.Min(mission.SequencesProposed, view.PlanSequences.Count) - 1;
                 if (mission.Stage == MissionStage.Running && mission.PendingSequence != null)
                     view.RunStatus = "Running: " + mission.PendingSequence.Name;
