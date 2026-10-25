@@ -175,6 +175,75 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("blocked: SET CONFIG:IPU", MissionSaveState.FromValues(saved.ToValues()).StopReason);
         }
 
+        // ---- The stop reason after a load (#202) ----
+
+        [Fact]
+        public void AnAbortedRunsDebriefKeepsItsStopReasonInTheRebuiltLog()
+        {
+            var transport = Transport(plannedSeconds: 600);
+            var mission = InFlight(transport, new PlayerConfig());
+            var start = RunToRunning(mission);
+            mission.Send(new AbortSequence());
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Aborted, null, "Program aborted.", "the player pressed Abort", true), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+
+            AssertSameDebriefAfterALoad(mission, "Debrief: Nominal (aborted by the player)");
+        }
+
+        [Fact]
+        public void ABlockedRunsDebriefKeepsItsStopReasonInTheRebuiltLog()
+        {
+            var transport = Transport(plannedSeconds: 600);
+            var mission = InFlight(transport, new PlayerConfig());
+            var start = RunToRunning(mission);
+            mission.Send(new KosRunBlocked("KUNIVERSE:QUICKSAVE", start.RunId));
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.NoReport, null, "Claudia Kermin refused KUNIVERSE:QUICKSAVE", "", false), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+
+            AssertSameDebriefAfterALoad(mission, "Debrief: Nominal (blocked: KUNIVERSE:QUICKSAVE)");
+        }
+
+        [Fact]
+        public void ATimedOutRunsDebriefKeepsItsStopReasonInTheRebuiltLog()
+        {
+            var transport = Transport(plannedSeconds: 600);
+            var mission = InFlight(transport, new PlayerConfig());
+            var start = RunToRunning(mission);
+            mission.Send(new UtAdvanced(ApprovedAt + 1800));
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Aborted, null, "Program aborted.", "timed out", true), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+
+            AssertSameDebriefAfterALoad(mission, "Debrief: Nominal (timed out)");
+        }
+
+        [Fact]
+        public void ARunThatEndedWithAReasonOfItsOwnAddsNoSuffixAfterALoad()
+        {
+            var transport = Transport(plannedSeconds: 600);
+            var mission = InFlight(transport, new PlayerConfig());
+            var start = RunToRunning(mission);
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Interrupted, null, "", "the game was loaded, quit or crashed while it ran", false), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+
+            AssertSameDebriefAfterALoad(mission, "Debrief: Nominal");
+        }
+
+        private void AssertSameDebriefAfterALoad(MissionControl mission, string title)
+        {
+            var live = mission.View.Log.Last(e => e.Kind == LogKind.Debrief);
+            Assert.Equal(title, live.Title);
+            var saved = mission.ExportStates();
+
+            var client = new ClaudeClient(new CraftCheckRouter(new StreamingFakeTransport()), () => "sk-ant-test", l => { });
+            var later = new MissionControl(client, _background, new PlayerConfig(), () => true, new PassingScriptCheck());
+            later.Send(new MissionsRestored(_save.Path, saved));
+            var rebuilt = later.View.Log.Last(e => e.Kind == LogKind.Debrief);
+            Assert.Equal(live.Title, rebuilt.Title);
+            Assert.Equal(live.Text, rebuilt.Text);
+            Assert.Equal(live.Why, rebuilt.Why);
+            Assert.Equal(live.Outcome, rebuilt.Outcome);
+        }
+
         // ---- Helpers ----
 
         /// <summary>The Mission Plan, a Sequence Plan planning <paramref name="plannedSeconds"/>, and a Nominal Debrief.</summary>
