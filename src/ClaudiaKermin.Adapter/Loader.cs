@@ -223,6 +223,7 @@ namespace ClaudiaKermin.Adapter
             return icon != null ? icon : MakeIcon(fallback);
         }
 
+        // A plain tile: the fallback for a Winged glare PNG that didn't load.
         private static Texture2D MakeIcon(Color color)
         {
             var icon = new Texture2D(38, 38, TextureFormat.ARGB32, false);
