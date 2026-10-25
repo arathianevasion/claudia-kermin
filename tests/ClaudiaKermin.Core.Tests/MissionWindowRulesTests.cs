@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Andrew Watson
 
 using System.Collections.Generic;
+using System.Linq;
 using ClaudiaKermin.Core.Missions;
 using ClaudiaKermin.Core.Ui;
 using Xunit;
@@ -251,6 +252,168 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(0.142f, MissionWindowRules.SpendFraction(view), 3);
             view.Spent = 20m;
             Assert.Equal(1f, MissionWindowRules.SpendFraction(view));
+        }
+
+        // ---- Craft Check card and approval checkbox ----
+
+        private static CraftCheckView Checked(CraftVerdict verdict, params CraftFinding[] findings)
+        {
+            return new CraftCheckView { State = CraftCheckState.Done, Verdict = verdict, Findings = new List<CraftFinding>(findings), CraftName = "Duna Probe", MarginPercent = 15 };
+        }
+
+        [Fact]
+        public void TheNoticeNamesTheCraftWhereItIs()
+        {
+            var check = Checked(CraftVerdict.Pass);
+            Assert.Equal("Duna Probe on the pad · Mission Goal set", MissionWindowRules.CraftNotice(check, true, true));
+            Assert.Equal("Duna Probe on the floor · Mission Goal set", MissionWindowRules.CraftNotice(check, false, true));
+            Assert.Equal("Duna Probe on the floor", MissionWindowRules.CraftNotice(check, false, false));
+            Assert.Equal("", MissionWindowRules.CraftNotice(new CraftCheckView(), true, true));
+        }
+
+        [Theory]
+        [InlineData(CraftVerdict.Pass, "Craft Check: Pass")]
+        [InlineData(CraftVerdict.PassWithWarnings, "Craft Check: Pass with Warnings")]
+        [InlineData(CraftVerdict.Fail, "Craft Check: Fail")]
+        public void TheCardHeaderNamesTheVerdict(CraftVerdict verdict, string text)
+        {
+            Assert.Equal(text, MissionWindowRules.CardTitle(Checked(verdict)));
+        }
+
+        [Fact]
+        public void TheCollapsedHeaderCountsTheFindings()
+        {
+            var two = Checked(CraftVerdict.PassWithWarnings, Warning(), Warning());
+            Assert.Equal("Craft Check: Pass with Warnings (2)", MissionWindowRules.CollapsedTitle(two));
+            two.Stale = true;
+            Assert.Equal("Craft Check: Pass with Warnings (2) - the craft changed since", MissionWindowRules.CollapsedTitle(two));
+            Assert.Equal("Craft Check: Pass", MissionWindowRules.CollapsedTitle(Checked(CraftVerdict.Pass)));
+            Assert.Equal("Craft Check: not checked yet", MissionWindowRules.CollapsedTitle(new CraftCheckView()));
+            Assert.Equal("Craft Check", MissionWindowRules.CollapsedTitle(new CraftCheckView { State = CraftCheckState.Running }));
+        }
+
+        [Fact]
+        public void TheVerdictIconIsAmberRedOrGreen()
+        {
+            Assert.Equal(ChipTone.Attention, MissionWindowRules.VerdictTone(CraftVerdict.PassWithWarnings));
+            Assert.Equal(ChipTone.Danger, MissionWindowRules.VerdictTone(CraftVerdict.Fail));
+            Assert.Equal(ChipTone.Success, MissionWindowRules.VerdictTone(CraftVerdict.Pass));
+        }
+
+        [Fact]
+        public void TheFactsRowShowsDeltaVMarginVerdictAndCost()
+        {
+            var check = Checked(CraftVerdict.Pass);
+            check.CraftDeltaV = 4058.4;
+            var facts = MissionWindowRules.Facts(check, 2.4m);
+            Assert.Equal(new[] { "Duna Probe", "Δv 4,058 m/s", "Margin wanted 15%", "Enough for this goal", "est. ~$2.40 for the Mission" }, facts.Select(f => f.Text).ToArray());
+            Assert.Equal(ChipTone.Success, facts[3].Tone);
+            Assert.Equal(ChipTone.Info, facts[1].Tone);
+        }
+
+        [Fact]
+        public void TheFactsRowSaysWhenTheCraftIsShortOrUnjudged()
+        {
+            var check = Checked(CraftVerdict.Fail);
+            check.CraftDeltaV = 900;
+            check.DeltaVShort = true;
+            var facts = MissionWindowRules.Facts(check, null);
+            Assert.Equal("Short of the delta-v this goal needs", facts[3].Text);
+            Assert.Equal(ChipTone.Danger, facts[3].Tone);
+            Assert.Equal(4, facts.Count);
+
+            check.Stale = true;
+            Assert.Equal("Check the craft to judge", MissionWindowRules.Facts(check, null)[3].Text);
+        }
+
+        [Fact]
+        public void AnUnknownDeltaVAsksForTheSimulator()
+        {
+            var facts = MissionWindowRules.Facts(Checked(CraftVerdict.Pass), null);
+            Assert.Equal("Δv unknown: turn on the delta-v simulator", facts[1].Text);
+            Assert.Equal(ChipTone.Attention, facts[1].Tone);
+            Assert.DoesNotContain(facts, f => f.Text == "Enough for this goal");
+        }
+
+        [Fact]
+        public void TheFooterFollowsTheWarningsAndBlockers()
+        {
+            var open = Checked(CraftVerdict.PassWithWarnings, Warning(), Warning(true));
+            var footer = MissionWindowRules.Footer(open);
+            Assert.Equal("Start Mission opens once every Warning is acknowledged.", footer.Text);
+            Assert.Null(footer.Tone);
+
+            var done = Checked(CraftVerdict.PassWithWarnings, Warning(true));
+            done.StartAllowed = true;
+            footer = MissionWindowRules.Footer(done);
+            Assert.Equal("All Warnings acknowledged. Start Mission is open.", footer.Text);
+            Assert.Equal(ChipTone.Success, footer.Tone);
+
+            var fail = Checked(CraftVerdict.Fail, new CraftFinding { Severity = CraftFindingSeverity.Blocker });
+            Assert.Equal("Start Mission is closed: fix every Blocker in the craft and check again.", MissionWindowRules.Footer(fail).Text);
+        }
+
+        [Fact]
+        public void AStaleCheckSaysStartMissionChecksAgain()
+        {
+            var stale = Checked(CraftVerdict.PassWithWarnings, Warning());
+            stale.Stale = true;
+            Assert.Equal("(the craft changed since; Start Mission checks again)", MissionWindowRules.Footer(stale).Text);
+        }
+
+        [Fact]
+        public void APassNeedsNoFooterUntilItIsOpen()
+        {
+            var pass = Checked(CraftVerdict.Pass);
+            Assert.Equal("", MissionWindowRules.Footer(pass).Text);
+        }
+
+        [Fact]
+        public void TheOtherStatesReadAsLines()
+        {
+            Assert.Equal("Not checked yet. Start Mission checks the craft first, or press Check again.", MissionWindowRules.StateLine(new CraftCheckView()));
+            Assert.Equal("Checking the craft against the Mission Goal…", MissionWindowRules.StateLine(new CraftCheckView { State = CraftCheckState.Running }));
+            Assert.Equal("Turn on the simulator", MissionWindowRules.StateLine(new CraftCheckView { State = CraftCheckState.NeedsSimulator, Message = "Turn on the simulator" }));
+            Assert.Equal("It broke", MissionWindowRules.StateLine(new CraftCheckView { State = CraftCheckState.Error, Message = "It broke" }));
+            Assert.True(MissionWindowRules.OffersCheckAgain(CraftCheckState.NeedsSimulator));
+            Assert.True(MissionWindowRules.OffersCheckAgain(CraftCheckState.Error));
+            Assert.True(MissionWindowRules.OffersCheckAgain(CraftCheckState.None));
+            Assert.False(MissionWindowRules.OffersCheckAgain(CraftCheckState.Running));
+        }
+
+        [Fact]
+        public void TheClaudiaLineLeadsWithTheSummaryOnlyWhenThereIsOne()
+        {
+            var check = Checked(CraftVerdict.Pass);
+            Assert.Equal("", MissionWindowRules.ClaudiaLine(check));
+            check.Summary = "Two Warnings need your OK.";
+            Assert.Equal("Two Warnings need your OK.", MissionWindowRules.ClaudiaLine(check));
+        }
+
+        [Fact]
+        public void AFindingIsLabelledWarningOrBlocker()
+        {
+            Assert.Equal("WARNING", MissionWindowRules.FindingLabel(CraftFindingSeverity.Warning));
+            Assert.Equal("BLOCKER", MissionWindowRules.FindingLabel(CraftFindingSeverity.Blocker));
+        }
+
+        [Fact]
+        public void TheApprovalCheckboxNamesThePlan()
+        {
+            var view = During(MissionStage.AwaitingPlanApproval);
+            Assert.Equal("Yes, approve the Mission Plan", MissionWindowRules.ApprovalLabel(view));
+            view.Stage = MissionStage.AwaitingSequenceApproval;
+            Assert.Equal("Yes, approve the Sequence Plan", MissionWindowRules.ApprovalLabel(view));
+            Assert.Equal("That reads like an approval. Confirm and I'll carry on.", MissionWindowRules.ApprovalAsk);
+        }
+
+        [Fact]
+        public void ConfirmApprovalAndNotYetLeaveTheActionRow()
+        {
+            Assert.False(MissionWindowRules.InActionRow(QuickReply.ConfirmApproval));
+            Assert.False(MissionWindowRules.InActionRow(QuickReply.NotYet));
+            Assert.True(MissionWindowRules.InActionRow(QuickReply.Approve));
+            Assert.False(MissionWindowRules.IsPrimary(QuickReply.ConfirmApproval));
         }
 
         [Fact]

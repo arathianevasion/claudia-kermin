@@ -187,7 +187,11 @@ namespace ClaudiaKermin.Adapter
             _missions.Window.UiHidden = false;
             _missions.Strip.UiHidden = false;
             // Each time Flight loads (including a revert), the Craft Check starts collapsed.
-            if (scene == GameScenes.FLIGHT) _missions.Window.FlightLoading();
+            if (scene == GameScenes.FLIGHT)
+            {
+                _missions.Window.FlightLoading();
+                _missions.Strip.FlightLoading();
+            }
         }
 
         private static bool SettingsSceneLoaded()

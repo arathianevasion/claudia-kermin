@@ -11,7 +11,7 @@ namespace ClaudiaKermin.Adapter
 {
     /// <summary>
     /// The Mission window: one compact column in every scene. Top to bottom: the title bar with the status chip, the
-    /// pinned Mission Goal, the transcript (the Craft Check, the Mission log, the Busy line), the prompt (which grows
+    /// pinned Mission Goal, the transcript (the Craft Check card, the Mission log, the approval checkbox, the Busy line), the prompt (which grows
     /// from 1 to 7 lines and takes that height from the transcript), the action row of quick replies, and the control
     /// bar (Settings, the setup summary or the spend meter, End Mission). Before a Mission the prompt writes the Mission
     /// Goal; type, model, Spending Cap and Mission Settings come from the <see cref="MissionSetup"/>, which the Settings
@@ -106,8 +106,6 @@ namespace ClaudiaKermin.Adapter
             switch (reply)
             {
                 case QuickReply.Approve: _send(new Approve()); break;
-                case QuickReply.ConfirmApproval: _send(new ConfirmApproval(true)); break;
-                case QuickReply.NotYet: _send(new ConfirmApproval(false)); break;
                 case QuickReply.Retry: _send(new Retry()); break;
                 case QuickReply.RaiseCap:
                     _raising = true;
@@ -167,6 +165,7 @@ namespace ClaudiaKermin.Adapter
 
             DrawTitleBar();
             DrawGoal(settingUp);
+            SetCraftCheckContext(settingUp);
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
             GUILayout.Space(ClaudiaSkin.Gap / 2);
             GUILayout.BeginHorizontal();
@@ -182,6 +181,18 @@ namespace ClaudiaKermin.Adapter
             _frame.DrawGrip();
             WindowFrame.DrawTooltip();
             GUI.DragWindow();
+        }
+
+        // What the Craft Check card in the transcript needs from the setup: the pinned goal, the cost estimate and Check again.
+        private void SetCraftCheckContext(bool settingUp)
+        {
+            var form = View.StartForm;
+            var model = _setup.ModelFor(form);
+            decimal estimate;
+            _log.GoalSet = settingUp && _goal.Length > 0;
+            _log.Estimate = settingUp && form.Estimates.TryGetValue(model, out estimate) ? estimate : (decimal?)null;
+            _log.CheckAgain = () => _goal.Length > 0 && form.Models.Count > 0 && View.CraftCheck.State != CraftCheckState.Running
+                ? new RunCraftCheck(_goal, model, _setup.Remote) : null;
         }
 
         private void Styles()
@@ -213,24 +224,13 @@ namespace ClaudiaKermin.Adapter
 
             var chip = MissionWindowRules.Status(View);
             if (chip == null) return;
-            var style = ClaudiaSkin.ChipStyle(Kind(chip.Tone));
+            var style = ClaudiaSkin.ChipStyle(ClaudiaSkin.KindOf(chip.Tone));
             var room = close.x - ClaudiaSkin.Gap - (titleX + titleWidth + ClaudiaSkin.Gap);
             if (room < 40) return;
             var text = ClaudiaSkin.Ellipsize(chip.Text, style, room - style.padding.horizontal);
             var size = style.CalcSize(new GUIContent(text));
             var chipWidth = Mathf.Min(size.x, room);
             GUI.Label(new Rect(close.x - ClaudiaSkin.Gap - chipWidth, (bar - size.y) / 2f, chipWidth, size.y), text, style);
-        }
-
-        private static ClaudiaSkin.ChipKind Kind(ChipTone tone)
-        {
-            switch (tone)
-            {
-                case ChipTone.Success: return ClaudiaSkin.ChipKind.Success;
-                case ChipTone.Attention: return ClaudiaSkin.ChipKind.Attention;
-                case ChipTone.Danger: return ClaudiaSkin.ChipKind.Danger;
-                default: return ClaudiaSkin.ChipKind.Info;
-            }
         }
 
         // ---- Pinned Mission Goal ----
@@ -384,14 +384,6 @@ namespace ClaudiaKermin.Adapter
                 DrawStartRow();
                 return;
             }
-            if (View.ConfirmPrompt != null)
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.Space(ClaudiaSkin.Padding);
-                GUILayout.Label(View.ConfirmPrompt, ClaudiaSkin.Body);
-                GUILayout.Space(ClaudiaSkin.Padding);
-                GUILayout.EndHorizontal();
-            }
             // Read before the row: Raise cap clicked in it mustn't add the field to an event that was laid out without it.
             var raising = _raising;
             var any = false;
@@ -418,10 +410,10 @@ namespace ClaudiaKermin.Adapter
             DrawRaiseCap(raising);
         }
 
-        // End Mission is always in the control bar during a Mission, so the row doesn't repeat it.
+        // End Mission is always in the control bar during a Mission, so the row doesn't repeat it; confirming an Approval is a checkbox in the transcript.
         private bool Shown(QuickReply reply)
         {
-            return !(reply == QuickReply.EndMission && View.CanEndMission);
+            return MissionWindowRules.InActionRow(reply) && !(reply == QuickReply.EndMission && View.CanEndMission);
         }
 
         private void DrawStartRow()
