@@ -259,8 +259,10 @@ namespace ClaudiaKermin.Core.Missions
 
         private void LogCost(CraftCheckCharge charge)
         {
-            _client.Log("Craft Check " + charge.Settlement.Kind + " $" + charge.Settlement.Amount.ToString("0.0000", CultureInfo.InvariantCulture)
-                + " on " + charge.Model + ", charged to no Mission.");
+            var amount = charge.Settlement.Amount.ToString("0.0000", CultureInfo.InvariantCulture);
+            _client.Log(charge.Settlement.Kind == "released"
+                ? "Craft Check released $" + amount + " on " + charge.Model + ": not billed, charged to no Mission."
+                : "Craft Check " + charge.Settlement.Kind + " $" + amount + " on " + charge.Model + ", charged to no Mission.");
         }
 
         private void Finished(CancellationTokenSource cancel, CraftCheckCharge charge, StreamResult result)
