@@ -2,61 +2,63 @@
 // Copyright (C) 2026 Andrew Watson
 
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using ClaudiaKermin.Core.Missions;
+using ClaudiaKermin.Core.Ui;
 using UnityEngine;
 
 namespace ClaudiaKermin.Adapter
 {
     /// <summary>
-    /// The Mission window: the start form when no Mission is active, otherwise the log drawer (chat lines,
-    /// with the Mission Plan, Sequence Plans and Debriefs as cards), the quick replies and the reply box.
-    /// It only draws <see cref="MissionView"/> and turns clicks into <see cref="MissionInput"/>s.
+    /// The Mission window: one compact column in every scene. Top to bottom: the title bar with the status chip, the
+    /// pinned Mission Goal, the transcript (the Craft Check, the Mission log, the Busy line), the prompt (which grows
+    /// from 1 to 7 lines and takes that height from the transcript), the action row of quick replies, and the control
+    /// bar (Settings, the setup summary or the spend meter, End Mission). Before a Mission the prompt writes the Mission
+    /// Goal; type, model, Spending Cap and Mission Settings come from the <see cref="MissionSetup"/>, which the Settings
+    /// window edits. It only draws <see cref="MissionView"/> and turns clicks into <see cref="MissionInput"/>s.
     /// </summary>
     public class MissionWindow
     {
         private const string InputControl = "ClaudiaMissionInput";
+        private const string RaiseControl = "ClaudiaMissionRaise";
         private const string LockId = "ClaudiaKerminMission";
-
-        private enum TypingFor
-        {
-            /// <summary>A reply to a pending plan (classified by Claude), or a question when nothing is pending.</summary>
-            Reply,
-            Change,
-            Question,
-            /// <summary>The note for Retry with a note, after "Couldn't produce a safe script".</summary>
-            Note,
-        }
+        private const int MaxPromptLines = 7;
+        private const float SendSize = 32;
+        private const float ControlBarHeight = 44;
+        // The resize grip sits in the bottom-right corner, over the control bar's right edge.
+        private const int GripRoom = 24;
 
         private readonly Action<MissionInput> _send;
         private readonly bool _debugTools;
-        // Large enough by default to read a Sequence Plan card and its script without resizing.
         private readonly WindowFrame _frame =
-            new WindowFrame(0x434B03, "Claudia: Mission", LockId, new Rect(260, 80, 700, 700), new Vector2(420, 360), true);
-        private readonly LogDrawer _log = new LogDrawer();
-        private GUIStyle _wrap;
-        private GUIStyle _bold;
-        private GUIStyle _goalStyle;
+            new WindowFrame(0x434B03, "Claudia: Mission", LockId, new Rect(260, 80, 420, 760), new Vector2(360, 420), true);
+        private readonly LogDrawer _log;
+        private GUIStyle _controlBar, _summary;
+        private GUIStyle _builtFrom;
 
-        // Start form: the Mission Goal here; type, model, Spending Cap and Mission Settings in the setup (the Settings window edits them).
+        // The Mission being set up: its type, model, Spending Cap and Mission Settings (the Settings window edits them).
         private readonly MissionSetup _setup;
+        // The Mission Goal pinned before the start: "" until the prompt sends one.
         private string _goal = "";
-        private Vector2 _goalScroll;
-        // The Craft Check findings scroll; a new result (a different set of findings) jumps back to the top.
-        private Vector2 _checkScroll;
-        private string _seenCheckResult = "";
-        // In Flight the Craft Check starts collapsed to one line so the Mission log gets the room; reset when Flight loads.
-        private bool _checkCollapsed = true;
+        // Edit loaded the pinned goal back into the prompt.
+        private bool _editingGoal;
+        private bool _showAllGoal;
+        // The goal clamped to 2 lines, kept until the goal or the width changes (measuring it takes a dozen passes).
+        private string _clampedFrom = "";
+        private float _clampedAt;
+        private string _clamped = "";
         // End Mission asked "End this Mission?" and awaits Yes / No.
         private bool _confirmingEnd;
         // Raise cap asked for a new Spending Cap and awaits the amount.
         private bool _raising;
         private string _raiseTo = "";
 
-        // Reply box.
+        // The prompt.
         private string _typed = "";
-        private TypingFor _typingFor = TypingFor.Reply;
+        private PromptFor _promptFor = PromptFor.Reply;
+        private bool _focusPrompt;
+        // Enter was taken as Send; the newline character that follows it in its own event is swallowed too.
+        private bool _swallowNewline;
 
         public bool Visible;
         public bool UiHidden;
@@ -72,9 +74,8 @@ namespace ClaudiaKermin.Adapter
             _send = send;
             _setup = setup;
             _debugTools = debugTools;
+            _log = new LogDrawer(send);
             _frame.Remember("mission");
-            // The VAB/SPH Mission board has two panes, so it opens wider.
-            _frame.EditorDefault = new Rect(160, 80, 980, 640);
         }
 
         public void OnGUI()
@@ -85,10 +86,12 @@ namespace ClaudiaKermin.Adapter
                 return;
             }
             GUI.skin = HighLogic.Skin;
+            _frame.Style = ClaudiaSkin.BareWindow;
             _frame.Show(Draw);
 
             // Keys typed into the window must not stage, throttle or rotate the craft.
-            _frame.SetTyping(GUI.GetNameOfFocusedControl() == InputControl);
+            var focused = GUI.GetNameOfFocusedControl();
+            _frame.SetTyping(focused == InputControl || focused == RaiseControl);
         }
 
         /// <summary>Releases the input locks; call when the window goes away.</summary>
@@ -97,7 +100,7 @@ namespace ClaudiaKermin.Adapter
             _frame.Unlock();
         }
 
-        /// <summary>A quick reply from here or the Capcom strip. Change and Ask pick what the reply box sends.</summary>
+        /// <summary>A quick reply from here or the Capcom strip. Change and Ask pick what the prompt sends; pressed again, they let go.</summary>
         public void QuickReplied(QuickReply reply)
         {
             switch (reply)
@@ -120,332 +123,335 @@ namespace ClaudiaKermin.Adapter
                 case QuickReply.GoToVessel: _send(new GoToVessel()); break;
                 case QuickReply.ManualControl: _send(new TakeManualControl()); break;
                 case QuickReply.HandBack:
-                    // Whatever is in the reply box goes with it as the optional message about what the player did.
+                    // Whatever is in the prompt goes with it as the optional message about what the player did.
                     _send(new HandBack(_typed));
                     _typed = "";
-                    _typingFor = TypingFor.Reply;
+                    _promptFor = PromptFor.Reply;
                     break;
-                case QuickReply.RetryWithNote:
-                    _typingFor = TypingFor.Note;
-                    Visible = true;
-                    break;
-                case QuickReply.ChangeSomething:
-                    _typingFor = TypingFor.Change;
-                    Visible = true;
-                    break;
-                case QuickReply.AskQuestion:
-                    _typingFor = TypingFor.Question;
-                    Visible = true;
-                    break;
+                case QuickReply.RetryWithNote: PickPrompt(PromptFor.Note, false); break;
+                case QuickReply.ChangeSomething: PickPrompt(PromptFor.Change, true); break;
+                case QuickReply.AskQuestion: PickPrompt(PromptFor.Question, true); break;
             }
+        }
+
+        private void PickPrompt(PromptFor mode, bool toggles)
+        {
+            _promptFor = toggles && _promptFor == mode ? PromptFor.Reply : mode;
+            Visible = true;
+            _focusPrompt = _promptFor == mode;
         }
 
         /// <summary>Flight is loading: the Craft Check starts collapsed again.</summary>
         public void FlightLoading()
         {
-            _checkCollapsed = true;
+            _log.FlightLoading();
         }
 
         /// <summary>The label with the view's names in it: Go to <i>vessel</i>.</summary>
         public static string Label(QuickReply reply, MissionView view)
         {
-            if (reply == QuickReply.GoToVessel && view.DueTime.VesselName.Length > 0) return "Go to " + view.DueTime.VesselName;
-            return Label(reply);
-        }
-
-        public static string Label(QuickReply reply)
-        {
-            switch (reply)
-            {
-                case QuickReply.Approve: return "Approve";
-                case QuickReply.ChangeSomething: return "Change something";
-                case QuickReply.AskQuestion: return "Ask a question";
-                case QuickReply.ConfirmApproval: return "Yes, approve";
-                case QuickReply.NotYet: return "Not yet";
-                case QuickReply.RaiseCap: return "Raise cap";
-                case QuickReply.EndMission: return "End Mission";
-                case QuickReply.Resume: return "Resume";
-                case QuickReply.RetryWithNote: return "Retry with a note";
-                case QuickReply.Replan: return "Re-plan";
-                case QuickReply.WarpToDueTime: return "Warp to Due Time";
-                case QuickReply.GoToVessel: return "Go to vessel";
-                case QuickReply.ManualControl: return "Manual Control";
-                case QuickReply.HandBack: return "Hand back to Claudia";
-                default: return "Retry";
-            }
+            return MissionWindowRules.Label(reply, view);
         }
 
         private void Draw(int id)
         {
-            if (_wrap == null)
+            Styles();
+            // The start form's goal is spent once a Mission is under way.
+            if (View.CanEndMission)
             {
-                _wrap = new GUIStyle(GUI.skin.label) { richText = false, wordWrap = true };
-                _bold = new GUIStyle(_wrap) { fontStyle = FontStyle.Bold };
-                _goalStyle = new GUIStyle(GUI.skin.textArea) { wordWrap = true, richText = false };
+                _goal = "";
+                _editingGoal = false;
             }
-            if (HighLogic.LoadedSceneIsEditor) DrawBoard();
-            else DrawFlight();
+            var settingUp = View.StartForm.CanStart;
+            var prompt = MissionWindowRules.Prompt(View, _promptFor, _goal.Length > 0 && !_editingGoal);
+
+            DrawTitleBar();
+            DrawGoal(settingUp);
+            GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
+            GUILayout.Space(ClaudiaSkin.Gap / 2);
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(ClaudiaSkin.Padding);
+            _log.Draw(View, _frame.Rect.width - 2 * ClaudiaSkin.Padding - 20, GUILayout.ExpandHeight(true));
+            GUILayout.Space(ClaudiaSkin.Padding / 2f);
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
+            DrawPrompt(prompt);
+            DrawActions(settingUp, prompt.For);
+            DrawControlBar(settingUp);
+
             _frame.DrawGrip();
             WindowFrame.DrawTooltip();
             GUI.DragWindow();
         }
 
-        /// <summary>Flight and the Space Center: one column, the Mission log over the start form and the Craft Check.</summary>
-        private void DrawFlight()
+        private void Styles()
         {
-            if (View.StartForm.CanStart) DrawStartForm();
-            // The start form's goal is spent once a Mission is under way.
-            if (View.CanEndMission) _goal = "";
-            if (View.Stage != MissionStage.None) DrawMission();
-            if (View.StartForm.CanStart || View.CraftCheck.State != CraftCheckState.None) DrawCraftCheck();
-            DrawDebugTools();
+            if (_controlBar != null && ReferenceEquals(_builtFrom, ClaudiaSkin.Bar)) return;
+            _builtFrom = ClaudiaSkin.Bar;
+            _controlBar = new GUIStyle(ClaudiaSkin.Bar) { padding = new RectOffset(ClaudiaSkin.Padding, GripRoom, 6, 6) };
+            _summary = new GUIStyle(ClaudiaSkin.Secondary) { wordWrap = false, alignment = TextAnchor.MiddleLeft };
         }
 
-        /// <summary>
-        /// The VAB/SPH Mission board: on the left the Mission Goal, the craft, its delta-v margin and the cost,
-        /// with the Craft Check pinned below; on the right the conversation with Claudia.
-        /// </summary>
-        private void DrawBoard()
+        // ---- Title bar ----
+
+        // A Claudia-blue dot, the title in accent, the status chip on the right, then close.
+        private void DrawTitleBar()
         {
-            if (View.CanEndMission) _goal = "";
-            var left = Mathf.Clamp(_frame.Rect.width * 0.42f, 300f, 460f);
+            var bar = ClaudiaSkin.TitleBarHeight;
+            var width = _frame.Rect.width;
+            ClaudiaSkin.DrawIcon(new Rect(ClaudiaSkin.Padding, (bar - 8) / 2f, 8, 8), ClaudiaSkin.IconShape.Dot, ClaudiaSkin.Claudia);
+            var titleStyle = ClaudiaSkin.TitleAccent;
+            var title = new GUIContent("Claudia: Mission");
+            var titleWidth = titleStyle.CalcSize(title).x;
+            var titleX = ClaudiaSkin.Padding + 8 + ClaudiaSkin.Gap;
+            GUI.Label(new Rect(titleX, 0, titleWidth, bar), title, titleStyle);
+
+            var close = new Rect(width - ClaudiaSkin.Padding - ClaudiaSkin.MinClickable, (bar - ClaudiaSkin.MinClickable) / 2f, ClaudiaSkin.MinClickable, ClaudiaSkin.MinClickable);
+            if (GUI.Button(close, new GUIContent("", "Close"), GUIStyle.none)) Visible = false;
+            ClaudiaSkin.DrawIcon(new Rect(close.center.x - 6, close.center.y - 6, 12, 12), ClaudiaSkin.IconShape.Close,
+                close.Contains(Event.current.mousePosition) ? ClaudiaSkin.Text : ClaudiaSkin.TextSecondary);
+
+            var chip = MissionWindowRules.Status(View);
+            if (chip == null) return;
+            var style = ClaudiaSkin.ChipStyle(Kind(chip.Tone));
+            var room = close.x - ClaudiaSkin.Gap - (titleX + titleWidth + ClaudiaSkin.Gap);
+            if (room < 40) return;
+            var text = ClaudiaSkin.Ellipsize(chip.Text, style, room - style.padding.horizontal);
+            var size = style.CalcSize(new GUIContent(text));
+            var chipWidth = Mathf.Min(size.x, room);
+            GUI.Label(new Rect(close.x - ClaudiaSkin.Gap - chipWidth, (bar - size.y) / 2f, chipWidth, size.y), text, style);
+        }
+
+        private static ClaudiaSkin.ChipKind Kind(ChipTone tone)
+        {
+            switch (tone)
+            {
+                case ChipTone.Success: return ClaudiaSkin.ChipKind.Success;
+                case ChipTone.Attention: return ClaudiaSkin.ChipKind.Attention;
+                case ChipTone.Danger: return ClaudiaSkin.ChipKind.Danger;
+                default: return ClaudiaSkin.ChipKind.Info;
+            }
+        }
+
+        // ---- Pinned Mission Goal ----
+
+        private void DrawGoal(bool settingUp)
+        {
+            var goal = settingUp ? _goal : View.Goal;
+            var textWidth = _frame.Rect.width - 2 * ClaudiaSkin.Padding;
+            if (goal != _clampedFrom || textWidth != _clampedAt)
+            {
+                _clampedFrom = goal;
+                _clampedAt = textWidth;
+                _clamped = goal.Length > 0 ? ClaudiaSkin.ClampLines(goal, ClaudiaSkin.Body, textWidth, 2) : "";
+            }
+            var clamped = _clamped;
+            var longGoal = clamped != goal;
+
+            GUILayout.BeginVertical(ClaudiaSkin.Raised);
             GUILayout.BeginHorizontal();
-
-            GUILayout.BeginVertical(GUILayout.Width(left));
-            if (View.StartForm.CanStart) DrawStartForm();
-            else if (View.Stage != MissionStage.None) DrawMissionHeader();
-            DrawCraftFacts();
-            if (View.StartForm.CanStart || View.CraftCheck.State != CraftCheckState.None) DrawCraftCheck();
-            DrawDebugTools();
-            GUILayout.EndVertical();
-
-            GUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandWidth(true));
-            GUILayout.Label("Conversation", _bold);
-            if (View.Stage == MissionStage.None)
-                GUILayout.Label("Write the Mission Goal on the left and press Start Mission. Claudia checks the craft first, then answers here.", _wrap);
-            else DrawConversation();
-            GUILayout.EndVertical();
-
+            ClaudiaSkin.SectionLabel("Mission Goal", GUILayout.ExpandWidth(false));
+            var step = HighLogic.LoadedSceneIsFlight && !settingUp ? MissionWindowRules.Step(View) : "";
+            if (step.Length > 0) GUILayout.Label("· " + step, ClaudiaSkin.Muted, GUILayout.ExpandWidth(false));
+            GUILayout.FlexibleSpace();
+            if (settingUp && goal.Length > 0 && !_editingGoal && ClaudiaSkin.IconButton(ClaudiaSkin.IconShape.Pencil, "Edit", GUILayout.ExpandWidth(false)))
+            {
+                _typed = _goal;
+                _editingGoal = true;
+                _focusPrompt = true;
+            }
+            if ((longGoal || _showAllGoal) && ClaudiaSkin.TextButton(_showAllGoal ? "Show less" : "Show all", GUILayout.ExpandWidth(false)))
+                _showAllGoal = !_showAllGoal;
             GUILayout.EndHorizontal();
+
+            if (goal.Length == 0) GUILayout.Label(settingUp ? "Describe the Mission Goal below." : "No Mission yet.", ClaudiaSkin.Secondary);
+            else GUILayout.Label(_showAllGoal ? goal : clamped, ClaudiaSkin.Body);
+            GUILayout.EndVertical();
+            ClaudiaSkin.Divider();
         }
 
-        /// <summary>The craft, its delta-v against the margin the Craft Check wants, and the cost.</summary>
-        private void DrawCraftFacts()
+        // ---- Prompt ----
+
+        private void DrawPrompt(PromptState prompt)
         {
-            var check = View.CraftCheck;
-            GUILayout.Box("", GUILayout.Height(2), GUILayout.ExpandWidth(true));
-            GUILayout.Label("Craft: " + (check.CraftName.Length > 0 ? check.CraftName : "none on the floor"), _bold);
-            GUILayout.Label(check.CraftDeltaV.HasValue
-                ? "Delta-v: " + check.CraftDeltaV.Value.ToString("#,0", CultureInfo.InvariantCulture) + " m/s; margin wanted over the Delta-v Map: "
-                    + check.MarginPercent.ToString(CultureInfo.InvariantCulture) + "%. " + MarginVerdict(check)
-                : "Delta-v: unknown (turn on the stock delta-v simulator in the editor).", _wrap);
-            if (View.Stage != MissionStage.None)
-                GUILayout.Label("Cost: " + SpendText(View) + "  Model: " + View.Model, _wrap);
-            else if (View.StartForm.CanStart && View.StartForm.Models.Count > 0)
+            ClaudiaSkin.Divider();
+            GUILayout.BeginVertical(ClaudiaSkin.Raised);
+            GUILayout.Label(prompt.Caption, ClaudiaSkin.Secondary);
+
+            var style = ClaudiaSkin.Prompt;
+            var width = _frame.Rect.width - 2 * ClaudiaSkin.Padding;
+            var rect = GUILayoutUtility.GetRect(width, PromptHeight(style, width), style, GUILayout.ExpandWidth(true));
+            var send = new Rect(rect.xMax - SendSize - 4, rect.yMax - SendSize - 4, SendSize, SendSize);
+            var e = Event.current;
+            var focused = GUI.GetNameOfFocusedControl() == InputControl;
+            var canSend = prompt.Enabled && _typed.Trim().Length > 0;
+
+            // Enter sends and Shift+Enter adds a line: Enter is taken before the text area sees it, both as the key and as its newline character.
+            var pressed = false;
+            if (focused && prompt.Enabled && e.type == EventType.KeyDown && !e.shift)
             {
-                decimal estimate;
-                var model = _setup.ModelFor(View.StartForm);
-                if (View.StartForm.Estimates.TryGetValue(model, out estimate))
-                    GUILayout.Label("Cost: a whole Mission is about $" + estimate.ToString("0.00", CultureInfo.InvariantCulture) + " with " + model + ".", _wrap);
+                if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter)
+                {
+                    pressed = true;
+                    _swallowNewline = true;
+                    e.Use();
+                }
+                else if (e.keyCode == KeyCode.None && (e.character == '\n' || e.character == '\r'))
+                {
+                    // A newline without its key event first still sends.
+                    pressed = !_swallowNewline;
+                    _swallowNewline = false;
+                    e.Use();
+                }
+                else if (e.keyCode != KeyCode.None)
+                {
+                    // Any other key: an Enter whose newline came in the same event leaves nothing to swallow.
+                    _swallowNewline = false;
+                }
             }
-        }
-
-        private static string MarginVerdict(CraftCheckView check)
-        {
-            if (check.State != CraftCheckState.Done || check.Stale) return "Check the craft to judge it against the Mission Goal.";
-            return check.DeltaVShort ? "Short of the delta-v this Mission Goal needs." : "Enough for this Mission Goal.";
-        }
-
-        private void DrawDebugTools()
-        {
-            if (!_debugTools) return;
-            GUI.enabled = View.CanCaptureSnapshot;
-            if (GUILayout.Button("Capture Game Snapshot (debug)")) _send(new CaptureSnapshot());
-            GUI.enabled = true;
-        }
-
-        private void DrawStartForm()
-        {
-            var form = View.StartForm;
-            GUILayout.Label("Start a Mission", _bold);
-            GUILayout.Label("Mission Goal:");
-            // About 9 lines by default; taller as the player resizes the window.
-            var goalHeight = Mathf.Max(9f * _goalStyle.lineHeight + _goalStyle.padding.vertical, _frame.Rect.height * 0.4f);
-            _goalScroll = GUILayout.BeginScrollView(_goalScroll, GUILayout.Height(goalHeight));
-            GUI.SetNextControlName(InputControl);
-            _goal = GUILayout.TextArea(_goal, 4000, _goalStyle);
-            GUILayout.EndScrollView();
-            if (GUILayout.Button("Clear", GUILayout.ExpandWidth(false))) _goal = "";
-
-            // Type, model, Spending Cap and Mission Settings are chosen in the Settings window.
-            GUILayout.Label((_setup.Remote ? "Remote" : "Crewed") + "; model " + _setup.ModelFor(form) + "; Spending Cap $"
-                + _setup.SpendingCap.ToString("0.00", CultureInfo.InvariantCulture) + "; " + _setup.Settings.Summary(), _wrap);
-            DrawSettingsButton();
-
-            // Start Mission runs the Craft Check first; it is disabled on a Blocker and until every Warning is acknowledged.
-            GUI.enabled = _setup.SpendingCap > 0 && _goal.Trim().Length > 0 && form.Models.Count > 0 && View.CraftCheck.StartAllowed;
-            if (GUILayout.Button("Start Mission"))
+            // The send button sits over the text area's right edge, so its click is taken before the text area would.
+            if (canSend && e.type == EventType.MouseDown && e.button == 0 && send.Contains(e.mousePosition))
             {
-                // The goal stays until the Mission has actually started: the Craft Check may still hold it back.
-                _send(new StartMission(_goal, _setup.SpendingCap, _setup.ModelFor(form), _setup.Settings.Copy(), _setup.Remote));
+                pressed = true;
+                e.Use();
             }
-            GUI.enabled = true;
-            if (form.Refusal.Length > 0) GUILayout.Label(form.Refusal, _wrap);
-        }
 
-        private void DrawSettingsButton()
-        {
-            if (OpenSettings != null && GUILayout.Button("Settings", GUILayout.ExpandWidth(false))) OpenSettings();
-        }
-
-        /// <summary>The Mission's settings on the board; while a plan awaits Approval they can be changed in the Settings window, which asks Claudia for a revised Mission Plan.</summary>
-        private void DrawSettings()
-        {
-            GUILayout.Label(View.Settings.Summary(), _wrap);
-            DrawSettingsButton();
-        }
-
-        /// <summary>The Craft Check, pinned at the bottom of the Mission board.</summary>
-        private void DrawCraftCheck()
-        {
-            var check = View.CraftCheck;
-            var form = View.StartForm;
-            GUILayout.Box("", GUILayout.Height(2), GUILayout.ExpandWidth(true));
-
-            // A check that needs the player is never hidden in Flight: Running, needs the simulator, errored, or Start Mission held closed.
-            var needsPlayer = check.State == CraftCheckState.Running || check.State == CraftCheckState.NeedsSimulator
-                || check.State == CraftCheckState.Error
-                || (check.State == CraftCheckState.Done && form.CanStart && !check.StartAllowed);
-            if (HighLogic.LoadedSceneIsFlight)
+            if (!prompt.Enabled)
             {
-                // Forced open without touching the player's choice, which comes back once the check no longer needs them.
-                var collapsed = _checkCollapsed && !needsPlayer;
-                GUILayout.BeginHorizontal();
-                GUILayout.Label(collapsed ? CollapsedHeading(check) : "Craft Check", _bold);
-                if (!needsPlayer && GUILayout.Button(collapsed ? "Expand" : "Collapse", GUILayout.ExpandWidth(false)))
-                    _checkCollapsed = !_checkCollapsed;
-                GUILayout.EndHorizontal();
-                if (collapsed) return;
+                // A disabled prompt can't hold the keyboard (and the keyboard lock with it).
+                if (focused) GUIUtility.keyboardControl = 0;
+                var old = GUI.enabled;
+                GUI.enabled = false;
+                GUI.TextArea(rect, "", style);
+                GUI.enabled = old;
             }
             else
             {
-                GUILayout.Label("Craft Check", _bold);
-            }
-
-            if (form.CanStart)
-            {
-                GUI.enabled = _goal.Trim().Length > 0 && form.Models.Count > 0 && check.State != CraftCheckState.Running;
-                if (GUILayout.Button("Check craft", GUILayout.ExpandWidth(false)))
-                    _send(new RunCraftCheck(_goal, _setup.ModelFor(form), _setup.Remote));
-                GUI.enabled = true;
-            }
-            // Chosen in the Settings window.
-            foreach (var processor in check.Processors)
-                if (processor.Chosen) GUILayout.Label("Claudia's kOS processor: " + processor.Title, _wrap);
-
-            // Any result after a pause (Running, Error, ...) is new, even if it matches the last one.
-            if (check.State != CraftCheckState.Done) _seenCheckResult = "";
-            switch (check.State)
-            {
-                case CraftCheckState.None:
-                    GUILayout.Label("Not checked yet. Start Mission checks the craft first, or press Check craft.", _wrap);
-                    break;
-                case CraftCheckState.Running:
-                    GUILayout.Label("Claudia is checking the craft...", _wrap);
-                    break;
-                case CraftCheckState.NeedsSimulator:
-                case CraftCheckState.Error:
-                    GUILayout.Label(check.Message, _wrap);
-                    break;
-                case CraftCheckState.Done:
-                    DrawCraftCheckResult(check);
-                    break;
-            }
-            if (form.CanStart && !check.StartAllowed && check.State == CraftCheckState.Done && !check.Stale)
-                GUILayout.Label(check.Verdict == CraftVerdict.Fail
-                    ? "Start Mission is closed: fix every Blocker in the craft and check again."
-                    : "Start Mission opens once you have acknowledged every Warning.", _wrap);
-        }
-
-        private static string VerdictText(CraftCheckView check)
-        {
-            return check.Verdict == CraftVerdict.Pass ? "Pass"
-                : check.Verdict == CraftVerdict.PassWithWarnings ? "Pass with Warnings" : "Fail";
-        }
-
-        /// <summary>The one line shown while collapsed, e.g. "Craft Check: Pass with Warnings (2)".</summary>
-        private static string CollapsedHeading(CraftCheckView check)
-        {
-            if (check.State == CraftCheckState.None) return "Craft Check: not checked yet";
-            if (check.State != CraftCheckState.Done) return "Craft Check";
-            return "Craft Check: " + VerdictText(check)
-                + (check.Verdict == CraftVerdict.Pass ? "" : " (" + check.Findings.Count.ToString(CultureInfo.InvariantCulture) + ")")
-                + (check.Stale ? " - the craft changed since" : "");
-        }
-
-        private void DrawCraftCheckResult(CraftCheckView check)
-        {
-            var verdict = VerdictText(check);
-            GUILayout.Label(verdict + (check.Stale ? " (the craft changed since; Start Mission checks again)" : ""), _bold);
-            var signature = check.Summary;
-            foreach (var finding in check.Findings) signature += "|" + finding.Code;
-            if (signature != _seenCheckResult)
-            {
-                _seenCheckResult = signature;
-                _checkScroll = Vector2.zero;
-            }
-            // Takes the space left over, but no more than 45% of the window, so a Mission log below keeps room.
-            _checkScroll = GUILayout.BeginScrollView(_checkScroll, GUILayout.MinHeight(120), GUILayout.MaxHeight(_frame.Rect.height * 0.45f), GUILayout.ExpandHeight(true));
-            if (check.Summary.Length > 0) GUILayout.Label("Claudia: " + check.Summary, _wrap);
-            foreach (var finding in check.Findings)
-            {
-                GUILayout.BeginVertical(GUI.skin.box);
-                GUILayout.Label((finding.Severity == CraftFindingSeverity.Blocker ? "Blocker: " : "Warning: ") + finding.Title, _bold);
-                GUILayout.Label(finding.Explanation, _wrap);
-                if (finding.Fix.Length > 0) GUILayout.Label("Fix: " + finding.Fix, _wrap);
-                if (finding.Severity == CraftFindingSeverity.Warning)
+                GUI.SetNextControlName(InputControl);
+                _typed = GUI.TextArea(rect, _typed, 4000, style);
+                if (_focusPrompt)
                 {
-                    var acknowledged = GUILayout.Toggle(finding.Acknowledged, "I accept this risk");
-                    if (acknowledged && !finding.Acknowledged) _send(new AcknowledgeWarning(finding.Code));
+                    GUI.FocusControl(InputControl);
+                    _focusPrompt = false;
                 }
-                GUILayout.EndVertical();
             }
-            GUILayout.EndScrollView();
+            if ((_typed.Length == 0 || !prompt.Enabled) && prompt.Placeholder.Length > 0 && e.type == EventType.Repaint)
+                ClaudiaSkin.Muted.Draw(new Rect(rect.x + style.padding.left, rect.y + style.padding.top - 2, rect.width - style.padding.horizontal, rect.height - style.padding.vertical + 4),
+                    new GUIContent(prompt.Placeholder), false, false, false, false);
+            ClaudiaSkin.DrawSendButton(send, canSend);
+            GUILayout.Label(prompt.Hint, ClaudiaSkin.Muted);
+            GUILayout.EndVertical();
+
+            if (pressed && canSend) Send(prompt);
         }
 
-        private void DrawMission()
+        // From 1 line up to 7 at the current width; beyond that the text area scrolls to the cursor.
+        private float PromptHeight(GUIStyle style, float width)
         {
-            DrawMissionHeader();
-            DrawConversation();
+            var one = Mathf.Max(style.CalcHeight(new GUIContent(ClaudiaSkin.Lines(1)), width), SendSize + 8);
+            var most = style.CalcHeight(new GUIContent(ClaudiaSkin.Lines(MaxPromptLines)), width);
+            // A trailing newline is a line of its own, which the measure would otherwise leave out.
+            var text = _typed.EndsWith("\n", StringComparison.Ordinal) ? _typed + "A" : _typed;
+            var needed = text.Length == 0 ? one : style.CalcHeight(new GUIContent(text), width);
+            return Mathf.Clamp(needed, one, most);
         }
 
-        private void DrawMissionHeader()
+        private void Send(PromptState prompt)
         {
-            GUILayout.Label("Mission Goal: " + View.Goal, _wrap);
-            GUILayout.Label("Model: " + View.Model + "   Spent: " + SpendText(View) + "   " + StageText(View), _wrap);
-            DrawSettings();
+            var text = _typed.Trim();
+            if (prompt.For == PromptFor.Goal)
+            {
+                // Pinned as the Mission Goal; nothing is sent until Check again or Start Mission.
+                _goal = text;
+                _editingGoal = false;
+                _showAllGoal = false;
+            }
+            else
+            {
+                _send(MissionWindowRules.Send(prompt.For, text));
+                _promptFor = PromptFor.Reply;
+            }
+            _typed = "";
         }
 
-        /// <summary>The log, the quick replies, the reply box and End Mission.</summary>
-        private void DrawConversation()
-        {
-            _log.Draw(View, GUILayout.ExpandHeight(true));
+        // ---- Action row ----
 
-            if (View.ConfirmPrompt != null) GUILayout.Label(View.ConfirmPrompt, _bold);
-            if (View.QuickReplies.Count > 0)
+        /// <param name="writing">What the prompt settled on; Change and Ask show pressed while it is theirs.</param>
+        private void DrawActions(bool settingUp, PromptFor writing)
+        {
+            if (settingUp)
+            {
+                DrawStartRow();
+                return;
+            }
+            if (View.ConfirmPrompt != null)
             {
                 GUILayout.BeginHorizontal();
-                foreach (var reply in View.QuickReplies)
-                    if (GUILayout.Button(Label(reply, View))) QuickReplied(reply);
+                GUILayout.Space(ClaudiaSkin.Padding);
+                GUILayout.Label(View.ConfirmPrompt, ClaudiaSkin.Body);
+                GUILayout.Space(ClaudiaSkin.Padding);
                 GUILayout.EndHorizontal();
             }
-            DrawRaiseCap();
-            DrawReplyBox();
-            DrawEndMission();
+            // Read before the row: Raise cap clicked in it mustn't add the field to an event that was laid out without it.
+            var raising = _raising;
+            var any = false;
+            foreach (var reply in View.QuickReplies)
+                if (Shown(reply)) any = true;
+            if (any)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Space(ClaudiaSkin.Padding);
+                foreach (var reply in View.QuickReplies)
+                {
+                    if (!Shown(reply)) continue;
+                    var label = Label(reply, View);
+                    bool clicked;
+                    if (MissionWindowRules.IsPrimary(reply)) clicked = ClaudiaSkin.PrimaryButton(label, GUILayout.ExpandWidth(true), GUILayout.MinWidth(0));
+                    else if (reply == QuickReply.ChangeSomething) clicked = ClaudiaSkin.ToggleButton(writing == PromptFor.Change, label, GUILayout.ExpandWidth(false));
+                    else if (reply == QuickReply.AskQuestion) clicked = ClaudiaSkin.ToggleButton(writing == PromptFor.Question, label, GUILayout.ExpandWidth(false));
+                    else clicked = ClaudiaSkin.SecondaryButton(label, GUILayout.ExpandWidth(false));
+                    if (clicked) QuickReplied(reply);
+                }
+                GUILayout.Space(ClaudiaSkin.Padding);
+                GUILayout.EndHorizontal();
+            }
+            DrawRaiseCap(raising);
+        }
+
+        // End Mission is always in the control bar during a Mission, so the row doesn't repeat it.
+        private bool Shown(QuickReply reply)
+        {
+            return !(reply == QuickReply.EndMission && View.CanEndMission);
+        }
+
+        private void DrawStartRow()
+        {
+            var form = View.StartForm;
+            var check = View.CraftCheck;
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(ClaudiaSkin.Padding);
+            // Start Mission runs the Craft Check first; it is closed on a Blocker and until every Warning is acknowledged.
+            var canStart = _setup.SpendingCap > 0 && _goal.Length > 0 && form.Models.Count > 0 && check.StartAllowed;
+            if (canStart)
+            {
+                // The goal stays until the Mission has actually started: the Craft Check may still hold it back.
+                if (ClaudiaSkin.PrimaryButton("Start Mission", GUILayout.ExpandWidth(true), GUILayout.MinWidth(0)))
+                    _send(new StartMission(_goal, _setup.SpendingCap, _setup.ModelFor(form), _setup.Settings.Copy(), _setup.Remote));
+            }
+            else
+            {
+                ClaudiaSkin.DisabledButton(MissionWindowRules.StartLabel(View), GUILayout.ExpandWidth(true), GUILayout.MinWidth(0));
+            }
+            GUI.enabled = _goal.Length > 0 && form.Models.Count > 0 && check.State != CraftCheckState.Running;
+            if (ClaudiaSkin.SecondaryButton(check.State == CraftCheckState.None ? "Check craft" : "Check again", GUILayout.ExpandWidth(false)))
+                _send(new RunCraftCheck(_goal, _setup.ModelFor(form), _setup.Remote));
+            GUI.enabled = true;
+            GUILayout.Space(ClaudiaSkin.Padding);
+            GUILayout.EndHorizontal();
         }
 
         // Raise cap: the Mission is Paused at its Spending Cap; the player picks a higher cap and it resumes.
-        private void DrawRaiseCap()
+        private void DrawRaiseCap(bool raising)
         {
             if (!View.QuickReplies.Contains(QuickReply.RaiseCap))
             {
@@ -453,87 +459,106 @@ namespace ClaudiaKermin.Adapter
                 _raiseTo = "";
                 return;
             }
-            if (!_raising) return;
-            if (_raiseTo.Length == 0) _raiseTo = (View.SpendingCap * 2).ToString("0.00", CultureInfo.InvariantCulture);
+            if (!raising) return;
+            if (_raiseTo.Length == 0) _raiseTo = Dollars(View.SpendingCap * 2);
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Raise Spending Cap to $", GUILayout.ExpandWidth(false));
-            GUI.SetNextControlName(InputControl);
-            _raiseTo = GUILayout.TextField(_raiseTo, 10, GUILayout.Width(80));
+            GUILayout.Space(ClaudiaSkin.Padding);
+            GUILayout.Label("Raise Spending Cap to $", ClaudiaSkin.Body, GUILayout.ExpandWidth(false));
+            GUI.SetNextControlName(RaiseControl);
+            _raiseTo = GUILayout.TextField(_raiseTo, 10, ClaudiaSkin.TextField, GUILayout.Width(90));
             decimal cap;
             GUI.enabled = decimal.TryParse(_raiseTo, NumberStyles.Number, CultureInfo.InvariantCulture, out cap) && cap > View.SpendingCap;
-            if (GUILayout.Button("Raise", GUILayout.ExpandWidth(false)))
+            if (ClaudiaSkin.PrimaryButton("Raise", GUILayout.ExpandWidth(false)))
             {
                 _send(new RaiseCap(cap));
                 _raising = false;
                 _raiseTo = "";
             }
             GUI.enabled = true;
-            if (GUILayout.Button("Cancel", GUILayout.ExpandWidth(false))) _raising = false;
+            if (ClaudiaSkin.SecondaryButton("Cancel", GUILayout.ExpandWidth(false))) _raising = false;
+            GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
+        }
+
+        // ---- Control bar ----
+
+        private void DrawControlBar(bool settingUp)
+        {
+            DrawEndConfirmation();
+            GUILayout.Space(ClaudiaSkin.Gap / 2);
+            ClaudiaSkin.Divider();
+            GUILayout.BeginHorizontal(_controlBar, GUILayout.Height(ControlBarHeight));
+            if (OpenSettings != null && ClaudiaSkin.IconButton(ClaudiaSkin.IconShape.Gear, "", GUILayout.Width(36))) OpenSettings();
+            GUILayout.Space(ClaudiaSkin.Gap);
+
+            if (View.CanEndMission) DrawSpendMeter();
+            else if (settingUp) DrawSummary(MissionWindowRules.SetupSummary(View, _setup.Remote, _setup.ModelFor(View.StartForm)));
+            else GUILayout.FlexibleSpace();
+
+            if (_debugTools)
+            {
+                GUI.enabled = View.CanCaptureSnapshot;
+                if (ClaudiaSkin.SmallButton("Capture Game Snapshot (debug)", GUILayout.ExpandWidth(false))) _send(new CaptureSnapshot());
+                GUI.enabled = true;
+            }
+            if (!View.CanEndMission) _confirmingEnd = false;
+            else if (ClaudiaSkin.DangerButton("End Mission", GUILayout.ExpandWidth(false), GUILayout.Height(32))) _confirmingEnd = true;
+            GUILayout.EndHorizontal();
+        }
+
+        // One line of the pending setup, ellipsized to the room it gets.
+        private void DrawSummary(string text)
+        {
+            var rect = GUILayoutUtility.GetRect(new GUIContent(text), _summary, GUILayout.ExpandWidth(true), GUILayout.MinWidth(0), GUILayout.Height(ControlBarHeight - 12));
+            if (Event.current.type != EventType.Repaint) return;
+            _summary.Draw(rect, new GUIContent(ClaudiaSkin.Ellipsize(text, _summary, rect.width), text), false, false, false, false);
+        }
+
+        // "$1.42 / $10.00" over an 84×4 bar: accent, amber from 80% of the Spending Cap.
+        private void DrawSpendMeter()
+        {
+            GUILayout.BeginVertical(GUILayout.ExpandWidth(false));
+            GUILayout.FlexibleSpace();
+            GUILayout.Label(MissionWindowRules.SpendMeter(View), ClaudiaSkin.Secondary, GUILayout.ExpandWidth(false));
+            var bar = GUILayoutUtility.GetRect(84, 4, GUILayout.Width(84), GUILayout.Height(4));
+            if (Event.current.type == EventType.Repaint)
+            {
+                GUI.DrawTexture(bar, ClaudiaSkin.Solid(ClaudiaSkin.Border));
+                var fill = new Rect(bar.x, bar.y, bar.width * MissionWindowRules.SpendFraction(View), bar.height);
+                GUI.DrawTexture(fill, ClaudiaSkin.Solid(View.CapWarning ? ClaudiaSkin.Attention : ClaudiaSkin.Accent));
+            }
+            GUILayout.FlexibleSpace();
+            GUILayout.EndVertical();
+            GUILayout.FlexibleSpace();
+        }
+
+        // End Mission needs a confirmation, shown just above the control bar.
+        private void DrawEndConfirmation()
+        {
+            if (!_confirmingEnd || !View.CanEndMission) return;
+            GUILayout.BeginVertical(ClaudiaSkin.Raised);
+            GUILayout.Label("End this Mission? Its folder and transcript are kept.", ClaudiaSkin.Body);
+            GUILayout.BeginHorizontal();
+            if (ClaudiaSkin.DangerButton("Yes, end it", GUILayout.ExpandWidth(true), GUILayout.MinWidth(0)))
+            {
+                _confirmingEnd = false;
+                _send(new EndMission());
+            }
+            if (ClaudiaSkin.SecondaryButton("No", GUILayout.ExpandWidth(true), GUILayout.MinWidth(0))) _confirmingEnd = false;
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
+        }
+
+        private static string Dollars(decimal amount)
+        {
+            return amount.ToString("0.00", CultureInfo.InvariantCulture);
         }
 
         /// <summary>The cost so far against the Spending Cap, e.g. "$1.08 of $10.00", with the 80% warning.</summary>
         public static string SpendText(MissionView view)
         {
-            var text = "$" + (view.Spent + view.HeldCharges).ToString("0.00", CultureInfo.InvariantCulture)
-                + " of $" + view.SpendingCap.ToString("0.00", CultureInfo.InvariantCulture);
+            var text = "$" + Dollars(view.Spent + view.HeldCharges) + " of $" + Dollars(view.SpendingCap);
             return view.CapWarning ? text + " (80% of the cap or more)" : text;
-        }
-
-        // The Mission Goal of a started Mission is shown read-only above; End Mission needs a confirmation.
-        private void DrawEndMission()
-        {
-            if (!View.CanEndMission)
-            {
-                _confirmingEnd = false;
-                return;
-            }
-            if (!_confirmingEnd)
-            {
-                if (GUILayout.Button("End Mission", GUILayout.ExpandWidth(false))) _confirmingEnd = true;
-                return;
-            }
-            GUILayout.Label("End this Mission? Its folder and transcript are kept.", _bold);
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Yes, end it"))
-            {
-                _confirmingEnd = false;
-                _send(new EndMission());
-            }
-            if (GUILayout.Button("No")) _confirmingEnd = false;
-            GUILayout.EndHorizontal();
-        }
-
-        private void DrawReplyBox()
-        {
-            if (!View.CanType) return;
-            var awaiting = View.Stage == MissionStage.AwaitingPlanApproval || View.Stage == MissionStage.AwaitingSequenceApproval;
-            var unsafeScript = View.Stage == MissionStage.UnsafeScript;
-            if (!awaiting && _typingFor != TypingFor.Question && !(unsafeScript && _typingFor == TypingFor.Note)) _typingFor = TypingFor.Reply;
-            var manual = View.Stage == MissionStage.ManualControl;
-            GUILayout.Label(manual ? "Ask Claudia, or write what you did and Hand back:"
-                : _typingFor == TypingFor.Change ? "What should change?"
-                : _typingFor == TypingFor.Note ? "Note for Claudia's retry:"
-                : _typingFor == TypingFor.Question || !awaiting ? "Ask Claudia:" : "Reply to Claudia:");
-
-            var enter = Event.current.type == EventType.KeyDown
-                && (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter)
-                && GUI.GetNameOfFocusedControl() == InputControl;
-            GUI.SetNextControlName(InputControl);
-            _typed = GUILayout.TextField(_typed, 2000);
-
-            GUI.enabled = _typed.Trim().Length > 0;
-            if (GUILayout.Button("Send") || (enter && GUI.enabled))
-            {
-                if (_typingFor == TypingFor.Change) _send(new ChangeSomething(_typed));
-                else if (_typingFor == TypingFor.Note) _send(new RetryWithNote(_typed));
-                else if (_typingFor == TypingFor.Question || !awaiting) _send(new AskQuestion(_typed));
-                else _send(new Reply(_typed));
-                _typed = "";
-                _typingFor = TypingFor.Reply;
-                if (enter) Event.current.Use();
-            }
-            GUI.enabled = true;
         }
 
         public static string StageText(MissionView view)

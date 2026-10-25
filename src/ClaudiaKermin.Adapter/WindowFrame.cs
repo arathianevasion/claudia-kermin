@@ -41,9 +41,6 @@ namespace ClaudiaKermin.Adapter
 
         public Rect Rect;
 
-        /// <summary>Where the window opens in the VAB/SPH when nothing is remembered; unset means the same as elsewhere.</summary>
-        public Rect? EditorDefault;
-
         /// <summary>The window's style (e.g. <see cref="ClaudiaSkin.Window"/>); unset uses the current skin's window.</summary>
         public GUIStyle Style;
 
@@ -136,7 +133,7 @@ namespace ClaudiaKermin.Adapter
             if (WindowMemory.TryGet(_memoryName, out box))
                 Rect = new Rect(box.X, box.Y, _resizable ? Mathf.Max(box.Width, _min.x) : Rect.width, _resizable ? Mathf.Max(box.Height, _min.y) : Rect.height);
             else
-                Rect = (scene == "vab" || scene == "sph") && EditorDefault.HasValue ? EditorDefault.Value : _default;
+                Rect = _default;
             _lastStored = new WindowBox(Rect.x, Rect.y, Rect.width, Rect.height);
         }
 
