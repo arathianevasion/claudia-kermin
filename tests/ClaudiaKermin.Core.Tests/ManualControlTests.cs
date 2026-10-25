@@ -251,6 +251,54 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ManualControlIsNotOfferedWhileTheLinkIsDownOrUnsteadyAndTheViewSaysWhy()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
+            var mission = Control(transport);
+            ToRunning(mission);
+            var ut = Pad().Ut;
+            Assert.True(mission.View.ManualControlAllowed);
+            Assert.Equal("", mission.View.ManualControlUnavailable);
+
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 1; }));
+            Assert.DoesNotContain(QuickReply.ManualControl, mission.View.QuickReplies);
+            Assert.Equal("no link to Kerbin and no other crew aboard", mission.View.ManualControlUnavailable);
+
+            // Back, but only just: it may drop again, so the button isn't offered and taking the craft is refused.
+            mission.Send(Pad(s => s.Ut = ut + 2));
+            Assert.False(mission.View.ManualControlAllowed);
+            Assert.DoesNotContain(QuickReply.ManualControl, mission.View.QuickReplies);
+            Assert.Equal("the link to Kerbin is unsteady", mission.View.ManualControlUnavailable);
+            mission.Send(new TakeManualControl());
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+            Assert.Empty(mission.TakeCommands());
+            Assert.Contains(mission.View.Log, e => e.Kind == LogKind.Notice && e.Text.Contains("the link to Kerbin is unsteady"));
+
+            // Steady for the grace: offered again.
+            mission.Send(Pad(s => s.Ut = ut + 7));
+            Assert.Equal(new[] { QuickReply.ManualControl }, mission.View.QuickReplies);
+            Assert.Equal("", mission.View.ManualControlUnavailable);
+            mission.Send(new TakeManualControl());
+            Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
+        }
+
+        [Fact]
+        public void AnUnsteadyLinkDoesNotMatterWithAnotherCrewMemberAboard()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
+            var mission = Control(transport);
+            ToRunning(mission);
+            var ut = Pad().Ut;
+            Action<GameSnapshot> pilot = s => s.Crew.Add(new SnapshotCrewMember { Name = "Jebediah Kerman", Trait = "Pilot" });
+
+            mission.Send(Pad(s => { pilot(s); s.HasLink = false; s.Ut = ut + 1; }));
+            mission.Send(Pad(s => { pilot(s); s.Ut = ut + 2; }));
+
+            Assert.Equal(new[] { QuickReply.ManualControl }, mission.View.QuickReplies);
+            Assert.Equal("", mission.View.ManualControlUnavailable);
+        }
+
+        [Fact]
         public void ARunWithNoLinkAndNoOtherCrewKeepsRunningUntilItEndsNormally()
         {
             var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief.sse");
@@ -513,6 +561,123 @@ namespace ClaudiaKermin.Core.Tests
         // ---- Link loss and saves ----
 
         [Fact]
+        public void ALinkDropInTheSnapshotRightAfterTakingManualControlDoesNotHandTheCraftStraightBack()
+        {
+            // The log in ticket 151: Manual Control offered while linked, the next snapshot at the same UT has no link.
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
+            var mission = Control(transport);
+            ToRunning(mission);
+            mission.Send(new TakeManualControl());
+            mission.TakeCommands();
+
+            mission.Send(Pad(s => s.HasLink = false));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut += 5; }));
+
+            Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
+            Assert.Empty(mission.TakeCommands());
+            Assert.Equal(ControlLocks.None, mission.View.Locks);
+            Assert.Equal(2, transport.Requests.Count);
+        }
+
+        [Fact]
+        public void ALinkThatComesBackWithinTheGraceDoesNotHandBackAndTheGraceStartsAgainWhenItDrops()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-manual.sse", "mission-plan.sse");
+            var mission = Control(transport);
+            ToRunning(mission);
+            mission.Send(new TakeManualControl());
+            mission.TakeCommands();
+            var ut = Pad().Ut;
+
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 1; }));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 4; }));
+            mission.Send(Pad(s => s.Ut = ut + 5));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 7; }));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 11; }));
+            Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
+            Assert.Empty(mission.TakeCommands());
+
+            // Down longer than the grace since it last dropped: Claudia takes the craft back, once.
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 12.5; }));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 13.5; }));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 20; }));
+            Assert.Single(mission.TakeCommands().OfType<MakeCraftSafe>());
+            Assert.Single(mission.View.Log, e => e.Kind == LogKind.Player && e.Text.StartsWith("Hand back"));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            Assert.Empty(mission.TakeCommands().OfType<MakeCraftSafe>());
+        }
+
+        [Fact]
+        public void TheGraceStartsAgainAfterAQuickloadAVesselSwitchOrLeavingFlight()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
+            var mission = Control(transport);
+            ToRunning(mission);
+            mission.Send(new TakeManualControl());
+            var ut = Pad().Ut;
+
+            // Down for a while, then a quickload to an earlier moment: the old drop is not this game's.
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 100; }));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 104; }));
+            mission.Send(new UtAdvanced(ut + 50));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 50; }));
+            Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
+            Assert.Equal(5, mission.View.LinkLossTakeBackIn);
+
+            // Another vessel: its link has its own history.
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 54; s.Craft.VesselId = "other"; }));
+            Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
+            Assert.Equal(5, mission.View.LinkLossTakeBackIn);
+
+            // Away from Flight and back, still unlinked: the first snapshot back starts the grace.
+            mission.Send(new SceneChanged(GameScene.Other));
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 300; s.Craft.VesselId = "other"; }));
+            Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
+            Assert.Empty(mission.TakeCommands().OfType<MakeCraftSafe>());
+        }
+
+        [Fact]
+        public void TheGraceStartsWhenTheLastOtherCrewMemberLeavesWithTheLinkAlreadyDown()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
+            var mission = Control(transport);
+            ToRunning(mission);
+            mission.Send(new TakeManualControl());
+            var ut = Pad().Ut;
+
+            mission.Send(Pad(s =>
+            {
+                s.HasLink = false;
+                s.Ut = ut + 1;
+                s.Crew.Add(new SnapshotCrewMember { Name = "Jebediah Kerman", Trait = "Pilot" });
+            }));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 60; }));
+
+            Assert.Equal(MissionStage.ManualControl, mission.View.Stage);
+            Assert.Equal(5, mission.View.LinkLossTakeBackIn);
+        }
+
+        [Fact]
+        public void WhileTheLinkIsDownInManualControlTheViewCountsDownToClaudiaTakingTheCraftBack()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse");
+            var mission = Control(transport);
+            ToRunning(mission);
+            mission.Send(new TakeManualControl());
+            var ut = Pad().Ut;
+            Assert.Null(mission.View.LinkLossTakeBackIn);
+
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 1; }));
+            Assert.Equal(5, mission.View.LinkLossTakeBackIn);
+            mission.Send(new UtAdvanced(ut + 4));
+            Assert.Equal(2, mission.View.LinkLossTakeBackIn);
+
+            mission.Send(Pad(s => s.Ut = ut + 5));
+            Assert.Null(mission.View.LinkLossTakeBackIn);
+        }
+
+        [Fact]
         public void LosingTheLinkInManualControlWithNoOtherCrewTakesTheCraftBackAndMakesItSafe()
         {
             var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-manual.sse", "mission-plan.sse");
@@ -522,8 +687,17 @@ namespace ClaudiaKermin.Core.Tests
             mission.TakeCommands();
 
             mission.Send(Pad(s => s.HasLink = false));
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut += 5.1; }));
 
-            Assert.Contains(mission.TakeCommands(), c => c is MakeCraftSafe);
+            var commands = mission.TakeCommands();
+            Assert.Single(commands.OfType<MakeCraftSafe>());
+            Assert.Single(commands.OfType<DropWarp>());
+            const string told = "No link to Kerbin and no other crew: Claudia has the craft back and the controls are locked.";
+            var message = Assert.Single(commands.OfType<PostScreenMessage>());
+            Assert.Equal(told, message.Text);
+            // Said on screen even with the Mission window open: the controls just went dead under the player's hands.
+            Assert.True(message.Always);
+            Assert.Contains(mission.View.Log, e => e.Kind == LogKind.Notice && e.Text == told);
             Assert.Equal(MissionStage.Debriefing, mission.View.Stage);
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             Assert.Contains("link dropped", AllText(transport.Requests[2]));

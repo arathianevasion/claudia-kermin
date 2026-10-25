@@ -220,8 +220,8 @@ namespace ClaudiaKermin.Adapter
                 else if (command is DropWarp) DueTimeActions.DropWarp();
                 else if (command is SwitchToVessel) DueTimeActions.GoToVessel(((SwitchToVessel)command).VesselId);
                 var message = command as PostScreenMessage;
-                // The alert below says it better when it fires for the same moment.
-                if (message != null && attention == null && !Watching)
+                // The alert below says it better when it fires for the same moment, unless the message must be seen.
+                if (message != null && (message.Always || (attention == null && !Watching)))
                     ScreenMessages.PostScreenMessage(message.Text, 6f, ScreenMessageStyle.UPPER_CENTER);
             }
             if (attention != null) NotifyPlayer(attention);

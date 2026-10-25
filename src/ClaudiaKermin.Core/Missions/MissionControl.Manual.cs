@@ -34,10 +34,60 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The "Manual Control isn't available" notice is repeated at most this often, in UT seconds, while keys stay held.</summary>
         private const double RefusalNoticeSeconds = 30;
 
-        /// <summary>A link to Kerbin (CommNet off counts) or another non-Tourist crew member aboard: someone could really fly the craft.</summary>
+        /// <summary>UT since which the craft has had no link and no other crew aboard (nobody could fly it); null otherwise.</summary>
+        private double? _strandedSince;
+        /// <summary>UT the link last came back after a drop; until the grace has passed since, the link is unsteady.</summary>
+        private double _linkBackAt = double.NegativeInfinity;
+
+        /// <summary>
+        /// Keeps the link's history from each Game Snapshot, and takes the craft back once the craft has been without a
+        /// link or other crew in Manual Control for longer than the grace: a link that drops for a moment, or in the
+        /// first snapshot after the player took Manual Control, doesn't hand the craft straight back. The history starts
+        /// again on another vessel, on the first snapshot after a load or back in Flight, and when time runs backwards
+        /// (a quickload).
+        /// </summary>
+        private void LinkSeen(GameSnapshot previous, GameSnapshot snapshot)
+        {
+            if (previous == null || previous.Craft.VesselId != snapshot.Craft.VesselId || snapshot.Ut < previous.Ut)
+            {
+                _strandedSince = null;
+                _linkBackAt = double.NegativeInfinity;
+            }
+            else if (snapshot.HasLink && !previous.HasLink) _linkBackAt = _ut;
+            if (snapshot.HasLink || snapshot.HasOtherCrew) _strandedSince = null;
+            else if (!_strandedSince.HasValue) _strandedSince = _ut;
+            if (InFlightManual && _ut - _strandedSince > _config.ManualLinkGraceSeconds) LinkLostDuringManual();
+        }
+
+        /// <summary>The Mission is in Manual Control, in Flight.</summary>
+        private bool InFlightManual
+        {
+            get { return _mission != null && _mission.Stage == MissionStage.ManualControl && _scene == GameScene.Flight; }
+        }
+
+        /// <summary>In Manual Control with no link and no other crew aboard: game seconds until Claudia takes the craft back.</summary>
+        private double? LinkLossTakeBackIn()
+        {
+            if (!InFlightManual || !_strandedSince.HasValue) return null;
+            return Math.Max(0, _strandedSince.Value + _config.ManualLinkGraceSeconds - _ut);
+        }
+
+        /// <summary>
+        /// A steady link to Kerbin (CommNet off counts) or another non-Tourist crew member aboard: someone could really fly
+        /// the craft. A link that came back less than the grace ago doesn't count, so the button isn't offered just before
+        /// the link drops again and Claudia takes the craft back.
+        /// </summary>
         private bool ManualAllowed
         {
-            get { return _snapshot != null && (_snapshot.HasLink || _snapshot.HasOtherCrew); }
+            get { return _snapshot != null && ManualUnavailableBecause().Length == 0; }
+        }
+
+        /// <summary>Why nobody could fly the craft now; "" when someone could (or there is no Game Snapshot yet).</summary>
+        private string ManualUnavailableBecause()
+        {
+            if (_snapshot == null || _snapshot.HasOtherCrew) return "";
+            if (!_snapshot.HasLink) return "no link to Kerbin and no other crew aboard";
+            return _ut - _linkBackAt < _config.ManualLinkGraceSeconds ? "the link to Kerbin is unsteady" : "";
         }
 
         /// <summary>A sequence is Running, or a plan waits for Approval with no request out: the player may take the craft now.</summary>
@@ -82,7 +132,7 @@ namespace ClaudiaKermin.Core.Missions
                 if (_ut - mission.RefusedAt >= RefusalNoticeSeconds)
                 {
                     mission.RefusedAt = _ut;
-                    Note(LogKind.Notice, "Manual Control isn't available: there is no link to Kerbin and no other crew aboard, so the flight controls stay locked.");
+                    Note(LogKind.Notice, "Manual Control isn't available: " + ManualUnavailableBecause() + ", so the flight controls stay locked.");
                 }
                 return;
             }
@@ -107,7 +157,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             if (!ManualAllowed)
             {
-                Note(LogKind.Notice, "Can't start the manual stretch: there is no link to Kerbin and no other crew aboard, so the flight controls stay locked.");
+                Note(LogKind.Notice, "Can't start the manual stretch: " + ManualUnavailableBecause() + ", so the flight controls stay locked.");
                 return;
             }
             mission.ManualPlanned = true;
@@ -166,13 +216,18 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>
         /// The link dropped during Manual Control with no other crew aboard (story 104): Claudia takes the craft back,
-        /// the mod makes it safe, and the stretch is Debriefed as a hand back with no message.
+        /// the mod makes it safe once, warp drops, the player is told on screen why the controls went dead, and the stretch
+        /// is Debriefed as a hand back with no message.
         /// </summary>
         private void LinkLostDuringManual()
         {
             var mission = _mission;
-            Note(LogKind.Notice, "The link dropped and no other crew is aboard: Claudia takes the craft back and the mod makes it safe.");
+            const string text = "No link to Kerbin and no other crew: Claudia has the craft back and the controls are locked.";
+            Note(LogKind.Notice, text);
+            // Off warp first, so the make-safe's throttle and steering apply to a craft off rails.
+            _commands.Add(new DropWarp());
             _commands.Add(new MakeCraftSafe("the link dropped during Manual Control with no other crew aboard"));
+            _commands.Add(new PostScreenMessage(text, always: true));
             mission.ManualOrigin += "; then the link dropped with no other crew aboard, so you took the craft back and the mod made it safe";
             HandedBack("");
         }

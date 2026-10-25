@@ -96,7 +96,10 @@ namespace ClaudiaKermin.Adapter
             var status = View.RunStatus.Length > 0 ? View.RunStatus : MissionWindow.StageText(View);
             if (View.ConfirmPrompt != null) status = View.ConfirmPrompt;
             if (View.PlanStale.Length > 0) status += " | The craft has changed (" + View.PlanStale + "): Re-plan.";
-            else if (View.Stage == MissionStage.Running && !View.ManualControlAllowed) status += " | Manual Control unavailable: no link, no other crew aboard.";
+            else if (View.LinkLossTakeBackIn.HasValue)
+                status += " | No link to Kerbin: Claudia takes the craft back in "
+                    + System.Math.Ceiling(View.LinkLossTakeBackIn.Value).ToString("0", System.Globalization.CultureInfo.InvariantCulture) + " s unless it returns.";
+            else if (View.Stage == MissionStage.Running && View.ManualControlUnavailable.Length > 0) status += " | Manual Control unavailable: " + View.ManualControlUnavailable + ".";
             else if (View.Locks != ControlLocks.None) status += " | Staging, groups, SAS, RCS, gear and brakes are locked while Claudia flies.";
             GUILayout.Label(status, _wrap);
             GUILayout.EndVertical();

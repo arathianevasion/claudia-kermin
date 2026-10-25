@@ -374,14 +374,15 @@ namespace ClaudiaKermin.Core.Missions
 
         private void Snapshot(GameSnapshot snapshot)
         {
+            var previous = _snapshot;
             _snapshot = snapshot;
             _craftCheck.OnSnapshot(snapshot);
             if (snapshot.Ut > _ut) _ut = snapshot.Ut;
+            LinkSeen(previous, snapshot);
             var mission = _mission;
             if (mission == null) return;
             // A plan restored from a save was never offered against a snapshot: the first one after the load is its baseline.
             if (mission.AwaitingApproval && mission.PlanBaseline == null && !mission.InFlight && _scene == GameScene.Flight) mission.PlanBaseline = snapshot;
-            if (mission.Stage == MissionStage.ManualControl && !snapshot.HasLink && !snapshot.HasOtherCrew && _scene == GameScene.Flight) LinkLostDuringManual();
         }
 
         // ---- Approval ----
@@ -1535,6 +1536,8 @@ namespace ClaudiaKermin.Core.Missions
                 }
                 view.Locks = LocksNow();
                 view.ManualControlAllowed = ManualAllowed;
+                view.ManualControlUnavailable = ManualUnavailableBecause();
+                view.LinkLossTakeBackIn = LinkLossTakeBackIn();
                 view.PlanStale = StaleBecause(mission);
                 if (mission.Stage == MissionStage.ManualControl)
                     view.QuickReplies = new List<QuickReply> { QuickReply.HandBack };

@@ -295,10 +295,14 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The controls locked now because Claudia has the craft; <see cref="ControlLocks.None"/> in Manual Control and when no Mission is active.</summary>
         public ControlLocks Locks;
         /// <summary>
-        /// The player may take Manual Control now: there is a link (CommNet off counts) or another non-Tourist crew member aboard.
-        /// Without either, flight controls stay locked and the Manual Control button isn't offered.
+        /// The player may take Manual Control now: there is a steady link (CommNet off counts) or another non-Tourist crew
+        /// member aboard. Without either, flight controls stay locked and the Manual Control button isn't offered.
         /// </summary>
         public bool ManualControlAllowed;
+        /// <summary>Why Manual Control isn't allowed (no link and no other crew aboard, or a link that only just came back); "" when it is.</summary>
+        public string ManualControlUnavailable = "";
+        /// <summary>In Manual Control with the link down and no other crew aboard: seconds of game time until Claudia takes the craft back; null otherwise.</summary>
+        public double? LinkLossTakeBackIn;
         /// <summary>The craft has changed beyond the pending plan's tolerances, so Approve is replaced by Re-plan; "" otherwise.</summary>
         public string PlanStale = "";
 
