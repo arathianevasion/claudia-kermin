@@ -35,7 +35,7 @@
 //| node is left in place), or an abort. The craft must be the active vessel (RSVP checks).
 //| Capture is not part of transfer_to: once inside the target's sphere of influence, fly
 //| `circularize(lexicon("at", "pe"))`, in a sequence with its Due Time at encounter_ut.
-//| Example: `local r is transfer_to(lexicon("target", "Mun", "target_pe", 30000)). addons:claudia:report(r).`
+//| Example: `local res is transfer_to(lexicon("target", "Mun", "target_pe", 30000)). addons:claudia:report(res).`
 
 // The block's own options and defaults ("required" means the Mission Script must give it).
 function transfer_to_defaults {

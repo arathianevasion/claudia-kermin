@@ -46,7 +46,7 @@
 //| sets reason "abort <option>: <detail>". Waits use on-rails warp only, dropping to 1x 30 s before
 //| a burn; the player may cancel warp. A wait longer than one orbit (3 h on the ground) fails the
 //| block: plan a Due Time instead. Report the Script Result yourself, once, at the end, e.g.
-//| `addons:claudia:report(r).`, or a lexicon of your own with at least success and reason.
+//| `addons:claudia:report(res).`, or a lexicon of your own with at least success and reason.
 
 // ---- Options ----
 

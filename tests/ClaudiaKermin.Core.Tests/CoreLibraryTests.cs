@@ -13,6 +13,27 @@ namespace ClaudiaKermin.Core.Tests
     {
         private const string Script = "@lazyglobal off.\r\nlocal r is exec_node().\r\naddons:claudia:report(r).\r\n";
 
+        // Common kOS built-in names (kOS refuses a local that hides one: "clobber BUILTIN_FUNCTION r").
+        // Hand-picked from the kOS built-in function and variable lists, not read from the kOS assembly.
+        private static readonly string[] KosBuiltins =
+        {
+            "r", "v", "q", "node", "heading", "ship", "body", "up", "stage", "time", "list", "target",
+            "orbit", "mass", "velocity", "altitude", "apoapsis", "periapsis", "eta", "status", "steering",
+            "throttle", "lock", "print", "round", "min", "max", "abs", "sqrt", "ln", "log10", "sin", "cos",
+            "tan", "vector", "vessel", "kuniverse", "constant", "warp", "lexicon", "queue", "stack", "range",
+        };
+
+        [Fact]
+        public void NoDocExampleNamesAVariableAfterAKosBuiltin()
+        {
+            var docs = CoreLibrary.Summaries() + "\n" + CoreLibrary.FullDocs();
+            var bad = new System.Collections.Generic.List<string>();
+            foreach (Match span in Regex.Matches(docs, "`[^`]*`", RegexOptions.Singleline))
+                foreach (Match decl in Regex.Matches(span.Value, "\\b(?:local|set|parameter)\\s+(\\w+)", RegexOptions.IgnoreCase))
+                    if (KosBuiltins.Contains(decl.Groups[1].Value.ToLowerInvariant())) bad.Add(decl.Value);
+            Assert.Empty(bad);
+        }
+
         [Fact]
         public void TheBundleKeepsTheMissionScriptFirstSoItsLineNumbersStayRight()
         {
