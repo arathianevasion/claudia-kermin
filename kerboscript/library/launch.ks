@@ -209,30 +209,30 @@ function launch_limit_aoa {
 function launch_when {
   parameter opt, options.
   local plan is lexicon("error", "", "wait", 0, "inc", opt:target_inc).
-  local at is opt:launch_at.
-  if at:istype("String") {
+  local go_at is opt:launch_at.
+  if go_at:istype("String") {
     return plan.
   }
-  if at:istype("Scalar") {
-    set plan:wait to max(0, at - time:seconds).
+  if go_at:istype("Scalar") {
+    set plan:wait to max(0, go_at - time:seconds).
     return plan.
   }
-  if not at:istype("Orbitable") {
+  if not go_at:istype("Orbitable") {
     set plan:error to "launch_at must be 'now', a time (UT s) or a body or vessel to launch into the plane of".
     return plan.
   }
-  if at:body:name <> ship:body:name {
-    set plan:error to "launch_at " + at:name + " doesn't orbit " + ship:body:name.
+  if go_at:body:name <> ship:body:name {
+    set plan:error to "launch_at " + go_at:name + " doesn't orbit " + ship:body:name.
     return plan.
   }
-  local plane is launch_plane_wait(ship:latitude, ship:longitude + ship:body:rotationangle, at:orbit:inclination, at:orbit:lan, ship:body:rotationperiod).
+  local plane is launch_plane_wait(ship:latitude, ship:longitude + ship:body:rotationangle, go_at:orbit:inclination, go_at:orbit:lan, ship:body:rotationperiod).
   if plane:wait < 0 {
-    set plan:error to "the pad never passes under " + at:name + "'s plane: inclination " + round(at:orbit:inclination, 2) + " is below latitude " + round(abs(ship:latitude), 2).
+    set plan:error to "the pad never passes under " + go_at:name + "'s plane: inclination " + round(go_at:orbit:inclination, 2) + " is below latitude " + round(abs(ship:latitude), 2).
     return plan.
   }
   set plan:wait to plane:wait.
   if not options:haskey("target_inc") {
-    set plan:inc to at:orbit:inclination.
+    set plan:inc to go_at:orbit:inclination.
     if not plane:north {
       set plan:inc to -plan:inc.
     }
@@ -283,19 +283,19 @@ function launch {
   set extra:ap_error to round(ship:apoapsis - target_ap).
 
   // Wait on the pad.
-  local when is launch_when(opt, options).
-  if when:error <> "" {
-    return claudia_finish(ctx, false, when:error, extra).
+  local go is launch_when(opt, options).
+  if go:error <> "" {
+    return claudia_finish(ctx, false, go:error, extra).
   }
   if opt:max_duration:istype("String") {
-    set opt:max_duration to when:wait + 900.
+    set opt:max_duration to go:wait + 900.
   }
-  local waiting is claudia_check_wait(when:wait).
+  local waiting is claudia_check_wait(go:wait).
   if waiting <> "" {
     return claudia_finish(ctx, false, waiting, extra).
   }
-  if when:wait > 0 {
-    local waited is claudia_wait_until(ctx, time:seconds + when:wait).
+  if go:wait > 0 {
+    local waited is claudia_wait_until(ctx, time:seconds + go:wait).
     if waited <> "" {
       claudia_make_safe().
       return claudia_finish(ctx, false, waited, extra).
@@ -306,7 +306,7 @@ function launch {
   if hdg:istype("String") {
     local v_orbit is sqrt(ship:body:mu / (ship:body:radius + target_ap)).
     local v_eq is 2 * constant:pi * ship:body:radius / ship:body:rotationperiod.
-    set hdg to launch_azimuth(when:inc, ship:latitude, v_orbit, v_eq).
+    set hdg to launch_azimuth(go:inc, ship:latitude, v_orbit, v_eq).
   }
   local max_q_pa is -1.
   if opt:throttle_max_q:istype("Scalar") {
