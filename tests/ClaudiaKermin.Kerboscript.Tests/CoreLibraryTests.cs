@@ -160,6 +160,35 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(expected ? "True" : "False", One("claudia_stage_on(" + stage + ", " + limit + ", " + Bool(firedEngines) + ", " + Bool(nextEngines) + ", " + Bool(hadThrust) + ", " + Bool(unsafeNext) + ")"));
         }
 
+        [Theory]
+        // Lists run from the next stage to fire downwards: engines held, then parachutes/heat shield.
+        // One decoupler-only stage, then engines.
+        [InlineData(5, 0, false, false, "list(false, true)", "list(false, false)", true)]
+        // Three decoupler-only stages in a row, then engines.
+        [InlineData(5, 0, false, false, "list(false, false, false, true)", "list(false, false, false, false)", true)]
+        // Engines straight away still chain.
+        [InlineData(5, 0, false, false, "list(true)", "list(false)", true)]
+        // A chute or heat shield stage anywhere before the engines stops the chain.
+        [InlineData(5, 0, false, false, "list(false, false, true)", "list(false, true, false)", false)]
+        [InlineData(5, 0, false, false, "list(false, true)", "list(true, false)", false)]
+        // A run that never reaches engines, or runs out of stages, doesn't chain.
+        [InlineData(5, 0, false, false, "list(false, false, false)", "list(false, false, false)", false)]
+        [InlineData(5, 0, false, false, "list()", "list()", false)]
+        // The stage limit cuts the run short: stage 3, limit 2 can fire one stage only.
+        [InlineData(3, 2, false, false, "list(false, true)", "list(false, false)", false)]
+        [InlineData(4, 2, false, false, "list(false, true)", "list(false, false)", true)]
+        [InlineData(4, 2, false, false, "list(false, false, true)", "list(false, false, false)", false)]
+        [InlineData(4, 2, false, false, "list(true)", "list(false)", true)]
+        // Stage 0 can't be fired.
+        [InlineData(1, 0, false, false, "list(false, true)", "list(false, false)", false)]
+        // The stage just fired held engines, or some engine still gives thrust.
+        [InlineData(5, 0, true, false, "list(false, true)", "list(false, false)", false)]
+        [InlineData(5, 0, false, true, "list(false, true)", "list(false, false)", false)]
+        public void Staging_on_chains_through_a_run_of_decoupler_only_stages_into_engines(int stage, int limit, bool firedEngines, bool hadThrust, string engines, string unsafeStages, bool expected)
+        {
+            Assert.Equal(expected ? "True" : "False", One("claudia_stage_chain(" + stage + ", " + limit + ", " + Bool(firedEngines) + ", " + Bool(hadThrust) + ", " + engines + ", " + unsafeStages + ")"));
+        }
+
         private static string Bool(bool value)
         {
             return value ? "true" : "false";
