@@ -207,14 +207,15 @@ function launch_laz_inc {
 }
 
 // Why the block stopped for lost control: off_aim and off_flow are the nose's degrees off the aim and
-// off the airflow (srfprograde), tset the throttle (0..1), q_pa the dynamic pressure (Pa), alt (m).
+// off the airflow (srfprograde), tset the throttle (0..1), q_pa the dynamic pressure (Pa), alt_m the
+// altitude (m).
 function launch_lost_control {
-  parameter coasting, tset, q_pa, off_aim, off_flow, alt.
+  parameter coasting, tset, q_pa, off_aim, off_flow, alt_m.
   local doing is "burning".
   if coasting {
     set doing to "coasting".
   }
-  return "lost control: " + round(off_aim) + " degrees off the ascent path at " + round(alt) + " m, " + doing + " at " + round(100 * tset) + "% throttle, q " + round(q_pa) + " Pa, " + round(off_flow) + " degrees off the airflow".
+  return "lost control: " + round(off_aim) + " degrees off the ascent path at " + round(alt_m) + " m, " + doing + " at " + round(100 * tset) + "% throttle, q " + round(q_pa) + " Pa, " + round(off_flow) + " degrees off the airflow".
 }
 
 // When to launch and into what inclination: lexicon("error", "" or why not, "wait", s, "inc", degrees).
