@@ -1,0 +1,180 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Andrew Watson
+
+using System;
+using System.Globalization;
+using System.Linq;
+using ClaudiaKermin.Core.Kos;
+using Xunit;
+
+namespace ClaudiaKermin.Kerboscript.Tests
+{
+    /// <summary>
+    /// The transfer and return blocks' pure helpers and the bundled RSVP, run on kOS.Safe
+    /// through the real bundle. Flying them needs KSP: those are the block tests in tests/blocks.
+    /// </summary>
+    public class TransferAndReturnTests
+    {
+        private static string[] Run(string missionScript)
+        {
+            return KosHarness.Run(CoreLibrary.Bundle(missionScript, 1, 10800)).ToArray();
+        }
+
+        private static string One(string expression)
+        {
+            return Run("print " + expression + ".").Single();
+        }
+
+        private static double Number(string expression)
+        {
+            return double.Parse(One(expression), CultureInfo.InvariantCulture);
+        }
+
+        // ---- RSVP ----
+
+        [Fact]
+        public void Rsvp_loads_from_the_bundle_with_every_function_it_exports_but_compile_to()
+        {
+            var printed = Run("transfer_to_rsvp(). print rsvp:length. print rsvp:haskey(\"goto\"). print rsvp:haskey(\"line_search\"). print rsvp:haskey(\"time_at_periapsis\"). print rsvp:haskey(\"compile_to\").");
+            Assert.Equal(new[] { "31", "True", "True", "True", "False" }, printed);
+        }
+
+        [Fact]
+        public void Rsvp_loads_once_however_often_a_block_asks_for_it()
+        {
+            // A second load would add every export again, which a lexicon refuses.
+            Assert.Equal("31", One("transfer_to_rsvp():length + 0 * transfer_to_rsvp():length"));
+        }
+
+        // ---- transfer options ----
+
+        private static string Unreadable(string options)
+        {
+            return One("transfer_to_unreadable(claudia_options(lexicon(" + options + "), transfer_to_defaults(), \"auto\"):opt)");
+        }
+
+        [Fact]
+        public void Transfer_takes_the_spec_options_and_defaults()
+        {
+            var printed = Run("local o is claudia_options(lexicon(), transfer_to_defaults(), \"auto\"). print o:error. print o:opt:window. print o:opt:correction. print o:opt:max_duration.");
+            Assert.Equal(new[] { "", "next", "True", "auto" }, printed);
+        }
+
+        [Fact]
+        public void Transfer_needs_a_target_and_a_target_periapsis()
+        {
+            Assert.Equal("target is required", Unreadable(""));
+            Assert.Equal("target_pe is required", Unreadable("\"target\", \"Mun\""));
+            Assert.Equal("", Unreadable("\"target\", \"Mun\", \"target_pe\", 30000"));
+        }
+
+        [Fact]
+        public void Transfer_refuses_option_values_it_cannot_read()
+        {
+            Assert.Equal("target must be a body or its name", Unreadable("\"target\", 5, \"target_pe\", 30000"));
+            Assert.Equal("target_pe must be metres above 0, not -5", Unreadable("\"target\", \"Mun\", \"target_pe\", -5"));
+            Assert.Equal("window must be 'next' or a time (UT seconds), not 'later'", Unreadable("\"target\", \"Mun\", \"target_pe\", 30000, \"window\", \"later\""));
+            Assert.Equal("correction must be true or false", Unreadable("\"target\", \"Mun\", \"target_pe\", 30000, \"correction\", \"yes\""));
+            Assert.Equal("target_pe must be metres above 0, not 30km", Unreadable("\"target\", \"Mun\", \"target_pe\", \"30km\""));
+            Assert.Equal("", Unreadable("\"target\", \"Mun\", \"target_pe\", 30000, \"window\", 5000, \"correction\", false"));
+        }
+
+        [Fact]
+        public void An_rsvp_failure_gives_its_problems_as_the_reason()
+        {
+            Assert.Equal("rsvp found no transfer: Existing maneuver node already exists; Option 'search_duration' is '-1', expected positive number",
+                One("transfer_to_rsvp_reason(lexicon(\"success\", false, \"problems\", lexicon(102, \"Existing maneuver node already exists\", 4, \"Option 'search_duration' is '-1', expected positive number\")))"));
+            Assert.Equal("rsvp found no transfer", One("transfer_to_rsvp_reason(lexicon(\"success\", false))"));
+        }
+
+        // ---- Departure span ----
+
+        [Theory]
+        [InlineData("\"next\"", "1300")]
+        [InlineData("2000", "2000")]
+        [InlineData("1100", "1300")]
+        public void The_departure_is_searched_from_five_minutes_ahead_or_from_the_window(string window, string earliest)
+        {
+            Assert.Equal(earliest, One("transfer_to_earliest(1000, " + window + ")"));
+        }
+
+        [Theory]
+        [InlineData(2, 3, "6")]
+        [InlineData(3, 2, "6")]
+        [InlineData(5, 5, "5")]
+        public void The_next_window_comes_round_once_a_synodic_period(double a, double b, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "round(transfer_to_synodic({0}, {1}), 6)", a, b)));
+        }
+
+        // ---- Coordinate descent ----
+
+        [Fact]
+        public void Descent_finds_the_minimum_of_each_coordinate()
+        {
+            var printed = Run("local d is transfer_to_descend({ parameter x. return abs(x[0] - 3) + abs(x[1] + 2). }, list(0, 0), list(1, 1), 6, 0). print d:x[0]. print d:x[1]. print d:cost.");
+            Assert.Equal(new[] { "3", "-2", "0" }, printed);
+        }
+
+        [Fact]
+        public void Descent_halves_its_steps_to_close_in_between_them()
+        {
+            Assert.True(Number("abs(transfer_to_descend({ parameter x. return abs(x[0] - 0.3). }, list(0), list(1), 10, 0):x[0] - 0.3)") < 0.01);
+        }
+
+        [Fact]
+        public void Descent_stops_once_the_cost_is_good_enough()
+        {
+            var printed = Run("local d is transfer_to_descend({ parameter x. return abs(x[0] - 3). }, list(0), list(1), 10, 1.5). print d:x[0]. print d:cost.");
+            Assert.Equal(new[] { "2", "1" }, printed);
+        }
+
+        // ---- return ----
+
+        [Fact]
+        public void Return_options_take_the_spec_defaults()
+        {
+            var printed = Run("local o is claudia_options(lexicon(), return_defaults(), \"auto\"). print o:error. print o:opt:target_pe. print o:opt:window. print o:opt:correction.");
+            Assert.Equal(new[] { "", "35000", "next", "True" }, printed);
+            Assert.Equal("", One("return_unreadable(claudia_options(lexicon(), return_defaults(), \"auto\"):opt)"));
+            Assert.Equal("target_pe must be metres above 0, not 0", One("return_unreadable(claudia_options(lexicon(\"target_pe\", 0), return_defaults(), \"auto\"):opt)"));
+        }
+
+        // A worked example: from a 30 km Mun orbit to a 35 km Kerbin periapsis (stock body values).
+        private const string MunReturn = "return_ejection(3.5316e12, 12000000, 635000, 6.5138398e10, 230000)";
+
+        [Fact]
+        public void A_mun_return_ejects_at_about_307_ms_and_132_degrees_before_the_asymptote()
+        {
+            Assert.InRange(Number(MunReturn + ":v_inf"), 370, 371);
+            Assert.InRange(Number(MunReturn + ":dv"), 306, 307.5);
+            Assert.InRange(Number(MunReturn + ":eject_angle"), 132, 132.7);
+        }
+
+        [Fact]
+        public void Aiming_at_the_moons_own_distance_needs_only_escape_and_ejects_straight_back()
+        {
+            const double mu = 6.5138398e10, r0 = 230000;
+            var printed = Run("local e is return_ejection(3.5316e12, 12000000, 12000000, " + mu.ToString("R", CultureInfo.InvariantCulture) + ", " + r0 + "). print round(e:v_inf, 3). print round(e:eject_angle, 3). print round(e:dv, 2).");
+            Assert.Equal("0", printed[0]);
+            Assert.Equal("180", printed[1]);
+            Assert.Equal(Math.Round(Math.Sqrt(2 * mu / r0) - Math.Sqrt(mu / r0), 2).ToString(CultureInfo.InvariantCulture), printed[2]);
+        }
+
+        [Fact]
+        public void The_time_from_a_radius_down_to_periapsis_follows_keplers_equation()
+        {
+            // Ellipse a = 10,000 km, e = 0.5, at r = a: E = 90 degrees, M = pi/2 - e.
+            Assert.InRange(Number("return_time_to_pe(10000000, 0.5, 3.5316e12, 10000000)"), 18016, 18021);
+            // Hyperbola a = -10,000 km, e = 1.5, at r = 12,500 km: cosh H = 1.5.
+            Assert.InRange(Number("return_time_to_pe(-10000000, 1.5, 3.5316e12, 12500000)"), 12023, 12028);
+        }
+
+        [Fact]
+        public void A_radius_the_orbit_never_comes_down_to_takes_no_time()
+        {
+            // Periapsis is at 5,000 km; the atmosphere top at 4,000 km is never reached.
+            Assert.Equal("0", One("return_time_to_pe(10000000, 0.5, 3.5316e12, 4000000)"));
+        }
+    }
+}
