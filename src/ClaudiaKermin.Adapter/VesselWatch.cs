@@ -19,8 +19,12 @@ namespace ClaudiaKermin.Adapter
         /// <summary>kOS's processor part module, found by name so the adapter needn't reference kOS.</summary>
         private const string KosProcessorModule = "kOSProcessor";
 
+        /// <summary>CommNet links change without a vessel event, so the vessels are reported again this often (real seconds).</summary>
+        private const float RefreshSeconds = 1f;
+
         private readonly Action<MissionInput> _send;
         private bool _dirty = true;
+        private float _nextRefresh;
 
         public VesselWatch(Action<MissionInput> send)
         {
@@ -34,6 +38,8 @@ namespace ClaudiaKermin.Adapter
             GameEvents.onCrewBoardVessel.Add(a => _dirty = true);
             GameEvents.onPartCouple.Add(OnPartCouple);
             GameEvents.onVesselUnloaded.Add(OnVesselUnloaded);
+            GameEvents.onPartDeCoupleNewVesselComplete.Add((original, made) => OnSplit(original, made, false));
+            GameEvents.onVesselsUndocking.Add((original, made) => OnSplit(original, made, true));
         }
 
         /// <summary>Call each frame: in Flight, reports the vessels once something about them changed.</summary>
@@ -44,10 +50,50 @@ namespace ClaudiaKermin.Adapter
                 _dirty = true;
                 return;
             }
+            if (UnityEngine.Time.unscaledTime >= _nextRefresh)
+            {
+                _nextRefresh = UnityEngine.Time.unscaledTime + RefreshSeconds;
+                _dirty = true;
+            }
             if (!_dirty || FlightGlobals.Vessels == null) return;
             _dirty = false;
-            var vessels = FlightGlobals.Vessels.Where(Counts).Select(v => Seen(v, false)).ToList();
+            var counted = FlightGlobals.Vessels.Where(Counts).ToList();
+            var vessels = counted.Select(v => Seen(v, false)).ToList();
+            Links(counted, vessels);
             _send(new VesselsSeen(vessels));
+        }
+
+        /// <summary>
+        /// Each loaded vessel's CommNet paths to the other loaded vessels, for a script sent to a Child Vessel from the craft
+        /// Claudia is aboard. With CommNet off every vessel reaches every other.
+        /// </summary>
+        private static void Links(IList<Vessel> vessels, IList<SeenVessel> seen)
+        {
+            var commNet = CommNet.CommNetScenario.CommNetEnabled && CommNet.CommNetNetwork.Instance != null ? CommNet.CommNetNetwork.Instance.CommNet : null;
+            for (var i = 0; i < vessels.Count; i++)
+            {
+                for (var j = 0; j < vessels.Count; j++)
+                {
+                    if (i == j) continue;
+                    if (!CommNet.CommNetScenario.CommNetEnabled) seen[i].LinkedTo.Add(seen[j].Id);
+                    else if (commNet != null && vessels[i].loaded && vessels[j].loaded && Node(vessels[i]) != null && Node(vessels[j]) != null
+                        && commNet.FindPath(Node(vessels[i]), new CommNet.CommPath(), Node(vessels[j])))
+                        seen[i].LinkedTo.Add(seen[j].Id);
+                }
+            }
+        }
+
+        private static CommNet.CommNode Node(Vessel vessel)
+        {
+            return vessel.connection != null ? vessel.connection.Comm : null;
+        }
+
+        // Staging or undocking split a vessel in two; both exist now, so each side's parts can be named.
+        private void OnSplit(Vessel original, Vessel made, bool undocked)
+        {
+            _dirty = true;
+            if (original == null || made == null || original == made) return;
+            _send(new VesselsSeparated(Seen(original, true), Seen(made, true), undocked));
         }
 
         /// <summary>
@@ -96,7 +142,8 @@ namespace ClaudiaKermin.Adapter
 
         private static SeenVessel Seen(Vessel vessel, bool withParts)
         {
-            var seen = new SeenVessel { Id = Id(vessel), Name = vessel.GetDisplayName(), Eva = vessel.isEVA };
+            var seen = new SeenVessel { Id = Id(vessel), Name = vessel.GetDisplayName(), Eva = vessel.isEVA, Situation = vessel.situation.ToString() };
+            seen.LinkedHome = !CommNet.CommNetScenario.CommNetEnabled || (vessel.connection != null && vessel.connection.IsConnectedHome);
             List<ProtoCrewMember> crew;
             if (vessel.loaded)
             {
