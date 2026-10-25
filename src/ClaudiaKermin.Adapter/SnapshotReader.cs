@@ -34,6 +34,7 @@ namespace ClaudiaKermin.Adapter
             snapshot.Craft.VesselId = vessel.id.ToString("N");
             snapshot.Craft.MassTonnes = vessel.GetTotalMass();
             snapshot.Craft.Stage = vessel.currentStage;
+            snapshot.RcsOn = vessel.ActionGroups[KSPActionGroup.RCS];
             ReadParts(snapshot, vessel.parts, vessel.VesselDeltaV);
             snapshot.Crew.AddRange(vessel.GetVesselCrew().Select(Crew));
             ReadAboard(snapshot);

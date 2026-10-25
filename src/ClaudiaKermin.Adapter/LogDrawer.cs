@@ -225,6 +225,7 @@ namespace ClaudiaKermin.Adapter
                 DrawMarginBar(detail.Margin);
             }
             if (detail.ResourcesLeft.Count > 0) Section("Resources left", string.Join(", ", detail.ResourcesLeft));
+            if (detail.RcsState.Length > 0) Section("RCS", detail.RcsState);
             if (detail.PlanMargin.Length > 0) Section("Against the plan", detail.PlanMargin);
             if (detail.RecheckSummary.Length > 0 || detail.RecheckFindings.Count > 0)
             {

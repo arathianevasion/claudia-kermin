@@ -104,6 +104,8 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>Null when there is no orbit to read (e.g. in the editor).</summary>
         public SnapshotOrbit Orbit;
         public List<SnapshotResource> Resources = new List<SnapshotResource>();
+        /// <summary>The RCS switch on the craft: true on, false off, null when it isn't read (the editor). Claudia plans around it; the mod never changes it.</summary>
+        public bool? RcsOn;
 
         // ---- Craft Check facts, computed by the adapter from the game ----
 
@@ -189,6 +191,7 @@ namespace ClaudiaKermin.Core.Missions
                 .Field("link", HasLink)
                 .Field("altitude", Altitude)
                 .Field("vertical_speed", VerticalSpeed);
+            if (RcsOn.HasValue) json.Field("rcs_on", RcsOn.Value);
             json.Name("craft").BeginObject()
                 .Field("name", Craft.Name)
                 .Field("mass_t", Craft.MassTonnes)
@@ -297,6 +300,7 @@ namespace ClaudiaKermin.Core.Missions
                 HasLink = JsonNode.Bool(root["link"]) ?? true,
                 Altitude = JsonNode.Double(root["altitude"]) ?? 0,
                 VerticalSpeed = JsonNode.Double(root["vertical_speed"]) ?? 0,
+                RcsOn = JsonNode.Bool(root["rcs_on"]),
             };
             var craft = root["craft"];
             if (craft != null)

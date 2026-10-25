@@ -102,6 +102,8 @@ namespace ClaudiaKermin.Core.Missions
         public MarginBar Margin;
         /// <summary>Resources left, one per line ("ElectricCharge 64%").</summary>
         public IList<string> ResourcesLeft = new List<string>();
+        /// <summary>The RCS switch as the craft was left ("RCS on" or "RCS off"); "" when it isn't known. Monopropellant shows in <see cref="ResourcesLeft"/>.</summary>
+        public string RcsState = "";
         /// <summary>Claudia's reading of what is left against the rest of the plan.</summary>
         public string PlanMargin = "";
         /// <summary>The margin recheck (a Craft Check on the craft as it is now): its summary, and one line per finding; empty when it didn't run.</summary>
