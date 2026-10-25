@@ -126,6 +126,25 @@ namespace ClaudiaKermin.Core.Chat
             if (_pending != null) _pending.CancelSource.Cancel();
         }
 
+        /// <summary>
+        /// Starts a new conversation, as restarting KSP would: no lines, no message history. A reply in progress is
+        /// cancelled and dropped when it lands. Only the basic chat does this; a Mission's context is never cleared.
+        /// </summary>
+        public void Clear()
+        {
+            var pending = _pending;
+            _pending = null;
+            if (pending != null)
+            {
+                pending.CancelSource.Cancel();
+                pending.CancelSource.Dispose();
+            }
+            _lines.Clear();
+            _conversation.Clear();
+            _lastUnanswered = null;
+            Version++;
+        }
+
         private sealed class Pending
         {
             public string Text;

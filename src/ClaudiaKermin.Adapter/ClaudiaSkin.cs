@@ -99,6 +99,8 @@ namespace ClaudiaKermin.Adapter
             ExternalLink,
             /// <summary>An arrow into a tray along the top: Dock.</summary>
             Dock,
+            /// <summary>A broom, handle up to the right: Clear.</summary>
+            Broom,
         }
 
         private static readonly Dictionary<string, Texture2D> Textures = new Dictionary<string, Texture2D>();
@@ -239,9 +241,15 @@ namespace ClaudiaKermin.Adapter
         /// <summary>A small secondary button with an icon before its text, or only the icon when the text is "".</summary>
         public static bool IconButton(IconShape shape, string text, params GUILayoutOption[] options)
         {
+            return IconButton(shape, text, "", options);
+        }
+
+        /// <summary>An <see cref="IconButton(IconShape, string, GUILayoutOption[])"/> with hover text, which <see cref="WindowFrame.DrawTooltip"/> shows.</summary>
+        public static bool IconButton(IconShape shape, string text, string tooltip, params GUILayoutOption[] options)
+        {
             Build();
             // Spaces leave room for the icon in front of the text.
-            var content = new GUIContent(text.Length > 0 ? "      " + text : "");
+            var content = new GUIContent(text.Length > 0 ? "      " + text : "", tooltip);
             var rect = GUILayoutUtility.GetRect(content, _small, Prepend(GUILayout.Height(MinClickable), options));
             var clicked = GUI.Button(rect, content, _small);
             const float size = 14;
@@ -786,6 +794,15 @@ namespace ClaudiaKermin.Adapter
                         || Segment(p, new Vector2(0.5f, 0.88f), new Vector2(0.5f, 0.36f)) <= 0.07f
                         || Segment(p, new Vector2(0.28f, 0.58f), new Vector2(0.5f, 0.36f)) <= 0.07f
                         || Segment(p, new Vector2(0.5f, 0.36f), new Vector2(0.72f, 0.58f)) <= 0.07f;
+                case IconShape.Broom:
+                {
+                    // The handle runs from the top right to the middle; the bristles are a wedge below its end.
+                    var handle = Segment(p, new Vector2(0.85f, 0.12f), new Vector2(0.5f, 0.5f)) <= 0.07f;
+                    var along = Vector2.Dot(p - new Vector2(0.5f, 0.5f), new Vector2(-0.7071f, 0.7071f));
+                    var across = Vector2.Dot(p - new Vector2(0.5f, 0.5f), new Vector2(0.7071f, 0.7071f));
+                    var bristles = along >= 0 && along <= 0.5f && Mathf.Abs(across) <= 0.08f + along * 0.35f;
+                    return handle || bristles;
+                }
                 case IconShape.ChevronDown:
                     return Segment(p, new Vector2(0.2f, 0.35f), new Vector2(0.5f, 0.65f)) <= 0.08f || Segment(p, new Vector2(0.5f, 0.65f), new Vector2(0.8f, 0.35f)) <= 0.08f;
                 case IconShape.ChevronUp:
