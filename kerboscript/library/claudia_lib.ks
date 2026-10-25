@@ -164,6 +164,46 @@ function claudia_stage_on {
   return stage_number > stage_limit and stage_number > 0.
 }
 
+// True if a stage fires straight on through a run of decoupler-only stages into engines.
+// stage_number: the number of the stage just fired; engines_below / unsafe_below: lists from the
+// next stage to fire downwards, each entry true if that stage holds engines / parachutes or a heat
+// shield. Fires on only if no stage in the run is unsafe, the run reaches engines before the stage
+// limit or stage 0, and neither the stage just fired nor any engine already gives thrust.
+function claudia_stage_chain {
+  parameter stage_number, stage_limit, fired_engines, had_thrust, engines_below, unsafe_below.
+  if fired_engines or had_thrust {
+    return false.
+  }
+  local step is 0.
+  until step >= engines_below:length {
+    if stage_number - step <= stage_limit or stage_number - step <= 0 {
+      return false.
+    }
+    if unsafe_below[step] {
+      return false.
+    }
+    if engines_below[step] {
+      return true.
+    }
+    set step to step + 1.
+  }
+  return false.
+}
+
+// claudia_stage_chain over the live craft, from the stage after fired down to the stage limit.
+function claudia_stage_run_on {
+  parameter fired, stage_limit, fired_engines, had_thrust.
+  local engines_below is list().
+  local unsafe_below is list().
+  local n is fired - 1.
+  until n < 0 or n < stage_limit {
+    engines_below:add(claudia_stage_has_engine(n)).
+    unsafe_below:add(claudia_stage_unsafe(n)).
+    set n to n - 1.
+  }
+  return claudia_stage_chain(fired, stage_limit, fired_engines, had_thrust, engines_below, unsafe_below).
+}
+
 // True if stage n holds an engine.
 function claudia_stage_has_engine {
   parameter n.
@@ -242,8 +282,8 @@ function claudia_autostage {
     local fired is stage:number - 1.
     local fired_engines is claudia_stage_has_engine(fired).
     stage.
-    // A decoupler-only stage that leaves no thrust: stage on into the engines at once.
-    until not claudia_stage_on(fired, ctx:opt:stage_limit, fired_engines, claudia_stage_has_engine(fired - 1), had_thrust, claudia_stage_unsafe(fired - 1)) {
+    // Decoupler-only stages that leave no thrust: stage on through the whole run into the engines at once.
+    until not claudia_stage_run_on(fired, ctx:opt:stage_limit, fired_engines, had_thrust) {
       wait until stage:ready.
       stage.
       set fired to fired - 1.
