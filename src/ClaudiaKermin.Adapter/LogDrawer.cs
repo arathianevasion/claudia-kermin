@@ -157,6 +157,7 @@ namespace ClaudiaKermin.Adapter
                 if (entry.CustomScriptReason.Length > 0) GUILayout.Label(entry.CustomScriptReason, ClaudiaSkin.Secondary);
             }
             GUILayout.Label(entry.Text, ClaudiaSkin.Body);
+            if (entry.Debrief != null) DrawDebrief(entry.Debrief);
             // Read before the buttons: a click mustn't add the expanded text to an event that was laid out without it.
             var showWhy = _showWhy.Contains(entry);
             var showScript = _showScript.Contains(entry);
@@ -173,6 +174,62 @@ namespace ClaudiaKermin.Adapter
             if (showWhy) GUILayout.Label("Why: " + entry.Why, ClaudiaSkin.Secondary);
             if (showScript) DrawScript(entry);
             ClaudiaSkin.EndCard();
+        }
+
+        // The Debrief's full picture under Claudia's account: outcome against target, the margin bar, resources, the margin
+        // recheck, science, the mod's events, the Mission Goal checklist, the follow-up on offer and a failed run's error text.
+        private void DrawDebrief(DebriefDetail detail)
+        {
+            if (detail.OutcomeVsTarget.Length > 0) Section("Outcome vs target", detail.OutcomeVsTarget);
+            if (detail.Margin != null)
+            {
+                GUILayout.Label("Delta-v left vs the rest of the plan", _bold);
+                GUILayout.Label(detail.Margin.Describe(), ClaudiaSkin.Body);
+                DrawMarginBar(detail.Margin);
+            }
+            if (detail.ResourcesLeft.Count > 0) Section("Resources left", string.Join(", ", detail.ResourcesLeft));
+            if (detail.PlanMargin.Length > 0) Section("Against the plan", detail.PlanMargin);
+            if (detail.RecheckSummary.Length > 0 || detail.RecheckFindings.Count > 0)
+            {
+                Section("Margin recheck", detail.RecheckSummary);
+                foreach (var finding in detail.RecheckFindings) GUILayout.Label("- " + finding, ClaudiaSkin.Secondary);
+            }
+            else if (detail.RecheckSkipped.Length > 0) Section("Margin recheck", "Not run: " + detail.RecheckSkipped + ".");
+            if (detail.Science.Length > 0 || detail.ScienceSeen.Count > 0)
+            {
+                Section("Science", detail.Science);
+                foreach (var line in detail.ScienceSeen) GUILayout.Label("- " + line, ClaudiaSkin.Secondary);
+            }
+            if (detail.Events.Count > 0)
+            {
+                GUILayout.Label("Events", _bold);
+                foreach (var line in detail.Events) GUILayout.Label("- " + line, ClaudiaSkin.Secondary);
+            }
+            if (detail.HasChecklist)
+            {
+                GUILayout.Label("Mission Goal: " + detail.ChecklistDone + " of " + detail.Checklist.Count, _bold);
+                foreach (var item in detail.Checklist) GUILayout.Label((item.Done ? "[x] " : "[ ] ") + item.Item, ClaudiaSkin.Body);
+            }
+            if (detail.FollowUp.Length > 0) Section("Next", detail.FollowUp);
+            if (detail.ScriptError.Length > 0)
+            {
+                GUILayout.Label("Script error", _bold);
+                GUILayout.Label(detail.ScriptError, ClaudiaSkin.Mono);
+            }
+        }
+
+        private void Section(string title, string text)
+        {
+            GUILayout.Label(title, _bold);
+            if (text.Length > 0) GUILayout.Label(text, ClaudiaSkin.Body);
+        }
+
+        private static void DrawMarginBar(MarginBar bar)
+        {
+            var rect = GUILayoutUtility.GetRect(0, ClaudiaSkin.Scaled(8), GUILayout.ExpandWidth(true));
+            GUI.DrawTexture(rect, ClaudiaSkin.Solid(ClaudiaSkin.Border));
+            var color = bar.Level == MarginLevel.Enough ? ClaudiaSkin.Success : bar.Level == MarginLevel.Tight ? ClaudiaSkin.Attention : ClaudiaSkin.Danger;
+            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width * (float)bar.Fraction, rect.height), ClaudiaSkin.Solid(color));
         }
 
         // The Mission Script as formatted for reading (display only; the entry's script is untouched), in a box that
