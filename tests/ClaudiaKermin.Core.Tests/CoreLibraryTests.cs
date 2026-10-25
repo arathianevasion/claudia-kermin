@@ -18,7 +18,8 @@ namespace ClaudiaKermin.Core.Tests
         public void NoDocExampleNamesAVariableAfterAKosBuiltin()
         {
             var docs = CoreLibrary.Summaries() + "\n" + CoreLibrary.FullDocs();
-            Assert.True(KosBuiltinNames.ClashesInExamples(docs).Count == 0, string.Join("\n", KosBuiltinNames.ClashesInExamples(docs)));
+            var bad = KosBuiltinNames.ClashesInExamples(docs);
+            Assert.True(bad.Count == 0, string.Join("\n", bad));
         }
 
         [Fact]
