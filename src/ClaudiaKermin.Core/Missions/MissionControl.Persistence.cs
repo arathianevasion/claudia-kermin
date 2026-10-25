@@ -260,6 +260,7 @@ namespace ClaudiaKermin.Core.Missions
             // The craft was reloaded: the last Game Snapshot is the old craft's. Facts wait for a fresh one.
             _snapshot = null;
             _active = null;
+            _craftLink = null;
 
             var restore = Choose(restored.States, existing);
             if (restore == null)

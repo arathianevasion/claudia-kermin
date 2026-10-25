@@ -399,7 +399,7 @@ namespace ClaudiaKermin.Core.Missions
             _saveDirectory = saveDirectory;
             _snapshot = null;
             _active = null;
-            _craftLinked = true;
+            _craftLink = null;
             _pendingStart = null;
             _startRefusal = "";
             _craftCheck.Reset();
@@ -415,7 +415,7 @@ namespace ClaudiaKermin.Core.Missions
             if (!TakeSnapshot(snapshot)) return;
             var previous = _snapshot;
             _snapshot = snapshot;
-            _craftLinked = snapshot.Linked;
+            _craftLink = snapshot.Linked;
             _craftCheck.OnSnapshot(snapshot);
             LinkSeen(previous, snapshot);
             var mission = _mission;

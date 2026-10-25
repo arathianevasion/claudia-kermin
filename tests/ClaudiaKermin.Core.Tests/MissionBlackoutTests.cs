@@ -265,6 +265,33 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("Failed", mission.View.Log.Single(e => e.Kind == LogKind.Debrief).Outcome);
         }
 
+        [Fact]
+        public void AFailedDebriefWaitingForTheLinkStillWaitsAfterALoadUntilTheCraftIsSeenLinked()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                ScriptedResponse.Fixture("mission-debrief-failed.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission);
+            mission.Send(Snapshot(s => s.HasLink = false));
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingReducedGoal && !v.Busy);
+
+            // The game is quit and the save loaded again: the link isn't known until the craft is seen.
+            var states = mission.ExportStates().ToList();
+            var client = new ClaudeClient(new CraftCheckRouter(new StreamingFakeTransport()), () => "sk-ant-test", l => { });
+            var loaded = new MissionControl(client, _background, new PlayerConfig(), () => true, new PassingScriptCheck());
+            loaded.Send(new MissionsRestored(_save.Path, states));
+            loaded.Send(new SceneChanged(GameScene.Flight));
+            Assert.Equal(MissionStage.AwaitingReducedGoal, loaded.View.Stage);
+            loaded.Send(Snapshot(s => s.HasLink = false));
+            Assert.Equal(MissionStage.AwaitingReducedGoal, loaded.View.Stage);
+
+            loaded.Send(Snapshot(s => s.HasLink = true));
+            Assert.Equal(MissionStage.Ended, loaded.View.Stage);
+        }
+
         // ---- Custom Scripts ----
 
         [Fact]

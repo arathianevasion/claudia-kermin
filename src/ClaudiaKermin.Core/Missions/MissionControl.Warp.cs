@@ -33,7 +33,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             var mission = _mission;
             var running = mission != null && !MissionOver && IsRunning(mission);
-            var linked = _craftLinked;
+            var linked = _craftLink != false;
             if (running && _warpLinked && !linked) HoldFor(ScriptWarp.LinkLost);
             _warpLinked = linked;
 

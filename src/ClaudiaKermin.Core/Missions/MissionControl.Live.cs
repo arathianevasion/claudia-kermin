@@ -196,7 +196,7 @@ namespace ClaudiaKermin.Core.Missions
                 Event(mission, "telemetry_check", crossing.Describe() + " (Blackout: recorded, no Alert sent)");
                 return;
             }
-            Note(LogKind.Notice,"Telemetry Check crossed: " + crossing.Describe() + ". Claudia is judging it.");
+            Note(LogKind.Notice, "Telemetry Check crossed: " + crossing.Describe() + ". Claudia is judging it.");
             Event(mission, "telemetry_check", crossing.Describe());
             Begin(new Turn
             {
@@ -229,7 +229,7 @@ namespace ClaudiaKermin.Core.Missions
             // Abort is disabled in a Blackout (story 103): a verdict that comes back after the link dropped isn't offered.
             if (mission.Blackout)
             {
-                crossing.Verdict = "Abort recommended, not offered: no link to Kerbin";
+                crossing.Verdict = AbortNotOffered;
                 return;
             }
             // A moment Claudia needs the player (stories 31 and 87): warp drops and the script holds it at 1x until they decide.

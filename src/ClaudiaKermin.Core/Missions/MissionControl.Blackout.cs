@@ -32,8 +32,11 @@ namespace ClaudiaKermin.Core.Missions
             public bool BlackoutWaitNoted;
         }
 
-        /// <summary>The Mission's craft has a link to Kerbin (or the save has no CommNet), as last seen.</summary>
-        private bool _craftLinked = true;
+        /// <summary>
+        /// The Mission's craft has a link to Kerbin (or the save has no CommNet), as last seen; null when unknown, after a
+        /// load or a restore until the craft is seen again, so nothing that waits for the link goes on a guess.
+        /// </summary>
+        private bool? _craftLink;
 
         private bool InBlackout
         {
@@ -45,7 +48,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             var mission = _mission;
             if (mission == null || mission.VesselId.Length == 0 || seen.VesselId != mission.VesselId) return;
-            _craftLinked = seen.Linked;
+            _craftLink = seen.Linked;
         }
 
         /// <summary>After every input: a Blackout begins or ends with the link, and a plan in hand flies under the approved Mission Plan.</summary>
@@ -53,11 +56,11 @@ namespace ClaudiaKermin.Core.Missions
         {
             var mission = _mission;
             if (mission == null) return;
-            var dark = !MissionOver && FollowsCraft(mission) && !_craftLinked;
+            var dark = !MissionOver && FollowsCraft(mission) && _craftLink == false;
             if (dark && !mission.Blackout) BlackoutBegins(mission);
-            else if (!dark && mission.Blackout) BlackoutEnds(mission);
-            // A Failed Debrief with no reduced goal waited for the link (also across a load): with the link, the Mission ends.
-            if (!mission.Blackout && mission.Stage == MissionStage.AwaitingReducedGoal && mission.ReducedGoal.Length == 0 && !mission.InFlight)
+            else if (!dark && mission.Blackout && _craftLink != false) BlackoutEnds(mission);
+            // A Failed Debrief with no reduced goal waited for the link (also across a load): with the link seen, the Mission ends.
+            if (_craftLink == true && mission.Stage == MissionStage.AwaitingReducedGoal && mission.ReducedGoal.Length == 0 && !mission.InFlight)
             {
                 mission.Stage = MissionStage.Ended;
                 Note(LogKind.Notice, "The Mission Goal can't be reached as stated: the Mission has ended.");
@@ -126,7 +129,7 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>
         /// In a Blackout, a plan in hand needs no Approval: the player approved the Mission Plan. A Sequence Plan runs and a
         /// revised Mission Plan is taken, each recorded for the player with her reasons. The first Mission Plan (no sequence
-        /// asked for yet), a manual stretch and a Due Time still ahead wait for the player.
+        /// asked for yet), a manual stretch and a plan with a Due Time wait for the player.
         /// </summary>
         private void FlyInBlackout(Mission mission)
         {
@@ -156,7 +159,8 @@ namespace ClaudiaKermin.Core.Missions
                 WaitsForLink(mission, "The manual stretch " + MissionPrompts.Quoted(plan.Name) + " waits for you when the link returns.");
                 return;
             }
-            if (plan.DueTimeUt.HasValue && _ut < plan.DueTimeUt.Value)
+            // A Due Time is a wait that needs the player (ADR 0004), so the plan waits for the link even once it is reached.
+            if (plan.DueTimeUt.HasValue)
             {
                 WaitsForLink(mission, "The Sequence Plan " + MissionPrompts.Quoted(plan.Name) + " has a Due Time for you, so it waits for the link.");
                 return;
@@ -208,6 +212,8 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>The verdict on a crossing that was recorded in a Blackout instead of being sent as an Alert.</summary>
         private const string BlackoutVerdict = "recorded in a Blackout, not judged";
+        /// <summary>The verdict on an Alert whose Abort recommendation came back after the link dropped.</summary>
+        private const string AbortNotOffered = "Abort recommended, not offered: no link to Kerbin";
 
         /// <summary>A Telemetry Check crossed in a Blackout: recorded, with no Claude call.</summary>
         private void RecordedInBlackout(Crossing crossing)
