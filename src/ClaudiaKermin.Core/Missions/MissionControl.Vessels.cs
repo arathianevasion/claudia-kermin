@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using ClaudiaKermin.Core.Kos;
 
 namespace ClaudiaKermin.Core.Missions
@@ -131,7 +132,7 @@ namespace ClaudiaKermin.Core.Missions
                 // An aboard Mission's processor is one on the vessel Claudia is in: after an undock the original may have gone with the other half.
                 // (A remote Mission's craft is found by its processor, so that one never moves.)
                 if (!mission.Remote && craft.ProcessorPartIds.Count > 0 && !craft.ProcessorPartIds.Contains(mission.ProcessorPartId ?? 0))
-                    mission.ProcessorPartId = craft.ProcessorPartIds[0];
+                    mission.ProcessorPartId = ProcessorChoice.Choose(ProcessorParts(craft), _craftCheck.PreferredProcessor);
             }
             ChildVesselsSeen(vessels);
             var why = MissionCraft.CannotFly(mission.Remote, craft);
@@ -140,6 +141,13 @@ namespace ClaudiaKermin.Core.Missions
             if (why.Length > 0) Event(mission, "cannot_fly", why);
             else Note(LogKind.Notice, "Claudia can fly " + mission.VesselName + " again. Resume from it when you're ready.");
             CarryOnWhenSceneAllows();
+        }
+
+        /// <summary>The vessel's parts for <see cref="ProcessorChoice"/>; without part parents each processor stands alone, so the first listed wins a tie.</summary>
+        private static IList<VesselPart> ProcessorParts(SeenVessel vessel)
+        {
+            if (vessel.Parts.Count > 0) return vessel.Parts;
+            return vessel.ProcessorPartIds.Select(id => new VesselPart(id, null, true)).ToList();
         }
 
         /// <summary>If she can fly no vessel the Mission is Paused (not in Manual Control: the player has the craft until hand back).</summary>

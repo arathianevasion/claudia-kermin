@@ -114,6 +114,12 @@ namespace ClaudiaKermin.Core.Missions
             get { return _state == CraftCheckState.Running; }
         }
 
+        /// <summary>The processor the player chose, as last resolved against a craft; null for none.</summary>
+        public uint? PreferredProcessor
+        {
+            get { return _preferredProcessor; }
+        }
+
         public uint? ProcessorFor(GameSnapshot snapshot)
         {
             return snapshot == null ? null : snapshot.ProcessorFor(ResolvePreferred(snapshot));
