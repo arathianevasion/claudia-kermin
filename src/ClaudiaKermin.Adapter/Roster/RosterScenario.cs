@@ -77,7 +77,7 @@ namespace ClaudiaKermin.Adapter.Roster
             reverting = true;
             try
             {
-                foreach (var action in actions) RosterGateway.Apply(roster, action, OfferRename);
+                foreach (var action in actions) RosterGateway.Apply(roster, action, OfferRename, state.RenameSkipped);
             }
             finally
             {
