@@ -120,7 +120,7 @@ _Avoid_: takeover, override, manual mode
 
 **Interrupted**:
 Of a Maneuver Sequence: it was Running when the scene changed, a save was loaded, or the game quit or crashed, so its script is gone. It is never restarted; Claudia gives it an interrupted-sequence Debrief when the player is back in Flight, judging from the craft as it now is. Not a Debrief outcome: the Debrief still ends Nominal, Off-Nominal or Failed.
-_Avoid_: aborted (which is the player's choice), crashed, restarted, resumed
+_Avoid_: restarted, resumed (an interrupted sequence is Debriefed, never run again)
 
 **Hand back**:
 The player's act, with an optional message about what they did, of giving the craft back to Claudia and ending Manual Control. Claudia gives the manual stretch a short Debrief (judged against its target if it was planned, a plain account if not), then revises the Mission Plan for Approval.
