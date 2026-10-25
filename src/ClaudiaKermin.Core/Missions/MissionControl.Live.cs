@@ -190,6 +190,12 @@ namespace ClaudiaKermin.Core.Missions
                 FollowUp = followUp,
             };
             mission.Crossings.Add(crossing);
+            if (mission.Blackout)
+            {
+                RecordedInBlackout(crossing);
+                Event(mission, "telemetry_check", crossing.Describe() + " (Blackout: recorded, no Alert sent)");
+                return;
+            }
             Note(LogKind.Notice, "Telemetry Check crossed: " + crossing.Describe() + ". Claudia is judging it.");
             Event(mission, "telemetry_check", crossing.Describe());
             Begin(new Turn
@@ -220,6 +226,13 @@ namespace ClaudiaKermin.Core.Missions
                 return;
             }
             if (mission.Stage != MissionStage.Running || !mission.RunId.HasValue) return;
+            // Abort is disabled in a Blackout (story 103): a verdict that comes back after the link dropped isn't offered.
+            if (mission.Blackout)
+            {
+                crossing.Verdict = AbortNotOffered;
+                return;
+            }
+            // A moment Claudia needs the player (stories 31 and 87): warp drops and the script holds it at 1x until they decide.
             mission.AbortRecommendation = "Claudia recommends Abort: " + crossing.Describe() + ". " + verdict.Why;
             _commands.Add(new DropWarp());
             _commands.Add(new PostScreenMessage(mission.AbortRecommendation, always: true));
@@ -232,7 +245,7 @@ namespace ClaudiaKermin.Core.Missions
             var mission = _mission;
             // Paused mid-run (an Alert Claudia couldn't judge) the script still flies, so Abort still stops it.
             if (mission == null || !IsRunning(mission) || !mission.RunId.HasValue || !mission.RunningProcessor.HasValue) return;
-            if (mission.StopReason != null) return;
+            if (mission.StopReason != null || mission.Blackout) return;
             mission.StopReason = "aborted by the player";
             mission.AbortRecommendation = "";
             Note(LogKind.Player, "Abort.");

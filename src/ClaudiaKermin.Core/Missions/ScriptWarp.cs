@@ -21,14 +21,16 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>
         /// Why warp is held at 1× now, or "" when it isn't. <paramref name="running"/>: a script runs (a Pause during a
         /// run counts); <paramref name="capWait"/>: Claudia's next request waits at the Spending Cap;
+        /// <paramref name="abortRecommended"/>: Claudia recommends Abort and the player hasn't decided (never in a Blackout);
         /// <paramref name="moment"/>: a moment still holding, or "". Manual Control holds even with no script, since
         /// taking the craft ends the run.
         /// </summary>
-        public static string HoldReason(bool running, MissionStage stage, bool capWait, string moment)
+        public static string HoldReason(bool running, MissionStage stage, bool capWait, bool abortRecommended, string moment)
         {
             if (stage == MissionStage.ManualControl) return "you have Manual Control";
             if (!running) return "";
             if (stage == MissionStage.Paused) return "the Mission is Paused";
+            if (abortRecommended) return "Claudia recommends Abort";
             if (capWait) return "Claudia's next request waits at the Spending Cap";
             return moment ?? "";
         }

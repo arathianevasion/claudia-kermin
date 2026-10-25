@@ -235,6 +235,8 @@ namespace ClaudiaKermin.Adapter
         // Pinned directly above the prompt, outside the scrolling transcript, so it is in view whatever is scrolled.
         private void DrawBusyLine()
         {
+            var blackout = MissionWindowRules.BlackoutLine(_view);
+            if (blackout.Length > 0) GUILayout.Label(blackout, ClaudiaSkin.Secondary);
             var line = MissionWindowRules.BusyLine(_view);
             if (line.Length == 0)
             {

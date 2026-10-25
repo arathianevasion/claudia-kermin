@@ -151,15 +151,16 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
-        public void TheHoldRuleCoversAPauseTheCapAMomentAndManualControl()
+        public void TheHoldRuleCoversAPauseTheCapAnAbortRecommendationAMomentAndManualControl()
         {
-            Assert.Equal("the Mission is Paused", ScriptWarp.HoldReason(true, MissionStage.Paused, false, ""));
-            Assert.Equal("Claudia's next request waits at the Spending Cap", ScriptWarp.HoldReason(true, MissionStage.Running, true, ""));
-            Assert.Equal(ScriptWarp.LinkLost, ScriptWarp.HoldReason(true, MissionStage.Running, false, ScriptWarp.LinkLost));
-            Assert.Equal("you have Manual Control", ScriptWarp.HoldReason(false, MissionStage.ManualControl, false, ""));
-            Assert.Equal("", ScriptWarp.HoldReason(true, MissionStage.Running, false, ""));
+            Assert.Equal("the Mission is Paused", ScriptWarp.HoldReason(true, MissionStage.Paused, false, false, ""));
+            Assert.Equal("Claudia's next request waits at the Spending Cap", ScriptWarp.HoldReason(true, MissionStage.Running, true, false, ""));
+            Assert.Equal("Claudia recommends Abort", ScriptWarp.HoldReason(true, MissionStage.Running, false, true, ""));
+            Assert.Equal(ScriptWarp.LinkLost, ScriptWarp.HoldReason(true, MissionStage.Running, false, false, ScriptWarp.LinkLost));
+            Assert.Equal("you have Manual Control", ScriptWarp.HoldReason(false, MissionStage.ManualControl, false, false, ""));
+            Assert.Equal("", ScriptWarp.HoldReason(true, MissionStage.Running, false, false, ""));
             // Nothing runs, nothing to hold: a Pause between sequences is the closed-window alert's business.
-            Assert.Equal("", ScriptWarp.HoldReason(false, MissionStage.Paused, true, ScriptWarp.StockAlarm));
+            Assert.Equal("", ScriptWarp.HoldReason(false, MissionStage.Paused, true, true, ScriptWarp.StockAlarm));
         }
 
         // ---- Harness ----

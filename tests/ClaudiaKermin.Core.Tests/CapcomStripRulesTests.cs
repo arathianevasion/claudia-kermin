@@ -44,6 +44,30 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void InABlackoutTheChipSaysBlackoutAndOnlyAPauseWaitsForYou()
+        {
+            var running = During(MissionStage.Running, 1, "Launch", "Circularize");
+            running.Blackout = true;
+            Assert.Equal("Blackout · flying Circularize", MissionWindowRules.StripStatus(running).Text);
+
+            var waiting = During(MissionStage.AwaitingSequenceApproval);
+            waiting.Blackout = true;
+            waiting.QueuedMessages = 2;
+            waiting.HeldMessages = 1;
+            waiting.LatestLine = "No link to Kerbin. 2 of Claudia's messages wait for the link.";
+            Assert.Equal("Blackout", MissionWindowRules.StripStatus(waiting).Text);
+            Assert.Equal("", MissionWindowRules.NeedsYou(waiting));
+            Assert.Equal(waiting.LatestLine, MissionWindowRules.StripLine(waiting));
+            Assert.Equal("No link to Kerbin · Claudia flies the approved Mission Plan · 2 of her messages wait for the link · 1 of yours held",
+                MissionWindowRules.BlackoutLine(waiting));
+
+            var paused = During(MissionStage.Paused);
+            paused.Blackout = true;
+            Assert.Equal("Waiting for you", MissionWindowRules.StripStatus(paused).Text);
+            Assert.Equal("", MissionWindowRules.BlackoutLine(During(MissionStage.Running)));
+        }
+
+        [Fact]
         public void ATypedApprovalToConfirmIsWaitingForYou()
         {
             var view = During(MissionStage.Sequencing);
