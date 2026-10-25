@@ -470,12 +470,12 @@ namespace ClaudiaKermin.Core.Missions
             else view.StartAllowed = true;
         }
 
-        /// <summary>What a result depends on besides the goal: the craft's parts and delta-v, its crew and Claudia's processor.</summary>
+        /// <summary>What a result depends on besides the goal: the craft's parts and delta-v, its crew, Claudia's processor and whether the save has CommNet (it decides the remote Blocker).</summary>
         private string CraftKey(GameSnapshot snapshot)
         {
             var key = new StringBuilder();
             key.Append(snapshot.Craft.Name).Append('|').Append(snapshot.Craft.Seats).Append('|').Append(snapshot.GameMode)
-                .Append('|').Append(ProcessorFor(snapshot)).Append('|').Append(_config.CraftCheckMarginPercent);
+                .Append('|').Append(ProcessorFor(snapshot)).Append('|').Append(_config.CraftCheckMarginPercent).Append('|').Append(snapshot.CommNetEnabled);
             foreach (var part in snapshot.Craft.Parts)
                 key.Append('|').Append(part.Id).Append(',').Append(part.ParentId).Append(',').Append(part.Name).Append(',').Append(part.BootFile);
             foreach (var stage in snapshot.Stages)
