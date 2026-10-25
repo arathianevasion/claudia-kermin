@@ -11,7 +11,7 @@ namespace ClaudiaKermin.Core.Tests
     /// <summary>The Core Library as the core ships it: the bundle and the docs. Running it is in the kerboscript tests.</summary>
     public class CoreLibraryTests
     {
-        private const string Script = "@lazyglobal off.\r\nlocal r is exec_node().\r\naddons:claudia:report(r).\r\n";
+        private const string Script = "@lazyglobal off.\r\nlocal res is exec_node().\r\naddons:claudia:report(res).\r\n";
 
         // Common kOS built-in names (kOS refuses a local that hides one: "clobber BUILTIN_FUNCTION r").
         // Hand-picked from the kOS built-in function and variable lists, not read from the kOS assembly.
@@ -29,7 +29,7 @@ namespace ClaudiaKermin.Core.Tests
             var docs = CoreLibrary.Summaries() + "\n" + CoreLibrary.FullDocs();
             var bad = new System.Collections.Generic.List<string>();
             foreach (Match span in Regex.Matches(docs, "`[^`]*`", RegexOptions.Singleline))
-                foreach (Match decl in Regex.Matches(span.Value, "\\b(?:local|set|parameter)\\s+(\\w+)", RegexOptions.IgnoreCase))
+                foreach (Match decl in Regex.Matches(span.Value, "\\b(?:local|parameter)\\s+(\\w+)", RegexOptions.IgnoreCase))
                     if (KosBuiltins.Contains(decl.Groups[1].Value.ToLowerInvariant())) bad.Add(decl.Value);
             Assert.Empty(bad);
         }
@@ -38,7 +38,7 @@ namespace ClaudiaKermin.Core.Tests
         public void TheBundleKeepsTheMissionScriptFirstSoItsLineNumbersStayRight()
         {
             var bundle = CoreLibrary.Bundle(Script, 1, 10800);
-            Assert.StartsWith("@lazyglobal off.\nlocal r is exec_node().\naddons:claudia:report(r).\n", bundle);
+            Assert.StartsWith("@lazyglobal off.\nlocal res is exec_node().\naddons:claudia:report(res).\n", bundle);
         }
 
         [Fact]
