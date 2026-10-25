@@ -56,8 +56,11 @@ namespace ClaudiaKermin.Adapter
             return snapshot;
         }
 
-        /// <summary>A link to Kerbin; CommNet off in the save counts as linked (spec: Manual Control and Blackout).</summary>
-        private static bool LinkedHome(Vessel vessel)
+        /// <summary>
+        /// A link to Kerbin; CommNet off in the save counts as linked (spec: Manual Control and Blackout). Aboard, this is the
+        /// link of the vessel Claudia is in; remote, the probe's control path home to KSC.
+        /// </summary>
+        public static bool LinkedHome(Vessel vessel)
         {
             if (!CommNet.CommNetScenario.CommNetEnabled) return true;
             return vessel.connection != null && vessel.connection.IsConnectedHome;

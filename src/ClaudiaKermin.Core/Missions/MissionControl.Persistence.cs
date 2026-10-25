@@ -267,6 +267,7 @@ namespace ClaudiaKermin.Core.Missions
             // The craft was reloaded: the last Game Snapshot is the old craft's. Facts wait for a fresh one.
             _snapshot = null;
             _active = null;
+            _craftLink = null;
 
             // A Mission deleted from the history may still have a state in an older save: without its folder it is gone, not restored.
             // A dismissed one keeps its folder but is history too.

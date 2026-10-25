@@ -245,14 +245,27 @@ namespace ClaudiaKermin.Core.Missions
 
         // ---- What follows ----
 
-        /// <summary>A Failed Debrief: with a reduced goal on offer the Mission waits for Approval of it; otherwise the Mission ends.</summary>
+        /// <summary>
+        /// A Failed Debrief makes the craft safe (throttle 0, SAS on, steering let go), in a Blackout or not. With a reduced
+        /// goal on offer the Mission waits for Approval of it; otherwise the Mission ends, but never in a Blackout: there it
+        /// waits for the link, and ends once the link is back (MissionControl.Blackout.cs).
+        /// </summary>
         private void FailedDebrief(Mission mission, Debrief debrief)
         {
+            _commands.Add(new MakeCraftSafe("a Failed Debrief"));
             if (debrief.FollowUp == FollowUps.ReducedGoal && debrief.FollowUpText.Length > 0)
             {
                 mission.ReducedGoal = debrief.FollowUpText;
                 mission.Stage = MissionStage.AwaitingReducedGoal;
-                Note(LogKind.Notice, "The Mission Goal can't be reached as stated. Claudia offers a reduced goal for your Approval: " + mission.ReducedGoal);
+                Note(LogKind.Notice, "The Mission Goal can't be reached as stated. Claudia offers a reduced goal for your Approval: " + mission.ReducedGoal
+                    + (mission.Blackout ? " It waits for the link." : ""));
+                return;
+            }
+            if (mission.Blackout)
+            {
+                mission.ReducedGoal = "";
+                mission.Stage = MissionStage.AwaitingReducedGoal;
+                Note(LogKind.Notice, "Failed Debrief in a Blackout: the craft is made safe, and the Mission waits for the link.");
                 return;
             }
             mission.Stage = MissionStage.Ended;

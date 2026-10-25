@@ -203,6 +203,7 @@ namespace ClaudiaKermin.Adapter
                 Send(new UtAdvanced(Planetarium.GetUniversalTime()));
                 Send(SnapshotReader.Read(vessel));
                 _vessels.Range(_mission.View.CraftVesselId);
+                _vessels.Link(_mission.View.CraftVesselId);
             }
             else if (scene == GameScene.Editor && EditorLogic.fetch != null && Time.realtimeSinceStartup >= _nextSnapshot)
             {

@@ -281,7 +281,8 @@ namespace ClaudiaKermin.Core.Missions
             var stale = StaleBecause(mission);
             if (stale.Length == 0 || !CanAnswerPlan) return;
             var missionPlan = mission.Stage == MissionStage.AwaitingPlanApproval;
-            Note(LogKind.Player, "Re-plan: the craft changed (" + stale + ").");
+            // In a Blackout Claudia re-plans herself (MissionControl.Blackout.cs); otherwise it is the player's button.
+            Note(mission.Blackout ? LogKind.Notice : LogKind.Player, "Re-plan: the craft changed (" + stale + ").");
             mission.ConfirmPrompt = null;
             mission.PlanBaseline = null;
             mission.Stage = missionPlan ? MissionStage.Planning : MissionStage.Sequencing;
