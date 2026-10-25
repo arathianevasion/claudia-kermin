@@ -94,7 +94,7 @@ namespace ClaudiaKermin.Adapter
             _stylesFor = HighLogic.Skin;
             _bold = new GUIStyle(ClaudiaSkin.Body) { fontStyle = FontStyle.Bold };
             // Scripts wrap to the card instead of running off the right edge; the transcript scrolls them.
-            _script = new GUIStyle(ClaudiaSkin.TextField) { wordWrap = true, font = ClaudiaSkin.Mono.font, fontSize = 12 };
+            _script = new GUIStyle(ClaudiaSkin.TextField) { wordWrap = true, font = ClaudiaSkin.Mono.font, fontSize = ClaudiaSkin.Scaled(12) };
         }
 
         private void DrawEntry(LogEntry entry, double now, float width)

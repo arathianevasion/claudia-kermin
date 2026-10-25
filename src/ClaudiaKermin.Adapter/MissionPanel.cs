@@ -23,8 +23,8 @@ namespace ClaudiaKermin.Adapter
         private const string InputControl = "ClaudiaMissionInput";
         private const string RaiseControl = "ClaudiaMissionRaise";
         private const int MaxPromptLines = 7;
-        private const float SendSize = 32;
-        private const float ControlBarHeight = 44;
+        private static readonly float SendSize = ClaudiaSkin.Scaled(32);
+        private static readonly float ControlBarHeight = ClaudiaSkin.Scaled(44);
 
         private readonly Action<MissionInput> _send;
         private readonly bool _debugTools;
@@ -406,7 +406,7 @@ namespace ClaudiaKermin.Adapter
             GUILayout.Space(ClaudiaSkin.Padding);
             GUILayout.Label("Raise Spending Cap to $", ClaudiaSkin.Body, GUILayout.ExpandWidth(false));
             GUI.SetNextControlName(RaiseControl);
-            _raiseTo = GUILayout.TextField(_raiseTo, 10, ClaudiaSkin.TextField, GUILayout.Width(90));
+            _raiseTo = GUILayout.TextField(_raiseTo, 10, ClaudiaSkin.TextField, GUILayout.Width(ClaudiaSkin.Scaled(90)));
             decimal cap;
             GUI.enabled = decimal.TryParse(_raiseTo, NumberStyles.Number, CultureInfo.InvariantCulture, out cap) && cap > _view.SpendingCap;
             if (ClaudiaSkin.PrimaryButton("Raise", GUILayout.ExpandWidth(false)))
@@ -429,7 +429,7 @@ namespace ClaudiaKermin.Adapter
             GUILayout.Space(ClaudiaSkin.Gap / 2);
             ClaudiaSkin.Divider();
             GUILayout.BeginHorizontal(_controlBar, GUILayout.Height(ControlBarHeight));
-            if (OpenSettings != null && ClaudiaSkin.IconButton(ClaudiaSkin.IconShape.Gear, "", GUILayout.Width(36))) OpenSettings();
+            if (OpenSettings != null && ClaudiaSkin.IconButton(ClaudiaSkin.IconShape.Gear, "", GUILayout.Width(ClaudiaSkin.ButtonHeight))) OpenSettings();
             GUILayout.Space(ClaudiaSkin.Gap);
 
             if (docked)
@@ -453,7 +453,7 @@ namespace ClaudiaKermin.Adapter
                 GUI.enabled = true;
             }
             if (!_view.CanEndMission) _confirmingEnd = false;
-            else if (ClaudiaSkin.DangerButton("End Mission", GUILayout.ExpandWidth(false), GUILayout.Height(32))) _confirmingEnd = true;
+            else if (ClaudiaSkin.DangerButton("End Mission", GUILayout.ExpandWidth(false), GUILayout.Height(ClaudiaSkin.Scaled(32)))) _confirmingEnd = true;
             GUILayout.EndHorizontal();
         }
 
@@ -465,13 +465,13 @@ namespace ClaudiaKermin.Adapter
             _summary.Draw(rect, new GUIContent(ClaudiaSkin.Ellipsize(text, _summary, rect.width), text), false, false, false, false);
         }
 
-        // "$1.42 / $10.00" over an 84×4 bar: accent, amber from 80% of the Spending Cap.
+        // "$1.42 / $10.00" over a bar 84 px wide (times the font scale) and 4 px high: accent, amber from 80% of the Spending Cap.
         private void DrawSpendMeter()
         {
             GUILayout.BeginVertical(GUILayout.ExpandWidth(false));
             GUILayout.FlexibleSpace();
             GUILayout.Label(MissionWindowRules.SpendMeter(_view), ClaudiaSkin.Secondary, GUILayout.ExpandWidth(false));
-            ClaudiaSkin.SpendBar(_view, 84);
+            ClaudiaSkin.SpendBar(_view, ClaudiaSkin.Scaled(84));
             GUILayout.FlexibleSpace();
             GUILayout.EndVertical();
             GUILayout.FlexibleSpace();

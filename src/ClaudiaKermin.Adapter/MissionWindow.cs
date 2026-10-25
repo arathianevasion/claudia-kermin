@@ -19,7 +19,7 @@ namespace ClaudiaKermin.Adapter
 
         private readonly MissionPanel _panel;
         private readonly WindowFrame _frame =
-            new WindowFrame(0x434B03, "Claudia: Mission", LockId, new Rect(260, 80, 420, 760), new Vector2(360, 420), true);
+            new WindowFrame(0x434B03, "Claudia: Mission", LockId, new Rect(260, 80, 500, 800), new Vector2(430, 460), true);
 
         public bool Visible;
         public bool UiHidden;
