@@ -58,6 +58,12 @@ namespace ClaudiaKermin.Adapter
         /// </summary>
         public bool Flashing { get; private set; }
 
+        /// <summary>The player has seen the button's call by another way (Settings open in the Space Center, where there is no Mission panel): the flash stops.</summary>
+        public void AcknowledgeFlash()
+        {
+            Flashing = false;
+        }
+
         /// <summary>The player can read Claudia now: the floating window or the docked panel is up and not hidden by F2.</summary>
         private bool Watching
         {

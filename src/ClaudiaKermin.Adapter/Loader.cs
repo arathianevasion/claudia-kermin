@@ -107,6 +107,9 @@ namespace ClaudiaKermin.Adapter
                 if (open && !pressed) _button.SetTrue(false);
                 else if (!open && pressed) _button.SetFalse(false);
 
+                // The Space Center has no Mission panel: its button opens Settings, and opening that is the acknowledgement.
+                if (HighLogic.LoadedScene == GameScenes.SPACECENTER && _window.Visible) _missions.AcknowledgeFlash();
+
                 // Claudia needs the player and the window is closed: the button flashes between its two frames.
                 var attention = _missions.Flashing && Mathf.FloorToInt(Time.realtimeSinceStartup * 2f) % 2 == 0;
                 if (attention != _attentionShown)
