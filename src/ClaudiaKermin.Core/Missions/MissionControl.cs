@@ -1551,7 +1551,7 @@ namespace ClaudiaKermin.Core.Missions
 
         private static string MetresPerSecond(double value)
         {
-            return value.ToString("#,0", CultureInfo.InvariantCulture) + " m/s";
+            return MissionCards.MetresPerSecond(value);
         }
 
         private void Rebuild()
