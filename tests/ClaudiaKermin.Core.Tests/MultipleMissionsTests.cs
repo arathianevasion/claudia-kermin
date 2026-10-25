@@ -11,6 +11,7 @@ using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Config;
 using ClaudiaKermin.Core.Kos;
 using ClaudiaKermin.Core.Missions;
+using ClaudiaKermin.Core.Ui;
 using Xunit;
 
 namespace ClaudiaKermin.Core.Tests
@@ -526,6 +527,33 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Empty(mission.View.Missions);
             Assert.Equal(MissionStage.None, mission.View.Stage);
             Assert.True(mission.View.StartForm.CanStart);
+        }
+
+        [Fact]
+        public void AFinishedMissionWhoseCostLogCannotBeReadIsListedWithAnUnknownCostNotZero()
+        {
+            var transport = Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief.sse");
+            var mission = Control(transport);
+            var run = ToRunning(mission);
+            var id = mission.View.MissionId;
+            mission.Send(new KosRunEnded(Finished(), run.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+            Assert.False(Entry(mission, id).CostUnknown);
+
+            MissionControl later;
+            using (new FileStream(Path.Combine(FolderOf(id), "cost-log.jsonl"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                // The list is read as the save loads, while another process holds the log.
+                later = Control(Replies());
+                var entry = Entry(later, id);
+                Assert.True(entry.CostUnknown);
+                Assert.Equal("Cost unknown of $10.00", MissionListRules.Cost(entry));
+            }
+
+            // Once the log reads again the cost is back, without a reload.
+            later.Send(new SceneChanged(GameScene.Editor));
+            Assert.False(Entry(later, id).CostUnknown);
+            Assert.True(Entry(later, id).Cost > 0m);
         }
 
         [Fact]

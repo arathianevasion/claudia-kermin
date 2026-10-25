@@ -29,6 +29,14 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AnUnreadableCostReadsAsUnknownNotZero()
+        {
+            var text = MissionListRules.Cost(new MissionListEntry { Cost = 0m, CostUnknown = true, SpendingCap = 10m });
+            Assert.Equal("Cost unknown of $10.00", text);
+            Assert.DoesNotContain("$0.00", text);
+        }
+
+        [Fact]
         public void AFinishedMissionNamesItsFinalDebriefOrSaysItHasNone()
         {
             Assert.Equal("Debrief: Nominal", MissionListRules.DebriefTitle(new MissionListEntry { Status = MissionStatus.Succeeded, FinalDebrief = new LogEntry { Title = "Debrief: Nominal" } }));
