@@ -3,6 +3,8 @@
 
 using ClaudiaKermin.Core.Chat;
 using ClaudiaKermin.Core.Claude;
+using ClaudiaKermin.Core.Missions;
+using ClaudiaKermin.Core.Ui;
 using UnityEngine;
 
 namespace ClaudiaKermin.Adapter
@@ -26,6 +28,9 @@ namespace ClaudiaKermin.Adapter
         private int _seenVersion = -1;
         private bool _dumping;
         private GUIStyle _lineStyle;
+        private readonly BannerDrawer _banner = new BannerDrawer();
+        // The banner's view of "no Mission": the basic chat has none.
+        private readonly MissionView _noMission = new MissionView();
 
         public bool Visible;
 
@@ -71,6 +76,8 @@ namespace ClaudiaKermin.Adapter
 
             if (_lineStyle == null) _lineStyle = new GUIStyle(GUI.skin.label) { richText = false, wordWrap = true };
             _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.ExpandHeight(true));
+            // An empty session, fresh or cleared, starts with the banner.
+            if (_chat.Lines.Count == 0) _banner.Draw(_noMission, _frame.Rect.width - 2 * ClaudiaSkin.Padding, _chat.Model, false, false);
             foreach (var line in _chat.Lines)
                 GUILayout.Label(Format(line), _lineStyle);
             GUILayout.EndScrollView();
@@ -83,10 +90,16 @@ namespace ClaudiaKermin.Adapter
             _typed = GUILayout.TextField(_typed, 2000);
 
             GUILayout.BeginHorizontal();
-            GUI.enabled = !_chat.Busy && _typed.Trim().Length > 0;
+            GUI.enabled = (!_chat.Busy && _typed.Trim().Length > 0) || ClearRules.IsCommand(_typed);
             if (GUILayout.Button("Send") || (enter && GUI.enabled))
             {
-                if (_chat.Send(_typed)) _typed = "";
+                // /clear starts a new conversation and is never sent to Claude; other /... text is sent as normal.
+                if (ClearRules.IsCommand(_typed))
+                {
+                    _chat.Clear();
+                    _typed = "";
+                }
+                else if (_chat.Send(_typed)) _typed = "";
                 if (enter) Event.current.Use();
             }
             GUI.enabled = _chat.Busy;
@@ -94,6 +107,7 @@ namespace ClaudiaKermin.Adapter
             GUI.enabled = _chat.CanRetry;
             if (GUILayout.Button("Retry")) _chat.Retry();
             GUI.enabled = true;
+            if (GUILayout.Button(new GUIContent("Clear", "Start a new conversation. Claudia forgets this chat."))) _chat.Clear();
             GUILayout.EndHorizontal();
 
             if (_dump != null)
@@ -108,6 +122,7 @@ namespace ClaudiaKermin.Adapter
             }
 
             _frame.DrawResizeZones();
+            WindowFrame.DrawTooltip();
             GUI.DragWindow();
         }
 

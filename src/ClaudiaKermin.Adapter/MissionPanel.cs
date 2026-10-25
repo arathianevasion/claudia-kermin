@@ -324,6 +324,13 @@ namespace ClaudiaKermin.Adapter
         private void Send(PromptState prompt)
         {
             var text = _typed.Trim();
+            if (ClearRules.IsCommand(text))
+            {
+                // Never sent to Claude, pinned as a goal or logged.
+                Clear(ClearRules.Action(_view, _log.HiddenBefore(_view)));
+                _typed = "";
+                return;
+            }
             if (prompt.For == PromptFor.Goal)
             {
                 // Pinned as the Mission Goal; nothing is sent until Check again or Start Mission.
@@ -475,6 +482,8 @@ namespace ClaudiaKermin.Adapter
             GUILayout.BeginHorizontal(_controlBar, GUILayout.Height(ControlBarHeight));
             if (OpenSettings != null && ClaudiaSkin.IconButton(ClaudiaSkin.IconShape.Gear, "", GUILayout.Width(ClaudiaSkin.ButtonHeight))) OpenSettings();
             GUILayout.Space(ClaudiaSkin.Gap);
+            DrawClear();
+            GUILayout.Space(ClaudiaSkin.Gap);
 
             if (docked)
             {
@@ -499,6 +508,23 @@ namespace ClaudiaKermin.Adapter
             if (!_view.CanEndMission) _confirmingEnd = false;
             else if (ClaudiaSkin.DangerButton("End Mission", GUILayout.ExpandWidth(false), GUILayout.Height(ClaudiaSkin.Scaled(32)))) _confirmingEnd = true;
             GUILayout.EndHorizontal();
+        }
+
+        // ---- Clear ----
+
+        // Disabled with no Mission. A finished Mission is dismissed; an active one is only hidden from the window.
+        private void DrawClear()
+        {
+            var action = ClearRules.Action(_view, _log.HiddenBefore(_view));
+            GUI.enabled = action != ClearAction.None;
+            if (ClaudiaSkin.IconButton(ClaudiaSkin.IconShape.Broom, "Clear", ClearRules.Tooltip(action), GUILayout.ExpandWidth(false))) Clear(action);
+            GUI.enabled = true;
+        }
+
+        private void Clear(ClearAction action)
+        {
+            if (action == ClearAction.Dismiss) _send(new DismissMission());
+            else if (action == ClearAction.Hide) _log.HideShown(_view);
         }
 
         // One line of the pending setup, ellipsized to the room it gets.

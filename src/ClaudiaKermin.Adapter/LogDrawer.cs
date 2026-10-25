@@ -92,9 +92,47 @@ namespace ClaudiaKermin.Adapter
             if (_send != null) _banner.Draw(view, width, SetupModel, SetupRemote, GoalSet);
             if (_send != null && (view.StartForm.CanStart || view.CraftCheck.State != CraftCheckState.None)) DrawCraftCheck(view);
             if (_send != null && view.StartForm.CanStart && view.StartForm.Refusal.Length > 0) GUILayout.Label(view.StartForm.Refusal, ClaudiaSkin.DangerText);
-            foreach (var entry in view.Log) DrawEntry(entry, view.Ut, width);
+            var hidden = _send != null ? HiddenBefore(view) : 0;
+            if (hidden > 0) DrawHiddenNotice(view);
+            for (var i = hidden; i < view.Log.Count; i++) DrawEntry(view.Log[i], view.Ut, width);
             if (_send != null && confirming) DrawApproval(view);
             GUILayout.EndScrollView();
+        }
+
+        // ---- Clear (view only) ----
+
+        // The count of log entries hidden before, per Mission: kept for the session only, and shared by the floating window and the docked panel.
+        private readonly Dictionary<string, int> _hiddenBefore = new Dictionary<string, int>();
+
+        /// <summary>How many entries of the Mission's log are hidden from the top; 0 when the transcript is whole.</summary>
+        public int HiddenBefore(MissionView view)
+        {
+            int count;
+            return view.MissionId.Length > 0 && _hiddenBefore.TryGetValue(view.MissionId, out count) ? Math.Min(count, view.Log.Count) : 0;
+        }
+
+        /// <summary>Hides the entries shown so far and brings the banner back into view. The Mission and Claude's context are untouched.</summary>
+        public void HideShown(MissionView view)
+        {
+            if (view.MissionId.Length == 0) return;
+            _hiddenBefore[view.MissionId] = view.Log.Count;
+            _scroll.y = 0;
+        }
+
+        private void Show(MissionView view)
+        {
+            _hiddenBefore.Remove(view.MissionId);
+        }
+
+        // "Earlier messages hidden · Show", centered under the banner.
+        private void DrawHiddenNotice(MissionView view)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            GUILayout.Label(ClearRules.Hidden + " ·", ClaudiaSkin.Notice, GUILayout.ExpandWidth(false));
+            if (ClaudiaSkin.TextButton(ClearRules.Show, GUILayout.ExpandWidth(false))) Show(view);
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
         }
 
         private void Styles()
