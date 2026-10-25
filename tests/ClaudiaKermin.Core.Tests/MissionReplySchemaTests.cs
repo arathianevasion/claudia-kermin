@@ -23,7 +23,7 @@ namespace ClaudiaKermin.Core.Tests
         /// <summary>The flight schema's three nullable parts (sequence_plan, debrief, alert).</summary>
         private const int UnionBudget = 3;
 
-        /// <summary>Below the 89 that compiled, with room under the 95 that did not.</summary>
+        /// <summary>Below the 89 that worked in play (not yet probed), with room under the 95 that was refused.</summary>
         private const int SizeBudget = 85;
 
         public static TheoryData<string, string> Schemas()
@@ -32,7 +32,7 @@ namespace ClaudiaKermin.Core.Tests
             {
                 { "planning", MissionReply.PlanningSchemaJson },
                 { "flight", MissionReply.FlightSchemaJson },
-                { "craft check", CraftCheckRules.SchemaJson() },
+                { "Craft Check", CraftCheckRules.SchemaJson() },
             };
         }
 

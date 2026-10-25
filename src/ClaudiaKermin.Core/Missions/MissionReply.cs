@@ -177,7 +177,8 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>
         /// Mission Plan, Mission Settings, typed replies and changes to a pending plan, and questions before a Mission
-        /// Plan is approved: an answer, a Mission Plan, or (a revision of a pending one) a Sequence Plan.
+        /// Plan is approved: an answer, a Mission Plan, or (a revision of a pending one) a Sequence Plan. A reply to a
+        /// pending Sequence Plan uses it too, because it can change the Mission Goal and so come back as a Mission Plan.
         /// </summary>
         public static readonly string PlanningSchemaJson = SchemaFor(AnswerKind, MissionPlanKind, SequencePlanKind);
 

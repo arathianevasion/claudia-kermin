@@ -94,13 +94,10 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void TheSchemaRequiresEveryDebriefFieldTheMissionAsksFor()
         {
-            var rig = new Rig(this, DebriefJson("Nominal", ""));
-            rig.Mission.Send(new StartMission(Goal, 10m, Sonnet));
-            CraftCheckRouter.StartChecked(rig.Mission, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
-            rig.DrainUntil(v => v.Stage == MissionStage.AwaitingPlanApproval);
-            using (var request = JsonDocument.Parse(rig.Transport.Requests[0].Body))
+            // A Debrief request sends the flight schema (#199).
+            using (var request = JsonDocument.Parse(MissionReply.FlightSchemaJson))
             {
-                var schema = request.RootElement.GetProperty("output_config").GetProperty("format").GetProperty("schema");
+                var schema = request.RootElement;
                 var debrief = schema.GetProperty("properties").GetProperty("debrief").GetProperty("anyOf")[0];
                 var required = debrief.GetProperty("required").EnumerateArray().Select(e => e.GetString()).ToList();
                 var properties = debrief.GetProperty("properties").EnumerateObject().Select(p => p.Name).ToList();
