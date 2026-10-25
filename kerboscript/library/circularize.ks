@@ -7,9 +7,9 @@
 
 @lazyglobal off.
 
-//| circularize(options): makes the orbit circular at apoapsis, periapsis or a given altitude with one
-//| burn (planned as a maneuver node and flown by exec_node). After launch, in the same Mission Script,
-//| it finishes the orbit; at "pe" inside a new body's SOI it is the capture burn.
+//| circularize(options): makes the orbit circular at apoapsis, periapsis or an altitude in one burn.
+//| The burn is planned as a maneuver node and flown by exec_node. After launch, in the same Mission
+//| Script, it finishes the orbit; at "pe" inside a new body's SOI it is the capture burn.
 //| Options:
 //|   at ["ap"]: where to burn: "ap", "pe" or an altitude in m between pe and ap (the next pass).
 //|   tolerance [0.01]: the eccentricity it must end within; more fails the block.

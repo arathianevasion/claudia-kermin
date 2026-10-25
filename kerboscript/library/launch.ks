@@ -7,9 +7,10 @@
 
 @lazyglobal off.
 
-//| launch(options): flies from the ground of a body with an atmosphere until the craft is coasting
-//| out of it with its apoapsis at target_ap; follow it with circularize in the same Mission Script.
-//| Below the atmosphere top, target_ap makes it a hop that ends at the top of the climb.
+//| launch(options): flies from the ground of a body with an atmosphere to a coast out of it; then circularize.
+//| It ends once the craft is coasting out of the atmosphere with its apoapsis at target_ap; follow it
+//| with circularize in the same Mission Script (one Maneuver Sequence, one Approval). A target_ap
+//| below the atmosphere top makes it a hop that ends at the top of the climb.
 //| Options:
 //|   launch_at ["now"]: "now", a time (UT s) to wait for on the pad, or a body or vessel (e.g. MUN)
 //|     to wait for the pad to pass under the plane of, which also sets target_inc to its plane.
