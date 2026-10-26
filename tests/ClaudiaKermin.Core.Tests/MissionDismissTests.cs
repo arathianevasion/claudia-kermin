@@ -89,6 +89,14 @@ namespace ClaudiaKermin.Core.Tests
             return mission;
         }
 
+        /// <summary>The save state of a Mission saved as Ended, as an older save carries it: in memory, ending drops the Mission, so the stage persists only in saves.</summary>
+        private MissionSaveState SavedEnded()
+        {
+            var saved = MissionSaveState.FromValues(Assert.Single(Finished(MissionStage.Succeeded).ExportStates()).ToValues());
+            saved.Stage = MissionStage.Ended;
+            return saved;
+        }
+
         private string FolderOf(MissionControl mission)
         {
             return Path.Combine(_save.Path, "ClaudiaKermin", "missions", Assert.Single(mission.ExportStates()).Id);
@@ -111,6 +119,49 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Empty(mission.ExportStates());
             Assert.True(File.Exists(Path.Combine(folder, "transcript.json")));
             Assert.True(File.Exists(Path.Combine(folder, "ended.json")));
+        }
+
+        [Fact]
+        public void DismissingAnEndedMissionFromAnOlderSaveLeavesNoCurrentMissionAndKeepsItsFolder()
+        {
+            var saved = SavedEnded();
+            var later = Control(Replies());
+            later.Send(new MissionsRestored(_save.Path, new List<MissionSaveState> { saved }));
+            Assert.Equal(MissionStage.Ended, later.View.Stage);
+
+            later.Send(new DismissMission());
+
+            Assert.Equal(MissionStage.None, later.View.Stage);
+            Assert.Empty(later.View.Log);
+            Assert.True(File.Exists(Path.Combine(_save.Path, "ClaudiaKermin", "missions", saved.Id, "transcript.json")));
+        }
+
+        [Fact]
+        public void ALoadAfterDismissingAnEndedMissionDoesNotRestoreIt()
+        {
+            var saved = SavedEnded();
+            var mission = Control(Replies());
+            mission.Send(new MissionsRestored(_save.Path, new List<MissionSaveState> { saved }));
+            mission.Send(new DismissMission());
+
+            mission.Send(new MissionsRestored(_save.Path, new List<MissionSaveState> { saved }));
+
+            Assert.Equal(MissionStage.None, mission.View.Stage);
+        }
+
+        [Fact]
+        public void EndingAnAlreadyEndedMissionDoesNothing()
+        {
+            var saved = SavedEnded();
+            var mission = Control(Replies());
+            mission.Send(new MissionsRestored(_save.Path, new List<MissionSaveState> { saved }));
+            var log = mission.View.Log.Count;
+
+            mission.Send(new EndMission());
+
+            Assert.Equal(MissionStage.Ended, mission.View.Stage);
+            Assert.Equal(log, mission.View.Log.Count);
+            Assert.False(File.Exists(Path.Combine(_save.Path, "ClaudiaKermin", "missions", saved.Id, "ended.json")));
         }
 
         [Fact]
