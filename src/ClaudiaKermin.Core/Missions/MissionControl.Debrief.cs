@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Kos;
+using ClaudiaKermin.Core.Tools;
 
 namespace ClaudiaKermin.Core.Missions
 {
@@ -28,6 +29,11 @@ namespace ClaudiaKermin.Core.Missions
             public string RecheckSummary = "";
             public readonly List<string> RecheckFindings = new List<string>();
             public string RecheckSkipped = "";
+            /// <summary>The recheck's request, which its tool loop appends to, and the Game Snapshot its tools calculate from.</summary>
+            public MessagesRequest RecheckRequest;
+            public GameSnapshot RecheckSnapshot;
+            public int RecheckToolSteps;
+            public bool RecheckLimitSent;
         }
 
         private sealed partial class Mission
@@ -157,16 +163,24 @@ namespace ClaudiaKermin.Core.Missions
                 return Skip(gate, skipped);
             }
 
+            gate.RecheckRequest = request;
+            gate.RecheckSnapshot = snapshot;
+            mission.Pending = turn;
+            SendRecheck(mission, turn, worst);
+            return true;
+        }
+
+        /// <summary>Sends the recheck's request (its first, or the next step of its tool loop), charged to the Mission at <paramref name="worst"/>.</summary>
+        private void SendRecheck(Mission mission, Turn turn, decimal worst)
+        {
             mission.PendingCharge = worst;
             mission.Requests++;
             LogCost(mission, "pending", worst, "margin_recheck");
-            mission.Pending = turn;
             mission.InFlight = true;
             mission.Activity = "rechecking margins";
             turn.Cancel = new CancellationTokenSource();
             var probe = new Turn { Purpose = Purpose.Margin };
-            _craftCheck.SendRecheck(request, turn.Cancel.Token, result => Rechecked(mission, turn, probe, result));
-            return true;
+            _craftCheck.SendRecheck(turn.Gate.RecheckRequest, turn.Cancel.Token, result => Rechecked(mission, turn, probe, result));
         }
 
         private static bool Skip(DebriefGate gate, string why)
@@ -179,6 +193,7 @@ namespace ClaudiaKermin.Core.Missions
         private decimal DebriefReserve(Mission mission, Turn turn)
         {
             var probe = new MessagesRequest { Model = mission.Model, MaxTokens = MissionPrompts.MaxTokens, OutputSchemaJson = MissionReply.FlightSchemaJson };
+            probe.Tools.AddRange(_tools.Definitions(ToolOffer.Mission));
             probe.System.AddRange(mission.System);
             probe.Messages.AddRange(mission.Conversation);
             probe.Messages.Add(Message.UserText(turn.UserText));
@@ -205,50 +220,128 @@ namespace ClaudiaKermin.Core.Missions
             }
             try
             {
+                if (result != null && result.Status == StreamStatus.Completed && result.Message.StopReason == StopReason.ToolUse && mission.DeferredRestore == null)
+                {
+                    RecheckToolsCalled(mission, turn, result.Message);
+                    return;
+                }
                 string problem;
                 var reply = CraftCheckFlow.ParseRecheck(result, out problem);
-                var gate = turn.Gate;
-                if (reply == null)
-                {
-                    gate.RecheckSkipped = "the recheck failed: " + problem;
-                    Note(LogKind.Notice, "The margin recheck failed (" + problem + "); the Debrief goes on without it.");
-                    turn.UserText += "\nThe mod's margin recheck did not come back (" + problem + "); judge the margin from the Game Snapshot.";
-                }
-                else
-                {
-                    gate.RecheckSummary = reply.Summary;
-                    gate.RecheckFindings.AddRange(reply.Findings.Select(f => (f.Severity == CraftFindingSeverity.Blocker ? "Blocker: " : "Warning: ") + f.Title
-                        + (f.Explanation.Length > 0 ? ". " + f.Explanation : "")));
-                    turn.UserText += "\nThe mod's margin recheck (a Craft Check of the craft as it is now, against the Maneuver Sequences still to fly; quoted): "
-                        + MissionPrompts.Quoted(reply.Summary + (gate.RecheckFindings.Count > 0 ? " Findings: " + string.Join(" ", gate.RecheckFindings.ToArray()) : " No findings.")) + ".";
-                }
-                if (mission.DeferredRestore != null)
-                {
-                    mission.Pending = null;
-                    return;
-                }
-                // Recorded before AfterCharge, which may Pause for the cap: a quit then still owes the Debrief.
-                RecordUnanswered(mission, turn);
-                AfterCharge(mission);
-                if (mission != _mission || mission.Stage == MissionStage.Paused) return;
-                // A refusal or a gone model is the player's call (#45), here as for any request: the Debrief waits, Paused.
-                if (result != null && result.Status == StreamStatus.Failed && result.Failure == StreamFailure.ModelNotFound)
-                {
-                    ModelGone(mission, turn);
-                    return;
-                }
-                if (result != null && result.Status == StreamStatus.Completed && result.Message.StopReason == StopReason.Refusal)
-                {
-                    Refused(mission, turn);
-                    return;
-                }
-                Send(mission, turn);
+                RecheckAnswered(mission, turn, reply, problem, result);
             }
             finally
             {
                 if (mission.DeferredRestore != null) CompleteDeferredRestore(mission);
                 Rebuild();
             }
+        }
+
+        /// <summary>
+        /// The recheck's tool loop: Claudia may call the tools offered on the Craft Check (stage_performance) against the Game
+        /// Snapshot the recheck was built from, with a Mission turn's limits. Each step is charged to the Mission and gated, like the
+        /// recheck itself, on leaving room for the Debrief; with none, the recheck is cut short and the Debrief goes on without it.
+        /// </summary>
+        private void RecheckToolsCalled(Mission mission, Turn turn, AssistantMessage message)
+        {
+            var gate = turn.Gate;
+            if (gate.RecheckLimitSent)
+            {
+                RecheckAnswered(mission, turn, null, "Claudia kept calling Planning Tools after the limit of " + ToolStep.MaxSteps + " steps", null);
+                return;
+            }
+            var atLimit = gate.RecheckToolSteps >= ToolStep.MaxSteps;
+            mission.InFlight = true;
+            mission.Activity = _craftCheck.ActivityOf(message);
+            turn.Cancel = new CancellationTokenSource();
+            _craftCheck.RunTools(message, gate.RecheckSnapshot, atLimit, step => RecheckToolsAnswered(mission, turn, message, step, atLimit));
+        }
+
+        private void RecheckToolsAnswered(Mission mission, Turn turn, AssistantMessage message, ToolStepResult step, bool atLimit)
+        {
+            if (mission.Pending != turn || !mission.InFlight) return;
+            mission.InFlight = false;
+            mission.Activity = "";
+            turn.Cancel.Dispose();
+            if (mission != _mission) return;
+            try
+            {
+                if (mission.Stage == MissionStage.Lost || mission.DeferredRestore != null)
+                {
+                    mission.Pending = null;
+                    return;
+                }
+                if (step == null)
+                {
+                    RecheckAnswered(mission, turn, null, "a Planning Tool failed", null);
+                    return;
+                }
+                var gate = turn.Gate;
+                gate.RecheckRequest.Messages.Add(message.ToMessage());
+                gate.RecheckRequest.Messages.Add(step.Results);
+                gate.RecheckToolSteps++;
+                if (atLimit) gate.RecheckLimitSent = true;
+                foreach (var call in step.Calls)
+                {
+                    Note(LogKind.Notice, "Planning Tool " + call.Name + " for the margin recheck (" + Shorten(call.InputJson) + "): " + (call.IsError ? "error: " : "") + call.Summary);
+                    Event(mission, "tool", "margin_recheck " + call.Name + " " + call.InputJson + " -> " + (call.IsError ? "error: " : "") + call.Summary);
+                }
+                var worst = RequestCharge.WorstCase(_config.Prices, mission.Model, gate.RecheckRequest);
+                if (mission.Committed + worst + DebriefReserve(mission, turn) > mission.SpendingCap)
+                {
+                    LogCost(mission, "blocked", worst, "over_cap");
+                    RecheckAnswered(mission, turn, null, "its next calculation step could pass the Spending Cap ($" + Dollars(mission.SpendingCap) + ")", null);
+                    return;
+                }
+                SendRecheck(mission, turn, worst);
+            }
+            finally
+            {
+                if (mission.DeferredRestore != null) CompleteDeferredRestore(mission);
+                Rebuild();
+            }
+        }
+
+        /// <summary>The recheck is over, with Claudia's findings or with <paramref name="problem"/> saying why there are none: they join the Debrief request, and it goes.</summary>
+        private void RecheckAnswered(Mission mission, Turn turn, CraftCheckReply reply, string problem, StreamResult result)
+        {
+            var gate = turn.Gate;
+            gate.RecheckRequest = null;
+            gate.RecheckSnapshot = null;
+            if (reply == null)
+            {
+                gate.RecheckSkipped = "the recheck failed: " + problem;
+                Note(LogKind.Notice, "The margin recheck failed (" + problem + "); the Debrief goes on without it.");
+                turn.UserText += "\nThe mod's margin recheck did not come back (" + problem + "); judge the margin from the Game Snapshot.";
+            }
+            else
+            {
+                gate.RecheckSummary = reply.Summary;
+                gate.RecheckFindings.AddRange(reply.Findings.Select(f => (f.Severity == CraftFindingSeverity.Blocker ? "Blocker: " : "Warning: ") + f.Title
+                    + (f.Explanation.Length > 0 ? ". " + f.Explanation : "")));
+                turn.UserText += "\nThe mod's margin recheck (a Craft Check of the craft as it is now, against the Maneuver Sequences still to fly; quoted): "
+                    + MissionPrompts.Quoted(reply.Summary + (gate.RecheckFindings.Count > 0 ? " Findings: " + string.Join(" ", gate.RecheckFindings.ToArray()) : " No findings.")) + ".";
+            }
+            if (mission.DeferredRestore != null)
+            {
+                mission.Pending = null;
+                return;
+            }
+            // Recorded before AfterCharge, which may Pause for the cap: a quit then still owes the Debrief.
+            RecordUnanswered(mission, turn);
+            AfterCharge(mission);
+            if (mission != _mission || mission.Stage == MissionStage.Paused) return;
+            // A refusal or a gone model is the player's call (#45), here as for any request: the Debrief waits, Paused.
+            if (result != null && result.Status == StreamStatus.Failed && result.Failure == StreamFailure.ModelNotFound)
+            {
+                ModelGone(mission, turn);
+                return;
+            }
+            if (result != null && result.Status == StreamStatus.Completed && result.Message.StopReason == StopReason.Refusal)
+            {
+                Refused(mission, turn);
+                return;
+            }
+            Send(mission, turn);
         }
 
         // ---- The card ----

@@ -29,6 +29,7 @@ namespace ClaudiaKermin.Core.Missions
                 OutputSchemaJson = CraftCheckRules.SchemaJson(),
                 CompactionTriggerTokens = _config.CompactionTriggerTokens,
             };
+            request.Tools.AddRange(Tools.Definitions(ClaudiaKermin.Core.Tools.ToolOffer.CraftCheck));
             request.System.Add(CraftCheckPrompts.System);
             request.System.Add(RecheckPrompts.System);
             request.Messages.Add(Message.UserText(RecheckPrompts.Facts(goal, snapshot, _config.CraftCheckMarginPercent, ResolvePreferred(snapshot), remote, restOfPlan)));

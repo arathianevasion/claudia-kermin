@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Config;
+using ClaudiaKermin.Core.Tools;
 
 namespace ClaudiaKermin.Core.Missions
 {
@@ -229,6 +230,7 @@ namespace ClaudiaKermin.Core.Missions
                 OutputSchemaJson = CraftCheckRules.SchemaJson(),
                 CompactionTriggerTokens = _config.CompactionTriggerTokens,
             };
+            request.Tools.AddRange(Tools.Definitions(ToolOffer.CraftCheck));
             request.System.Add(CraftCheckPrompts.System);
             request.Messages.Add(Message.UserText(CraftCheckPrompts.Facts(goal, snapshot, _config.CraftCheckMarginPercent, ResolvePreferred(snapshot), remote)));
             var worstCase = RequestCharge.WorstCase(_config.Prices, request.Model, request);
@@ -251,6 +253,9 @@ namespace ClaudiaKermin.Core.Missions
             var charge = new CraftCheckCharge { Model = request.Model, Pending = worstCase };
             var cancel = new CancellationTokenSource();
             _cancel = cancel;
+            _request = request;
+            _toolSnapshot = snapshot;
+            _spendingCap = spendingCap;
             _background.Run(
                 () => _client.Stream(request, update => { }, cancel.Token),
                 result => Finished(cancel, charge, result),
@@ -269,6 +274,7 @@ namespace ClaudiaKermin.Core.Missions
         private void Forget()
         {
             DropCost();
+            ForgetLoop();
             if (_cancel != null) _cancel.Cancel();
             _cancel = null;
             _verdict = CraftVerdict.None;
@@ -301,6 +307,7 @@ namespace ClaudiaKermin.Core.Missions
 
         private void LogCost(CraftCheckCharge charge)
         {
+            foreach (var earlier in charge.Earlier) LogCost(earlier);
             var amount = charge.Settlement.Amount.ToString("0.0000", CultureInfo.InvariantCulture);
             _client.Log(charge.Settlement.Kind == "released"
                 ? "Craft Check released $" + amount + " on " + charge.Model + ": not billed, charged to no Mission."
@@ -317,6 +324,13 @@ namespace ClaudiaKermin.Core.Missions
                 LogCost(charge);
                 return;
             }
+            if (result != null && result.Status == StreamStatus.Completed && result.Message.StopReason == StopReason.ToolUse)
+            {
+                ToolsCalled(cancel, charge, result.Message);
+                return;
+            }
+            charge.Earlier.AddRange(_stepCharges);
+            _stepCharges.Clear();
             _cost = charge;
             _cancel = null;
             cancel.Dispose();

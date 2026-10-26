@@ -32,6 +32,8 @@ namespace ClaudiaKermin.Core.Missions
         public decimal Pending;
         /// <summary>Set when the request ended.</summary>
         public RequestSettlement Settlement;
+        /// <summary>The check's earlier tool-loop steps, each its own request, oldest first; this charge is its last.</summary>
+        public readonly System.Collections.Generic.List<CraftCheckCharge> Earlier = new System.Collections.Generic.List<CraftCheckCharge>();
     }
 
     /// <summary>The Spending Cap's pricing and settling rules, shared by a Mission's requests and the Craft Check.</summary>

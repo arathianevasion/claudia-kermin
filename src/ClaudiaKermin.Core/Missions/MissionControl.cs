@@ -11,6 +11,7 @@ using System.Threading;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Config;
 using ClaudiaKermin.Core.Kos;
+using ClaudiaKermin.Core.Tools;
 using ClaudiaKermin.Core.Ui;
 
 namespace ClaudiaKermin.Core.Missions
@@ -191,6 +192,12 @@ namespace ClaudiaKermin.Core.Missions
             public Crossing Crossing;
             /// <summary>A Debrief's extras from the mod: its events, the rest of the plan and the margin recheck (MissionControl.Debrief.cs); null before it begins.</summary>
             public DebriefGate Gate;
+            /// <summary>The tool loop's steps so far (MissionControl.Tools.cs): each added Claude's tool_use reply and its results to <see cref="Messages"/>.</summary>
+            public int ToolSteps;
+            /// <summary>The step limit's "reply now" results have gone: another tool call fails the turn.</summary>
+            public bool ToolLimitSent;
+            /// <summary>The Game Snapshot taken for the turn when its messages were built: what its tools calculate from.</summary>
+            public GameSnapshot ToolSnapshot;
             public List<Message> Messages;
             public CancellationTokenSource Cancel;
         }
@@ -959,6 +966,7 @@ namespace ClaudiaKermin.Core.Missions
             if (turn.Messages == null)
             {
                 if (turn.Effort == null) turn.Effort = EffortFor(turn.Purpose);
+                turn.ToolSnapshot = _snapshot;
                 turn.Messages = new List<Message>();
                 if (turn.Effort != mission.Effort) turn.Messages.Add(Message.SystemEffort(turn.Effort));
                 turn.Messages.Add(Message.UserText(turn.UserText));
@@ -975,6 +983,8 @@ namespace ClaudiaKermin.Core.Missions
                 CompactionTriggerTokens = _config.CompactionTriggerTokens,
                 CompactionInstructions = MissionPrompts.CompactionInstructions,
             };
+            // The same tools list on every Mission request, whatever the turn may call, so the cached prefix never changes.
+            request.Tools.AddRange(_tools.Definitions(ToolOffer.Mission));
             request.System.AddRange(mission.System);
             request.Messages.AddRange(mission.Conversation);
             request.Messages.AddRange(turn.Messages);
@@ -984,7 +994,7 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>
         /// Discards the turn's uncommitted messages and builds them again from the turn's own fields, with the
         /// Game Snapshot of this moment: the one step of "discard the uncommitted turn and resend it from scratch"
-        /// (the cut-off retry now; the tool loop and the Second look reuse it). <paramref name="reshape"/> changes
+        /// (the cut-off retry, a discarded tool loop, and the Second look to come). A tool loop in the turn goes with it. <paramref name="reshape"/> changes
         /// the turn first (its effort, a note). The turn is recorded as unanswered again, so a quit or save before
         /// the reply loads it in its new form, and nothing is sent: <see cref="Send"/> does that.
         /// </summary>
@@ -993,6 +1003,9 @@ namespace ClaudiaKermin.Core.Missions
             if (reshape != null) reshape(turn);
             turn.Messages = null;
             turn.Cancel = null;
+            turn.ToolSteps = 0;
+            turn.ToolLimitSent = false;
+            turn.ToolSnapshot = null;
             RecordUnanswered(mission, turn);
         }
 
@@ -1141,6 +1154,11 @@ namespace ClaudiaKermin.Core.Missions
             if (message.StopReason == StopReason.MaxTokens)
             {
                 CutOff(mission, turn);
+                return;
+            }
+            if (message.StopReason == StopReason.ToolUse)
+            {
+                ToolsCalled(mission, turn, message);
                 return;
             }
             var reply = MissionReply.Parse(message.Text);
@@ -1565,6 +1583,8 @@ namespace ClaudiaKermin.Core.Missions
 
         private void Pause(Mission mission, string reason)
         {
+            // A tool loop never survives a Pause: Retry or Resume sends the turn from scratch.
+            if (mission.Pending != null && !mission.InFlight) DiscardLoop(mission, mission.Pending);
             if (mission.Stage != MissionStage.Paused) mission.StageBeforePause = mission.Stage;
             mission.Stage = MissionStage.Paused;
             mission.PauseCause = PauseCause.Other;
@@ -1679,6 +1699,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             if (message.StopReason == StopReason.Refusal) return "refused";
             if (message.StopReason == StopReason.MaxTokens) return "cut_off";
+            if (message.StopReason == StopReason.ToolUse) return "tool_use";
             if (turn.Purpose == Purpose.Margin) return CraftCheckReply.Parse(message.Text) == null ? "off_schema" : "completed";
             var reply = MissionReply.Parse(message.Text);
             return reply == null || Mismatch(turn.Purpose, reply) != null ? "off_schema" : "completed";
@@ -1925,7 +1946,7 @@ namespace ClaudiaKermin.Core.Missions
             if (!view.Busy && view.CraftCheck.State == CraftCheckState.Running)
             {
                 view.Busy = true;
-                view.Activity = "checking the craft";
+                view.Activity = _craftCheck.ToolActivity.Length > 0 ? _craftCheck.ToolActivity : "checking the craft";
             }
             _view = view;
         }

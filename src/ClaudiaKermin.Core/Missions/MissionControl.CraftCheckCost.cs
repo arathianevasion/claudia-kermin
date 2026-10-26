@@ -14,6 +14,14 @@ namespace ClaudiaKermin.Core.Missions
         private void FoldCraftCheckCost(Mission mission, CraftCheckCharge cost)
         {
             if (cost == null) return;
+            // A check that called tools was several requests: each joins the cost log as its own.
+            foreach (var step in cost.Earlier)
+            {
+                LogCraftCheckCost(mission, step.Model, "craft_check_pending", step.Pending, "");
+                mission.Spent += step.Settlement.Spent;
+                mission.Held += step.Settlement.Held;
+                LogCraftCheckCost(mission, step.Model, "craft_check_" + step.Settlement.Kind, step.Settlement.Amount, step.Settlement.Outcome ?? "tool_use");
+            }
             var settlement = cost.Settlement;
             LogCraftCheckCost(mission, cost.Model, "craft_check_pending", cost.Pending, "");
             mission.Spent += settlement.Spent;
