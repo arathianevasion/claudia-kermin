@@ -30,7 +30,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # python3 -I lea
 import baseline  # noqa: E402
 
 KINDS = ['debrief', 'craft_check', 'margin_recheck', 'change', 'reply', 'settings']
-PLAN_KINDS = ('change', 'reply', 'settings')
 FINDING_KINDS = ('craft_check', 'margin_recheck')
 
 # Craft Check codes that are Blockers (CraftCheckRules.cs); every other code is a Warning. A unittest checks this
@@ -334,8 +333,9 @@ def run(cases, runner, new_effort='medium', old_effort=None, per_kind=20, repeat
                 elif rec['error'] is None:
                     rec['error'] = 'reply was not a JSON object'
                 rec['agree'] = rec['signature'] is not None and rec['signature'] == original
-                if case['kind'] in FINDING_KINDS and rec['signature'] is not None and original:
-                    rec['missed'] = missed_blockers(original, rec['signature'])
+                if case['kind'] in FINDING_KINDS and original:
+                    # A call that failed or came back unusable has found none of the Blockers.
+                    rec['missed'] = missed_blockers(original, rec['signature'] or {})
                 else:
                     rec['missed'] = []
                 results.append(rec)

@@ -247,6 +247,16 @@ class PassRuleTests(MissionCase):
         self.assertEqual((20, 0), (s['old']['agree'], s['new']['agree']))
         self.assertEqual(['agreement fell by more than 1 in 20'], s['reasons'])   # the disagreement fails it, not a Blocker
 
+    def test_a_failed_call_at_the_new_effort_counts_as_missing_the_blockers(self):
+        folder = os.path.join(self.root, 'cc')
+        fx.make_craft_check(folder, 'check-1', 'craft_check', fx.findings('delta_v_short'))
+        cases = replay.check_rebuilds(replay.load_cases(folder))
+        results = replay.run(cases, FakeRunner(lambda req: RuntimeError('down') if req['effort'] == 'medium'
+                                               else fx.findings('delta_v_short')))
+        s = replay.summarize(results)['craft_check']
+        self.assertEqual(1, s['new']['missed'])
+        self.assertFalse(s['pass'])
+
     def test_an_old_effort_that_never_reproduces_the_originals_is_no_yardstick(self):
         s = replay.summarize(replay.run(self.cases(), FakeRunner(lambda req: 'nope')))
         self.assertTrue(all('no yardstick' in ' '.join(S['reasons']) for S in s.values()))

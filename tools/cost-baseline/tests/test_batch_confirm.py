@@ -78,6 +78,13 @@ class ApprovalTests(BatchCase):
         _, text = self.run_main('--kinds', 'debrief', '--approve', 'debrief', submit=FakeSubmit())
         self.assertLess(text.index('estimated cost'), text.index('debrief results:'))
 
+    def test_an_approved_kind_with_nothing_exact_to_send_says_so(self):
+        submit = FakeSubmit()
+        code, text = self.run_main('--kinds', 'settings', '--approve', 'settings', submit=submit)
+        self.assertEqual(2, code)
+        self.assertEqual([], submit.sent)
+        self.assertIn('settings: approved, but there are no exact requests to send.', text)
+
     def test_each_kind_needs_its_own_flag(self):
         submit = FakeSubmit()
         self.run_main('--kinds', 'debrief,reply', '--approve', 'debrief', '--approve', 'reply', submit=submit)

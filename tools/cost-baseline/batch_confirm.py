@@ -137,6 +137,9 @@ def main(argv=None, submit=None, stdout=None):
             out.write('  no price for the model of %s: add it to PRICES in baseline.py; it is not in the estimate\n' % cid)
     approved = [k for k in kinds if k in a.approve and plan[k]]
     for k in kinds:
+        if k in a.approve and not plan[k]:
+            out.write('%s: approved, but there are no exact requests to send.\n' % k)
+    for k in kinds:
         if k not in a.approve:
             out.write('%s: not approved, nothing sent. Pass --approve %s to send it.\n' % (k, k))
     if a.dry_run:
