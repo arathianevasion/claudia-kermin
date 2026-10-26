@@ -13,13 +13,17 @@ namespace ClaudiaKermin.Core.Kos
     /// Whether a Mission Script is a Custom Script, read from the script itself rather than from Claudia's
     /// own flag. A script is built from Building Blocks when it calls at least one and flies the craft only
     /// through Building Blocks and Core Library helpers (<c>claudia_*</c>): any direct flight control of its
-    /// own (locking steering or throttle, staging, waiting, nodes, warp, toggling systems, running other
-    /// files) makes it a Custom Script. Plain kerboscript glue (<c>set</c>, <c>if</c>, <c>print</c>, reading
-    /// a block's result, calling <c>ADDONS:CLAUDIA:REPORT</c>) does not.
+    /// own (locking steering or throttle, waiting, nodes, warp, toggling systems, running other files) makes
+    /// it a Custom Script. Plain kerboscript glue (<c>set</c>, <c>if</c>, <c>print</c>, reading a block's
+    /// result, <c>stage.</c>, an <c>add node(...)</c> immediately followed by <c>exec_node()</c>, calling
+    /// <c>ADDONS:CLAUDIA:REPORT</c>) does not; a script that calls no Building Block is a Custom Script anyway.
     /// </summary>
     public static class ScriptProvenance
     {
         private static readonly Regex Token = new Regex(@"[A-Za-z_][A-Za-z0-9_]*|:|\(|\.", RegexOptions.Compiled);
+
+        private static readonly Regex AddNode = new Regex(@"\badd\s+node\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex ExecNodeNext = new Regex(@"\s*\.\s*((local\s+)?\w+\s+(is|to)\s+)?exec_node\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         /// <summary>Statements that fly the craft or touch files directly, whatever the script around them does.</summary>
         private static readonly HashSet<string> ControlStatements = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -53,7 +57,10 @@ namespace ClaudiaKermin.Core.Kos
         /// <summary>The decision, for a given set of Building Block names.</summary>
         public static bool IsCustom(string script, ISet<string> blockNames)
         {
-            var tokens = Token.Matches(Strip(script ?? "")).Cast<Match>().Select(m => m.Value).ToList();
+            var code = Strip(script ?? "");
+            var matches = Token.Matches(code).Cast<Match>().ToList();
+            var tokens = matches.Select(m => m.Value).ToList();
+            var flownNodes = FlownNodeAdds(code);
             var calledBlock = false;
             for (var i = 0; i < tokens.Count; i++)
             {
@@ -67,8 +74,8 @@ namespace ClaudiaKermin.Core.Kos
                 if (defining && (blockNames.Contains(token) || token.StartsWith("claudia_", StringComparison.OrdinalIgnoreCase))) return true;
                 if (previous == ":") continue; // a suffix (lex:add(...), stage:number), not a statement
                 if (next == "(" && !defining && blockNames.Contains(token)) calledBlock = true;
+                if (token.Equals("add", StringComparison.OrdinalIgnoreCase) && flownNodes.Contains(matches[i].Index)) continue;
                 if (ControlStatements.Contains(token)) return true;
-                if (token.Equals("stage", StringComparison.OrdinalIgnoreCase) && next == ".") return true;
                 if (Switches.Contains(token) && (next.Equals("on", StringComparison.OrdinalIgnoreCase) || next.Equals("off", StringComparison.OrdinalIgnoreCase))) return true;
                 if (token.Equals("set", StringComparison.OrdinalIgnoreCase))
                 {
@@ -82,8 +89,28 @@ namespace ClaudiaKermin.Core.Kos
             return !calledBlock;
         }
 
+        /// <summary>Where each <c>add node(...)</c> that the very next statement flies with <c>exec_node()</c> starts.</summary>
+        private static HashSet<int> FlownNodeAdds(string code)
+        {
+            var found = new HashSet<int>();
+            foreach (Match add in AddNode.Matches(code))
+            {
+                var depth = 0;
+                var i = add.Index + add.Length - 1; // the "("
+                for (; i < code.Length; i++)
+                {
+                    if (code[i] == '(') depth++;
+                    else if (code[i] == ')' && --depth == 0) break;
+                }
+                if (i >= code.Length) continue;
+                var after = ExecNodeNext.Match(code, i + 1);
+                if (after.Success && after.Index == i + 1) found.Add(add.Index);
+            }
+            return found;
+        }
+
         /// <summary>Drops comments and string contents, so a name inside either is not read as code.</summary>
-        private static string Strip(string script)
+        internal static string Strip(string script)
         {
             var text = new StringBuilder();
             var inString = false;

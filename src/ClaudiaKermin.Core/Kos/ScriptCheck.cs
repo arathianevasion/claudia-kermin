@@ -22,6 +22,9 @@ namespace ClaudiaKermin.Core.Kos
         /// <summary>Each forbidden call found, e.g. "line 3: COPYPATH (touch files)".</summary>
         public readonly IList<string> Forbidden;
 
+        /// <summary>Lint warnings (see <see cref="ScriptLints"/>); they never make the check fail.</summary>
+        public IList<string> Warnings = new List<string>();
+
         public ScriptCheckResult(string compileError, IList<string> forbidden)
         {
             CompileError = compileError;
