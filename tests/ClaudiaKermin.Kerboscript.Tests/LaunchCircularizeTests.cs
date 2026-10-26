@@ -57,6 +57,17 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(pitch, One("round(launch_pitch(" + altitude + ", 1000, 70000, 0.45), 2)"));
         }
 
+        [Theory]
+        [InlineData(11000, 12000, 0.5, "True")]
+        [InlineData(10900, 12000, 0.5, "True")]
+        [InlineData(10700, 12000, 0.5, "False")]
+        [InlineData(14000, 12000, 0.05, "False")]
+        [InlineData(30000, -1, 0.5, "False")]
+        public void The_turn_waits_while_throttle_max_q_eases_the_throttle_in_thick_air(double q, double maxQ, double pressureRatio, string held)
+        {
+            Assert.Equal(held, One("launch_turn_held(" + q + ", " + maxQ + ", " + pressureRatio + ")"));
+        }
+
         // ---- launch: the throttle ----
 
         [Theory]
@@ -75,6 +86,37 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(throttle, One("round(launch_throttle(" + ap + ", 80000, 2000, " + q + ", " + maxQ + ", " + floor + "), 3)"));
         }
 
+        // #234: no trickle just under the target; the cutoff band (half the top-up band) is inside it.
+        [Theory]
+        [InlineData(79999, 0, -1, 0, "0")]
+        [InlineData(79900, 0, -1, 0, "0")]
+        [InlineData(79800, 0, -1, 0, "0")]
+        [InlineData(79700, 0, -1, 0, "0.15")]
+        [InlineData(79000, 20000, 20000, 0, "0.5")]
+        public void The_throttle_cuts_off_within_the_cutoff_band_of_the_target_ap_instead_of_trickling(double ap, double q, double maxQ, double floor, string throttle)
+        {
+            Assert.Equal(throttle, One("round(launch_throttle(" + ap + ", 80000, 2000, " + q + ", " + maxQ + ", " + floor + "), 3)"));
+        }
+
+        [Theory]
+        [InlineData(80000, "200")]
+        [InlineData(10000, "50")]
+        public void The_cutoff_band_is_half_the_top_up_band(double targetAp, string cutoff)
+        {
+            Assert.Equal(cutoff, One("launch_cutoff_tol(" + targetAp + ")"));
+            Assert.Equal("True", One("launch_cutoff_tol(" + targetAp + ") < launch_topup_tol(" + targetAp + ")"));
+        }
+
+        [Theory]
+        [InlineData(0, "True")]
+        [InlineData(0.02, "False")]
+        [InlineData(0.05, "True")]
+        [InlineData(1, "True")]
+        public void Stock_delta_v_is_trusted_at_zero_throttle_or_from_five_percent(double throttle, string trusted)
+        {
+            Assert.Equal(trusted, One("claudia_dv_trusted(" + throttle + ")"));
+        }
+
         [Theory]
         [InlineData(0.9, 6.4, 9.81, 167.97, "0.374")]
         [InlineData(0.9, 20, 9.81, 100, "1")]
@@ -83,6 +125,53 @@ namespace ClaudiaKermin.Kerboscript.Tests
         public void In_thick_air_the_throttle_floor_keeps_thrust_at_least_equal_to_weight(double pressureRatio, double mass, double g, double thrust, string floor)
         {
             Assert.Equal(floor, One("round(launch_throttle_floor(" + pressureRatio + ", " + mass + ", " + g + ", " + thrust + "), 3)"));
+        }
+
+        // ---- launch: the ascent, flown offline (launch_ascent_sim.ks) ----
+
+        // launch_no_flip's ascent (target_ap 60 km, throttle_max_q 12 kPa) in the offline sim, with the
+        // turn hold on or off: the result lines by their first word, and the whole printout.
+        private static (System.Collections.Generic.Dictionary<string, string> Result, string Track) Ascent(bool hold, double dragArea, double maxQ = 12000, double targetAp = 60000)
+        {
+            var sim = System.IO.File.ReadAllText(System.IO.Path.Combine(System.AppContext.BaseDirectory, "launch_ascent_sim.ks"));
+            var lines = Run(sim + "\nsim_ascent(lexicon(\"target_ap\", " + targetAp + ", \"max_q\", " + maxQ
+                + ", \"turn_start_speed\", 60, \"turn_shape\", 0.45, \"max_aoa\", 5, \"drag_area\", " + dragArea + ", \"hold\", " + (hold ? "true" : "false") + ")).");
+            var result = lines.Where(l => !l.StartsWith("track ")).ToDictionary(l => l.Split(' ')[0], l => l.Substring(l.IndexOf(' ') + 1));
+            return (result, string.Join("\n", lines));
+        }
+
+        // #235: the pitch program turned a q-limited craft over by altitude while its thrust, held to about
+        // its weight, couldn't hold the path up; the path fell over and the craft stalled near 10 km.
+        [Theory]
+        [InlineData(0.5)]
+        [InlineData(1.0)]
+        public void Without_the_turn_hold_a_q_limited_craft_stalls_low_in_the_climb(double dragArea)
+        {
+            var (result, track) = Ascent(false, dragArea);
+            Assert.True(result["stalled"].StartsWith("True"), track);
+            var at = double.Parse(result["stalled"].Split(' ').Last());
+            Assert.InRange(at, 8000, 14000);
+        }
+
+        [Theory]
+        [InlineData(0.5)]
+        [InlineData(1.0)]
+        [InlineData(1.5)]
+        public void With_the_turn_hold_a_q_limited_craft_climbs_to_its_cutoff_without_leaving_the_airflow(double dragArea)
+        {
+            var (result, track) = Ascent(true, dragArea);
+            Assert.True(result["stalled"].StartsWith("False"), track);
+            Assert.True(double.Parse(result["coast_ap"]) >= 59700, track);
+            Assert.True(double.Parse(result["max_q"]) < 15000, track);
+            Assert.True(double.Parse(result["min_twr"]) > 0.95, track);
+            // The nose never runs ahead of (below) the prograde by more than max_aoa.
+            Assert.True(double.Parse(result["max_lead"]) <= 5, track);
+        }
+
+        [Fact]
+        public void Without_throttle_max_q_the_turn_hold_changes_nothing()
+        {
+            Assert.Equal(Ascent(false, 0.5, -1, 80000).Track, Ascent(true, 0.5, -1, 80000).Track);
         }
 
         // ---- launch: heading and the plane ----
@@ -143,6 +232,20 @@ namespace ClaudiaKermin.Kerboscript.Tests
         public void The_inclination_handed_to_lib_lazcalc_is_one_the_latitude_can_reach(double inc, double lat, string clamped)
         {
             Assert.Equal(clamped, One("round(launch_laz_inc(" + inc + ", " + lat + "), 4)"));
+        }
+
+        // ---- launch: angle off the airflow ----
+
+        [Theory]
+        [InlineData(5, 100, 8000, "5")]
+        [InlineData(5, 8000, 8000, "5")]
+        [InlineData(5, 16000, 8000, "2.5")]
+        [InlineData(5, 32000, 8000, "1.25")]
+        [InlineData(5, 400000, 8000, "0.5")]
+        [InlineData(0, 16000, 8000, "0")]
+        public void The_allowed_angle_off_the_airflow_falls_with_dynamic_pressure_above_the_reference(double maxAoa, double q, double qRef, string allowed)
+        {
+            Assert.Equal(allowed, One("round(launch_allowed_aoa(" + maxAoa + ", " + q + ", " + qRef + "), 3)"));
         }
 
         // ---- launch: losing control ----

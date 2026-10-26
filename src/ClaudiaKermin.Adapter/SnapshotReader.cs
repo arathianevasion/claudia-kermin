@@ -34,7 +34,10 @@ namespace ClaudiaKermin.Adapter
             snapshot.Craft.VesselId = vessel.id.ToString("N");
             snapshot.Craft.MassTonnes = vessel.GetTotalMass();
             snapshot.Craft.Stage = vessel.currentStage;
+            snapshot.RcsOn = vessel.ActionGroups[KSPActionGroup.RCS];
+            snapshot.Throttle = vessel.ctrlState.mainThrottle;
             ReadParts(snapshot, vessel.parts, vessel.VesselDeltaV);
+            MarkTrickleStages(snapshot, vessel.parts);
             snapshot.Crew.AddRange(vessel.GetVesselCrew().Select(Crew));
             ReadAboard(snapshot);
             // A save with CommNet off counts as linked, whatever the connection says.
@@ -167,6 +170,34 @@ namespace ClaudiaKermin.Adapter
                     EndMassT = stage.endMass,
                 });
             }
+        }
+
+        /// <summary>The throttle under which stock's delta-v reads 0 with an engine lit (#234).</summary>
+        private const double TrickleThrottle = 0.05;
+
+        /// <summary>
+        /// Stock's delta-v calculation burns at the current fuel flow while an engine is lit and the throttle is above 0, so a trickle
+        /// throttle reads 0 m/s. A stage reading 0 whose lit engine still has propellant is marked unknown, not 0.
+        /// </summary>
+        private static void MarkTrickleStages(GameSnapshot snapshot, IList<Part> parts)
+        {
+            if (snapshot.Throttle <= 0 || snapshot.Throttle >= TrickleThrottle) return;
+            foreach (var stage in snapshot.Stages)
+            {
+                if (stage.DeltaVVac > 0) continue;
+                stage.DeltaVUnreliable = parts.Any(part => part.inverseStage == stage.Number && HasLitEngineWithPropellant(part));
+            }
+        }
+
+        private static bool HasLitEngineWithPropellant(Part part)
+        {
+            foreach (var module in part.Modules)
+            {
+                var engine = module as ModuleEngines;
+                if (engine == null || !engine.EngineIgnited || engine.flameout) continue;
+                if (engine.propellants.All(p => p.totalResourceAvailable > 0)) return true;
+            }
+            return false;
         }
 
         private static void ReadBodies(GameSnapshot snapshot)

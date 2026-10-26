@@ -334,6 +334,8 @@ namespace ClaudiaKermin.Core.Missions
                         .Field("inc_deg", Math.Round(snapshot.Orbit.Inclination, 2));
             }
             json.Field("dv_used_ms", Rounded(readings.DeltaVUsed)).Field("dv_left_ms", Rounded(readings.DeltaVLeft));
+            if (snapshot != null && snapshot.DeltaVUnreliable)
+                json.Field("dv_reading", "unreadable now: stock delta-v reads 0 while an engine is lit at a trickle throttle (" + Math.Round(snapshot.Throttle * 100) + "%), not a real 0");
             json.Name("resources_pct").BeginObject();
             foreach (var pair in readings.ResourcePercent) json.Field(pair.Key, Math.Round(pair.Value, 1));
             json.EndObject();

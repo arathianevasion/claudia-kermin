@@ -4,6 +4,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using ClaudiaKermin.Core.Kos;
 
 namespace ClaudiaKermin.Core.Missions
 {
@@ -125,8 +126,12 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>A Kerbal on EVA.</summary>
         public bool Eva;
         public bool HasKosProcessor;
+        /// <summary>The vessel is loaded in the scene (its parts exist), so the mod can steer it; false when it is only a saved record.</summary>
+        public bool Loaded;
         /// <summary>The <c>persistentId</c>s of its parts with a kOS processor.</summary>
         public List<uint> ProcessorPartIds = new List<uint>();
+        /// <summary>Its parts with their parents, for choosing a processor by distance from the root; empty when the adapter didn't read them.</summary>
+        public List<VesselPart> Parts = new List<VesselPart>();
         /// <summary>Part titles, filled only for docking and separation (<see cref="VesselsDocked"/>, <see cref="VesselsSeparated"/>).</summary>
         public List<string> PartTitles = new List<string>();
         /// <summary>KSP's situation name, e.g. ORBITING or SUB_ORBITAL; "" when not read.</summary>
@@ -171,6 +176,21 @@ namespace ClaudiaKermin.Core.Missions
             Distance = distance;
             UnloadDistance = unloadDistance;
             RangeRate = rangeRate;
+        }
+    }
+
+    /// <summary>
+    /// A <see cref="MakeCraftSafe"/> could not reach the Mission's craft because it is not loaded (#207). The Mission
+    /// remembers it, saved with it, and makes the craft safe the next time it is seen loaded.
+    /// </summary>
+    public sealed class CraftSafingUnreached : MissionInput
+    {
+        public readonly string Reason;
+        public readonly string VesselId;
+        public CraftSafingUnreached(string reason, string vesselId)
+        {
+            Reason = reason ?? "";
+            VesselId = vesselId ?? "";
         }
     }
 

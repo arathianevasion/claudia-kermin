@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using ClaudiaKermin.Core.Kos;
 
 namespace ClaudiaKermin.Core.Missions
@@ -38,6 +39,8 @@ namespace ClaudiaKermin.Core.Missions
             public string InterruptReason;
             /// <summary>The craft docked since the pending plan was offered (what with), so Approve is Re-plan; "" otherwise.</summary>
             public string Recheck = "";
+            /// <summary>Why the craft is still to be made safe: a make-safe found it unloaded (#207); "" when none is owed. Saved.</summary>
+            public string SafePending = "";
             /// <summary>Requests sent when the craft docked: a plan from a later request was made with the facts after docking.</summary>
             public int RecheckSince;
         }
@@ -94,9 +97,32 @@ namespace ClaudiaKermin.Core.Missions
 
         // ---- Which vessel is the craft ----
 
+        /// <summary>The adapter couldn't make the unloaded craft safe: remember it until the craft is seen loaded (#207).</summary>
+        private void SafingUnreached(CraftSafingUnreached unreached)
+        {
+            var mission = _mission;
+            if (mission == null || unreached.VesselId != mission.VesselId) return;
+            mission.SafePending = string.IsNullOrEmpty(unreached.Reason) ? "the craft was left unsafe" : unreached.Reason;
+        }
+
+        /// <summary>The craft is loaded now: make it safe as owed, once. If it still can't be reached the adapter says so again.</summary>
+        private void ApplyPendingSafety(Mission mission, IList<SeenVessel> vessels)
+        {
+            if (mission.SafePending.Length == 0 || mission.VesselId.Length == 0) return;
+            foreach (var vessel in vessels)
+            {
+                if (vessel.Id != mission.VesselId || !vessel.Loaded) continue;
+                var reason = mission.SafePending;
+                mission.SafePending = "";
+                _commands.Add(new MakeCraftSafe(reason,mission.VesselId, mission.ProcessorPartId));
+                return;
+            }
+        }
+
         private void VesselsChanged(IList<SeenVessel> vessels)
         {
             var mission = _mission;
+            if (mission != null && vessels != null && _scene == GameScene.Flight) ApplyPendingSafety(mission, vessels);
             if (mission == null || !FollowsCraft(mission) || _scene != GameScene.Flight || vessels == null) return;
             var craft = MissionCraft.Follow(mission.Remote, mission.ProcessorPartId, mission.VesselId, vessels);
             if (craft != null)
@@ -106,7 +132,7 @@ namespace ClaudiaKermin.Core.Missions
                 // An aboard Mission's processor is one on the vessel Claudia is in: after an undock the original may have gone with the other half.
                 // (A remote Mission's craft is found by its processor, so that one never moves.)
                 if (!mission.Remote && craft.ProcessorPartIds.Count > 0 && !craft.ProcessorPartIds.Contains(mission.ProcessorPartId ?? 0))
-                    mission.ProcessorPartId = craft.ProcessorPartIds[0];
+                    mission.ProcessorPartId = ProcessorChoice.Choose(ProcessorParts(craft), _craftCheck.PreferredProcessor);
             }
             ChildVesselsSeen(vessels);
             var why = MissionCraft.CannotFly(mission.Remote, craft);
@@ -114,6 +140,14 @@ namespace ClaudiaKermin.Core.Missions
             mission.CannotFlyBecause = why;
             if (why.Length > 0) Event(mission, "cannot_fly", why);
             else Note(LogKind.Notice, "Claudia can fly " + mission.VesselName + " again. Resume from it when you're ready.");
+            CarryOnWhenSceneAllows();
+        }
+
+        /// <summary>The vessel's parts for <see cref="ProcessorChoice"/>; without part parents each processor stands alone, so the first listed wins a tie.</summary>
+        private static IList<VesselPart> ProcessorParts(SeenVessel vessel)
+        {
+            if (vessel.Parts.Count > 0) return vessel.Parts;
+            return vessel.ProcessorPartIds.Select(id => new VesselPart(id, null, true)).ToList();
         }
 
         /// <summary>If she can fly no vessel the Mission is Paused (not in Manual Control: the player has the craft until hand back).</summary>

@@ -10,6 +10,11 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>Delta-v in vacuum; it does not depend on the simulator's chosen body.</summary>
         public double DeltaVVac;
         public double DeltaVAsl;
+        /// <summary>
+        /// The 0 the simulator gave is not a real reading: an engine of this stage is lit at a trickle throttle with
+        /// propellant to burn, and stock reads 0 then (#234). The delta-v is unknown, not 0.
+        /// </summary>
+        public bool DeltaVUnreliable;
         /// <summary>Vacuum thrust; the sea-level figure is the mod's own, see <see cref="SeaLevelThrust"/>.</summary>
         public double ThrustVacKn;
         public double StartMassT;

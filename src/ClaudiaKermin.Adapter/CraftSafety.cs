@@ -14,7 +14,7 @@ namespace ClaudiaKermin.Adapter
         /// The Mission's craft (by id, loaded or not in the scene), wherever the player is: its kOS locks are let go, then
         /// throttle 0 and SAS. With no craft on record, the active vessel.
         /// </summary>
-        public static void MakeSafe(MakeCraftSafe command)
+        public static void MakeSafe(MakeCraftSafe command, System.Action<MissionInput> send = null)
         {
             var active = FlightGlobals.ActiveVessel;
             var id = command.Target(active != null ? active.id.ToString("N") : null);
@@ -29,6 +29,8 @@ namespace ClaudiaKermin.Adapter
             {
                 Debug.Log(ModInfo.LogTag + " couldn't make the Mission's craft safe (" + command.Reason + "): vessel " + id +
                           (craft == null ? " not found" : " is not loaded"));
+                // The Mission remembers an unloaded craft and has it made safe when it next loads (#207).
+                if (craft != null && send != null) send(new CraftSafingUnreached(command.Reason, id));
                 return;
             }
 
@@ -43,6 +45,35 @@ namespace ClaudiaKermin.Adapter
                 Debug.LogWarning(ModInfo.LogTag + " couldn't release the kOS locks: " + e.Message);
             }
             MakeSafe(craft);
+        }
+
+        /// <summary>The Mission's craft (by id), loaded or not: SAS off, so it can't fight kOS steering on the next run.</summary>
+        public static void SasOff(TurnSasOff command)
+        {
+            var active = FlightGlobals.ActiveVessel;
+            var id = command.Target(active != null ? active.id.ToString("N") : null);
+            if (id == null || FlightGlobals.Vessels == null) return;
+            foreach (var vessel in FlightGlobals.Vessels)
+                if (vessel != null && vessel.id.ToString("N") == id)
+                {
+                    SasOff(vessel, "hand back");
+                    return;
+                }
+            Debug.Log(ModInfo.LogTag + " couldn't turn SAS off (hand back): vessel " + id + " not found");
+        }
+
+        /// <summary>SAS off, logged. Every run starts this way: SAS and kOS cooked steering pull against each other.</summary>
+        public static void SasOff(Vessel vessel, string why)
+        {
+            if (vessel == null) return;
+            if (!vessel.loaded)
+            {
+                Debug.Log(ModInfo.LogTag + " couldn't turn SAS off (" + why + "): '" + vessel.vesselName + "' is not loaded");
+                return;
+            }
+            var was = vessel.ActionGroups[KSPActionGroup.SAS];
+            vessel.ActionGroups.SetGroup(KSPActionGroup.SAS, false);
+            Debug.Log(ModInfo.LogTag + " SAS turned off on '" + vessel.vesselName + "' (" + why + "), was " + (was ? "on" : "off"));
         }
 
         public static void MakeSafe(Vessel vessel)

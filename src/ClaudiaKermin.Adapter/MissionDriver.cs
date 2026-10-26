@@ -288,7 +288,12 @@ namespace ClaudiaKermin.Adapter
                 var safe = command as MakeCraftSafe;
                 if (safe != null)
                 {
-                    CraftSafety.MakeSafe(safe);
+                    CraftSafety.MakeSafe(safe, Send);
+                    continue;
+                }
+                if (command is TurnSasOff)
+                {
+                    CraftSafety.SasOff((TurnSasOff)command);
                     continue;
                 }
                 if (command is SeatClaudia)

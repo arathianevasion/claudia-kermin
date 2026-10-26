@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using ClaudiaKermin.Core.Kos;
 using ClaudiaKermin.Core.Missions;
 
 namespace ClaudiaKermin.Adapter
@@ -162,7 +163,9 @@ namespace ClaudiaKermin.Adapter
                 crew = vessel.GetVesselCrew();
                 foreach (var part in vessel.parts)
                 {
-                    if (part.Modules.Contains(KosProcessorModule)) seen.ProcessorPartIds.Add(part.persistentId);
+                    var hasProcessor = part.Modules.Contains(KosProcessorModule);
+                    if (hasProcessor) seen.ProcessorPartIds.Add(part.persistentId);
+                    seen.Parts.Add(new VesselPart(part.persistentId, part.parent == null ? (uint?)null : part.parent.persistentId, hasProcessor));
                     if (withParts && part.partInfo != null) seen.PartTitles.Add(part.partInfo.title);
                 }
             }
@@ -171,10 +174,15 @@ namespace ClaudiaKermin.Adapter
                 crew = vessel.protoVessel != null ? vessel.protoVessel.GetVesselCrew() : new List<ProtoCrewMember>();
                 if (vessel.protoVessel != null)
                     foreach (var part in vessel.protoVessel.protoPartSnapshots)
-                        if (part.modules.Any(m => m.moduleName == KosProcessorModule)) seen.ProcessorPartIds.Add(part.persistentId);
+                    {
+                        var hasProcessor = part.modules.Any(m => m.moduleName == KosProcessorModule);
+                        if (hasProcessor) seen.ProcessorPartIds.Add(part.persistentId);
+                        seen.Parts.Add(new VesselPart(part.persistentId, part.parent == null ? (uint?)null : part.parent.persistentId, hasProcessor));
+                    }
             }
             seen.ClaudiaAboard = crew.Any(Roster.RosterGateway.IsClaudia);
             seen.HasKosProcessor = seen.ProcessorPartIds.Count > 0;
+            seen.Loaded = vessel.loaded;
             return seen;
         }
     }

@@ -486,6 +486,52 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AnUndockingKeepsThePlayersPreferredProcessorWhenTheVesselHasTwo()
+        {
+            var mission = Control(Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-failed.sse"));
+            var start = ToRunning(mission);
+            Assert.Equal(Processor, start.ProcessorPartId);
+
+            // The player picks a second processor (#103) in the snapshot the game last sent.
+            mission.Send(Craft(s => s.Craft.Parts.Add(new SnapshotPart { Id = 3105, ParentId = 3104, Title = "Second processor", HasKosProcessor = true })));
+            mission.Send(new ChooseProcessor(3105));
+
+            // Claudia's half has two processors; the one the player chose is deeper than the other, which is listed first.
+            var undocked = Vessel("undocked", "Craft", claudia: true);
+            undocked.Parts.Add(new VesselPart(1, null, false));
+            undocked.Parts.Add(new VesselPart(4001, 1, true));
+            undocked.Parts.Add(new VesselPart(2, 1, false));
+            undocked.Parts.Add(new VesselPart(3105, 2, true));
+            undocked.ProcessorPartIds.AddRange(new uint[] { 4001, 3105 });
+            undocked.HasKosProcessor = true;
+            mission.Send(new VesselsSeen(new[] { Vessel("probe", "Probe", processors: Processor), undocked }));
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
+
+            Assert.Equal(3105u, mission.TakeCommands().OfType<MakeCraftSafe>().Single().ProcessorPartId);
+        }
+
+        [Fact]
+        public void AnUndockingWithNoPreferenceTakesTheProcessorNearestTheRoot()
+        {
+            var mission = Control(Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-failed.sse"));
+            var start = ToRunning(mission);
+
+            var undocked = Vessel("undocked", "Craft", claudia: true);
+            undocked.Parts.Add(new VesselPart(1, null, false));
+            undocked.Parts.Add(new VesselPart(2, 1, false));
+            undocked.Parts.Add(new VesselPart(3105, 2, true));
+            undocked.Parts.Add(new VesselPart(4001, 1, true));
+            undocked.ProcessorPartIds.AddRange(new uint[] { 3105, 4001 });
+            undocked.HasKosProcessor = true;
+            mission.Send(new VesselsSeen(new[] { Vessel("probe", "Probe", processors: Processor), undocked }));
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
+
+            Assert.Equal(4001u, mission.TakeCommands().OfType<MakeCraftSafe>().Single().ProcessorPartId);
+        }
+
+        [Fact]
         public void TheCraftsProcessorFollowsClaudiaToTheVesselSheStaysInAfterAnUndocking()
         {
             var mission = Control(Replies("mission-plan.sse", "mission-sequence-plan.sse", "mission-debrief-failed.sse"));

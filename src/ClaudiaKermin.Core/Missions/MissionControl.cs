@@ -117,6 +117,7 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is VesselsDocked) Docked((VesselsDocked)input);
             else if (input is VesselsSeparated) Separated((VesselsSeparated)input);
             else if (input is CraftRange) RangeSeen((CraftRange)input);
+            else if (input is CraftSafingUnreached) SafingUnreached((CraftSafingUnreached)input);
             else if (input is VesselUnloaded) Unloaded(((VesselUnloaded)input).VesselId);
             else if (input is FarSwitchConfirmed) FarSwitched(((FarSwitchConfirmed)input).VesselName);
             else if (input is RunEventSeen) EventSeen((RunEventSeen)input);
@@ -444,6 +445,7 @@ namespace ClaudiaKermin.Core.Missions
             if (mission == null) return;
             // A plan restored from a save was never offered against a snapshot: the first one after the load is its baseline.
             if (mission.AwaitingApproval && mission.PlanBaseline == null && !mission.InFlight && _scene == GameScene.Flight) mission.PlanBaseline = snapshot;
+            CarryOnWhenSceneAllows();
         }
 
         // ---- Approval ----
@@ -531,6 +533,8 @@ namespace ClaudiaKermin.Core.Missions
             if (plan.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
             mission.RunningProcessor = processor.Value;
             mission.RunId = ++_lastRunId;
+            // A new run means the craft was reachable; an owed make-safe must not cut it off later.
+            mission.SafePending = "";
             StartRunawayTimer(mission, plan);
             RunStarting(mission);
             StartLive(mission, plan);
@@ -548,7 +552,7 @@ namespace ClaudiaKermin.Core.Missions
             {
                 Purpose = Purpose.Reply,
                 Effort = "high",
-                UserText = "The player replied (quoted data): " + MissionPrompts.Quoted(text),
+                UserText = MissionPrompts.PlayerReplied(text),
                 Notice = MissionPrompts.ReplyNotice(_mission.Stage == MissionStage.AwaitingPlanApproval),
             });
         }
@@ -563,7 +567,7 @@ namespace ClaudiaKermin.Core.Missions
             {
                 Purpose = Purpose.Change,
                 Effort = "high",
-                UserText = "The player wants a change (quoted data): " + MissionPrompts.Quoted(text),
+                UserText = MissionPrompts.PlayerWantsChange(text),
                 Notice = MissionPrompts.ChangeNotice(_mission.Stage == MissionStage.AwaitingPlanApproval),
             });
         }
@@ -583,7 +587,7 @@ namespace ClaudiaKermin.Core.Missions
                 Purpose = Purpose.Question,
                 Effort = "low",
                 // While Running it carries a compact craft snapshot; it never touches the run.
-                UserText = "The player asks (quoted data): " + MissionPrompts.Quoted(text) + (running ? "\n" + CompactFacts(mission) : ""),
+                UserText = MissionPrompts.PlayerAsks(text) + (running ? "\n" + CompactFacts(mission) : ""),
                 Notice = mission.AwaitingApproval ? MissionPrompts.QuestionWithPlanPendingNotice : MissionPrompts.QuestionNotice,
                 PlayerText = mission.AwaitingApproval ? text : null,
                 Waits = running,
@@ -1212,13 +1216,18 @@ namespace ClaudiaKermin.Core.Missions
                 return;
             }
             Note(LogKind.Notice, "The Mission Plan names a vessel that hasn't left the craft (" + named + "); Claudia is revising it.");
+            // The correction is the refused turn asked again: its own Purpose (so the reply is read, and the plan offered, as it
+            // would have been) and its own wait at the Spending Cap, through the same Begin as any other turn.
+            var typed = turn.Purpose == Purpose.Reply || turn.Purpose == Purpose.Change;
             Begin(new Turn
             {
-                Purpose = Purpose.MissionPlan,
+                Purpose = turn.Purpose,
                 Effort = "high",
                 ChildVesselRetry = true,
-                UserText = MissionPrompts.ChildVesselNotLeft(ids),
-                Notice = MissionPrompts.ChildVesselNotice,
+                Waits = turn.Waits,
+                // The refused turn was never committed to the conversation, so what it asked (the player's words, the new settings) goes again.
+                UserText = turn.UserText + "\n" + MissionPrompts.ChildVesselNotLeft(ids),
+                Notice = MissionPrompts.ChildVesselNotice +(typed ? MissionPrompts.ChildVesselTypedNotice : ""),
             });
         }
 
@@ -1627,6 +1636,15 @@ namespace ClaudiaKermin.Core.Missions
                 mission.PausedForCap = false;
                 mission.PauseReason = EvaPauseReason(mission.EvaScience);
             }
+        }
+
+        /// <summary>A cap-paused Mission whose carrying on was refused (the wrong scene or vessel) goes ahead once the scene allows it, quietly until then (#220).</summary>
+        private void CarryOnWhenSceneAllows()
+        {
+            var mission = _mission;
+            if (mission == null || mission.Stage != MissionStage.Paused || !mission.PausedForCap || mission.InFlight) return;
+            if (mission.Committed >= mission.SpendingCap || mission.UnreadableCostLogRestore != null || ResumeRefusal(mission).Length > 0) return;
+            CarryOnIfCapCovers(mission);
         }
 
         private void LogCost(Mission mission, string kind, decimal amount, string outcome)

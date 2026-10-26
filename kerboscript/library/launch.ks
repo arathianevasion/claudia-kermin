@@ -21,11 +21,14 @@
 //|   turn_start_speed [60]: m/s of airspeed at which the gravity turn starts. Give more than the craft
 //|     will reach (e.g. 100000) to climb straight up.
 //|   turn_shape [0.45]: the turn's pitch is 90 * (1 - f^turn_shape), f the fraction of the way from
-//|     the turn start to the atmosphere top (or target_ap if lower); smaller turns over sooner.
+//|     the turn start to the atmosphere top (or target_ap if lower); smaller turns over sooner. The
+//|     turn starts again from vertical wherever throttle_max_q held it.
 //|   max_aoa [5]: most degrees the nose may be off the airflow while the air is thick enough to matter
-//|     (over 500 Pa dynamic pressure), all the way up and through the coast.
+//|     (over 500 Pa dynamic pressure), all the way up and through the coast; above 8000 Pa the angle
+//|     allowed falls in proportion to q (a tenth of max_aoa at the least).
 //|   throttle_max_q ["none"]: Pa of dynamic pressure to throttle back at (to 5% at most; in thick
-//|     air never below the craft's weight).
+//|     air never below the craft's weight). While it holds the throttle back in thick air the turn
+//|     waits: too slow to turn over without falling, the craft climbs as steeply as max_aoa lets it.
 //|   g, atm_height, surface_pressure ["body"]: the body's surface gravity (m/s^2), atmosphere top (m)
 //|     and surface pressure (Pa), to override what the game says.
 //|   max_duration ["auto"]: the wait on the pad plus 900 s.
@@ -93,13 +96,36 @@ function launch_pitch {
   return 90 * (1 - fraction ^ shape).
 }
 
-// The throttle on the way to target_ap: 0 once ap reaches it (only that cuts the engines off);
-// easing off linearly over the last ramp metres of apoapsis; easing off from 90% to 110% of max_q
+// Whether the turn waits at dynamic pressure q_now (Pa) and pressure_ratio of surface pressure:
+// while max_q (Pa, -1 for no limit) has the throttle easing back (from 90% of it, as launch_throttle
+// eases) in thick air, the craft is too slow to turn over without its path falling with it (#235),
+// so it climbs as steeply as max_aoa lets it instead: launch starts the turn again from vertical
+// wherever this holds.
+function launch_turn_held {
+  parameter q_now, max_q, pressure_ratio.
+  return max_q > 0 and q_now > 0.9 * max_q and launch_thick_air(pressure_ratio).
+}
+
+// How far under target_ap (m) the apoapsis may sag while coasting before the engines light again.
+function launch_topup_tol {
+  parameter target_ap.
+  return max(100, 0.005 * target_ap).
+}
+
+// How close to target_ap (m) the engines cut off: half the top-up band, so a cutoff can't be undone
+// at once by the top-up.
+function launch_cutoff_tol {
+  parameter target_ap.
+  return launch_topup_tol(target_ap) / 2.
+}
+
+// The throttle on the way to target_ap: 0 once ap is within launch_cutoff_tol of it (only that cuts the
+// engines off, so the throttle never trickles near the target); easing off linearly over the last ramp metres of apoapsis; easing off from 90% to 110% of max_q
 // (Pa, -1 for no limit) at dynamic pressure q_now (Pa), down to 5%; but never below t_floor, so the
 // throttle can't collapse in thick air (the floor wins over max_q).
 function launch_throttle {
   parameter ap, target_ap, ramp, q_now, max_q, t_floor.
-  if ap >= target_ap {
+  if ap >= target_ap - launch_cutoff_tol(target_ap) {
     return 0.
   }
   local t is min(1, (target_ap - ap) / ramp).
@@ -125,12 +151,6 @@ function launch_throttle_floor {
   return min(1, mass_t * g / thrust_kn).
 }
 
-// Degrees wrapped into [0, 360).
-function launch_wrap {
-  parameter deg.
-  return deg - 360 * floor(deg / 360).
-}
-
 // How long until a launch site at latitude lat (degrees) and celestial longitude site_lng
 // (degrees: its longitude plus the body's rotation angle) next passes under the plane of an orbit of
 // inclination inc and longitude of ascending node lan, on a body turning once in period s.
@@ -146,8 +166,8 @@ function launch_plane_wait {
     return lexicon("wait", -1, "north", true).
   }
   local offset is arcsin(x).
-  local north_wait is launch_wrap(lan + offset - site_lng) / 360 * period.
-  local south_wait is launch_wrap(lan + 180 - offset - site_lng) / 360 * period.
+  local north_wait is claudia_wrap_angle(lan + offset - site_lng) / 360 * period.
+  local south_wait is claudia_wrap_angle(lan + 180 - offset - site_lng) / 360 * period.
   if north_wait <= south_wait {
     return lexicon("wait", north_wait, "north", true).
   }
@@ -157,6 +177,22 @@ function launch_plane_wait {
 // Dynamic pressure (Pa) above which the air pushes hard enough on the craft for max_aoa to apply.
 function launch_aero_q {
   return 500.
+}
+
+// Dynamic pressure (Pa) up to which the full max_aoa is allowed; above it the allowed angle falls in
+// proportion, so a craft with weak aerodynamic stability is held nearer the airflow where q is highest.
+function launch_aoa_q_ref {
+  return 8000.
+}
+
+// Degrees the nose may be off the airflow at dynamic pressure q_pa: max_aoa up to q_ref, then
+// max_aoa * q_ref / q_pa, never less than a tenth of max_aoa.
+function launch_allowed_aoa {
+  parameter max_aoa, q_pa, q_ref.
+  if q_pa <= q_ref {
+    return max_aoa.
+  }
+  return max(max_aoa * 0.1, max_aoa * q_ref / q_pa).
 }
 
 // The body's values, each option's own or, for "body", the game's: lexicon("g", m/s^2,
@@ -332,16 +368,10 @@ function launch {
   lock throttle to tset.
   local aim is ship:up:vector.
   lock steering to aim.
-  if ship:availablethrust <= 0 {
-    local staged is claudia_autostage(ctx).
-    if staged <> "" {
-      claudia_make_safe().
-      return claudia_finish(ctx, false, staged, extra).
-    }
-  }
-  if ship:availablethrust <= 0 {
+  local lit is claudia_stage_into_engines(ctx).
+  if lit <> "" {
     claudia_make_safe().
-    return claudia_finish(ctx, false, "no thrust", extra).
+    return claudia_finish(ctx, false, lit, extra).
   }
   launch_release_clamps(ctx).
 
@@ -350,7 +380,7 @@ function launch {
   local turn_end is min(body_values:atm_height, target_ap).
   local turn_start_alt is -1.
   local ramp is max(500, 0.02 * target_ap).
-  local topup_tol is max(100, 0.005 * target_ap).
+  local topup_tol is launch_topup_tol(target_ap).
   local coasting is false.
   local off_since is -1.
   local q_max is 0.
@@ -399,6 +429,10 @@ function launch {
     if turn_start_alt < 0 and spd >= opt:turn_start_speed {
       set turn_start_alt to altitude.
     }
+    // While throttle_max_q holds the throttle back in thick air the turn waits, starting again from vertical here.
+    if turn_start_alt >= 0 and launch_turn_held(q_pa, max_q_pa, ratio) {
+      set turn_start_alt to altitude.
+    }
     local want is ship:up:vector.
     if not coasting {
       local pitch is 90.
@@ -417,7 +451,7 @@ function launch {
       }
     }
     if q_pa > launch_aero_q() and spd > 30 {
-      set want to launch_limit_aoa(want, ship:srfprograde:vector, opt:max_aoa).
+      set want to launch_limit_aoa(want, ship:srfprograde:vector, launch_allowed_aoa(opt:max_aoa, q_pa, launch_aoa_q_ref())).
     }
     set aim to want.
 
@@ -453,8 +487,6 @@ function launch {
     return claudia_finish(ctx, false, reason, extra).
   }
   set tset to 0.
-  set ship:control:pilotmainthrottle to 0.
-  unlock throttle.
-  unlock steering.
+  claudia_release_controls().
   return claudia_finish(ctx, true, "", extra).
 }

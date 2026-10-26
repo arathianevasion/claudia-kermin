@@ -201,7 +201,7 @@ namespace ClaudiaKermin.Core.Missions
 
         // ---- Handing back ----
 
-        private void HandedBack(string message)
+        private void HandedBack(string message, bool linkLost = false)
         {
             var mission = _mission;
             if (MissionOver || mission.Stage != MissionStage.ManualControl) return;
@@ -209,6 +209,12 @@ namespace ClaudiaKermin.Core.Missions
             mission.HandBackMessage = (message ?? "").Trim();
             Note(LogKind.Player, mission.HandBackMessage.Length > 0 ? "Hand back to Claudia: " + mission.HandBackMessage : "Hand back to Claudia.");
             Event(mission, "hand_back", mission.HandBackMessage);
+            // A link-lost take-back has just made the craft safe (SAS on) and keeps it that way; only the player's hand back turns it off.
+            if (!linkLost)
+            {
+                _commands.Add(new TurnSasOff(mission.VesselId));
+                Note(LogKind.Notice, "SAS turned off for Claudia's steering.");
+            }
             mission.Stage = MissionStage.Debriefing;
             Begin(HandBackTurn(mission));
         }
@@ -257,7 +263,7 @@ namespace ClaudiaKermin.Core.Missions
             _commands.Add(new MakeCraftSafe("the link dropped during Manual Control with no other crew aboard", mission.VesselId, mission.ProcessorPartId));
             _commands.Add(new PostScreenMessage(text, always: true));
             mission.ManualOrigin += "; then the link dropped with no other crew aboard, so you took the craft back and the mod made it safe";
-            HandedBack("");
+            HandedBack("", linkLost: true);
         }
 
         // ---- Re-plan when the craft changed ----

@@ -4,8 +4,8 @@
 // Building Block transfer_to, the spec's `transfer` (kOS already has a built-in TRANSFER, for moving
 // resources, which a function may not hide): flies from orbit around a body to an encounter with
 // one of its moons, planning the ejection with RSVP v9 (bundled, kerboscript/rsvp/NOTE.md). Built on
-// claudia_lib.ks and exec_node.ks; block-only helpers are prefixed transfer_to_, and the return
-// block shares the patch, descent and mid-course correction helpers here. The "//|" lines are
+// claudia_lib.ks and exec_node.ks (the patch, descent and mid-course correction helpers it shares with
+// return are in claudia_lib.ks); block-only helpers are prefixed transfer_to_. The "//|" lines are
 // Claudia's docs for it; the first is its summary.
 
 @lazyglobal off.
@@ -17,10 +17,10 @@
 //| Options:
 //|   target [required]: the body to reach, a name ("Mun") or a body (body("Minmus")).
 //|   target_pe [required]: periapsis altitude at the target, m.
-//|   window ["next"]: "next" departs in the next transfer window from 5 minutes ahead (RSVP's
-//|     cheapest departure within one synodic period); a time (UT seconds) departs in the first
-//|     window from that time. The block warps on rails to the window however far off it is: no Due
-//|     Time is needed for it.
+//|   window ["next"]: "next" departs in the next transfer window from 5 minutes ahead (RSVP
+//|     searches one synodic period, the time between windows: about 33 minutes for the Mun from a
+//|     100 km orbit); a time (UT seconds) searches the same span from that time instead. The block
+//|     warps on rails to the window however far off it is: no Due Time is needed for it.
 //|   correction [true]: false leaves out the mid-course correction.
 //|   max_duration ["auto"]: the time to the planned arrival plus 900 s.
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block; each burn gets them too.
@@ -28,6 +28,13 @@
 //| target_pe_actual (m, the periapsis predicted at the target), correction_dv (m/s the correction
 //| burned; 0 when the prediction was already within 1 km of target_pe, the fix was under 0.1 m/s,
 //| or correction is false).
+//| ejection_node_dv (m/s the ejection node asked for: RSVP's choice), ejection_dv_used (m/s the
+//| ejection burn used) and ejection_burn_time (s the engines burned): a dv_used well above the node
+//| means the burn wasted thrust; a node well above the delta-v a Hohmann transfer needs means RSVP
+//| chose it. All -1 when the block failed before the ejection burn was flown.
+//| ejection_wait (s from the block's start to the ejection node RSVP planned; for window "next" at
+//| most a synodic period and 5 minutes, plus RSVP's run): -1 when the block failed before RSVP
+//| planned the node.
 //| Fails with "target is required", "target_pe is required", an option value it can't read, "no body
 //| named <x>", a target that doesn't orbit the craft's body, "not in orbit", "a maneuver node is
 //| already planned: remove it first", "rsvp found no transfer: <why>", "no encounter with
@@ -58,54 +65,15 @@ function transfer_to_unreadable {
       return "target_pe is required".
     }
   }
-  local pe is transfer_to_pe_unreadable(opt:target_pe).
+  local pe is claudia_pe_unreadable(opt:target_pe).
   if pe <> "" {
     return pe.
   }
-  local window is transfer_to_window_unreadable(opt:window).
+  local window is claudia_window_unreadable(opt:window).
   if window <> "" {
     return window.
   }
-  return transfer_to_correction_unreadable(opt:correction).
-}
-
-function transfer_to_pe_unreadable {
-  parameter target_pe.
-  if not target_pe:istype("Scalar") or target_pe <= 0 {
-    return "target_pe must be metres above 0, not " + target_pe.
-  }
-  return "".
-}
-
-function transfer_to_window_unreadable {
-  parameter window.
-  if window:istype("String") {
-    if window <> "next" {
-      return "window must be 'next' or a time (UT seconds), not '" + window + "'".
-    }
-  } else if not window:istype("Scalar") {
-    return "window must be 'next' or a time (UT seconds), not '" + window + "'".
-  }
-  return "".
-}
-
-function transfer_to_correction_unreadable {
-  parameter correction.
-  if not correction:istype("Boolean") {
-    return "correction must be true or false".
-  }
-  return "".
-}
-
-// The earliest departure (UT): 5 minutes from now, time to plan, turn and lead the burn, or window
-// if that is a later UT.
-function transfer_to_earliest {
-  parameter now, window.
-  local earliest is now + 300.
-  if window:istype("Scalar") {
-    set earliest to max(earliest, window).
-  }
-  return earliest.
+  return claudia_correction_unreadable(opt:correction).
 }
 
 // Seconds between one departure window and the next for orbits of these periods (s); the longer
@@ -119,45 +87,39 @@ function transfer_to_synodic {
   return 1 / beat.
 }
 
-// Coordinate descent: lowers cost(x) over the list of numbers x, one coordinate at a time, starting
-// with steps (one per coordinate) and stepping on while that helps; when no step helps, every step
-// halves, up to rounds times. Stops early once the cost is at most good, or after 400 tries.
-// Returns lexicon("x", the best list, "cost", its cost).
-function transfer_to_descend {
-  parameter cost, x, steps, rounds, good.
-  local best is x:copy.
-  local best_cost is cost(best).
-  local step is steps:copy.
-  local tries is 1.
-  local halvings is 0.
-  until halvings >= rounds or best_cost <= good or tries >= 400 {
-    local moved is false.
-    for i in range(best:length) {
-      for sign in list(1, -1) {
-        local going is true.
-        until not going or best_cost <= good or tries >= 400 {
-          local trial is best:copy.
-          set trial[i] to best[i] + sign * step[i].
-          local trial_cost is cost(trial).
-          set tries to tries + 1.
-          if trial_cost < best_cost {
-            set best to trial.
-            set best_cost to trial_cost.
-            set moved to true.
-          } else {
-            set going to false.
-          }
-        }
-      }
-    }
-    if not moved {
-      for i in range(step:length) {
-        set step[i] to step[i] / 2.
-      }
-      set halvings to halvings + 1.
-    }
-  }
-  return lexicon("x", best, "cost", best_cost).
+// RSVP's options for the ejection burn: it creates the first node only, and costs each trial as
+// the ejection plus a circular capture at target_pe, the orbit circularize(at pe) flies afterwards,
+// so the window is the cheapest overall rather than the fastest. Time of flight is left to RSVP's
+// default (it starts at the Hohmann time, and with the interval below stays there).
+//
+// The search spans one synodic period from earliest: the time between windows, which covers every
+// phase of the target against the craft, so RSVP finds the next window (#228). A longer span only
+// adds windows that, from a circular orbit, cost the same to a few m/s, so RSVP picks one by noise:
+// a whole Mun period (RSVP's default) planned a window 60,000 s away and the craft drained its
+// charge waiting for it.
+//
+// The interval is how far apart RSVP seeds its local searches (kerboscript/rsvp/search.ks): a seed
+// every search_interval, each a hill climb with a first step of search_interval / 10 that stops once
+// the step is under step_threshold, max(120, 0.002 * search_interval) s. RSVP's default for a moon is
+// half the craft's period, about 980 s from 100 km: each step 98 s, under the threshold, so no climb
+// ran, and over one synodic period RSVP took the best of three departures (1649 m/s against about
+// 860 for a Hohmann transfer). A hill climb needs an interval of 1200 s or more, and then never
+// steps finer than 120 s, 22 degrees round a 100 km orbit, so instead the interval is span / 100:
+// about 100 departures, 20 s apart for the Mun from 100 km, each tried at the Hohmann time of flight.
+// That is how the merged search over a Mun period found its 839 m/s node, over 142 departures whose
+// phase against the Mun drifted 14 s each, and this costs fewer Lambert solves than that did. (An
+// inclined target such as Minmus is tried the same way; the mid-course correction takes up what the
+// fixed time of flight misses.)
+function transfer_to_rsvp_options {
+  parameter earliest, target_pe, craft_period, target_period.
+  local span is transfer_to_synodic(craft_period, target_period).
+  return lexicon(
+    "create_maneuver_nodes", "first",
+    "final_orbit_periapsis", target_pe,
+    "final_orbit_type", "circular",
+    "earliest_departure", earliest,
+    "search_duration", span,
+    "search_interval", span / 100).
 }
 
 // RSVP's failure as a reason: "rsvp found no transfer: <its problems>".
@@ -175,116 +137,10 @@ function transfer_to_rsvp_reason {
   return "rsvp found no transfer: " + texts:join("; ").
 }
 
-// RSVP's lexicon of functions, loaded on first use: a bundled file's top-level statements would
-// only run after the Mission Script ends, so RSVP's main is a function called here.
-function transfer_to_rsvp {
-  if not (defined rsvp) {
-    rsvp_file_main().
-  }
-  return rsvp.
-}
-
-// The first patch of orb's path (orb itself or a later one) around dest:
-// lexicon("orbit", that patch, "soi_ut", UT it begins), or "none" if the path never gets there.
-function transfer_to_patch {
-  parameter orb, dest.
-  local o is orb.
-  local start_ut is time:seconds.
-  until o:body = dest {
-    if not o:hasnextpatch {
-      return "none".
-    }
-    set start_ut to time:seconds + o:nextpatcheta.
-    set o to o:nextpatch.
-  }
-  return lexicon("orbit", o, "soi_ut", start_ut).
-}
-
-// m the periapsis at dest on orb's path is above target_pe (negative: below); 1e12 with no encounter.
-function transfer_to_pe_error {
-  parameter orb, dest, target_pe.
-  local p is transfer_to_patch(orb, dest).
-  if p:istype("String") {
-    return 1e12.
-  }
-  return p:orbit:periapsis - target_pe.
-}
-
-// Options for a burn the block flies with exec_node: its own common options, and what is left of
-// max_duration.
-function transfer_to_burn_options {
-  parameter ctx, nd.
-  local opt is ctx:opt.
-  local burn is lexicon("node", nd, "min_ec_pct", opt:min_ec_pct, "abort_on_part_loss", opt:abort_on_part_loss, "stage_limit", opt:stage_limit).
-  if opt:max_duration:istype("Scalar") {
-    set burn:max_duration to max(1, opt:max_duration - (time:seconds - ctx:start_ut)).
-  }
-  return burn.
-}
-
-// Flies nd with exec_node, counting its delta-v as the block's. Returns exec_node's result.
-function transfer_to_burn {
-  parameter ctx, nd.
-  local burned is exec_node(transfer_to_burn_options(ctx, nd)).
-  set ctx:dv_used to ctx:dv_used + burned:dv_used.
-  // exec_node's staging dropped parts on purpose; don't count them as lost.
-  set ctx:parts to ship:parts:length.
-  set ctx:last_ut to time:seconds.
-  return burned.
-}
-
-// The mid-course correction: a node halfway between now and arrive_ut, aimed at target_pe at dest,
-// flown with exec_node. A sphere-of-influence change before halfway (leaving a moon on the way home)
-// is waited out first (on rails, however long), so the node is placed on the orbit it will be on. Nothing is burned
-// when the prediction is already within 1 km of target_pe or the fix is under 0.1 m/s.
-// Returns lexicon("reason", "" or why the block fails, "dv", m/s burned).
-function transfer_to_correct {
-  parameter ctx, dest, target_pe, arrive_ut.
-  local done is lexicon("reason", "", "dv", 0).
-  local mid is (time:seconds + arrive_ut) / 2.
-  if ship:orbit:hasnextpatch {
-    local soi_ut is time:seconds + ship:orbit:nextpatcheta.
-    if soi_ut < mid - 120 {
-      local after is soi_ut + 30.
-      local waited is claudia_wait_until(ctx, after).
-      if waited <> "" {
-        claudia_make_safe().
-        set done:reason to waited.
-        return done.
-      }
-    }
-  }
-  if abs(transfer_to_pe_error(ship:orbit, dest, target_pe)) <= 1000 {
-    return done.
-  }
-
-  local nd is node(mid, 0, 0, 0).
-  add nd.
-  local found is transfer_to_descend({
-    parameter x.
-    set nd:radialout to x[0].
-    set nd:normal to x[1].
-    set nd:prograde to x[2].
-    return abs(transfer_to_pe_error(nd:orbit, dest, target_pe)).
-  }, list(0, 0, 0), list(1, 1, 1), 10, 100).
-  set nd:radialout to found:x[0].
-  set nd:normal to found:x[1].
-  set nd:prograde to found:x[2].
-  if nd:deltav:mag < 0.1 {
-    remove nd.
-    return done.
-  }
-  local burned is transfer_to_burn(ctx, nd).
-  set done:dv to burned:dv_used.
-  if not burned:success {
-    set done:reason to burned:reason.
-  }
-  return done.
-}
-
 function transfer_to {
   parameter options is lexicon().
-  local extra is lexicon("encounter_ut", -1, "target_pe_actual", -1, "correction_dv", 0).
+  local extra is lexicon("encounter_ut", -1, "target_pe_actual", -1, "correction_dv", 0,
+    "ejection_wait", -1, "ejection_node_dv", -1, "ejection_dv_used", -1, "ejection_burn_time", -1).
   local ctx is claudia_begin("transfer_to", options, transfer_to_defaults(), "auto").
   if ctx:error <> "" {
     return claudia_finish(ctx, false, ctx:error, extra).
@@ -312,29 +168,29 @@ function transfer_to {
     return claudia_finish(ctx, false, "a maneuver node is already planned: remove it first", extra).
   }
 
-  local earliest is transfer_to_earliest(time:seconds, opt:window).
+  local earliest is claudia_earliest(time:seconds, opt:window).
 
-  // RSVP searches one synodic period, so it finds the next window, and adds the ejection node; on
+  // RSVP searches the next window for the cheapest departure, and adds the ejection node; on
   // failure it removes every node.
-  local planned is transfer_to_rsvp():goto(dest, lexicon(
-    "create_maneuver_nodes", "first",
-    "final_orbit_periapsis", opt:target_pe,
-    "earliest_departure", earliest,
-    "search_duration", transfer_to_synodic(ship:orbit:period, dest:orbit:period))).
+  local planned is claudia_rsvp():goto(dest, transfer_to_rsvp_options(earliest, opt:target_pe, ship:orbit:period, dest:orbit:period)).
   if not planned:success or not hasnode {
     return claudia_finish(ctx, false, transfer_to_rsvp_reason(planned), extra).
   }
-  // The ejection burn may be far off (window "next" can be more than an orbit away, a UT window
+  // The ejection burn may be far off (window "next" up to a synodic period away, a UT window
   // further): exec_node warps there on rails, with no cap (ADR 0004).
+  set extra:ejection_wait to round(nextnode:time - ctx:start_ut).
   if opt:max_duration:istype("String") {
     set opt:max_duration to planned:predicted:arrival:time - ctx:start_ut + 900.
   }
 
-  local ejected is transfer_to_burn(ctx, nextnode).
+  local ejected is claudia_burn(ctx, nextnode).
+  set extra:ejection_node_dv to ejected:node_dv.
+  set extra:ejection_dv_used to round(ejected:dv_used, 1).
+  set extra:ejection_burn_time to ejected:burn_time.
   if not ejected:success {
     return claudia_finish(ctx, false, ejected:reason, extra).
   }
-  local enc is transfer_to_patch(ship:orbit, dest).
+  local enc is claudia_patch(ship:orbit, dest).
   if enc:istype("String") {
     return claudia_finish(ctx, false, "no encounter with " + dest:name + " after the ejection burn", extra).
   }
@@ -345,12 +201,12 @@ function transfer_to {
       claudia_make_safe().
       return claudia_finish(ctx, false, ticked, extra).
     }
-    local fixed is transfer_to_correct(ctx, dest, opt:target_pe, enc:soi_ut).
+    local fixed is claudia_correct(ctx, dest, opt:target_pe, enc:soi_ut).
     set extra:correction_dv to round(fixed:dv, 2).
     if fixed:reason <> "" {
       return claudia_finish(ctx, false, fixed:reason, extra).
     }
-    set enc to transfer_to_patch(ship:orbit, dest).
+    set enc to claudia_patch(ship:orbit, dest).
     if enc:istype("String") {
       return claudia_finish(ctx, false, "no encounter with " + dest:name + " after the correction", extra).
     }

@@ -273,6 +273,37 @@ namespace ClaudiaKermin.Core.Tests
             return snapshot;
         }
 
+        private static MissionSaveState SaveWithSequence(bool customScript, string reason, string script)
+        {
+            // Written with the badge Claudia claimed, whatever the script says, as saves from before the badge was derived were.
+            var state = new MissionSaveState
+            {
+                Id = "m1",
+                Stage = MissionStage.AwaitingSequenceApproval,
+                SequencePlan = new SequencePlan { Name = "Burn", Script = script, CustomScript = customScript, CustomScriptReason = reason },
+            };
+            return MissionSaveState.FromValues(state.ToValues());
+        }
+
+        [Fact]
+        public void ACustomScriptBadgeIsReDerivedFromTheSavedScriptNotTrustedFromTheSavedFlag()
+        {
+            // An older save carries the badge Claudia claimed: custom on a script built from Building Blocks...
+            var blocks = SaveWithSequence(true, "Nothing fits.", "local res is circularize().\nprint \"done\".\n");
+            Assert.False(blocks.SequencePlan.CustomScript);
+            Assert.Equal("", blocks.SequencePlan.CustomScriptReason);
+
+            // ...and not custom on a script that flies the craft by hand.
+            var custom = SaveWithSequence(false, "", "lock throttle to 1.\nwait 5.\n");
+            Assert.True(custom.SequencePlan.CustomScript);
+            Assert.False(string.IsNullOrWhiteSpace(custom.SequencePlan.CustomScriptReason));
+
+            // A custom script keeps the reason Claudia gave.
+            var kept = SaveWithSequence(true, "Nothing fits.", "lock throttle to 1.\n");
+            Assert.True(kept.SequencePlan.CustomScript);
+            Assert.Equal("Nothing fits.", kept.SequencePlan.CustomScriptReason);
+        }
+
         [Fact]
         public void TheDockingRecheckNoticeAndCannotFlyPauseRoundTripAndOldSavesLoadWithNoneSet()
         {
@@ -475,6 +506,10 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("Claudia declined.", after.PauseReason);
             Assert.NotNull(after.SequencePlan);
             Assert.Equal(1, after.SequencesProposed);
+            // The notice says the Mission is still Paused and why, not that the reply awaits Approval.
+            var notice = Assert.Single(mission.View.Log, e => e.Kind == LogKind.Notice && e.Text.Contains("already been answered"));
+            Assert.Contains("stays Paused: Claudia declined.", notice.Text);
+            Assert.DoesNotContain("for your Approval", notice.Text);
 
             // Resume lands on the offered plan and asks nothing.
             mission.Send(new Retry());
@@ -768,6 +803,76 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ACapPausedMissionRefusedOnLoadCarriesOnOnceTheSceneAllowsIt()
+        {
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-big.sse"), ScriptedResponse.Fixture("mission-plan-priced.sse"));
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            StartChecked(mission, new StartMission(Goal, 0.50m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.Paused);
+            // The Pause is the cap's and the craft's both: Resume waits for the player to be in Flight with it.
+            var saved = Saved(mission);
+            saved[0].PausedCannotFly = true;
+            mission.Send(new RaiseCap(25m));
+
+            // Loaded at the space centre: Resume is refused there, so the Mission waits.
+            var after = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-priced.sse"));
+            var resumed = Control(after);
+            resumed.Send(new SceneChanged(GameScene.Other));
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            Assert.Equal(MissionStage.Paused, resumed.View.Stage);
+            Assert.Empty(after.Requests);
+
+            // Into Flight, in the craft: the cap covers what it has spent, so the Mission carries on.
+            resumed.Send(new SceneChanged(GameScene.Flight));
+            resumed.Send(OnPad());
+            Assert.Equal(MissionStage.AwaitingPlanApproval, resumed.View.Stage);
+            Assert.DoesNotContain(QuickReply.RaiseCap, resumed.View.QuickReplies);
+        }
+
+        [Fact]
+        public void ACapPausedMissionRefusedOnARaiseSendsItsWaitingRequestOnceTheSceneAllowsIt()
+        {
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-big.sse"));
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            StartChecked(mission, new StartMission(Goal, 0.50m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.Paused);
+            var saved = Saved(mission);
+
+            // Loaded in Flight; the Approve is turned away at the cap, and the request waits.
+            var after = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var resumed = Control(after);
+            resumed.Send(new SceneChanged(GameScene.Flight));
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            resumed.Send(OnPad());
+            resumed.Send(new Retry());
+            resumed.Send(new Approve());
+            Assert.Equal(MissionStage.Paused, resumed.View.Stage);
+            Assert.Empty(after.Requests);
+
+            // Raised while the player is in another vessel: Resume is refused, so it waits.
+            var elsewhere = OnPad();
+            elsewhere.Craft.VesselId = "relay";
+            elsewhere.Craft.Name = "Relay Station";
+            elsewhere.Crew.Clear();
+            elsewhere.Craft.Parts.RemoveAll(p => p.HasKosProcessor);
+            resumed.Send(elsewhere);
+            resumed.Send(new RaiseCap(25m));
+            Assert.Equal(MissionStage.Paused, resumed.View.Stage);
+            Assert.Empty(after.Requests);
+
+            // Back in the craft: the cap covers the waiting request, so one request goes out.
+            resumed.Send(OnPad());
+            DrainUntil(resumed, v => after.Requests.Count > 0 && !v.Busy);
+            Assert.Single(after.Requests);
+            resumed.Send(OnPad());
+            Assert.Single(after.Requests);
+        }
+
+        [Fact]
         public void ACapPausedMissionWhoseCapIsStillReachedStaysPausedWhenLoaded()
         {
             var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan-big.sse")));
@@ -986,6 +1091,73 @@ namespace ClaudiaKermin.Core.Tests
             resumed.Send(new ChooseModel("claude-opus-5-5"));
             DrainUntil(resumed, v => v.Stage == MissionStage.AwaitingPlanApproval);
             Assert.Equal("claude-opus-5-5", resumed.View.Model);
+        }
+
+        private MissionControl PausedMissionBy(StreamingFakeTransport transport)
+        {
+            var mission = Control(transport);
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            StartChecked(mission, new StartMission(Goal, 10m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.Paused);
+            return mission;
+        }
+
+        [Fact]
+        public void AQuickloadOfARefusalPauseKeepsTheUnansweredTurnSoRetryResendsItOnce()
+        {
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("refusal.sse"), ScriptedResponse.Fixture("mission-plan.sse"));
+            var mission = PausedMissionBy(transport);
+            var saved = Saved(mission);
+            Assert.Equal("Refusal", saved[0].PauseCause);
+
+            // A quickload within the running game: the Mission is already in memory.
+            mission.Send(new MissionsRestored(_save.Path, saved));
+            DrainUntil(mission, v => !v.Busy);
+            Assert.Equal(MissionStage.Paused, mission.View.Stage);
+            Assert.Equal(new[] { QuickReply.Retry, QuickReply.RetryWithNote, QuickReply.EndMission }, mission.View.QuickReplies.ToArray());
+            Assert.Single(transport.Requests);
+
+            mission.Send(new Retry());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            Assert.Equal(2, transport.Requests.Count);
+            Assert.Equal(transport.Requests[0].Body, transport.Requests[1].Body);
+        }
+
+        [Fact]
+        public void AQuickloadOfAModelGonePauseKeepsTheUnansweredTurnSoChooseModelResendsItOnce()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Error(404, "not_found_error", "model: claude-sonnet-5-5"),
+                ScriptedResponse.Fixture("mission-plan.sse"));
+            var mission = PausedMissionBy(transport);
+            var saved = Saved(mission);
+            Assert.Equal("ModelGone", saved[0].PauseCause);
+
+            mission.Send(new MissionsRestored(_save.Path, saved));
+            DrainUntil(mission, v => !v.Busy);
+            Assert.Equal(new[] { QuickReply.ChooseModel, QuickReply.EndMission }, mission.View.QuickReplies.ToArray());
+
+            mission.Send(new ChooseModel("claude-opus-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            Assert.Equal(2, transport.Requests.Count);
+            // The same turn went again, on the model chosen.
+            Assert.Equal(transport.Requests[0].Body.Replace("claude-sonnet-5-5", "claude-opus-5-5"), transport.Requests[1].Body);
+        }
+
+        [Fact]
+        public void AQuickloadOfARefusalPauseThenRetryWithANoteSendsTheOriginalTurnPlusTheNote()
+        {
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("refusal.sse"), ScriptedResponse.Fixture("mission-plan.sse"));
+            var mission = PausedMissionBy(transport);
+            var saved = Saved(mission);
+
+            mission.Send(new MissionsRestored(_save.Path, saved));
+            DrainUntil(mission, v => !v.Busy);
+            mission.Send(new RetryWithNote("A harmless test craft."));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            Assert.Equal(2, transport.Requests.Count);
+            Assert.Contains("A harmless test craft.", transport.Requests[1].Body);
         }
 
         [Fact]

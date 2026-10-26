@@ -39,7 +39,7 @@
 //|   stage_limit [0]: auto-staging stages on flameout but never below this stage number, and never
 //|     fires a stage holding parachutes or heat-shield separation. Out of fuel at the limit fails.
 //| A block returns a result lexicon (it does not report). Common fields: success (boolean), reason
-//| ("" on success), dv_used (m/s), dv_remaining (m/s, stock estimate), duration (s), body,
+//| ("" on success), dv_used (m/s), dv_remaining (m/s, stock estimate; -1 and a dv_remaining_note at a trickle throttle), duration (s), body,
 //| situation (e.g. "ORBITING"), orbit (lexicon ap, pe in m, inc in degrees) or, when landed,
 //| splashed or on the pad, geo (lexicon lat, lng, alt), and stage (current stage number); plus the
 //| block's extra results. An abort leaves the craft safe (throttle 0, SAS holding attitude) and
@@ -529,6 +529,21 @@ function claudia_fly_node {
   return "".
 }
 
+// Stock delta-v reads 0 while an engine runs at a trickle of throttle (under 5%), so it can be trusted
+// only at throttle 0 or from 5% up.
+function claudia_dv_trusted {
+  parameter throttle_now.
+  return throttle_now <= 0 or throttle_now >= 0.05.
+}
+
+// The stock delta-v left (m/s), or -1 (unknown) at a trickle throttle.
+function claudia_dv_remaining {
+  if not claudia_dv_trusted(ship:control:mainthrottle) {
+    return -1.
+  }
+  return round(ship:deltav:current, 1).
+}
+
 // The block's result lexicon: the Script Result's common fields plus extra (the block's own).
 function claudia_finish {
   parameter ctx, success, reason, extra.
@@ -536,7 +551,7 @@ function claudia_finish {
     "success", success,
     "reason", reason,
     "dv_used", round(ctx:dv_used, 1),
-    "dv_remaining", round(ship:deltav:current, 1),
+    "dv_remaining", claudia_dv_remaining(),
     "duration", round(time:seconds - ctx:start_ut, 1),
     "body", ship:body:name,
     "situation", status,
@@ -546,10 +561,236 @@ function claudia_finish {
   } else {
     set result["orbit"] to lexicon("ap", round(ship:apoapsis), "pe", round(ship:periapsis), "inc", round(ship:orbit:inclination, 2)).
   }
+  if not claudia_dv_trusted(ship:control:mainthrottle) {
+    set result["dv_remaining_note"] to "unknown: stock delta-v reads 0 while the engines run at a trickle throttle".
+  }
   for key in extra:keys {
     set result[key] to extra[key].
   }
   // One log row per block result; this is not the Script Result, which the Mission Script reports once.
   addons:claudia:blockresult(ctx:block, result).
   return result.
+}
+
+// ---- Flying: shared by launch, ascend, land and exec_node ----
+
+// Degrees wrapped into [0, 360).
+function claudia_wrap_angle {
+  parameter deg.
+  return deg - 360 * floor(deg / 360).
+}
+
+// A craft whose engines aren't lit yet stages into them (within stage_limit). Returns "" once some
+// engine gives thrust, else why not: the staging reason, or "no thrust".
+function claudia_stage_into_engines {
+  parameter ctx.
+  if ship:availablethrust <= 0 {
+    local staged is claudia_autostage(ctx).
+    if staged <> "" {
+      return staged.
+    }
+  }
+  if ship:availablethrust <= 0 {
+    return "no thrust".
+  }
+  return "".
+}
+
+// The tail of a burn that succeeded: throttle to 0 and the throttle and steering locks released.
+function claudia_release_controls {
+  set ship:control:pilotmainthrottle to 0.
+  unlock throttle.
+  unlock steering.
+}
+
+// ---- Transfers: shared by transfer_to and return ----
+
+// "" or why a target_pe value isn't metres above 0.
+function claudia_pe_unreadable {
+  parameter target_pe.
+  if not target_pe:istype("Scalar") or target_pe <= 0 {
+    return "target_pe must be metres above 0, not " + target_pe.
+  }
+  return "".
+}
+
+// "" or why a window value isn't "next" or a time (UT seconds).
+function claudia_window_unreadable {
+  parameter window.
+  if window:istype("String") {
+    if window <> "next" {
+      return "window must be 'next' or a time (UT seconds), not '" + window + "'".
+    }
+  } else if not window:istype("Scalar") {
+    return "window must be 'next' or a time (UT seconds), not '" + window + "'".
+  }
+  return "".
+}
+
+// "" or why a correction value isn't true or false.
+function claudia_correction_unreadable {
+  parameter correction.
+  if not correction:istype("Boolean") {
+    return "correction must be true or false".
+  }
+  return "".
+}
+
+// The earliest departure (UT): 5 minutes from now, time to plan, turn and lead the burn, or window
+// if that is a later UT.
+function claudia_earliest {
+  parameter now, window.
+  local earliest is now + 300.
+  if window:istype("Scalar") {
+    set earliest to max(earliest, window).
+  }
+  return earliest.
+}
+
+// Coordinate descent: lowers cost(x) over the list of numbers x, one coordinate at a time, starting
+// with steps (one per coordinate) and stepping on while that helps; when no step helps, every step
+// halves, up to rounds times. Stops early once the cost is at most good, or after 400 tries.
+// Returns lexicon("x", the best list, "cost", its cost).
+function claudia_descend {
+  parameter cost, x, steps, rounds, good.
+  local best is x:copy.
+  local best_cost is cost(best).
+  local step is steps:copy.
+  local tries is 1.
+  local halvings is 0.
+  until halvings >= rounds or best_cost <= good or tries >= 400 {
+    local moved is false.
+    for i in range(best:length) {
+      for sign in list(1, -1) {
+        local going is true.
+        until not going or best_cost <= good or tries >= 400 {
+          local trial is best:copy.
+          set trial[i] to best[i] + sign * step[i].
+          local trial_cost is cost(trial).
+          set tries to tries + 1.
+          if trial_cost < best_cost {
+            set best to trial.
+            set best_cost to trial_cost.
+            set moved to true.
+          } else {
+            set going to false.
+          }
+        }
+      }
+    }
+    if not moved {
+      for i in range(step:length) {
+        set step[i] to step[i] / 2.
+      }
+      set halvings to halvings + 1.
+    }
+  }
+  return lexicon("x", best, "cost", best_cost).
+}
+
+// RSVP's lexicon of functions, loaded on first use: a bundled file's top-level statements would
+// only run after the Mission Script ends, so RSVP's main is a function called here.
+function claudia_rsvp {
+  if not (defined rsvp) {
+    rsvp_file_main().
+  }
+  return rsvp.
+}
+
+// The first patch of orb's path (orb itself or a later one) around dest:
+// lexicon("orbit", that patch, "soi_ut", UT it begins), or "none" if the path never gets there.
+function claudia_patch {
+  parameter orb, dest.
+  local o is orb.
+  local start_ut is time:seconds.
+  until o:body = dest {
+    if not o:hasnextpatch {
+      return "none".
+    }
+    set start_ut to time:seconds + o:nextpatcheta.
+    set o to o:nextpatch.
+  }
+  return lexicon("orbit", o, "soi_ut", start_ut).
+}
+
+// m the periapsis at dest on orb's path is above target_pe (negative: below); 1e12 with no encounter.
+function claudia_pe_error {
+  parameter orb, dest, target_pe.
+  local p is claudia_patch(orb, dest).
+  if p:istype("String") {
+    return 1e12.
+  }
+  return p:orbit:periapsis - target_pe.
+}
+
+// Options for a burn the block flies with exec_node: its own common options, and what is left of
+// max_duration.
+function claudia_burn_options {
+  parameter ctx, nd.
+  local opt is ctx:opt.
+  local burn is lexicon("node", nd, "min_ec_pct", opt:min_ec_pct, "abort_on_part_loss", opt:abort_on_part_loss, "stage_limit", opt:stage_limit).
+  if opt:max_duration:istype("Scalar") {
+    set burn:max_duration to max(1, opt:max_duration - (time:seconds - ctx:start_ut)).
+  }
+  return burn.
+}
+
+// Flies nd with exec_node, counting its delta-v as the block's. Returns exec_node's result.
+function claudia_burn {
+  parameter ctx, nd.
+  local burned is exec_node(claudia_burn_options(ctx, nd)).
+  set ctx:dv_used to ctx:dv_used + burned:dv_used.
+  // exec_node's staging dropped parts on purpose; don't count them as lost.
+  set ctx:parts to ship:parts:length.
+  set ctx:last_ut to time:seconds.
+  return burned.
+}
+
+// The mid-course correction: a node halfway between now and arrive_ut, aimed at target_pe at dest,
+// flown with exec_node. A sphere-of-influence change before halfway (leaving a moon on the way home)
+// is waited out first (on rails, however long), so the node is placed on the orbit it will be on. Nothing is burned
+// when the prediction is already within 1 km of target_pe or the fix is under 0.1 m/s.
+// Returns lexicon("reason", "" or why the block fails, "dv", m/s burned).
+function claudia_correct {
+  parameter ctx, dest, target_pe, arrive_ut.
+  local done is lexicon("reason", "", "dv", 0).
+  local mid is (time:seconds + arrive_ut) / 2.
+  if ship:orbit:hasnextpatch {
+    local soi_ut is time:seconds + ship:orbit:nextpatcheta.
+    if soi_ut < mid - 120 {
+      local after is soi_ut + 30.
+      local waited is claudia_wait_until(ctx, after).
+      if waited <> "" {
+        claudia_make_safe().
+        set done:reason to waited.
+        return done.
+      }
+    }
+  }
+  if abs(claudia_pe_error(ship:orbit, dest, target_pe)) <= 1000 {
+    return done.
+  }
+
+  local nd is node(mid, 0, 0, 0).
+  add nd.
+  local found is claudia_descend({
+    parameter x.
+    set nd:radialout to x[0].
+    set nd:normal to x[1].
+    set nd:prograde to x[2].
+    return abs(claudia_pe_error(nd:orbit, dest, target_pe)).
+  }, list(0, 0, 0), list(1, 1, 1), 10, 100).
+  set nd:radialout to found:x[0].
+  set nd:normal to found:x[1].
+  set nd:prograde to found:x[2].
+  if nd:deltav:mag < 0.1 {
+    remove nd.
+    return done.
+  }
+  local burned is claudia_burn(ctx, nd).
+  set done:dv to burned:dv_used.
+  if not burned:success {
+    set done:reason to burned:reason.
+  }
+  return done.
 }

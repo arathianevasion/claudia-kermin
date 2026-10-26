@@ -11,4 +11,5 @@
 wait until ship:unpacked.
 local result is transfer_to(lexicon("target", "Mun", "target_pe", 30000, "stage_limit", 2)).
 print "transfer_to test: success " + result:success + ", Mun pe " + result:target_pe_actual + " m, correction " + result:correction_dv + " m/s, " + result:reason.
+print "transfer_to ejection: node " + result:ejection_node_dv + " m/s, burned " + result:ejection_dv_used + " m/s in " + result:ejection_burn_time + " s, " + result:ejection_wait + " s after the start".
 addons:claudia:report(result).

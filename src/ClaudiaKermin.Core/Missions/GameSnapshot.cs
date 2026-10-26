@@ -104,6 +104,8 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>Null when there is no orbit to read (e.g. in the editor).</summary>
         public SnapshotOrbit Orbit;
         public List<SnapshotResource> Resources = new List<SnapshotResource>();
+        /// <summary>The RCS switch on the craft: true on, false off, null when it isn't read (the editor). Claudia plans around it; the mod never changes it.</summary>
+        public bool? RcsOn;
 
         // ---- Craft Check facts, computed by the adapter from the game ----
 
@@ -113,6 +115,13 @@ namespace ClaudiaKermin.Core.Missions
         public bool DeltaVSimulator;
         /// <summary>Per-stage figures from the stock simulator.</summary>
         public List<SnapshotStage> Stages = new List<SnapshotStage>();
+        /// <summary>The main throttle, 0 to 1; 0 when it isn't read.</summary>
+        public double Throttle;
+        /// <summary>Some stage's delta-v is unknown: stock reads 0 at a trickle throttle with an engine lit (#234).</summary>
+        public bool DeltaVUnreliable
+        {
+            get { return Stages.Any(s => s.DeltaVUnreliable); }
+        }
         public List<SnapshotCrewMember> Crew = new List<SnapshotCrewMember>();
 
         // ---- Aboard and remote facts (spec stories 41 to 44) ----
@@ -184,11 +193,15 @@ namespace ClaudiaKermin.Core.Missions
                 .Field("body", Body)
                 .Field("mode", GameMode)
                 .Field("dv_sim", DeltaVSimulator)
+                .Field("throttle", Throttle)
                 .Field("claudia_standing", ClaudiaStanding)
                 .Field("commnet", CommNetEnabled)
                 .Field("link", HasLink)
                 .Field("altitude", Altitude)
                 .Field("vertical_speed", VerticalSpeed);
+            if (RcsOn.HasValue) json.Field("rcs_on", RcsOn.Value);
+            if (DeltaVUnreliable)
+                json.Field("dv_reading", "unreliable at low throttle: stock delta-v reads 0 while an engine is lit at a trickle throttle, so the stages' delta-v is unknown, not 0");
             json.Name("craft").BeginObject()
                 .Field("name", Craft.Name)
                 .Field("mass_t", Craft.MassTonnes)
@@ -221,9 +234,13 @@ namespace ClaudiaKermin.Core.Missions
             json.EndArray().EndObject();
             json.Name("stages").BeginArray();
             foreach (var stage in Stages)
-                json.BeginObject().Field("stage", stage.Number).Field("dv_vac", stage.DeltaVVac).Field("dv_asl", stage.DeltaVAsl)
-                    .Field("thrust_vac_kn", stage.ThrustVacKn)
+            {
+                json.BeginObject().Field("stage", stage.Number);
+                if (stage.DeltaVUnreliable) json.Name("dv_vac").Null().Name("dv_asl").Null().Field("dv_unreliable", true);
+                else json.Field("dv_vac", stage.DeltaVVac).Field("dv_asl", stage.DeltaVAsl);
+                json.Field("thrust_vac_kn", stage.ThrustVacKn)
                     .Field("start_mass_t", stage.StartMassT).Field("end_mass_t", stage.EndMassT).EndObject();
+            }
             json.EndArray();
             json.Name("crew").BeginArray();
             foreach (var member in Crew) json.BeginObject().Field("name", member.Name).Field("trait", member.Trait).EndObject();
@@ -292,11 +309,13 @@ namespace ClaudiaKermin.Core.Missions
                 Body = JsonNode.Str(root["body"]) ?? "",
                 GameMode = JsonNode.Str(root["mode"]) ?? "",
                 DeltaVSimulator = JsonNode.Bool(root["dv_sim"]) ?? false,
+                Throttle = JsonNode.Double(root["throttle"]) ?? 0,
                 ClaudiaStanding = JsonNode.Str(root["claudia_standing"]) ?? "",
                 CommNetEnabled = JsonNode.Bool(root["commnet"]) ?? true,
                 HasLink = JsonNode.Bool(root["link"]) ?? true,
                 Altitude = JsonNode.Double(root["altitude"]) ?? 0,
                 VerticalSpeed = JsonNode.Double(root["vertical_speed"]) ?? 0,
+                RcsOn = JsonNode.Bool(root["rcs_on"]),
             };
             var craft = root["craft"];
             if (craft != null)
@@ -345,6 +364,7 @@ namespace ClaudiaKermin.Core.Missions
                     snapshot.Stages.Add(new SnapshotStage
                     {
                         Number = (int)(JsonNode.Long(stage["stage"]) ?? 0),
+                        DeltaVUnreliable = JsonNode.Bool(stage["dv_unreliable"]) ?? false,
                         DeltaVVac = JsonNode.Double(stage["dv_vac"]) ?? 0,
                         DeltaVAsl = JsonNode.Double(stage["dv_asl"]) ?? 0,
                         ThrustVacKn = JsonNode.Double(stage["thrust_vac_kn"]) ?? 0,

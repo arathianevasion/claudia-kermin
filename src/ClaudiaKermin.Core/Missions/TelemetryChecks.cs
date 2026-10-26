@@ -186,10 +186,10 @@ namespace ClaudiaKermin.Core.Missions
             return readings;
         }
 
-        /// <summary>The craft's vacuum delta-v left from the stock simulator; null when it is off.</summary>
+        /// <summary>The craft's vacuum delta-v left from the stock simulator; null when it is off or a stage's reading is unreliable (a trickle throttle, #234).</summary>
         public static double? DeltaVLeftOf(GameSnapshot snapshot)
         {
-            if (snapshot == null || !snapshot.DeltaVSimulator) return null;
+            if (snapshot == null || !snapshot.DeltaVSimulator || snapshot.DeltaVUnreliable) return null;
             return snapshot.Stages.Sum(s => s.DeltaVVac);
         }
 

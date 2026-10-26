@@ -332,6 +332,43 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AnUnloadedCraftIsMadeSafeWhenItNextLoadsEvenAcrossASaveAndLoad()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                ScriptedResponse.Fixture("mission-debrief-failed.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission);
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
+            mission.TakeCommands();
+
+            // The adapter found the craft unloaded: nothing owed is re-issued while it stays unloaded.
+            mission.Send(new CraftSafingUnreached("some other vessel", "another-vessel"));
+            Assert.Equal("", mission.ExportStates()[0].SafePending);
+            mission.Send(new CraftSafingUnreached("a Failed Debrief", CraftId));
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(new VesselsSeen(new[] { new SeenVessel { Id = CraftId, Loaded = false } }));
+            Assert.Empty(mission.TakeCommands().OfType<MakeCraftSafe>());
+
+            // It survives the save.
+            var saved = mission.ExportStates();
+            Assert.Equal("a Failed Debrief", saved[0].SafePending);
+            Assert.Equal("a Failed Debrief", MissionSaveState.FromValues(saved[0].ToValues()).SafePending);
+            Assert.Equal("", MissionSaveState.FromValues(new Dictionary<string, string> { { "id", "m1" } }).SafePending);
+
+            // The craft loads: it is made safe once.
+            mission.Send(new VesselsSeen(new[] { new SeenVessel { Id = CraftId, Loaded = true } }));
+            var safe = mission.TakeCommands().OfType<MakeCraftSafe>().Single();
+            Assert.Equal(CraftId, safe.VesselId);
+            Assert.Equal("a Failed Debrief", safe.Reason);
+            mission.Send(new VesselsSeen(new[] { new SeenVessel { Id = CraftId, Loaded = true } }));
+            Assert.Empty(mission.TakeCommands().OfType<MakeCraftSafe>());
+            Assert.Equal("", mission.ExportStates()[0].SafePending);
+        }
+
+        [Fact]
         public void MakeCraftSafeFallsBackToTheActiveVesselOnlyWithNoCraftOnRecord()
         {
             Assert.Equal("active", new MakeCraftSafe("x").Target("active"));

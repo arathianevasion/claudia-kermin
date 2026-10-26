@@ -223,7 +223,8 @@ namespace ClaudiaKermin.Core.Missions
             if (_mission != null) list.Add(InPlay(_mission));
             // The folder's cost log moves with every request; the parked Missions' costs are read again, the finished ones' never change.
             list.AddRange(_others.Where(e => !e.Finished).Select(e => Paused(e.Id)));
-            list.AddRange(_others.Where(e => e.Finished));
+            // A finished Mission whose cost log couldn't be read is read again, so its cost shows as soon as it can be.
+            list.AddRange(_others.Where(e => e.Finished).Select(e => e.CostUnknown ? MissionHistory.Finished(_saveDirectory, e.Id, _config) ?? e : e));
             return list;
         }
 
@@ -243,7 +244,8 @@ namespace ClaudiaKermin.Core.Missions
                 else if (!_finishedCache.TryGetValue(id, out entry))
                 {
                     entry = MissionHistory.Finished(_saveDirectory, id, _config);
-                    if (entry != null) _finishedCache[id] = entry;
+                    // An unknown cost is not cached: the next list reads the log again once it can be read.
+                    if (entry != null && !entry.CostUnknown) _finishedCache[id] = entry;
                     else if (MissionHistory.IsResumable(_saveDirectory, id)) entry = Paused(id);
                 }
                 if (entry != null) others.Add(entry);

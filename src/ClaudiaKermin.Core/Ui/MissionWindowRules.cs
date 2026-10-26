@@ -575,7 +575,8 @@ namespace ClaudiaKermin.Core.Ui
                     return "Sequence Plan awaiting Approval · Due Time " + (view.DueTime.Reached ? "reached" : "in " + KerbinTime.Span(view.DueTime.SecondsLeft));
                 case MissionStage.Paused:
                     if (replies.Contains(QuickReply.RaiseCap)) return "Paused at the Spending Cap";
-                    return view.PauseReason.Length > 0 ? "Paused: " + view.PauseReason : "Paused";
+                    // The reason is already in the chat as a Notice, which the rebuilt log keeps; say it once.
+                    return "Paused";
                 case MissionStage.UnsafeScript: return "Couldn't produce a safe script";
                 case MissionStage.AwaitingReducedGoal: return replies.Contains(QuickReply.AcceptReducedGoal) ? "Approve the reduced goal?" : "No reduced goal: End Mission?";
                 default: return "";

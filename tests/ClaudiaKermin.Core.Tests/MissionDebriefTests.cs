@@ -267,6 +267,45 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Empty(rig.Mission.View.Log.Last(e => e.Kind == LogKind.Debrief).Debrief.Events);
         }
 
+        [Fact]
+        public void TheDebriefCardReportsTheRcsSwitchAndTheMonopropellantLeft()
+        {
+            var rig = new Rig(this, DebriefJson("Nominal", ""));
+            var start = rig.RunToRunning();
+            var snapshot = OnPad();
+            snapshot.RcsOn = true;
+            snapshot.Resources.Add(new SnapshotResource { Name = "MonoPropellant", Amount = 15, Max = 60 });
+            rig.Mission.Send(snapshot);
+            rig.Mission.Send(new KosRunEnded(Finished(), start.RunId));
+            rig.DrainUntil(v => v.Stage == MissionStage.Sequencing || v.Stage == MissionStage.AwaitingSequenceApproval);
+
+            var detail = rig.Mission.View.Log.Last(e => e.Kind == LogKind.Debrief).Debrief;
+            Assert.Equal("RCS on", detail.RcsState);
+            Assert.Contains("MonoPropellant 25%", detail.ResourcesLeft);
+        }
+
+        [Fact]
+        public void TheDebriefCardSaysNothingOfRcsWhenTheSnapshotDidNotReadIt()
+        {
+            var rig = new Rig(this, DebriefJson("Nominal", ""));
+            var start = rig.RunToRunning();
+            rig.Mission.Send(new KosRunEnded(Finished(), start.RunId));
+            rig.DrainUntil(v => v.Stage == MissionStage.Sequencing || v.Stage == MissionStage.AwaitingSequenceApproval);
+
+            Assert.Equal("", rig.Mission.View.Log.Last(e => e.Kind == LogKind.Debrief).Debrief.RcsState);
+        }
+
+        [Fact]
+        public void TheRcsSwitchSurvivesTheSnapshotJsonAndIsOmittedWhenUnread()
+        {
+            var on = new GameSnapshot { RcsOn = true };
+            Assert.Contains("\"rcs_on\":true", on.ToJson());
+            Assert.True(GameSnapshot.Parse(on.ToJson()).RcsOn);
+            Assert.False(GameSnapshot.Parse(new GameSnapshot { RcsOn = false }.ToJson()).RcsOn);
+            Assert.DoesNotContain("rcs_on", new GameSnapshot().ToJson());
+            Assert.Null(GameSnapshot.Parse(new GameSnapshot().ToJson()).RcsOn);
+        }
+
         // ---- The card ----
 
         [Fact]

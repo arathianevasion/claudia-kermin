@@ -35,7 +35,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [Fact]
         public void Rsvp_loads_from_the_bundle_with_every_function_it_exports_but_compile_to()
         {
-            var printed = Run("transfer_to_rsvp(). print rsvp:length. print rsvp:haskey(\"goto\"). print rsvp:haskey(\"line_search\"). print rsvp:haskey(\"time_at_periapsis\"). print rsvp:haskey(\"compile_to\").");
+            var printed = Run("claudia_rsvp(). print rsvp:length. print rsvp:haskey(\"goto\"). print rsvp:haskey(\"line_search\"). print rsvp:haskey(\"time_at_periapsis\"). print rsvp:haskey(\"compile_to\").");
             Assert.Equal(new[] { "31", "True", "True", "True", "False" }, printed);
         }
 
@@ -43,7 +43,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
         public void Rsvp_loads_once_however_often_a_block_asks_for_it()
         {
             // A second load would add every export again, which a lexicon refuses.
-            Assert.Equal("31", One("transfer_to_rsvp():length + 0 * transfer_to_rsvp():length"));
+            Assert.Equal("31", One("claudia_rsvp():length + 0 * claudia_rsvp():length"));
         }
 
         // ---- transfer options ----
@@ -95,7 +95,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [InlineData("1100", "1300")]
         public void The_departure_is_searched_from_five_minutes_ahead_or_from_the_window(string window, string earliest)
         {
-            Assert.Equal(earliest, One("transfer_to_earliest(1000, " + window + ")"));
+            Assert.Equal(earliest, One("claudia_earliest(1000, " + window + ")"));
         }
 
         [Theory]
@@ -107,25 +107,55 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "round(transfer_to_synodic({0}, {1}), 6)", a, b)));
         }
 
+        private static string[] RsvpOptions(double craftPeriod, double targetPeriod)
+        {
+            return Run(string.Format(CultureInfo.InvariantCulture,
+                "local o is transfer_to_rsvp_options(1300, 30000, {0}, {1}). print o:keys:length. print o:create_maneuver_nodes. print o:final_orbit_periapsis. print o:final_orbit_type. print o:earliest_departure. print round(o:search_duration, 3). print round(o:search_interval, 3). print o:haskey(\"max_time_of_flight\").",
+                craftPeriod, targetPeriod));
+        }
+
+        // #228: a craft in a 100 km Kerbin orbit (1960 s) against the Mun (138984 s). A window comes round
+        // every 1988 s. One synodic period covers every phase of the Mun against the craft, so RSVP finds
+        // the next window, not the cheapest of the 70 in a Mun orbit (60,000 s away in-game). The interval
+        // seeds about 100 departures 20 s apart: the default seeded three, which found 1649 m/s against
+        // about 860.
+        [Fact]
+        public void The_options_passed_to_rsvp_search_the_next_window_densely_and_capture_at_target_pe()
+        {
+            Assert.Equal(new[] { "6", "first", "30000", "circular", "1300", "1988.036", "19.88", "False" }, RsvpOptions(1960, 138984));
+        }
+
+        [Fact]
+        public void The_search_is_the_same_whichever_orbit_is_the_craft()
+        {
+            Assert.Equal(RsvpOptions(1960, 138984), RsvpOptions(138984, 1960));
+        }
+
+        [Fact]
+        public void Equal_periods_search_one_period_rather_than_forever()
+        {
+            Assert.Equal(new[] { "6", "first", "30000", "circular", "1300", "5000", "50", "False" }, RsvpOptions(5000, 5000));
+        }
+
         // ---- Coordinate descent ----
 
         [Fact]
         public void Descent_finds_the_minimum_of_each_coordinate()
         {
-            var printed = Run("local d is transfer_to_descend({ parameter x. return abs(x[0] - 3) + abs(x[1] + 2). }, list(0, 0), list(1, 1), 6, 0). print d:x[0]. print d:x[1]. print d:cost.");
+            var printed = Run("local d is claudia_descend({ parameter x. return abs(x[0] - 3) + abs(x[1] + 2). }, list(0, 0), list(1, 1), 6, 0). print d:x[0]. print d:x[1]. print d:cost.");
             Assert.Equal(new[] { "3", "-2", "0" }, printed);
         }
 
         [Fact]
         public void Descent_halves_its_steps_to_close_in_between_them()
         {
-            Assert.True(Number("abs(transfer_to_descend({ parameter x. return abs(x[0] - 0.3). }, list(0), list(1), 10, 0):x[0] - 0.3)") < 0.01);
+            Assert.True(Number("abs(claudia_descend({ parameter x. return abs(x[0] - 0.3). }, list(0), list(1), 10, 0):x[0] - 0.3)") < 0.01);
         }
 
         [Fact]
         public void Descent_stops_once_the_cost_is_good_enough()
         {
-            var printed = Run("local d is transfer_to_descend({ parameter x. return abs(x[0] - 3). }, list(0), list(1), 10, 1.5). print d:x[0]. print d:cost.");
+            var printed = Run("local d is claudia_descend({ parameter x. return abs(x[0] - 3). }, list(0), list(1), 10, 1.5). print d:x[0]. print d:cost.");
             Assert.Equal(new[] { "2", "1" }, printed);
         }
 

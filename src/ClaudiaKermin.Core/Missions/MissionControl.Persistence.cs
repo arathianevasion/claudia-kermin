@@ -92,6 +92,7 @@ namespace ClaudiaKermin.Core.Missions
                 PendingNotice = mission.LoadNotice ?? "",
                 PausedCannotFly = mission.PausedCannotFly,
                 PausedForCap = mission.PausedForCap && mission.Stage == MissionStage.Paused,
+                SafePending = mission.SafePending,
                 MissionPlan = mission.Plan,
                 SequencePlan = mission.PendingSequence,
                 QueuedEntries = mission.Log.Count(e => e.Queued),
@@ -234,11 +235,17 @@ namespace ClaudiaKermin.Core.Missions
         {
             var leaving = _scene == GameScene.Flight && scene != GameScene.Flight;
             _scene = scene;
-            if (!leaving) return;
+            if (!leaving)
+            {
+                // Entering Flight waits for its first snapshot, which says which vessel the player is in.
+                if (scene != GameScene.Flight) CarryOnWhenSceneAllows();
+                return;
+            }
             _snapshot = null;
             _active = null;
             if (_mission != null) _mission.SwitchingAway = false;
             if (_mission != null && IsRunning(_mission)) Interrupt(_mission, "the player left Flight");
+            CarryOnWhenSceneAllows();
         }
 
         private void Interrupt(Mission mission, string reason)
@@ -418,6 +425,7 @@ namespace ClaudiaKermin.Core.Missions
                 ReducedGoal = state.ReducedGoal ?? "",
                 Recheck = state.Recheck ?? "",
                 RecheckSince = state.RecheckSince,
+                SafePending = state.SafePending ?? "",
             };
             foreach (var setting in state.Settings) mission.Settings[setting.Key] = setting.Value;
             RestoreChildVessels(mission, state.ChildVessels);
@@ -540,8 +548,15 @@ namespace ClaudiaKermin.Core.Missions
         {
             var count = mission.Conversation.Count;
             UnansweredTurn unanswered = null;
-            if (resumeAfterQuit) unanswered = ValidUnanswered(mission);
+            // A Paused save keeps its unanswered turn through a quickload too: Retry, Retry with a note and Choose model resend it.
+            if (resumeAfterQuit || state.Stage == MissionStage.Paused) unanswered = ValidUnanswered(mission);
             else ClearUnanswered(mission);
+            // The file is the latest turn sent, not the save's: a Paused save only owns it when it is the request it paused from.
+            if (unanswered != null && !resumeAfterQuit && state.Stage == MissionStage.Paused)
+            {
+                var kept = StageOf((Purpose)Enum.Parse(typeof(Purpose), unanswered.Purpose));
+                if (kept != MissionStage.None && kept != state.StageBeforePause) unanswered = null;
+            }
 
             if (count > state.TranscriptMarker)
             {
@@ -628,7 +643,7 @@ namespace ClaudiaKermin.Core.Missions
             var inFlight = paused ? state.StageBeforePause : state.Stage;
             if (inFlight == MissionStage.Planning) purpose = Purpose.MissionPlan;
             else if (inFlight == MissionStage.Sequencing) purpose = Purpose.SequencePlan;
-            // A Debrief would move the Mission on past its Pause, so a Paused one is asked again as before (#213 decides it).
+            // A Debrief would move the Mission on past its Pause, so a Paused one is asked again as before (applying it while Paused is still open in #213).
             else if (inFlight == MissionStage.Debriefing && !paused) purpose = Purpose.Debrief;
             else return false;
 
@@ -672,9 +687,11 @@ namespace ClaudiaKermin.Core.Missions
             }
             mission.SuppressCards = false;
             Event(mission, "advanced", "the reply to the in-flight " + purpose + " request was already in the transcript");
-            Note(LogKind.Notice, "Claudia's last request had already been answered; her reply is offered for your Approval.");
-            if (paused)
+            if (!paused) Note(LogKind.Notice, "Claudia's last request had already been answered; her reply is offered for your Approval.");
+            else
             {
+                Note(LogKind.Notice, "Claudia's last request had already been answered; her reply is kept for when you Resume, and the Mission stays Paused"
+                    + (string.IsNullOrEmpty(state.PauseReason) ? "." : ": " + state.PauseReason));
                 // The offer moved the stage on; the Pause and its cause stand, and Resume lands on the offer.
                 mission.StageBeforePause = mission.Stage;
                 mission.Stage = MissionStage.Paused;

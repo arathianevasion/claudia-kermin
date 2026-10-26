@@ -96,6 +96,8 @@ namespace ClaudiaKermin.Core.Missions
         public int QueuedEntries;
         /// <summary>Paused at the Spending Cap, so Raise cap is offered and a raised cap sends the waiting request.</summary>
         public bool PausedForCap;
+        /// <summary>Why the craft is still to be made safe because it was unloaded when the make-safe came (#207); "" for none and in older saves.</summary>
+        public string SafePending = "";
         public MissionPlan MissionPlan;
         /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
         public SequencePlan SequencePlan;
@@ -154,6 +156,7 @@ namespace ClaudiaKermin.Core.Missions
             if (PendingNotice.Length > 0) values["pendingNotice"] = PendingNotice;
             if (PausedCannotFly) values["pausedCannotFly"] = "true";
             if (PausedForCap) values["pausedForCap"] = "true";
+            if (SafePending.Length > 0) values["safePending"] = SafePending;
             foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
             for (var i = 0; i < UnsafeProblems.Count; i++) values[UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture)] = UnsafeProblems[i];
             if (QueuedEntries > 0) values["queuedEntries"] = QueuedEntries.ToString(CultureInfo.InvariantCulture);
@@ -205,6 +208,7 @@ namespace ClaudiaKermin.Core.Missions
                 PendingNotice = Get(values, "pendingNotice"),
                 PausedCannotFly = Get(values, "pausedCannotFly") == "true",
                 PausedForCap = Get(values, "pausedForCap") == "true",
+                SafePending = Get(values, "safePending"),
             };
             double runStart;
             if (double.TryParse(Get(values, "runStartUt"), NumberStyles.Float, CultureInfo.InvariantCulture, out runStart)) state.RunStartUt = runStart;
