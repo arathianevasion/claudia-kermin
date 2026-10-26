@@ -252,18 +252,21 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void ACutOffReplyAndAnOffSchemaReplyArePaidForAndLogged()
         {
-            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("max-tokens-tool.sse"), ScriptedResponse.Fixture("text.sse"));
+            // The first cut-off is retried automatically (#267); the second one pauses the Mission.
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("max-tokens-tool.sse"), ScriptedResponse.Fixture("max-tokens-tool.sse"), ScriptedResponse.Fixture("text.sse"));
             var mission = Control(transport);
             CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
             DrainUntil(mission, v => v.Stage == MissionStage.Paused);
             var firstSpent = mission.View.Spent;
             Assert.True(firstSpent > 0m);
+            Assert.Equal(new[] { "pending", "paid", "pending", "paid" }, Events(CostLog(mission.View.MissionId)));
+            Assert.DoesNotContain("off_schema", CostLog(mission.View.MissionId));
             Assert.Contains("\"outcome\":\"cut_off\"", CostLog(mission.View.MissionId));
 
             mission.Send(new Retry());
             DrainUntil(mission, v => v.Stage == MissionStage.Paused && v.Spent > firstSpent);
             Assert.Contains("\"outcome\":\"off_schema\"", CostLog(mission.View.MissionId));
-            Assert.Equal(new[] { "pending", "paid", "pending", "paid" }, Events(CostLog(mission.View.MissionId)));
+            Assert.Equal(new[] { "pending", "paid", "pending", "paid", "pending", "paid" }, Events(CostLog(mission.View.MissionId)));
         }
 
         // ---- Thresholds ----

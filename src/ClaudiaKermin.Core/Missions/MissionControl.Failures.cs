@@ -14,6 +14,8 @@ namespace ClaudiaKermin.Core.Missions
         Refusal,
         /// <summary>The model is retired or not found: Choose model or End Mission.</summary>
         ModelGone,
+        /// <summary>The reply was cut off again after the automatic reduced retry (or the Spending Cap had no room for it): Retry sends the reduced form; Retry with a note and End Mission also.</summary>
+        CutOff,
     }
 
     /// <summary>
@@ -71,7 +73,7 @@ namespace ClaudiaKermin.Core.Missions
         private bool RefusalRetriedWithNote(string note)
         {
             var mission = _mission;
-            if (mission == null || mission.Stage != MissionStage.Paused || mission.PauseCause != PauseCause.Refusal) return false;
+            if (mission == null || mission.Stage != MissionStage.Paused || (mission.PauseCause != PauseCause.Refusal && mission.PauseCause != PauseCause.CutOff)) return false;
             note = (note ?? "").Trim();
             if (note.Length == 0 || mission.InFlight || mission.Pending == null) return true;
             Note(LogKind.Player, "Retry with a note: " + note);
@@ -87,7 +89,8 @@ namespace ClaudiaKermin.Core.Missions
         {
             switch (mission.PauseCause)
             {
-                case PauseCause.Refusal: return new List<QuickReply> { QuickReply.Retry, QuickReply.RetryWithNote, QuickReply.EndMission };
+                case PauseCause.Refusal:
+                case PauseCause.CutOff: return new List<QuickReply> { QuickReply.Retry, QuickReply.RetryWithNote, QuickReply.EndMission };
                 case PauseCause.ModelGone: return new List<QuickReply> { QuickReply.ChooseModel, QuickReply.EndMission };
                 default: return null;
             }
