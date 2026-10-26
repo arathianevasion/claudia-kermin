@@ -56,6 +56,16 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The semi-major axis of its orbit round <see cref="Parent"/>.</summary>
         public double Sma;
         public double Inclination;
+        /// <summary>The radius of its sphere of influence; 0 for the star.</summary>
+        public double SoiRadius;
+        /// <summary>Seconds for one turn on its axis.</summary>
+        public double RotationPeriod;
+        /// <summary>Its orbit round <see cref="Parent"/>, with <see cref="Sma"/> and <see cref="Inclination"/>: eccentricity, LAN and argument of periapsis (degrees), mean anomaly at epoch (radians) and the epoch (UT).</summary>
+        public double Eccentricity;
+        public double Lan;
+        public double ArgumentOfPeriapsis;
+        public double MeanAnomalyAtEpoch;
+        public double Epoch;
 
         /// <summary>Surface gravity in m/s².</summary>
         public double SurfaceGravity

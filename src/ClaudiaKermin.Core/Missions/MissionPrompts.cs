@@ -123,12 +123,33 @@ namespace ClaudiaKermin.Core.Missions
         /// Mission likely needs, picked from its Mission Goal (<see cref="BlockSelection"/>). The base layer's
         /// Summaries still name every block.
         /// </summary>
-        public static string MissionLayer(string missionId, string goal)
+        public static string MissionLayer(string missionId, string goal, string bodyTable = "")
         {
             return "Mission " + missionId + ".\n\n"
                 + "Building Blocks for this Mission, in full (the others are in the summaries above, without their options spelled out). "
                 + "Where no shipped block fits, write a Custom Script.\n\n"
-                + CoreLibrary.FullDocs(BlockSelection.For(goal));
+                + CoreLibrary.FullDocs(BlockSelection.For(goal))
+                + bodyTable;
+        }
+
+        /// <summary>
+        /// The body constants, built once when the Mission starts and frozen in the cached prefix (not the per-turn Game
+        /// Snapshot): Claudia reads them here instead of recalling them. "" when the game's bodies weren't read.
+        /// </summary>
+        public static string BodyTable(IList<SnapshotBody> bodies)
+        {
+            if (bodies == null || bodies.Count == 0) return "";
+            var json = new JsonWriter().BeginArray();
+            foreach (var body in bodies)
+                json.BeginObject().Field("name", body.Name).Field("parent", body.Parent).Field("gm", body.Gm).Field("radius", body.Radius)
+                    .Field("soi_radius", body.SoiRadius).Field("rotation_period", body.RotationPeriod)
+                    .Field("atmosphere_height", body.AtmosphereHeight).Field("sea_level_atm", body.SeaLevelAtm)
+                    .Field("sma", body.Sma).Field("eccentricity", body.Eccentricity).Field("inclination", body.Inclination)
+                    .Field("lan", body.Lan).Field("arg_pe", body.ArgumentOfPeriapsis)
+                    .Field("mean_anomaly_at_epoch", body.MeanAnomalyAtEpoch).Field("epoch", body.Epoch).EndObject();
+            return "\n\nBody constants (JSON data; metres, m³/s², seconds; orbit angles in degrees except mean_anomaly_at_epoch, in radians; "
+                + "sma to epoch is each body's own orbit round its parent). Use these, not remembered values:\n"
+                + json.EndArray();
         }
 
         // ---- Mission Settings and timing ----
