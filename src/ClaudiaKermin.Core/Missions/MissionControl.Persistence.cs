@@ -157,6 +157,7 @@ namespace ClaudiaKermin.Core.Missions
                     PlayerText = turn.PlayerText,
                     ScriptRewrite = turn.ScriptRewrite,
                     ChildVesselRetry = turn.ChildVesselRetry,
+                    ReducedGoalRetry = turn.ReducedGoalRetry,
                     Waits = turn.Waits,
                     BaseMessages = mission.Conversation.Count,
                 });
@@ -551,7 +552,13 @@ namespace ClaudiaKermin.Core.Missions
             UnansweredTurn unanswered = null;
             // A Paused save keeps its unanswered turn through a quickload too: Retry, Retry with a note and Choose model resend it.
             if (resumeAfterQuit || state.Stage == MissionStage.Paused) unanswered = ValidUnanswered(mission);
-            else ClearUnanswered(mission);
+            // A save made while Retry with a note was out owns that turn too: the player's note must not be lost to an Interrupted Debrief.
+            else if (state.Stage == MissionStage.Debriefing)
+            {
+                unanswered = ValidUnanswered(mission);
+                if (unanswered != null && !unanswered.ReducedGoalRetry) unanswered = null;
+            }
+            if (unanswered == null && !resumeAfterQuit && state.Stage != MissionStage.Paused) ClearUnanswered(mission);
             // The file is the latest turn sent, not the save's: a Paused save only owns it when it is the request it paused from.
             if (unanswered != null && !resumeAfterQuit && state.Stage == MissionStage.Paused)
             {
@@ -596,8 +603,10 @@ namespace ClaudiaKermin.Core.Missions
                     PlayerText = unanswered.PlayerText,
                     ScriptRewrite = unanswered.ScriptRewrite,
                     ChildVesselRetry = unanswered.ChildVesselRetry,
+                    ReducedGoalRetry = unanswered.ReducedGoalRetry,
                     Waits = unanswered.Waits,
                 };
+                if (unanswered.ReducedGoalRetry) mission.Pending.Gate = mission.Gate = RetryGate();
                 var requestStage = StageOf(purpose);
                 var settled = requestStage != MissionStage.None ? requestStage : Settle(mission, state.Stage == MissionStage.Paused ? state.StageBeforePause : state.Stage);
                 // A plan or Debrief request in hand is what the loop was waiting for; a question changes nothing.

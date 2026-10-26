@@ -33,6 +33,8 @@ namespace ClaudiaKermin.Core.Missions
         public bool ScriptRewrite;
         /// <summary>The correction of a Mission Plan that named a Child Vessel which never left the craft, so a re-sent one is not corrected a second time (the Mission Pauses instead); false in older files.</summary>
         public bool ChildVesselRetry;
+        /// <summary>The Debrief asked again with the player's note after a Failed Debrief offered no reduced goal, so a quickload of a save made while it was out sends it again; false in older files.</summary>
+        public bool ReducedGoalRetry;
         /// <summary>The turn waits at the Spending Cap instead of Pausing the Mission (the waiting call).</summary>
         public bool Waits;
         /// <summary>How many messages the committed conversation held when the turn was sent; the turn is stale once the transcript has grown past it.</summary>
@@ -116,6 +118,7 @@ namespace ClaudiaKermin.Core.Missions
                 .Field("player_text", turn.PlayerText)
                 .Field("script_rewrite", turn.ScriptRewrite)
                 .Field("child_vessel_retry", turn.ChildVesselRetry)
+                .Field("reduced_goal_retry", turn.ReducedGoalRetry)
                 .Field("waits", turn.Waits)
                 .Field("base_messages", turn.BaseMessages)
                 .EndObject();
@@ -135,6 +138,7 @@ namespace ClaudiaKermin.Core.Missions
                 PlayerText = JsonNode.Str(root["player_text"]),
                 ScriptRewrite = JsonNode.Bool(root["script_rewrite"]) ?? false,
                 ChildVesselRetry = JsonNode.Bool(root["child_vessel_retry"]) ?? false,
+                ReducedGoalRetry = JsonNode.Bool(root["reduced_goal_retry"]) ?? false,
                 Waits = JsonNode.Bool(root["waits"]) ?? false,
                 BaseMessages = (int)(JsonNode.Long(root["base_messages"]) ?? 0),
             };

@@ -174,6 +174,8 @@ namespace ClaudiaKermin.Core.Missions
             public bool ScriptRewrite;
             /// <summary>A correction after a Mission Plan named a vessel that never left the craft: if it does so again, the Mission Pauses.</summary>
             public bool ChildVesselRetry;
+            /// <summary>The Debrief asked again, with the player's note, after a Failed Debrief offered no reduced goal: a load while it is out sends it again, not an Interrupted Debrief.</summary>
+            public bool ReducedGoalRetry;
             /// <summary>
             /// Sent while a run is live or near one (a hand-back Debrief and its revision, a late-Approval re-plan): at the
             /// Spending Cap it waits for Raise cap instead of Pausing the Mission (<see cref="WaitForCap"/>). A turn sent

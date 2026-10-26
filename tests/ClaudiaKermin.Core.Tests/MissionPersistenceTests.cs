@@ -921,7 +921,19 @@ namespace ClaudiaKermin.Core.Tests
 
         private static ScriptedResponse Answer(string intent)
         {
-            var text = JsonSerializer.Serialize("{\"kind\":\"answer\",\"say\":\"Noted.\",\"reply_intent\":" + intent + ",\"mission_plan\":null,\"sequence_plan\":null,\"debrief\":null}");
+            return ReplyWith("{\"kind\":\"answer\",\"say\":\"Noted.\",\"reply_intent\":" + intent + ",\"mission_plan\":null,\"sequence_plan\":null,\"debrief\":null}");
+        }
+
+        private static ScriptedResponse FailedDebrief(string followUp, string followUpText)
+        {
+            return ReplyWith("{\"kind\":\"debrief\",\"say\":\"Debrief.\",\"reply_intent\":\"none\",\"mission_plan\":null,\"sequence_plan\":null,\"alert\":null,"
+                + "\"debrief\":{\"outcome\":\"Failed\",\"why\":\"It went.\",\"what_happened\":\"It went.\",\"goal_reached\":false,\"next\":\"Fly on.\",\"eva_science\":\"\","
+                + "\"follow_up\":\"" + followUp + "\",\"follow_up_text\":\"" + followUpText + "\"}}");
+        }
+
+        private static ScriptedResponse ReplyWith(string json)
+        {
+            var text = JsonSerializer.Serialize(json);
             var sse = "event: message_start\n"
                 + "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_t\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-sonnet-5-5\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":3000,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":1}}}\n\n"
                 + "event: content_block_start\n"
@@ -1176,6 +1188,76 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         // ---- Crash, quit or leaving Flight while Running ----
+
+        /// <summary>A Failed Debrief with no reduced goal, then Retry with a note whose request is held in flight; returns the save made then.</summary>
+        private IList<MissionSaveState> RetryWithANoteInFlight(out MissionControl mission, out StreamingFakeTransport transport, ScriptedResponse retry, params ScriptedResponse[] after)
+        {
+            retry.PauseAt = 100;
+            _gates.Add(retry);
+            var responses = new List<ScriptedResponse>
+            {
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                FailedDebrief("end_mission", ""),
+                retry,
+            };
+            responses.AddRange(after);
+            transport = new StreamingFakeTransport(responses.ToArray());
+            mission = Control(transport);
+            var start = ToRunning(mission);
+            var report = new Dictionary<string, object> { { "success", false }, { "reason", "link check" }, { "situation", "PRELAUNCH" } };
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Finished, report, "", "", false), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingReducedGoal);
+            mission.Send(new RetryWithNote("Any orbit will do."));
+            var sent = transport;
+            DrainUntil(mission, v => sent.Requests.Count >= 4);
+            var saved = Saved(mission);
+            Assert.Equal(MissionStage.Debriefing, saved[0].Stage);
+            return saved;
+        }
+
+        private static string LastUserTurn(StreamingFakeTransport transport, int request)
+        {
+            return Messages(transport.Requests[request]).Where(m => m.GetProperty("role").GetString() == "user").Select(Text).Last();
+        }
+
+        [Fact]
+        public void AQuickloadMidRetryWithANoteResendsTheNoteInsteadOfAskingForAnInterruptedDebrief()
+        {
+            StreamingFakeTransport transport;
+            MissionControl mission;
+            // The retry is refused while the load waits on it, so no reply is left to apply: the note is all that is left to send.
+            var refused = ScriptedResponse.Fixture("refusal.sse", 64);
+            var saved = RetryWithANoteInFlight(out mission, out transport, refused, FailedDebrief("reduced_goal", "Reach a stable orbit of Kerbin."));
+
+            mission.Send(new MissionsRestored(_save.Path, saved));
+            refused.Gate.Set();
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingReducedGoal && !v.Busy);
+
+            Assert.Equal(5, transport.Requests.Count);
+            var turn = LastUserTurn(transport, 4);
+            Assert.Contains("Any orbit will do.", turn);
+            Assert.DoesNotContain("Interrupted", turn);
+            Assert.Equal(new[] { QuickReply.AcceptReducedGoal, QuickReply.EndMission }, mission.View.QuickReplies.ToArray());
+        }
+
+        [Fact]
+        public void AQuitMidRetryWithANoteResendsTheNote()
+        {
+            StreamingFakeTransport transport;
+            MissionControl mission;
+            var saved = RetryWithANoteInFlight(out mission, out transport, FailedDebrief("reduced_goal", "Reach a stable orbit of Kerbin."));
+
+            var after = new StreamingFakeTransport(FailedDebrief("reduced_goal", "Reach a stable orbit of Kerbin."));
+            var resumed = Control(after);
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            DrainUntil(resumed, v => v.Stage == MissionStage.AwaitingReducedGoal && !v.Busy);
+
+            Assert.Single(after.Requests);
+            var turn = LastUserTurn(after, 0);
+            Assert.Contains("Any orbit will do.", turn);
+            Assert.DoesNotContain("Interrupted", turn);
+        }
 
         [Fact]
         public void AnythingRunningAtACrashIsInterruptedDebriefedAndNeverRestarted()
