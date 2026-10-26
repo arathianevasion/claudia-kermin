@@ -382,11 +382,13 @@ namespace ClaudiaKermin.Core.Missions
                 };
                 // The badge is read from the script, not taken from a custom_script field (older transcripts and saved plans may still carry one; it is ignored); her reason text is kept when it is custom.
                 var proposed = reply.SequencePlan;
-                proposed.CustomScript = proposed.Script.Trim().Length > 0 && ScriptProvenance.IsCustom(proposed.Script);
+                // A lint that fires is flight logic of its own (a re-built block or tool), so it shows the badge too; lints only warn, the Script Check still decides.
+                var lints = proposed.Script.Trim().Length > 0 ? ScriptLints.Warnings(proposed.Script) : new List<string>();
+                proposed.CustomScript = proposed.Script.Trim().Length > 0 && (ScriptProvenance.IsCustom(proposed.Script) || lints.Count > 0);
                 if (proposed.CustomScript)
                 {
                     var reason = (JsonNode.Str(sequence["custom_script_reason"]) ?? "").Trim();
-                    proposed.CustomScriptReason = reason.Length > 0 ? reason : "It is not built from Building Blocks alone.";
+                    proposed.CustomScriptReason = string.Join(" ", new[] { reason.Length > 0 ? reason : "It is not built from Building Blocks alone." }.Concat(lints.Where(l => !reason.Contains(l))));
                 }
             }
 

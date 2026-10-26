@@ -36,10 +36,11 @@ namespace ClaudiaKermin.Core.Tests
         [InlineData("lock steering to prograde.")]
         [InlineData("lock throttle to 1.")]
         [InlineData("unlock all.")]
-        [InlineData("stage.")]
         [InlineData("wait 5.")]
         [InlineData("wait until ship:altitude > 100.")]
         [InlineData("add node(time:seconds + 60, 0, 0, 10).")]
+        [InlineData("add node(time:seconds + 60, 0, 0, 10).\nprint \"flying\".\nexec_node().")]
+        [InlineData("add node(time:seconds + 60, 0, 0, 10). // exec_node() comes later\nlock throttle to 1.")]
         [InlineData("remove nextnode.")]
         [InlineData("set throttle to 0.5.")]
         [InlineData("set ship:control:pilotmainthrottle to 0.")]
@@ -56,6 +57,28 @@ namespace ClaudiaKermin.Core.Tests
         public void ABlockScriptThatAlsoFliesTheCraftItselfIsCustom(string extra)
         {
             Assert.True(ScriptProvenance.IsCustom("circularize().\n" + extra + "\n"));
+        }
+
+        [Fact]
+        public void StagingBetweenBuildingBlocksIsBlockUse()
+        {
+            Assert.False(ScriptProvenance.IsCustom("launch(lexicon(\"target_ap\", 80000)).\nstage.\ncircularize().\n"));
+            Assert.False(ScriptProvenance.IsCustom("circularize().\nSTAGE.\n"));
+        }
+
+        [Fact]
+        public void AddingTheNodeAnExecNodeCallFliesIsBlockUse()
+        {
+            Assert.False(ScriptProvenance.IsCustom("add node(time:seconds + 60, 0, 0, 10).\nexec_node().\n"));
+            Assert.False(ScriptProvenance.IsCustom("ADD NODE(time:seconds + 60, 0, 0, max(1, 2)).\nlocal r is exec_node(lexicon(\"min_ec_pct\", 10)).\n"));
+            Assert.False(ScriptProvenance.IsCustom("add node(time:seconds + 60, 0, 0, 10).\nset res to exec_node().\n"));
+        }
+
+        [Fact]
+        public void AScriptThatOnlyStagesAndAddsNodesWithoutABlockCallIsStillCustom()
+        {
+            Assert.True(ScriptProvenance.IsCustom("stage.\n"));
+            Assert.True(ScriptProvenance.IsCustom("add node(time:seconds + 60, 0, 0, 10).\n"));
         }
 
         [Fact]

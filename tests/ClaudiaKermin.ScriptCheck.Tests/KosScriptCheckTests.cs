@@ -30,6 +30,28 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             Assert.True(result.Passed, string.Join("; ", result.Problems.ToArray()) + "\n" + script);
         }
 
+        // ---- Lints: warn, never refuse ----
+
+        [Theory]
+        [InlineData("circularize().\nfrom {local i is 0.} until i > 20 step {set i to i + 1.} do {\n  local p is latlng(i, 10).\n  print p:terrainheight.\n}\n", "landing-site search")]
+        [InlineData("until ship:orbit:nextpatch:periapsis > 30000 {\n  set nextnode:prograde to nextnode:prograde + 1.\n}\n", "next patch")]
+        [InlineData("until false {\n  if stage:liquidfuel < 0.1 { stage. }\n  wait 0.1.\n}\n", "staging loop")]
+        public void AReinventionLintWarnsAndTheScriptStillPasses(string script, string warning)
+        {
+            var result = _check.Check(script);
+            Assert.True(result.Passed, string.Join("; ", result.Problems.ToArray()));
+            Assert.Contains(result.Warnings, w => w.Contains(warning));
+            Assert.DoesNotContain(result.Problems, p => p.Contains(warning));
+        }
+
+        [Fact]
+        public void AnOrdinaryScriptHasNoWarnings()
+        {
+            var result = _check.Check("local res is lexicon(\"success\", true).\nstage.\nuntil res:success { print 1. }\nlocal p is latlng(1, 2).\n");
+            Assert.True(result.Passed, string.Join("; ", result.Problems.ToArray()));
+            Assert.Empty(result.Warnings);
+        }
+
         // ---- Forbidden: one theory per item of the spec's list ----
 
         [Theory]
