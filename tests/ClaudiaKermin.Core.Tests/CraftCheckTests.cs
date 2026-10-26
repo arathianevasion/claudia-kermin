@@ -136,6 +136,42 @@ namespace ClaudiaKermin.Core.Tests
                 Assert.Equal("json_schema", doc.RootElement.GetProperty("output_config").GetProperty("format").GetProperty("type").GetString());
         }
 
+        private static GameSnapshot WithUnreliableStage()
+        {
+            var craft = Craft();
+            craft.DeltaVSimulator = true;
+            craft.Stages[0].DeltaVVac = 0;
+            craft.Stages[0].DeltaVUnreliable = true;
+            return craft;
+        }
+
+        [Fact]
+        public void AnUnreliableStageIsUnknownDeltaVNotZeroInTheFactsAndTheView()
+        {
+            var transport = Replies("craft-check-pass.sse");
+            var mission = Checked(transport, WithUnreliableStage());
+
+            var facts = UserFacts(transport.Requests.Single());
+            Assert.Contains("\"total_delta_v_vac\":null", facts);
+            Assert.DoesNotContain("\"total_delta_v_vac\":0", facts);
+            Assert.Contains("do not report delta_v_short", facts);
+            Assert.Null(mission.View.CraftCheck.CraftDeltaV);
+            Assert.False(mission.View.CraftCheck.DeltaVShort);
+        }
+
+        [Fact]
+        public void AReliableCraftStillReportsItsTotalDeltaV()
+        {
+            var transport = Replies("craft-check-pass.sse");
+            var craft = Craft();
+            craft.DeltaVSimulator = true;
+            var mission = Checked(transport, craft);
+
+            Assert.DoesNotContain("do not report delta_v_short", UserFacts(transport.Requests.Single()));
+            Assert.DoesNotContain("\"total_delta_v_vac\":null", UserFacts(transport.Requests.Single()));
+            Assert.NotNull(mission.View.CraftCheck.CraftDeltaV);
+        }
+
         [Fact]
         public void NoReactionWheelRcsOrStabiliserIsAWarningNotABlocker()
         {

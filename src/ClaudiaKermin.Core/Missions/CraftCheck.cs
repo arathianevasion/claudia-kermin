@@ -453,7 +453,7 @@ namespace ClaudiaKermin.Core.Missions
             if (snapshot != null)
             {
                 view.CraftName = snapshot.Craft.Name;
-                if (snapshot.DeltaVSimulator && snapshot.Stages.Count > 0) view.CraftDeltaV = snapshot.Stages.Sum(s => s.DeltaVVac);
+                if (snapshot.DeltaVSimulator && snapshot.Stages.Count > 0 && !snapshot.DeltaVUnreliable) view.CraftDeltaV = snapshot.Stages.Sum(s => s.DeltaVVac);
             }
             view.DeltaVShort = _state == CraftCheckState.Done && !view.Stale && _findings.Any(f => f.Code == "delta_v_short");
 
@@ -485,7 +485,8 @@ namespace ClaudiaKermin.Core.Missions
             foreach (var part in snapshot.Craft.Parts)
                 key.Append('|').Append(part.Id).Append(',').Append(part.ParentId).Append(',').Append(part.Name).Append(',').Append(part.BootFile);
             foreach (var stage in snapshot.Stages)
-                key.Append('|').Append(stage.Number).Append(':').Append(Math.Round(stage.DeltaVVac / 10)).Append(':').Append(Math.Round(stage.ThrustVacKn));
+                key.Append('|').Append(stage.Number).Append(':').Append(stage.DeltaVUnreliable ? "?" : Math.Round(stage.DeltaVVac / 10).ToString(CultureInfo.InvariantCulture))
+                    .Append(':').Append(Math.Round(stage.ThrustVacKn));
             foreach (var member in snapshot.Crew) key.Append('|').Append(member.Name);
             return key.ToString();
         }
@@ -536,9 +537,13 @@ namespace ClaudiaKermin.Core.Missions
             var chosen = processors.FirstOrDefault(p => p.Id == chosenId);
             if (chosen == null) json.Null();
             else json.BeginObject().Field("id", chosen.Id).Field("title", chosen.Title).Field("boot_file", chosen.BootFile).EndObject();
-            json.Field("total_delta_v_vac", Math.Round(snapshot.Stages.Sum(s => s.DeltaVVac)));
+            if (snapshot.DeltaVUnreliable) json.Name("total_delta_v_vac").Null();
+            else json.Field("total_delta_v_vac", Math.Round(snapshot.Stages.Sum(s => s.DeltaVVac)));
             json.EndObject();
             text.Append("Claudia's processor and totals (JSON data): ").Append(json.ToString()).Append('\n');
+            if (snapshot.DeltaVUnreliable)
+                text.Append("The craft's delta-v is unknown right now (the stock simulator reads 0 while an engine is lit at a trickle throttle): "
+                    + "do not report delta_v_short or margin_under_25, and do not treat any delta-v as 0 m/s.\n");
             text.Append(Separations(snapshot, remote, chosenId, home));
             return text.ToString();
         }
