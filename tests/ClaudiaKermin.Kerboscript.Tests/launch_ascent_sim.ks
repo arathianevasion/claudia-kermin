@@ -11,11 +11,11 @@
 
 // opt: "target_ap" (m), "max_q" (Pa, -1 for none), "turn_start_speed" (m/s), "turn_shape", "max_aoa"
 // (degrees), "drag_area" (m^2), "hold" (false flies the turn by altitude alone, as before #235).
-// Prints one line per 1000 m of climb, then "stalled <true|false> at <m>" (vertical speed lost with
-// the apoapsis still short of target_ap by more than the throttle's easing ramp), "coast_ap <m>",
-// "max_q <Pa>", "min_twr <lowest burning in thick air>" and "max_lead <degrees>" (most the nose was
-// pitched below the prograde).
-function launch_sim_ascent {
+// Prints one "track ..." line per 1000 m of climb, then "stalled <true|false> at <m>" (vertical speed
+// lost with the apoapsis still short of target_ap by more than the throttle's easing ramp),
+// "coast_ap <m>", "cutoff <where, q and path angle, or none>", "max_q <Pa>", "min_twr <lowest
+// burning in thick air>" and "max_lead <degrees>" (most the nose was pitched below the prograde).
+function sim_ascent {
   parameter opt.
   local e_const is 2.718281828459.
   local r_body is 600000.
@@ -24,7 +24,9 @@ function launch_sim_ascent {
   local spin is 174.94.
   local scale is 5600.
   local rho0 is 1.225.
-  local flow is 215 / (320 * 9.80665).
+  local thrust_vac is 215.
+  local isp_vac is 320.
+  local flow is thrust_vac / (isp_vac * 9.80665).
   local dry is 2.4.
   local dt is 0.1.
   local turn_end is min(70000, opt:target_ap).
@@ -55,7 +57,7 @@ function launch_sim_ascent {
     local ap is -mu / (2 * energy) * (1 + ecc) - r_body.
     local thrust is 0.
     if m > dry {
-      set thrust to 215 * (320 - 70 * ratio) / 320.
+      set thrust to thrust_vac * (isp_vac - 70 * ratio) / isp_vac.
     }
 
     local t_floor is launch_throttle_floor(ratio, m, g, thrust).
@@ -110,7 +112,7 @@ function launch_sim_ascent {
     set t to t + dt.
 
     if h >= next_print {
-      print round(h) + " m " + round(t) + " s vert " + round(90 - pitch, 1) + " prograde " + round(90 - prograde, 1) + " q " + round(q) + " throttle " + round(100 * tset) + " vs " + round(vy) + " ap " + round(ap).
+      print "track " + round(h) + " m " + round(t) + " s vert " + round(90 - pitch, 1) + " prograde " + round(90 - prograde, 1) + " q " + round(q) + " throttle " + round(100 * tset) + " vs " + round(vy) + " ap " + round(ap).
       set next_print to next_print + 1000.
     }
     if vy < 0 {

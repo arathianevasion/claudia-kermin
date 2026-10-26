@@ -103,9 +103,9 @@ namespace ClaudiaKermin.Kerboscript.Tests
         private static (System.Collections.Generic.Dictionary<string, string> Result, string Track) Ascent(bool hold, double dragArea, double maxQ = 12000, double targetAp = 60000)
         {
             var sim = System.IO.File.ReadAllText(System.IO.Path.Combine(System.AppContext.BaseDirectory, "launch_ascent_sim.ks"));
-            var lines = Run(sim + "\nlaunch_sim_ascent(lexicon(\"target_ap\", " + targetAp + ", \"max_q\", " + maxQ
+            var lines = Run(sim + "\nsim_ascent(lexicon(\"target_ap\", " + targetAp + ", \"max_q\", " + maxQ
                 + ", \"turn_start_speed\", 60, \"turn_shape\", 0.45, \"max_aoa\", 5, \"drag_area\", " + dragArea + ", \"hold\", " + (hold ? "true" : "false") + ")).");
-            var result = lines.Where(l => !char.IsDigit(l[0])).ToDictionary(l => l.Split(' ')[0], l => l.Substring(l.IndexOf(' ') + 1));
+            var result = lines.Where(l => !l.StartsWith("track ")).ToDictionary(l => l.Split(' ')[0], l => l.Substring(l.IndexOf(' ') + 1));
             return (result, string.Join("\n", lines));
         }
 

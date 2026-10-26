@@ -99,7 +99,8 @@ function launch_pitch {
 // Whether the turn waits at dynamic pressure q_now (Pa) and pressure_ratio of surface pressure:
 // while max_q (Pa, -1 for no limit) has the throttle easing back (from 90% of it, as launch_throttle
 // eases) in thick air, the craft is too slow to turn over without its path falling with it (#235),
-// so it climbs as steeply as max_aoa lets it instead.
+// so it climbs as steeply as max_aoa lets it instead: launch starts the turn again from vertical
+// wherever this holds.
 function launch_turn_held {
   parameter q_now, max_q, pressure_ratio.
   return max_q > 0 and q_now > 0.9 * max_q and launch_thick_air(pressure_ratio).
