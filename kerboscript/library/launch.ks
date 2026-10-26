@@ -26,6 +26,8 @@
 //|   max_aoa [5]: most degrees the nose may be off the airflow while the air is thick enough to matter
 //|     (over 500 Pa dynamic pressure), all the way up and through the coast; above 8000 Pa the angle
 //|     allowed falls in proportion to q (a tenth of max_aoa at the least).
+//|     In thin air (under 500 Pa) the nose is held no more than 3 degrees below the prograde, so the
+//|     upper turn follows the trajectory instead of the pitch program.
 //|   throttle_max_q ["none"]: Pa of dynamic pressure to throttle back at (to 5% at most; in thick
 //|     air never below the craft's weight). While it holds the throttle back in thick air the turn
 //|     waits: too slow to turn over without falling, the craft climbs as steeply as max_aoa lets it.
@@ -193,6 +195,22 @@ function launch_allowed_aoa {
     return max_aoa.
   }
   return max(max_aoa * 0.1, max_aoa * q_ref / q_pa).
+}
+
+// Degrees the commanded pitch may be below the surface-prograde pitch in thin air (#236).
+function launch_thin_lead {
+  return 3.
+}
+
+// pitch (degrees above the horizon) raised, in thin air (q_pa under launch_aero_q, where max_aoa
+// does not apply), to no lower than lead degrees below prograde_pitch, so the upper turn follows
+// the trajectory; otherwise pitch as it was (#236).
+function launch_thin_pitch {
+  parameter pitch, prograde_pitch, q_pa, lead.
+  if q_pa > launch_aero_q() {
+    return pitch.
+  }
+  return max(pitch, prograde_pitch - lead).
 }
 
 // The body's values, each option's own or, for "body", the game's: lexicon("g", m/s^2,
@@ -441,6 +459,9 @@ function launch {
       }
       if laz_on {
         set hdg to LAZcalc(laz).
+      }
+      if spd > 30 {
+        set pitch to launch_thin_pitch(pitch, 90 - vang(ship:srfprograde:vector, ship:up:vector), q_pa, launch_thin_lead()).
       }
       set want to heading(hdg, pitch):vector.
     } else if spd > 30 {

@@ -10,11 +10,14 @@
 // to show whether a throttled-back craft keeps climbing, not to predict the in-game numbers.
 
 // opt: "target_ap" (m), "max_q" (Pa, -1 for none), "turn_start_speed" (m/s), "turn_shape", "max_aoa"
-// (degrees), "drag_area" (m^2), "hold" (false flies the turn by altitude alone, as before #235).
+// (degrees), "drag_area" (m^2), "hold" (false flies the turn by altitude alone, as before #235), "thin" (false lets the
+// pitch program run free in thin air, as before #236),
+// "thrust_scale" (1 for the LV-T45's 215 kN; less makes a heavier, slower craft that reaches thin air burning).
 // Prints one "track ..." line per 1000 m of climb, then "stalled <true|false> at <m>" (vertical speed
 // lost with the apoapsis still short of target_ap by more than the throttle's easing ramp),
 // "coast_ap <m>", "cutoff <where, q and path angle, or none>", "max_q <Pa>", "min_twr <lowest
-// burning in thick air>" and "max_lead <degrees>" (most the nose was pitched below the prograde).
+// burning in thick air>" and "max_lead <degrees>" (most the nose was pitched below the prograde)
+// and "max_thin_lead" (the same, in thin air, under 500 Pa).
 function sim_ascent {
   parameter opt.
   local e_const is 2.718281828459.
@@ -24,7 +27,7 @@ function sim_ascent {
   local spin is 174.94.
   local scale is 5600.
   local rho0 is 1.225.
-  local thrust_vac is 215.
+  local thrust_vac is 215 * opt:thrust_scale.
   local isp_vac is 320.
   local flow is thrust_vac / (isp_vac * 9.80665).
   local dry is 2.4.
@@ -41,6 +44,7 @@ function sim_ascent {
   local q_max is 0.
   local min_twr is 100.
   local max_lead is 0.
+  local max_thin_lead is 0.
   local stalled is false.
   local coast_ap is 0.
   local cutoff is "none".
@@ -84,12 +88,18 @@ function sim_ascent {
     if turn_start_alt >= 0 {
       set pitch to launch_pitch(h, turn_start_alt, turn_end, opt:turn_shape).
     }
+    if opt:thin and spd > 30 {
+      set pitch to launch_thin_pitch(pitch, prograde, q, launch_thin_lead()).
+    }
     if q > launch_aero_q() and spd > 30 {
       local allowed is launch_allowed_aoa(opt:max_aoa, q, launch_aoa_q_ref()).
       set pitch to max(prograde - allowed, min(prograde + allowed, pitch)).
     }
     if spd > 30 {
       set max_lead to max(max_lead, prograde - pitch).
+      if q <= launch_aero_q() {
+        set max_thin_lead to max(max_thin_lead, prograde - pitch).
+      }
     }
 
     local force is thrust * tset.
@@ -126,4 +136,5 @@ function sim_ascent {
   print "max_q " + round(q_max).
   print "min_twr " + round(min_twr, 3).
   print "max_lead " + round(max_lead, 1).
+  print "max_thin_lead " + round(max_thin_lead, 1).
 }

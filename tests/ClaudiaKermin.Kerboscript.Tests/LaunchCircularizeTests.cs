@@ -131,11 +131,11 @@ namespace ClaudiaKermin.Kerboscript.Tests
 
         // launch_no_flip's ascent (target_ap 60 km, throttle_max_q 12 kPa) in the offline sim, with the
         // turn hold on or off: the result lines by their first word, and the whole printout.
-        private static (System.Collections.Generic.Dictionary<string, string> Result, string Track) Ascent(bool hold, double dragArea, double maxQ = 12000, double targetAp = 60000)
+        private static (System.Collections.Generic.Dictionary<string, string> Result, string Track) Ascent(bool hold, double dragArea, double maxQ = 12000, double targetAp = 60000, bool thin = true, double thrustScale = 1)
         {
             var sim = System.IO.File.ReadAllText(System.IO.Path.Combine(System.AppContext.BaseDirectory, "launch_ascent_sim.ks"));
             var lines = Run(sim + "\nsim_ascent(lexicon(\"target_ap\", " + targetAp + ", \"max_q\", " + maxQ
-                + ", \"turn_start_speed\", 60, \"turn_shape\", 0.45, \"max_aoa\", 5, \"drag_area\", " + dragArea + ", \"hold\", " + (hold ? "true" : "false") + ")).");
+                + ", \"turn_start_speed\", 60, \"turn_shape\", 0.45, \"max_aoa\", 5, \"drag_area\", " + dragArea + ", \"hold\", " + (hold ? "true" : "false") + ", \"thin\", " + (thin ? "true" : "false") + ", \"thrust_scale\", " + thrustScale + ")).");
             var result = lines.Where(l => !l.StartsWith("track ")).ToDictionary(l => l.Split(' ')[0], l => l.Substring(l.IndexOf(' ') + 1));
             return (result, string.Join("\n", lines));
         }
@@ -172,6 +172,31 @@ namespace ClaudiaKermin.Kerboscript.Tests
         public void Without_throttle_max_q_the_turn_hold_changes_nothing()
         {
             Assert.Equal(Ascent(false, 0.5, -1, 80000).Track, Ascent(true, 0.5, -1, 80000).Track);
+        }
+
+        // #236: in thin air the pitch is held no lower than 3 degrees under the surface-prograde pitch.
+        [Theory]
+        [InlineData(30, 60, 100, 3, "57")]
+        [InlineData(58, 60, 100, 3, "58")]
+        [InlineData(70, 60, 100, 3, "70")]
+        [InlineData(30, 60, 500, 3, "57")]
+        [InlineData(30, 60, 501, 3, "30")]
+        [InlineData(30, 60, 20000, 3, "30")]
+        public void In_thin_air_the_pitch_is_held_within_a_few_degrees_of_the_prograde(double pitch, double prograde, double q, double lead, string held)
+        {
+            Assert.Equal(held, One("launch_thin_pitch(" + pitch + ", " + prograde + ", " + q + ", " + lead + ")"));
+        }
+
+        // A slow (70% thrust) craft to a 300 km apoapsis is still burning above 40 km, in the thin air.
+        [Fact]
+        public void Without_the_thin_air_cap_the_nose_runs_well_below_the_prograde_up_high_and_with_it_stays_within_a_few_degrees()
+        {
+            var (free, freeTrack) = Ascent(true, 0.5, 12000, 300000, false, 0.7);
+            Assert.True(double.Parse(free["max_thin_lead"]) > 20, freeTrack);
+            var (capped, track) = Ascent(true, 0.5, 12000, 300000, true, 0.7);
+            Assert.True(double.Parse(capped["max_thin_lead"]) <= 3.1, track);
+            Assert.True(capped["stalled"].StartsWith("False"), track);
+            Assert.True(double.Parse(capped["coast_ap"]) >= 297000, track);
         }
 
         // ---- launch: heading and the plane ----
