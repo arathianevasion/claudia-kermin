@@ -15,7 +15,7 @@ A Kerbal Space Program mod that adds **Claudia**, an AI mission controller. You 
 4. **The loop.** Each Maneuver Sequence goes through four steps:
    - **Sequence Plan:** what she'll do, its targets and tolerances, and what could go wrong.
    - **Approval:** your go-ahead in chat.
-   - **Running:** the mod runs her kOS script, built from a shipped library of tested Building Blocks (`launch`, `circularize`, `exec_node`, `transfer_to`, `land`, `ascend`, `return`, `reentry`, `science`).
+   - **Running:** the mod runs her kOS script, built from a shipped library of tested Building Blocks (`launch`, `circularize`, `exec_node`, `transfer_to`, `tune_pe`, `land`, `ascend`, `return`, `reentry`, `science`).
    - **Debrief:** how it went, rated Nominal, Off-Nominal or Failed, followed by the next plan.
 
 Claudia is also a Kerbal: a female crew member with the **Super Intelligence** role, which combines Pilot, Engineer and Scientist. She flies aboard crewed craft, or remotely from Mission Control for probes. If she dies aboard, the Mission is Lost, and she returns to the roster later.
