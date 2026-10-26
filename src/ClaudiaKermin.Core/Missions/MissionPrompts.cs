@@ -70,6 +70,10 @@ namespace ClaudiaKermin.Core.Missions
 
         public const int MaxTokens = 32000;
 
+        /// <summary>The effort of the reduced form a cut-off reply is resent in, and the line added to that resend (#267).</summary>
+        public const string CutOffEffort = "medium";
+        public const string CutOffNote = "Your last attempt ran out of room while thinking. Decide with what you have and keep your reasoning short.";
+
         /// <summary>
         /// The summarization prompt for server-side compaction (it replaces the API's default). It lists what a
         /// long Mission must not lose; the summary is all Claude has of the compacted turns.

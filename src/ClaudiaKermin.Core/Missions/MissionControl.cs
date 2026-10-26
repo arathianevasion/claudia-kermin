@@ -182,6 +182,11 @@ namespace ClaudiaKermin.Core.Missions
             /// while Running always waits.
             /// </summary>
             public bool Waits;
+            /// <summary>
+            /// The turn is in its reduced form after a cut-off reply (<see cref="ResendFromScratch"/>): medium effort and
+            /// the cut-off note. At most one automatic retry per turn, and any Retry sends this form, never the identical request.
+            /// </summary>
+            public bool CutOffRetry;
             /// <summary>An Alert's crossed Telemetry Check, which its verdict is recorded on; null for other turns.</summary>
             public Crossing Crossing;
             /// <summary>A Debrief's extras from the mod: its events, the rest of the plan and the margin recheck (MissionControl.Debrief.cs); null before it begins.</summary>
@@ -917,26 +922,7 @@ namespace ClaudiaKermin.Core.Missions
             }
             if (HeldForCraft(mission, turn)) return;
 
-            if (turn.Messages == null)
-            {
-                if (turn.Effort == null) turn.Effort = EffortFor(turn.Purpose);
-                turn.Messages = new List<Message>();
-                if (turn.Effort != mission.Effort) turn.Messages.Add(Message.SystemEffort(turn.Effort));
-                turn.Messages.Add(Message.UserText(turn.UserText));
-                turn.Messages.Add(Message.SystemText(turn.Notice + BlackoutNotice(mission)));
-            }
-
-            var request = new MessagesRequest
-            {
-                Model = mission.Model,
-                MaxTokens = MissionPrompts.MaxTokens,
-                OutputSchemaJson = Schema(mission, turn),
-                CompactionTriggerTokens = _config.CompactionTriggerTokens,
-                CompactionInstructions = MissionPrompts.CompactionInstructions,
-            };
-            request.System.AddRange(mission.System);
-            request.Messages.AddRange(mission.Conversation);
-            request.Messages.AddRange(turn.Messages);
+            var request = BuildRequest(mission, turn);
             decimal worstCase;
             // In a Blackout nothing Pauses at the cap: the player couldn't answer, so the request waits (the waiting call).
             if (!MaySend(mission, request, turn.Waits || IsRunning(mission) || mission.Blackout, out worstCase)) return;
@@ -956,6 +942,76 @@ namespace ClaudiaKermin.Core.Missions
                 () => _client.Stream(request, update => _background.Post(() => Streamed(mission, turn, update)), cancel, dump),
                 result => Finished(mission, turn, result),
                 error => Finished(mission, turn, null));
+        }
+
+        /// <summary>The turn's request: its messages are built once, on first need, and kept unchanged for Retry (<see cref="ResendFromScratch"/> is the one way to build them again).</summary>
+        private MessagesRequest BuildRequest(Mission mission, Turn turn)
+        {
+            if (turn.Messages == null)
+            {
+                if (turn.Effort == null) turn.Effort = EffortFor(turn.Purpose);
+                turn.Messages = new List<Message>();
+                if (turn.Effort != mission.Effort) turn.Messages.Add(Message.SystemEffort(turn.Effort));
+                turn.Messages.Add(Message.UserText(turn.UserText));
+                var notice = turn.Notice + BlackoutNotice(mission);
+                if (turn.CutOffRetry) notice += "\n\n" + MissionPrompts.CutOffNote;
+                turn.Messages.Add(Message.SystemText(notice));
+            }
+
+            var request = new MessagesRequest
+            {
+                Model = mission.Model,
+                MaxTokens = MissionPrompts.MaxTokens,
+                OutputSchemaJson = Schema(mission, turn),
+                CompactionTriggerTokens = _config.CompactionTriggerTokens,
+                CompactionInstructions = MissionPrompts.CompactionInstructions,
+            };
+            request.System.AddRange(mission.System);
+            request.Messages.AddRange(mission.Conversation);
+            request.Messages.AddRange(turn.Messages);
+            return request;
+        }
+
+        /// <summary>
+        /// Discards the turn's uncommitted messages and builds them again from the turn's own fields, with the
+        /// Game Snapshot of this moment: the one step of "discard the uncommitted turn and resend it from scratch"
+        /// (the cut-off retry now; the tool loop and the Second look reuse it). <paramref name="reshape"/> changes
+        /// the turn first (its effort, a note). The turn is recorded as unanswered again, so a quit or save before
+        /// the reply loads it in its new form, and nothing is sent: <see cref="Send"/> does that.
+        /// </summary>
+        private void ResendFromScratch(Mission mission, Turn turn, Action<Turn> reshape)
+        {
+            if (reshape != null) reshape(turn);
+            turn.Messages = null;
+            turn.Cancel = null;
+            RecordUnanswered(mission, turn);
+        }
+
+        /// <summary>
+        /// A reply stopped at <c>max_tokens</c> (#267). It is never committed. The turn is put into its reduced form (medium
+        /// effort and the cut-off note) and, the first time, resent at once if the Spending Cap has room for its worst case;
+        /// otherwise, or after a second cut-off, it fails as it always did, and the player's Retry sends the reduced form.
+        /// </summary>
+        private void CutOff(Mission mission, Turn turn)
+        {
+            var again = turn.CutOffRetry;
+            if (!again)
+                ResendFromScratch(mission, turn, t => { t.CutOffRetry = true; t.Effort = MissionPrompts.CutOffEffort; });
+            if (!again && HasCapRoom(mission, turn))
+            {
+                Event(mission, "cut_off_retry", turn.Purpose.ToString());
+                mission.Activity = "thinking";
+                Send(mission, turn);
+                return;
+            }
+            Failed(mission, turn, "Claudia's reply was cut short.");
+            if (mission.Stage == MissionStage.Paused && mission.Pending == turn) mission.PauseCause = PauseCause.CutOff;
+        }
+
+        /// <summary>Whether the Spending Cap has room for the turn's request at its worst case; unlike <see cref="MaySend"/> it never Pauses or waits.</summary>
+        private bool HasCapRoom(Mission mission, Turn turn)
+        {
+            return mission.Committed + RequestCharge.WorstCase(_config.Prices, mission.Model, BuildRequest(mission, turn)) <= mission.SpendingCap;
         }
 
         /// <summary>
@@ -1075,7 +1131,7 @@ namespace ClaudiaKermin.Core.Missions
             }
             if (message.StopReason == StopReason.MaxTokens)
             {
-                Failed(mission, turn, "Claudia's reply was cut short.");
+                CutOff(mission, turn);
                 return;
             }
             var reply = MissionReply.Parse(message.Text);
@@ -1786,7 +1842,7 @@ namespace ClaudiaKermin.Core.Missions
                 }
                 view.AbortRecommended = mission.AbortRecommendation;
                 // While Running a question queues behind whatever is in hand, so typing stays open.
-                view.CanType = (!mission.InFlight || mission.Stage == MissionStage.Running) && (mission.Stage != MissionStage.Paused || mission.PauseCause == PauseCause.Refusal)
+                view.CanType = (!mission.InFlight || mission.Stage == MissionStage.Running) && (mission.Stage != MissionStage.Paused || mission.PauseCause == PauseCause.Refusal || mission.PauseCause == PauseCause.CutOff)
                     && mission.Stage != MissionStage.WaitingForFlight && mission.Stage != MissionStage.Lost
                     && mission.Stage != MissionStage.AwaitingReducedGoal;
 

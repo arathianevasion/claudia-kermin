@@ -37,6 +37,8 @@ namespace ClaudiaKermin.Core.Missions
         public bool ReducedGoalRetry;
         /// <summary>The turn waits at the Spending Cap instead of Pausing the Mission (the waiting call).</summary>
         public bool Waits;
+        /// <summary>The turn is in its reduced form after a cut-off reply (medium effort, with a note), so a re-sent one is never the identical request; false in older files.</summary>
+        public bool CutOffRetry;
         /// <summary>How many messages the committed conversation held when the turn was sent; the turn is stale once the transcript has grown past it.</summary>
         public int BaseMessages;
     }
@@ -120,6 +122,7 @@ namespace ClaudiaKermin.Core.Missions
                 .Field("child_vessel_retry", turn.ChildVesselRetry)
                 .Field("reduced_goal_retry", turn.ReducedGoalRetry)
                 .Field("waits", turn.Waits)
+                .Field("cut_off_retry", turn.CutOffRetry)
                 .Field("base_messages", turn.BaseMessages)
                 .EndObject();
             MissionFolder.ReplaceAtomically(Path.Combine(folder, UnansweredFile), json.ToString());
@@ -140,6 +143,7 @@ namespace ClaudiaKermin.Core.Missions
                 ChildVesselRetry = JsonNode.Bool(root["child_vessel_retry"]) ?? false,
                 ReducedGoalRetry = JsonNode.Bool(root["reduced_goal_retry"]) ?? false,
                 Waits = JsonNode.Bool(root["waits"]) ?? false,
+                CutOffRetry = JsonNode.Bool(root["cut_off_retry"]) ?? false,
                 BaseMessages = (int)(JsonNode.Long(root["base_messages"]) ?? 0),
             };
         }
