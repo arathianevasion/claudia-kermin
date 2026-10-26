@@ -199,7 +199,7 @@ function reentry_shield_modules {
       for name in list("ModuleDecouple", "ModuleAnchoredDecoupler", "ModuleJettison") {
         if p:hasmodule(name) {
           local m is p:getmodule(name).
-          local event is reentry_jettison_event(m:alleventnames).
+          local event is claudia_decoupler_event(m:alleventnames).
           if event <> "" {
             found:add(lexicon("module", m, "event", event)).
           }
@@ -208,26 +208,6 @@ function reentry_shield_modules {
     }
   }
   return found.
-}
-
-// The event, of a decoupler module's event names, that drops what it holds; "" if it has none. kOS
-// names an event by its menu text, which a part may rename (stock HeatShield1's ModuleDecouple lists
-// "jettison heat shield", not "decouple"), so the known names come first, then any that says it.
-function reentry_jettison_event {
-  parameter names.
-  for wanted in list("decouple", "jettison heat shield", "jettison") {
-    for name in names {
-      if name:tolower = wanted {
-        return name.
-      }
-    }
-  }
-  for name in names {
-    if name:tolower:contains("decouple") or name:tolower:contains("jettison") {
-      return name.
-    }
-  }
-  return "".
 }
 
 // True if the decoupler p is a heat shield or sits against one.

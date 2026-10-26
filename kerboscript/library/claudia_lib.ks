@@ -11,7 +11,7 @@
 //   documented defaults returned by <block>_defaults(); an unknown option fails at once with reason
 //   "unknown option <name>". Block-only helpers are prefixed <block>_.
 // - Every block also takes the common options from claudia_common_defaults(): min_ec_pct,
-//   max_duration, abort_on_part_loss and stage_limit.
+//   max_duration, abort_on_part_loss, stage_limit and drop_empty.
 // - A block returns one result lexicon built by claudia_finish(): the Script Result's common fields
 //   plus the block's extra results. It never reports: the Mission Script reports once.
 // - claudia_begin and claudia_finish tell the mod a block began and what it returned
@@ -33,6 +33,11 @@
 //| s, degrees); leave an option out to get its default. Don't name a variable after a kOS built-in
 //| (r, v, q, node, transfer, ...): kOS won't compile the script. An unknown option fails the block at once
 //| with reason "unknown option <name>". Every block also takes the common options:
+//|   drop_empty [empty list]: part names or tags (e.g. list("fuelTank", "side tanks")); the auto-staging fires the
+//|     decoupler that holds them once every tank it would drop is empty (fuel, oxidizer, solid fuel, mono and
+//|     xenon all count), in the very burn that empties them, and never one that still holds fuel, is below
+//|     stage_limit or holds the part running the script. Only burning blocks use it (launch, ascend, land,
+//|     exec_node, circularize and the blocks that fly them); the result then lists dropped.
 //|   min_ec_pct [10]: abort when electric charge falls below this percent of capacity.
 //|   max_duration [per block]: abort when the block has run this many seconds, waits included.
 //|   abort_on_part_loss [true]: abort when the craft loses a part other than by the block's own staging.
@@ -54,7 +59,7 @@
 // The common options every block takes. max_duration is the block's own default.
 function claudia_common_defaults {
   parameter max_duration.
-  return lexicon("min_ec_pct", 10, "max_duration", max_duration, "abort_on_part_loss", true, "stage_limit", 0).
+  return lexicon("min_ec_pct", 10, "max_duration", max_duration, "abort_on_part_loss", true, "stage_limit", 0, "drop_empty", list()).
 }
 
 // "" if every key in opts is a known option (a key of defaults), else "unknown option <key>".
@@ -87,7 +92,16 @@ function claudia_merge_options {
 function claudia_options {
   parameter opts, block_defaults, max_duration.
   local defaults is claudia_merge_options(block_defaults, claudia_common_defaults(max_duration)).
-  return lexicon("error", claudia_unknown_option(opts, defaults), "opt", claudia_merge_options(opts, defaults)).
+  local merged is claudia_merge_options(opts, defaults).
+  local error is claudia_unknown_option(opts, defaults).
+  // One name or tag may be given bare; the rest of the library sees a list.
+  if merged:drop_empty:istype("String") {
+    set merged:drop_empty to list(merged:drop_empty).
+  }
+  if error = "" and not merged:drop_empty:istype("List") {
+    set error to "drop_empty must be a list of part names or tags".
+  }
+  return lexicon("error", error, "opt", merged).
 }
 
 // ---- Aborts ----
@@ -267,6 +281,7 @@ function claudia_needs_stage {
 // Returns "" or the reason the block must fail.
 function claudia_autostage {
   parameter ctx.
+  claudia_drop_empty(ctx).
   if not stage:ready {
     return "".
   }
@@ -296,6 +311,182 @@ function claudia_autostage {
     set ctx:last_ut to time:seconds.
   }
   return "".
+}
+
+// ---- Dropping parts (the drop_empty option and the drop_parts block) ----
+
+// True if a part, by its name or its tag, is one of wanted (names or tags, any case).
+function claudia_drop_matches {
+  parameter part_name, part_tag, wanted.
+  for w in wanted {
+    local want is (w + ""):tolower.
+    if want <> "" and (want = part_name:tolower or want = part_tag:tolower) {
+      return true.
+    }
+  }
+  return false.
+}
+
+// True if every tank is empty: amounts and capacities are parallel lists, one entry per tank. A set
+// with no tank is not empty, so nothing is dropped for holding no fuel.
+function claudia_tanks_empty {
+  parameter amounts, capacities.
+  if amounts:length = 0 {
+    return false.
+  }
+  local i is 0.
+  until i >= amounts:length {
+    if amounts[i] > max(0.01, 0.001 * capacities[i]) {
+      return false.
+    }
+    set i to i + 1.
+  }
+  return true.
+}
+
+// True if a resource is a tank's contents (not charge, intake air or ablator).
+function claudia_is_propellant {
+  parameter res_name.
+  return res_name <> "ElectricCharge" and res_name <> "IntakeAir" and res_name <> "Ablator".
+}
+
+// The part that separates p from the craft, or "" if it has none.
+function claudia_decoupler_of {
+  parameter p.
+  local d is p:decoupler.
+  if d:istype("Part") {
+    return d.
+  }
+  return "".
+}
+
+// Every part that leaves with decoupler d (the parts whose decoupler it is).
+function claudia_dropped_with {
+  parameter d.
+  local found is list().
+  for p in ship:parts {
+    local other is claudia_decoupler_of(p).
+    if not other:istype("String") and other:uid = d:uid {
+      found:add(p).
+    }
+  }
+  return found.
+}
+
+// True if a set of parts holds the part running the script or the root: dropping it ends the flight.
+function claudia_drop_holds_core {
+  parameter gone.
+  for p in gone {
+    if p:uid = core:part:uid or p:uid = ship:rootpart:uid {
+      return true.
+    }
+  }
+  return false.
+}
+
+// The event, of a decoupler module's event names, that drops what it holds; "" if it has none. kOS
+// names an event by its menu text, which a part may rename (stock HeatShield1's ModuleDecouple lists
+// "jettison heat shield", not "decouple"), so the known names come first, then any that says it.
+function claudia_decoupler_event {
+  parameter names.
+  for wanted in list("decouple", "jettison heat shield", "jettison") {
+    for name in names {
+      if name:tolower = wanted {
+        return name.
+      }
+    }
+  }
+  for name in names {
+    if name:tolower:contains("decouple") or name:tolower:contains("jettison") {
+      return name.
+    }
+  }
+  return "".
+}
+
+// Fires decoupler d. Returns true if one of its modules had an event to fire.
+function claudia_fire_decoupler {
+  parameter d.
+  for module_name in list("ModuleDecouple", "ModuleAnchoredDecoupler", "ModuleJettison") {
+    if d:hasmodule(module_name) {
+      local m is d:getmodule(module_name).
+      local event is claudia_decoupler_event(m:alleventnames).
+      if event <> "" {
+        m:doevent(event).
+        return true.
+      }
+    }
+  }
+  return false.
+}
+
+// Adds the parts an inner block's result says it dropped to ctx's.
+function claudia_note_dropped {
+  parameter ctx, inner.
+  if inner:haskey("dropped") {
+    for n in inner:dropped {
+      ctx:dropped:add(n).
+    }
+  }
+}
+
+// Fires the decoupler of every part in drop_empty whose tanks are all empty, together with every other
+// part leaving with it, and notes the names of the parts that left in ctx:dropped. Looks twice a second.
+// A decoupler is tried once (ctx:drop_tried), and never one below stage_limit.
+function claudia_drop_empty {
+  parameter ctx.
+  local wanted is ctx:opt:drop_empty.
+  if wanted:length = 0 or time:seconds < ctx:drop_ut + 0.5 {
+    return.
+  }
+  set ctx:drop_ut to time:seconds.
+  local fired is list().
+  local fired_parts is list().
+  for p in ship:parts {
+    if claudia_drop_matches(p:name, p:tag, wanted) {
+      local d is claudia_decoupler_of(p).
+      if not d:istype("String") and not ctx:drop_tried:contains(d:uid) and d:stage >= ctx:opt:stage_limit {
+        local gone is claudia_dropped_with(d).
+        local amounts is list().
+        local capacities is list().
+        for g in gone {
+          for res in g:resources {
+            if claudia_is_propellant(res:name) and res:capacity > 0 {
+              amounts:add(res:amount).
+              capacities:add(res:capacity).
+            }
+          }
+        }
+        // Nested, not one "and": firing is a side effect and must only follow the guards.
+        if claudia_tanks_empty(amounts, capacities) {
+          if not claudia_drop_holds_core(gone) {
+            ctx:drop_tried:add(d:uid).
+            if claudia_fire_decoupler(d) {
+              fired:add(d:uid).
+              for g in gone {
+                fired_parts:add(g).
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  if fired:length > 0 {
+    // Let the dropped parts leave before counting what the craft should still have.
+    wait 0.5.
+    local left is list().
+    for p in ship:parts {
+      left:add(p:uid).
+    }
+    for g in fired_parts {
+      if not left:contains(g:uid) {
+        ctx:dropped:add(g:name).
+      }
+    }
+    set ctx:parts to ship:parts:length.
+    set ctx:last_ut to time:seconds.
+  }
 }
 
 // ---- Waits and warp ----
@@ -484,7 +675,10 @@ function claudia_begin {
     "start_ut", time:seconds,
     "last_ut", time:seconds,
     "dv_used", 0,
-    "parts", ship:parts:length).
+    "parts", ship:parts:length,
+    "dropped", list(),
+    "drop_tried", list(),
+    "drop_ut", 0).
 }
 
 // Once per physics tick in a block's loops. tset: the throttle the block is commanding now.
@@ -510,6 +704,7 @@ function claudia_tick {
 function claudia_add_result {
   parameter ctx, inner.
   set ctx:dv_used to ctx:dv_used + inner:dv_used.
+  claudia_note_dropped(ctx, inner).
   set ctx:parts to ship:parts:length.
   set ctx:last_ut to time:seconds.
 }
@@ -520,7 +715,7 @@ function claudia_add_result {
 function claudia_fly_node {
   parameter ctx, nd.
   local opt is ctx:opt.
-  local inner is exec_node(lexicon("node", nd, "min_ec_pct", opt:min_ec_pct, "abort_on_part_loss", opt:abort_on_part_loss, "stage_limit", opt:stage_limit)).
+  local inner is exec_node(lexicon("node", nd, "min_ec_pct", opt:min_ec_pct, "abort_on_part_loss", opt:abort_on_part_loss, "stage_limit", opt:stage_limit, "drop_empty", opt:drop_empty)).
   claudia_add_result(ctx, inner).
   if not inner:success {
     remove nd.
@@ -563,6 +758,9 @@ function claudia_finish {
   }
   if not claudia_dv_trusted(ship:control:mainthrottle) {
     set result["dv_remaining_note"] to "unknown: stock delta-v reads 0 while the engines run at a trickle throttle".
+  }
+  if ctx:dropped:length > 0 {
+    set result["dropped"] to ctx:dropped.
   }
   for key in extra:keys {
     set result[key] to extra[key].
@@ -728,7 +926,7 @@ function claudia_pe_error {
 function claudia_burn_options {
   parameter ctx, nd.
   local opt is ctx:opt.
-  local burn is lexicon("node", nd, "min_ec_pct", opt:min_ec_pct, "abort_on_part_loss", opt:abort_on_part_loss, "stage_limit", opt:stage_limit).
+  local burn is lexicon("node", nd, "min_ec_pct", opt:min_ec_pct, "abort_on_part_loss", opt:abort_on_part_loss, "stage_limit", opt:stage_limit, "drop_empty", opt:drop_empty).
   if opt:max_duration:istype("Scalar") {
     set burn:max_duration to max(1, opt:max_duration - (time:seconds - ctx:start_ut)).
   }
@@ -740,6 +938,7 @@ function claudia_burn {
   parameter ctx, nd.
   local burned is exec_node(claudia_burn_options(ctx, nd)).
   set ctx:dv_used to ctx:dv_used + burned:dv_used.
+  claudia_note_dropped(ctx, burned).
   // exec_node's staging dropped parts on purpose; don't count them as lost.
   set ctx:parts to ship:parts:length.
   set ctx:last_ut to time:seconds.
