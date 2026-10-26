@@ -86,6 +86,37 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(throttle, One("round(launch_throttle(" + ap + ", 80000, 2000, " + q + ", " + maxQ + ", " + floor + "), 3)"));
         }
 
+        // #234: no trickle just under the target; the cutoff band (half the top-up band) is inside it.
+        [Theory]
+        [InlineData(79999, 0, -1, 0, "0")]
+        [InlineData(79900, 0, -1, 0, "0")]
+        [InlineData(79800, 0, -1, 0, "0")]
+        [InlineData(79700, 0, -1, 0, "0.15")]
+        [InlineData(79000, 20000, 20000, 0, "0.5")]
+        public void The_throttle_cuts_off_within_the_cutoff_band_of_the_target_ap_instead_of_trickling(double ap, double q, double maxQ, double floor, string throttle)
+        {
+            Assert.Equal(throttle, One("round(launch_throttle(" + ap + ", 80000, 2000, " + q + ", " + maxQ + ", " + floor + "), 3)"));
+        }
+
+        [Theory]
+        [InlineData(80000, "200")]
+        [InlineData(10000, "50")]
+        public void The_cutoff_band_is_half_the_top_up_band(double targetAp, string cutoff)
+        {
+            Assert.Equal(cutoff, One("launch_cutoff_tol(" + targetAp + ")"));
+            Assert.Equal("True", One("launch_cutoff_tol(" + targetAp + ") < launch_topup_tol(" + targetAp + ")"));
+        }
+
+        [Theory]
+        [InlineData(0, "True")]
+        [InlineData(0.02, "False")]
+        [InlineData(0.05, "True")]
+        [InlineData(1, "True")]
+        public void Stock_delta_v_is_trusted_at_zero_throttle_or_from_five_percent(double throttle, string trusted)
+        {
+            Assert.Equal(trusted, One("claudia_dv_trusted(" + throttle + ")"));
+        }
+
         [Theory]
         [InlineData(0.9, 6.4, 9.81, 167.97, "0.374")]
         [InlineData(0.9, 20, 9.81, 100, "1")]

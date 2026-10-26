@@ -29,7 +29,7 @@ namespace ClaudiaKermin.Core.Missions
                 return "the craft is now " + now.Situation + ", not " + baseline.Situation;
 
             var tolerance = tolerancePercent / 100.0;
-            if (baseline.DeltaVSimulator && now.DeltaVSimulator)
+            if (baseline.DeltaVSimulator && now.DeltaVSimulator && !baseline.DeltaVUnreliable && !now.DeltaVUnreliable)
             {
                 var before = baseline.Stages.Sum(s => s.DeltaVVac);
                 var after = now.Stages.Sum(s => s.DeltaVVac);

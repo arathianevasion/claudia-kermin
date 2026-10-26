@@ -106,13 +106,26 @@ function launch_turn_held {
   return max_q > 0 and q_now > 0.9 * max_q and launch_thick_air(pressure_ratio).
 }
 
-// The throttle on the way to target_ap: 0 once ap reaches it (only that cuts the engines off);
-// easing off linearly over the last ramp metres of apoapsis; easing off from 90% to 110% of max_q
+// How far under target_ap (m) the apoapsis may sag while coasting before the engines light again.
+function launch_topup_tol {
+  parameter target_ap.
+  return max(100, 0.005 * target_ap).
+}
+
+// How close to target_ap (m) the engines cut off: half the top-up band, so a cutoff can't be undone
+// at once by the top-up.
+function launch_cutoff_tol {
+  parameter target_ap.
+  return launch_topup_tol(target_ap) / 2.
+}
+
+// The throttle on the way to target_ap: 0 once ap is within launch_cutoff_tol of it (only that cuts the
+// engines off, so the throttle never trickles near the target); easing off linearly over the last ramp metres of apoapsis; easing off from 90% to 110% of max_q
 // (Pa, -1 for no limit) at dynamic pressure q_now (Pa), down to 5%; but never below t_floor, so the
 // throttle can't collapse in thick air (the floor wins over max_q).
 function launch_throttle {
   parameter ap, target_ap, ramp, q_now, max_q, t_floor.
-  if ap >= target_ap {
+  if ap >= target_ap - launch_cutoff_tol(target_ap) {
     return 0.
   }
   local t is min(1, (target_ap - ap) / ramp).
@@ -367,7 +380,7 @@ function launch {
   local turn_end is min(body_values:atm_height, target_ap).
   local turn_start_alt is -1.
   local ramp is max(500, 0.02 * target_ap).
-  local topup_tol is max(100, 0.005 * target_ap).
+  local topup_tol is launch_topup_tol(target_ap).
   local coasting is false.
   local off_since is -1.
   local q_max is 0.

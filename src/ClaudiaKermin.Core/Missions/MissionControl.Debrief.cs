@@ -268,7 +268,7 @@ namespace ClaudiaKermin.Core.Missions
             detail.ScienceSeen = mission.RunEvents.ScienceLines(mission.RunStartUt);
             if (snapshot != null)
             {
-                double? left = snapshot.DeltaVSimulator && snapshot.Stages.Count > 0 ? snapshot.Stages.Sum(s => s.DeltaVVac) : (double?)null;
+                double? left = snapshot.DeltaVSimulator && snapshot.Stages.Count > 0 && !snapshot.DeltaVUnreliable ? snapshot.Stages.Sum(s => s.DeltaVVac) : (double?)null;
                 detail.Margin = MarginBar.Compute(left, RestOfPlan(mission).Sum(s => s.DeltaV), _config.CraftCheckMarginPercent);
                 detail.ResourcesLeft = snapshot.Resources.Where(r => r.Max > 0)
                     .Select(r => r.Name + " " + (100 * r.Amount / r.Max).ToString("0", CultureInfo.InvariantCulture) + "%").ToList();
