@@ -108,6 +108,21 @@ namespace ClaudiaKermin.Core.Missions
             return info.Id.Length == 0 ? null : info;
         }
 
+        public const string BodyTableFile = "body-table.txt";
+
+        /// <summary>Saves the body table as the Mission layer carries it, so a Mission reloaded before its first answer rebuilds the same cached prefix.</summary>
+        public static void WriteBodyTable(string folder, string table)
+        {
+            if (table.Length > 0) MissionFolder.ReplaceAtomically(Path.Combine(folder, BodyTableFile), table);
+        }
+
+        /// <summary>The saved body table; "" when none was saved (an older Mission, or the game's bodies weren't read).</summary>
+        public static string ReadBodyTable(string folder)
+        {
+            var path = Path.Combine(folder, BodyTableFile);
+            return File.Exists(path) ? File.ReadAllText(path) : "";
+        }
+
         public static void WriteUnanswered(string folder, UnansweredTurn turn)
         {
             var json = new JsonWriter().BeginObject()

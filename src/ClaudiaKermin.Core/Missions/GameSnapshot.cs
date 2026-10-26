@@ -75,6 +75,16 @@ namespace ClaudiaKermin.Core.Missions
         public double Eccentricity;
         public double Period;
         public double SemiMajorAxis;
+        /// <summary>Longitude of the ascending node, degrees; with the next four it lets a tool propagate the orbit.</summary>
+        public double Lan;
+        /// <summary>Argument of periapsis, degrees.</summary>
+        public double ArgumentOfPeriapsis;
+        /// <summary>Mean anomaly at <see cref="Epoch"/>, radians (KSP's own unit).</summary>
+        public double MeanAnomalyAtEpoch;
+        /// <summary>The UT the mean anomaly is given at.</summary>
+        public double Epoch;
+        /// <summary>The body the orbit is round; "" when not read (an older recording).</summary>
+        public string Body = "";
     }
 
     public sealed class SnapshotResource
@@ -260,7 +270,10 @@ namespace ClaudiaKermin.Core.Missions
                 json.Name("bodies").BeginArray();
                 foreach (var body in Bodies)
                     json.BeginObject().Field("name", body.Name).Field("parent", body.Parent).Field("gm", body.Gm).Field("radius", body.Radius)
-                        .Field("atmosphere_height", body.AtmosphereHeight).Field("sea_level_atm", body.SeaLevelAtm).Field("sma", body.Sma).Field("inclination", body.Inclination).EndObject();
+                        .Field("atmosphere_height", body.AtmosphereHeight).Field("sea_level_atm", body.SeaLevelAtm).Field("sma", body.Sma).Field("inclination", body.Inclination)
+                        .Field("soi_radius", body.SoiRadius).Field("rotation_period", body.RotationPeriod)
+                        .Field("eccentricity", body.Eccentricity).Field("lan", body.Lan).Field("arg_pe", body.ArgumentOfPeriapsis)
+                        .Field("mean_anomaly_at_epoch", body.MeanAnomalyAtEpoch).Field("epoch", body.Epoch).EndObject();
                 json.EndArray();
             }
             json.Name("orbit");
@@ -274,6 +287,11 @@ namespace ClaudiaKermin.Core.Missions
                     .Field("eccentricity", Orbit.Eccentricity)
                     .Field("period", Orbit.Period)
                     .Field("semi_major_axis", Orbit.SemiMajorAxis)
+                    .Field("lan", Orbit.Lan)
+                    .Field("arg_pe", Orbit.ArgumentOfPeriapsis)
+                    .Field("mean_anomaly_at_epoch", Orbit.MeanAnomalyAtEpoch)
+                    .Field("epoch", Orbit.Epoch)
+                    .Field("orbit_body", Orbit.Body)
                     .EndObject();
             }
             json.Name("resources").BeginArray();
@@ -408,6 +426,13 @@ namespace ClaudiaKermin.Core.Missions
                         SeaLevelAtm = JsonNode.Double(body["sea_level_atm"]) ?? 0,
                         Sma = JsonNode.Double(body["sma"]) ?? 0,
                         Inclination = JsonNode.Double(body["inclination"]) ?? 0,
+                        SoiRadius = JsonNode.Double(body["soi_radius"]) ?? 0,
+                        RotationPeriod = JsonNode.Double(body["rotation_period"]) ?? 0,
+                        Eccentricity = JsonNode.Double(body["eccentricity"]) ?? 0,
+                        Lan = JsonNode.Double(body["lan"]) ?? 0,
+                        ArgumentOfPeriapsis = JsonNode.Double(body["arg_pe"]) ?? 0,
+                        MeanAnomalyAtEpoch = JsonNode.Double(body["mean_anomaly_at_epoch"]) ?? 0,
+                        Epoch = JsonNode.Double(body["epoch"]) ?? 0,
                     });
                 }
             }
@@ -422,6 +447,11 @@ namespace ClaudiaKermin.Core.Missions
                     Eccentricity = JsonNode.Double(orbit["eccentricity"]) ?? 0,
                     Period = JsonNode.Double(orbit["period"]) ?? 0,
                     SemiMajorAxis = JsonNode.Double(orbit["semi_major_axis"]) ?? 0,
+                    Lan = JsonNode.Double(orbit["lan"]) ?? 0,
+                    ArgumentOfPeriapsis = JsonNode.Double(orbit["arg_pe"]) ?? 0,
+                    MeanAnomalyAtEpoch = JsonNode.Double(orbit["mean_anomaly_at_epoch"]) ?? 0,
+                    Epoch = JsonNode.Double(orbit["epoch"]) ?? 0,
+                    Body = JsonNode.Str(orbit["orbit_body"]) ?? "",
                 };
             }
             var resources = root["resources"];

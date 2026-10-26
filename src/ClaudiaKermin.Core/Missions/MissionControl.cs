@@ -333,7 +333,8 @@ namespace ClaudiaKermin.Core.Missions
             };
             // Frozen for the whole Mission, so the cached prefix never changes.
             mission.System.Add(MissionPrompts.BaseLayer);
-            mission.System.Add(MissionPrompts.MissionLayer(id, goal));
+            var bodyTable = MissionPrompts.BodyTable(_snapshot != null ? _snapshot.Bodies : null);
+            mission.System.Add(MissionPrompts.MissionLayer(id, goal, bodyTable));
             var settings = start.Settings != null ? start.Settings.Copy() : MissionSettingsValues.Defaults(_config);
             settings.WriteTo(mission.Settings);
             mission.System.Add(MissionPrompts.TimingLayer(settings));
@@ -342,6 +343,14 @@ namespace ClaudiaKermin.Core.Missions
             _mission = mission;
             Note(LogKind.Player, "Mission Goal: " + goal);
             RecordStart(mission);
+            try
+            {
+                MissionStore.WriteBodyTable(mission.Folder, bodyTable);
+            }
+            catch (Exception e) when (IsFileError(e))
+            {
+                Note(LogKind.Notice, "Couldn't write the Mission's body table: " + e.Message);
+            }
             FoldCraftCheckCost(mission, _craftCheck.TakeCost());
             // Started from the editor with her not aboard: the mod puts her in a free seat (the Craft Check made sure there is one).
             if (!mission.Remote && _scene == GameScene.Editor && _snapshot != null && !_snapshot.ClaudiaAboard && _snapshot.FreeSeats > 0)

@@ -260,6 +260,14 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Contains("Kerbal Space Program", baseLayer);
             Assert.Contains("kOS", baseLayer);
             Assert.Contains("ADDONS:CLAUDIA:REPORT", baseLayer);
+            // The body constants sit once in the cached Mission layer (#273), never in the per-turn Game Snapshot.
+            Assert.Contains("Body constants", bodies[0].GetProperty("system")[1].GetProperty("text").GetString());
+            Assert.Contains("\"name\":\"Sun\"", bodies[0].GetProperty("system")[1].GetProperty("text").GetString());
+            foreach (var body in bodies)
+            {
+                Assert.DoesNotContain("Body constants", body.GetProperty("messages").GetRawText());
+                Assert.DoesNotContain("soi_radius", body.GetProperty("messages").GetRawText());
+            }
 
             // Append-only: each request's messages begin with the previous request's, byte for byte.
             for (var i = 1; i < bodies.Length; i++)

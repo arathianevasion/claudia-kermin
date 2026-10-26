@@ -54,6 +54,11 @@ namespace ClaudiaKermin.Adapter
                     Eccentricity = orbit.eccentricity,
                     Period = orbit.period,
                     SemiMajorAxis = orbit.semiMajorAxis,
+                    Lan = orbit.LAN,
+                    ArgumentOfPeriapsis = orbit.argumentOfPeriapsis,
+                    MeanAnomalyAtEpoch = orbit.meanAnomalyAtEpoch,
+                    Epoch = orbit.epoch,
+                    Body = orbit.referenceBody != null ? orbit.referenceBody.bodyName : "",
                 };
             }
             return snapshot;
@@ -216,6 +221,13 @@ namespace ClaudiaKermin.Adapter
                     SeaLevelAtm = body.atmosphere ? body.GetPressure(0) / 101.325 : 0,
                     Sma = orbit != null && body.referenceBody != body ? orbit.semiMajorAxis : 0,
                     Inclination = orbit != null ? orbit.inclination : 0,
+                    SoiRadius = body.sphereOfInfluence,
+                    RotationPeriod = body.rotationPeriod,
+                    Eccentricity = orbit != null && body.referenceBody != body ? orbit.eccentricity : 0,
+                    Lan = orbit != null && body.referenceBody != body ? orbit.LAN : 0,
+                    ArgumentOfPeriapsis = orbit != null && body.referenceBody != body ? orbit.argumentOfPeriapsis : 0,
+                    MeanAnomalyAtEpoch = orbit != null && body.referenceBody != body ? orbit.meanAnomalyAtEpoch : 0,
+                    Epoch = orbit != null && body.referenceBody != body ? orbit.epoch : 0,
                 });
             }
         }

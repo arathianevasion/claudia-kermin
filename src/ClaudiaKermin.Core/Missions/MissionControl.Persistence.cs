@@ -452,7 +452,7 @@ namespace ClaudiaKermin.Core.Missions
             else
             {
                 mission.System.Add(MissionPrompts.BaseLayer);
-                mission.System.Add(MissionPrompts.MissionLayer(state.Id, state.Goal));
+                mission.System.Add(MissionPrompts.MissionLayer(state.Id, state.Goal, MissionStore.ReadBodyTable(mission.Folder)));
                 mission.System.Add(MissionPrompts.TimingLayer(MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config))));
             }
             RestoreBlackout(mission, state);
