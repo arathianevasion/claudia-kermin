@@ -136,6 +136,8 @@ namespace ClaudiaKermin.Core.Ui
             if (mode == PromptFor.Reply && !awaiting) mode = PromptFor.Question;
 
             var manual = view.Stage == MissionStage.ManualControl;
+            // A Failed Debrief with no reduced goal takes only a note asking Claudia for one.
+            var asksForGoal = mode == PromptFor.Note && view.Stage == MissionStage.AwaitingReducedGoal && view.QuickReplies.Contains(QuickReply.RetryWithNote);
             return new PromptState
             {
                 For = mode,
@@ -144,8 +146,8 @@ namespace ClaudiaKermin.Core.Ui
                     : mode == PromptFor.Note ? "Note for Claudia's retry:"
                     : mode == PromptFor.Question ? "Ask Claudia" : "Reply to Claudia",
                 Hint = manual ? "Hand back sends what you typed with it" : KeysHint,
-                Placeholder = view.CanType ? "" : Unavailable(view),
-                Enabled = view.CanType && (view.Stage != MissionStage.Paused || mode == PromptFor.Note),
+                Placeholder = view.CanType || asksForGoal ? "" : Unavailable(view),
+                Enabled = asksForGoal || (view.CanType && (view.Stage != MissionStage.Paused || mode == PromptFor.Note)),
             };
         }
 
@@ -576,7 +578,7 @@ namespace ClaudiaKermin.Core.Ui
                     // The reason is already in the chat as a Notice, which the rebuilt log keeps; say it once.
                     return "Paused";
                 case MissionStage.UnsafeScript: return "Couldn't produce a safe script";
-                case MissionStage.AwaitingReducedGoal: return "Approve the reduced goal?";
+                case MissionStage.AwaitingReducedGoal: return replies.Contains(QuickReply.AcceptReducedGoal) ? "Approve the reduced goal?" : "No reduced goal: End Mission?";
                 default: return "";
             }
         }
@@ -645,7 +647,8 @@ namespace ClaudiaKermin.Core.Ui
                 case MissionStage.AwaitingSequenceApproval: return new StatusChip("Plan awaiting Approval", ChipTone.Info);
                 case MissionStage.Paused: return new StatusChip("Paused", ChipTone.Attention);
                 case MissionStage.UnsafeScript: return new StatusChip("No safe script", ChipTone.Attention);
-                case MissionStage.AwaitingReducedGoal: return new StatusChip("Reduced goal awaiting Approval", ChipTone.Attention);
+                case MissionStage.AwaitingReducedGoal:
+                    return new StatusChip(view.QuickReplies.Contains(QuickReply.AcceptReducedGoal) ? "Reduced goal awaiting Approval" : "Goal can't be reached", ChipTone.Attention);
                 case MissionStage.ManualControl: return new StatusChip("Manual Control · you fly", ChipTone.Attention);
                 case MissionStage.Succeeded: return new StatusChip("Mission Goal met", ChipTone.Success);
                 case MissionStage.Ended: return new StatusChip("Mission ended", ChipTone.Danger);

@@ -781,7 +781,9 @@ namespace ClaudiaKermin.Core.Missions
             }
             else if (stage == MissionStage.UnsafeScript) UnsafeScriptCard(mission, null);
             else if (stage == MissionStage.Lost) LostDebrief(mission, "");
-            else if (stage == MissionStage.AwaitingReducedGoal) Note(LogKind.Notice, "Claudia offered a reduced goal for your Approval: " + mission.ReducedGoal);
+            else if (stage == MissionStage.AwaitingReducedGoal)
+                Note(LogKind.Notice, mission.ReducedGoal.Length > 0 ? "Claudia offered a reduced goal for your Approval: " + mission.ReducedGoal
+                    : "Claudia offered no reduced goal: End Mission, or Retry with a note asking her for one.");
             mission.SequencesProposed = state.SequencesProposed;
             mission.LatestLine = state.LatestLine;
         }
@@ -816,7 +818,7 @@ namespace ClaudiaKermin.Core.Missions
                 case MissionStage.ManualControl: return "Manual Control: the player flying the craft";
                 case MissionStage.Succeeded: return "the Mission Goal met";
                 case MissionStage.Ended: return "ended";
-                case MissionStage.AwaitingReducedGoal: return "waiting for your Approval of a reduced goal";
+                case MissionStage.AwaitingReducedGoal: return "waiting for you after a Failed Debrief";
                 case MissionStage.Lost: return "Lost (Claudia was killed aboard)";
                 default: return "planning";
             }

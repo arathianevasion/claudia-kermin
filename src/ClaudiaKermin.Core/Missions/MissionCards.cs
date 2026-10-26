@@ -128,7 +128,7 @@ namespace ClaudiaKermin.Core.Missions
                 case "Failed":
                     return debrief.FollowUp == FollowUps.ReducedGoal && debrief.FollowUpText.Length > 0
                         ? "The Mission Goal can't be reached as stated. Reduced goal, for your Approval: " + debrief.FollowUpText + " Approve it, or End Mission."
-                        : "The Mission Goal can't be reached as stated, and no reduced goal is on offer: the Mission ends.";
+                        : "The Mission Goal can't be reached as stated, and no reduced goal is on offer. End Mission, or Retry with a note asking Claudia for one.";
                 case "Off-Nominal":
                     return debrief.FollowUp == FollowUps.RevisedPlan
                         ? "Revised Mission Plan next" + (text.Length > 0 ? ": " + text : ".")

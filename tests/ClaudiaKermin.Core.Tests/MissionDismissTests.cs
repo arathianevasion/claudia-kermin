@@ -82,13 +82,6 @@ namespace ClaudiaKermin.Core.Tests
                 lost.Send(new ClaudiaKilled());
                 return lost;
             }
-            if (stage == MissionStage.Ended)
-            {
-                var ended = Running(out script, "mission-debrief-failed.sse");
-                ended.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Interrupted, null, "", "the kOS processor was lost", false), script.RunId));
-                DrainUntil(ended, v => v.Stage == MissionStage.Ended);
-                return ended;
-            }
             var mission = Running(out script, "mission-debrief.sse");
             var report = new Dictionary<string, object> { { "success", true }, { "reason", "done" } };
             mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Finished, report, "", "", false), script.RunId));
@@ -103,7 +96,6 @@ namespace ClaudiaKermin.Core.Tests
 
         [Theory]
         [InlineData(MissionStage.Succeeded)]
-        [InlineData(MissionStage.Ended)]
         [InlineData(MissionStage.Lost)]
         public void DismissingAFinishedMissionLeavesNoCurrentMissionAndKeepsItsFolder(MissionStage stage)
         {
@@ -145,7 +137,6 @@ namespace ClaudiaKermin.Core.Tests
 
         [Theory]
         [InlineData(MissionStage.Succeeded)]
-        [InlineData(MissionStage.Ended)]
         [InlineData(MissionStage.Lost)]
         public void ALoadAfterDismissingDoesNotRestoreTheMission(MissionStage stage)
         {

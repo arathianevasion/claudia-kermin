@@ -344,7 +344,7 @@ namespace ClaudiaKermin.Core.Tests
             var start = rig.RunToRunning();
 
             rig.Mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.NoReport, null, "Undefined Variable Name: APOAPSIS2.\nat line 4", "", false), start.RunId));
-            rig.DrainUntil(v => v.Stage == MissionStage.Ended);
+            rig.DrainUntil(v => v.Stage == MissionStage.AwaitingReducedGoal && !v.Busy);
 
             var detail = rig.Mission.View.Log.Last(e => e.Kind == LogKind.Debrief).Debrief;
             Assert.Equal("Undefined Variable Name: APOAPSIS2.\nat line 4", detail.ScriptError);
@@ -436,16 +436,57 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
-        public void AFailedDebriefWithNoReducedGoalEndsTheMission()
+        public void AFailedDebriefWithNoReducedGoalWaitsWithEndMissionAndRetryWithANote()
         {
             var rig = new Rig(this, DebriefJson("Failed", ",\"follow_up\":\"end_mission\",\"follow_up_text\":\"\""));
             var start = rig.RunToRunning();
 
             rig.Mission.Send(new KosRunEnded(Finished(), start.RunId));
-            rig.DrainUntil(v => v.Stage == MissionStage.Ended);
+            rig.DrainUntil(v => v.Stage == MissionStage.AwaitingReducedGoal);
 
-            Assert.Equal("The Mission Goal can't be reached as stated, and no reduced goal is on offer: the Mission ends.",
-                rig.Mission.View.Log.Last(e => e.Kind == LogKind.Debrief).Debrief.FollowUp);
+            var view = rig.Mission.View;
+            Assert.Equal(new[] { QuickReply.RetryWithNote, QuickReply.EndMission }, view.QuickReplies);
+            Assert.True(view.CanEndMission);
+            Assert.Contains("End Mission, or Retry with a note", view.Log.Last(e => e.Kind == LogKind.Debrief).Debrief.FollowUp);
+
+            rig.Mission.Send(new EndMission());
+            Assert.Equal(MissionStage.None, rig.Mission.View.Stage);
+        }
+
+        [Fact]
+        public void EndingAFailedMissionWithNoReducedGoalRecordsItInTheMissionsListAsFailed()
+        {
+            var rig = new Rig(this, DebriefJson("Failed", ",\"follow_up\":\"end_mission\",\"follow_up_text\":\"\""));
+            var start = rig.RunToRunning();
+            var id = rig.Mission.View.MissionId;
+            rig.Mission.Send(new KosRunEnded(Finished(), start.RunId));
+            rig.DrainUntil(v => v.Stage == MissionStage.AwaitingReducedGoal);
+
+            rig.Mission.Send(new EndMission());
+
+            Assert.Equal(MissionStage.None, rig.Mission.View.Stage);
+            var entry = Assert.Single(rig.Mission.View.Missions, m => m.Id == id);
+            Assert.Equal(MissionStatus.Ended, entry.Status);
+            Assert.Equal("Failed", entry.FinalDebrief.Outcome);
+            Assert.True(entry.CanDelete);
+            Assert.False(entry.CanResume);
+            Assert.True(File.Exists(Path.Combine(_save.Path, "ClaudiaKermin", "missions", id, MissionStore.FinishedFile)));
+        }
+
+        [Fact]
+        public void RetryWithANoteAfterAFailedDebriefWithNoReducedGoalAsksClaudiaForOne()
+        {
+            var rig = new Rig(this, DebriefJson("Failed", ",\"follow_up\":\"end_mission\",\"follow_up_text\":\"\""),
+                Reply(DebriefJson("Failed", ",\"follow_up\":\"reduced_goal\",\"follow_up_text\":\"Reach a stable orbit of Kerbin.\"")));
+            var start = rig.RunToRunning();
+            rig.Mission.Send(new KosRunEnded(Finished(), start.RunId));
+            rig.DrainUntil(v => v.Stage == MissionStage.AwaitingReducedGoal);
+
+            rig.Mission.Send(new RetryWithNote("Any orbit will do."));
+            rig.DrainUntil(v => rig.Transport.Requests.Count == 4 && v.Stage == MissionStage.AwaitingReducedGoal && !v.Busy);
+
+            Assert.Contains("Any orbit will do.", LastUserText(rig.Transport.Requests[3]));
+            Assert.Equal(new[] { QuickReply.AcceptReducedGoal, QuickReply.EndMission }, rig.Mission.View.QuickReplies);
         }
 
         [Fact]

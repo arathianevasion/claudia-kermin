@@ -96,7 +96,7 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is AskQuestion) Asked(((AskQuestion)input).Text);
             else if (input is Retry || input is Resume) Retried();
             else if (input is RaiseCap) Raised(((RaiseCap)input).SpendingCap);
-            else if (input is RetryWithNote) { if (!RefusalRetriedWithNote(((RetryWithNote)input).Note)) ScriptRetried(((RetryWithNote)input).Note ?? "", false); }
+            else if (input is RetryWithNote) { if (!RefusalRetriedWithNote(((RetryWithNote)input).Note) && !ReducedGoalAsked(((RetryWithNote)input).Note)) ScriptRetried(((RetryWithNote)input).Note ?? "", false); }
             else if (input is ChooseModel) ModelChosen(((ChooseModel)input).Model);
             else if (input is Replan) Replanned();
             else if (input is TakeManualControl) TakeManual("the Manual Control button");
@@ -857,6 +857,12 @@ namespace ClaudiaKermin.Core.Missions
             if (running && mission.RunningProcessor.HasValue)
                 _commands.Add(new AbortScript(mission.RunningProcessor.Value, "the player ended the Mission"));
             if (mission.PendingSequence != null && mission.PendingSequence.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
+            // End Mission on a Failed Debrief's wait records the Mission as finished, as the auto-end did before it waited on the player.
+            if (mission.Stage == MissionStage.AwaitingReducedGoal)
+            {
+                mission.Stage = MissionStage.Ended;
+                RecordFinished(mission);
+            }
             try
             {
                 MissionFolder.WriteEnded(mission.Folder, mission.Id, mission.Stage.ToString());
@@ -1798,7 +1804,9 @@ namespace ClaudiaKermin.Core.Missions
                 else if (mission.Stage == MissionStage.UnsafeScript && !mission.InFlight)
                     view.QuickReplies = new List<QuickReply> { QuickReply.Retry, QuickReply.RetryWithNote, QuickReply.Replan };
                 else if (mission.Stage == MissionStage.AwaitingReducedGoal && !mission.InFlight)
-                    view.QuickReplies = new List<QuickReply> { QuickReply.AcceptReducedGoal, QuickReply.EndMission };
+                    view.QuickReplies = mission.ReducedGoal.Length > 0
+                        ? new List<QuickReply> { QuickReply.AcceptReducedGoal, QuickReply.EndMission }
+                        : new List<QuickReply> { QuickReply.RetryWithNote, QuickReply.EndMission };
                 else if (mission.Declined && !mission.InFlight)
                     view.QuickReplies = new List<QuickReply> { QuickReply.ChangeSomething, QuickReply.EndMission };
                 else if (mission.AwaitingApproval && !mission.InFlight && view.PlanStale.Length > 0)
