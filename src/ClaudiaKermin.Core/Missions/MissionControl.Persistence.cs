@@ -156,6 +156,7 @@ namespace ClaudiaKermin.Core.Missions
                     Notice = turn.Notice,
                     PlayerText = turn.PlayerText,
                     ScriptRewrite = turn.ScriptRewrite,
+                    ChildVesselRetry = turn.ChildVesselRetry,
                     Waits = turn.Waits,
                     BaseMessages = mission.Conversation.Count,
                 });
@@ -594,6 +595,7 @@ namespace ClaudiaKermin.Core.Missions
                     Notice = unanswered.Notice,
                     PlayerText = unanswered.PlayerText,
                     ScriptRewrite = unanswered.ScriptRewrite,
+                    ChildVesselRetry = unanswered.ChildVesselRetry,
                     Waits = unanswered.Waits,
                 };
                 var requestStage = StageOf(purpose);

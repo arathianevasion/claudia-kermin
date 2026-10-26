@@ -27,8 +27,12 @@ namespace ClaudiaKermin.Core.Tests
         private readonly Background _background = new Background(e => throw new Exception("background error", e));
         private readonly TempDir _save = new TempDir();
 
+        private readonly List<ScriptedResponse> _gates = new List<ScriptedResponse>();
+
         public void Dispose()
         {
+            // Let a request left in flight by a "crashed" Mission finish into a queue nobody drains.
+            foreach (var response in _gates) response.Gate.Set();
             _save.Dispose();
         }
 
@@ -62,11 +66,11 @@ namespace ClaudiaKermin.Core.Tests
 
         // ---- Harness ----
 
-        private MissionControl Control(StreamingFakeTransport transport)
+        private MissionControl Control(StreamingFakeTransport transport, Background background = null)
         {
             var client = new ClaudeClient(new CraftCheckRouter(transport), () => "sk-ant-test", l => { });
             client.Timing.Wait = (d, c) => { };
-            var mission = new MissionControl(client, _background, new PlayerConfig(), () => true, new PassingScriptCheck());
+            var mission = new MissionControl(client, background ?? _background, new PlayerConfig(), () => true, new PassingScriptCheck());
             mission.Send(new SaveLoaded(_save.Path));
             return mission;
         }
@@ -307,6 +311,52 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Contains("Use the other vessel.", correction);
             Assert.Contains(mission.View.Log, e => e.Text.Contains("Claudia is revising it"));
             Assert.Empty(mission.View.ChildVessels);
+        }
+
+        [Fact]
+        public void ASaveDuringTheCorrectionOfARefusedMissionPlanKeepsItsOneRetrySoASecondRefusalPauses()
+        {
+            // The correction is held in flight while the game is saved and the Mission loaded again.
+            var correction = MissionPlan("[]", "craft");
+            correction.PauseAt = 100;
+            _gates.Add(correction);
+            var crashedQueue = new Background();
+            var crashed = Control(new StreamingFakeTransport(MissionPlan(NeverLeft, "Bystander"), correction), crashedQueue);
+            crashed.Send(new SceneChanged(GameScene.Flight));
+            CraftCheckRouter.StartChecked(crashed, crashedQueue, Mothership.WithProbe(), new StartMission(Goal, 10m, Sonnet, false));
+            crashed.Send(Mothership.WithProbe());
+            crashed.Send(new VesselsSeen(new List<SeenVessel> { CraftSeen(), ProbeSeen(id: "bystander", name: "Bystander") }));
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (!crashed.View.Log.Any(e => e.Text.Contains("Claudia is revising it")) && DateTime.UtcNow < deadline)
+            {
+                crashedQueue.Drain();
+                Thread.Sleep(2);
+            }
+            Assert.Contains(crashed.View.Log, e => e.Text.Contains("Claudia is revising it"));
+            var saved = crashed.ExportStates();
+
+            // The correction names the vessel again: the Mission Pauses, rather than correcting a second time.
+            var transport = new StreamingFakeTransport(MissionPlan(NeverLeft, "Bystander"), MissionPlan("[]", "craft"));
+            var resumed = Control(transport);
+            resumed.Send(new SceneChanged(GameScene.Flight));
+            resumed.Send(new MissionsRestored(_save.Path, saved));
+            resumed.Send(new VesselsSeen(new List<SeenVessel> { CraftSeen(), ProbeSeen(id: "bystander", name: "Bystander") }));
+            DrainUntil(resumed, v => v.Stage == MissionStage.Paused);
+            Assert.Single(transport.Requests);
+            Assert.Contains("has not left the craft", resumed.View.PauseReason);
+        }
+
+        [Fact]
+        public void AnUnansweredTurnFromBeforeTheCorrectionFlagWasKeptLoadsWithoutIt()
+        {
+            MissionStore.WriteUnanswered(_save.Path, new UnansweredTurn { Purpose = "MissionPlan", UserText = "x", ChildVesselRetry = true });
+            var path = System.IO.Path.Combine(_save.Path, MissionStore.UnansweredFile);
+            var json = System.IO.File.ReadAllText(path);
+            Assert.Contains("\"child_vessel_retry\":true", json);
+            Assert.True(MissionStore.ReadUnanswered(_save.Path).ChildVesselRetry);
+            System.IO.File.WriteAllText(path, json.Replace("\"child_vessel_retry\":true,", "").Replace(",\"child_vessel_retry\":true", ""));
+            Assert.DoesNotContain("child_vessel_retry", System.IO.File.ReadAllText(path));
+            Assert.False(MissionStore.ReadUnanswered(_save.Path).ChildVesselRetry);
         }
 
         [Fact]
