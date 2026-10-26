@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Missions;
@@ -60,7 +61,10 @@ namespace ClaudiaKermin.Core.Tools
                 {
                     ran++;
                     var input = use.InputIsValid ? use.InputJson : "";
-                    running.Add(new KeyValuePair<int, Task<ToolOutcome>>(i, Task.Run(() => tools.Run(use.Name, input, snapshot, body))));
+                    // A thread of its own, not the pool's: a busy pool would start a call late and charge the wait to its time limit,
+                    // and a call that blocks on the adapter's main thread (the body interface) must not hold up the pool.
+                    running.Add(new KeyValuePair<int, Task<ToolOutcome>>(i, Task.Factory.StartNew(() => tools.Run(use.Name, input, snapshot, body),
+                        CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)));
                 }
             }
 
