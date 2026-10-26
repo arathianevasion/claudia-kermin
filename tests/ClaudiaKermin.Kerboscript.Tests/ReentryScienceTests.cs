@@ -152,7 +152,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [InlineData("list()", "")]
         public void The_heat_shield_is_dropped_by_whichever_decouple_or_jettison_event_its_module_has(string events, string chosen)
         {
-            Assert.Equal(chosen, One("reentry_jettison_event(" + events + ")"));
+            Assert.Equal(chosen, One("claudia_decoupler_event(" + events + ")"));
         }
 
         [Fact]

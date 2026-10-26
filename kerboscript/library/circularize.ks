@@ -162,8 +162,10 @@ function circularize {
     "max_duration", opt:max_duration,
     "min_ec_pct", opt:min_ec_pct,
     "abort_on_part_loss", opt:abort_on_part_loss,
-    "stage_limit", opt:stage_limit)).
+    "stage_limit", opt:stage_limit,
+    "drop_empty", opt:drop_empty)).
   set ctx:dv_used to flown:dv_used.
+  claudia_note_dropped(ctx, flown).
   set extra:ecc to round(ship:orbit:eccentricity, 5).
   if not flown:success {
     return claudia_finish(ctx, false, flown:reason, extra).
