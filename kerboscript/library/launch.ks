@@ -21,12 +21,14 @@
 //|   turn_start_speed [60]: m/s of airspeed at which the gravity turn starts. Give more than the craft
 //|     will reach (e.g. 100000) to climb straight up.
 //|   turn_shape [0.45]: the turn's pitch is 90 * (1 - f^turn_shape), f the fraction of the way from
-//|     the turn start to the atmosphere top (or target_ap if lower); smaller turns over sooner.
+//|     the turn start to the atmosphere top (or target_ap if lower); smaller turns over sooner. The
+//|     turn starts again from vertical wherever throttle_max_q held it.
 //|   max_aoa [5]: most degrees the nose may be off the airflow while the air is thick enough to matter
 //|     (over 500 Pa dynamic pressure), all the way up and through the coast; above 8000 Pa the angle
 //|     allowed falls in proportion to q (a tenth of max_aoa at the least).
 //|   throttle_max_q ["none"]: Pa of dynamic pressure to throttle back at (to 5% at most; in thick
-//|     air never below the craft's weight).
+//|     air never below the craft's weight). While it holds the throttle back in thick air the turn
+//|     waits: too slow to turn over without falling, the craft climbs as steeply as max_aoa lets it.
 //|   g, atm_height, surface_pressure ["body"]: the body's surface gravity (m/s^2), atmosphere top (m)
 //|     and surface pressure (Pa), to override what the game says.
 //|   max_duration ["auto"]: the wait on the pad plus 900 s.
@@ -92,6 +94,16 @@ function launch_pitch {
   }
   local fraction is min(1, (h - start_alt) / (end_alt - start_alt)).
   return 90 * (1 - fraction ^ shape).
+}
+
+// Whether the turn waits at dynamic pressure q_now (Pa) and pressure_ratio of surface pressure:
+// while max_q (Pa, -1 for no limit) has the throttle easing back (from 90% of it, as launch_throttle
+// eases) in thick air, the craft is too slow to turn over without its path falling with it (#235),
+// so it climbs as steeply as max_aoa lets it instead: launch starts the turn again from vertical
+// wherever this holds.
+function launch_turn_held {
+  parameter q_now, max_q, pressure_ratio.
+  return max_q > 0 and q_now > 0.9 * max_q and launch_thick_air(pressure_ratio).
 }
 
 // The throttle on the way to target_ap: 0 once ap reaches it (only that cuts the engines off);
@@ -402,6 +414,10 @@ function launch {
     // Steer: the pitch program while burning, the airflow while coasting, never more than max_aoa off
     // the airflow while the air matters.
     if turn_start_alt < 0 and spd >= opt:turn_start_speed {
+      set turn_start_alt to altitude.
+    }
+    // While throttle_max_q holds the throttle back in thick air the turn waits, starting again from vertical here.
+    if turn_start_alt >= 0 and launch_turn_held(q_pa, max_q_pa, ratio) {
       set turn_start_alt to altitude.
     }
     local want is ship:up:vector.

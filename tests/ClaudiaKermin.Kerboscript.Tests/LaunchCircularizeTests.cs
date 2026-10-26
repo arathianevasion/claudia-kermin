@@ -57,6 +57,17 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(pitch, One("round(launch_pitch(" + altitude + ", 1000, 70000, 0.45), 2)"));
         }
 
+        [Theory]
+        [InlineData(11000, 12000, 0.5, "True")]
+        [InlineData(10900, 12000, 0.5, "True")]
+        [InlineData(10700, 12000, 0.5, "False")]
+        [InlineData(14000, 12000, 0.05, "False")]
+        [InlineData(30000, -1, 0.5, "False")]
+        public void The_turn_waits_while_throttle_max_q_eases_the_throttle_in_thick_air(double q, double maxQ, double pressureRatio, string held)
+        {
+            Assert.Equal(held, One("launch_turn_held(" + q + ", " + maxQ + ", " + pressureRatio + ")"));
+        }
+
         // ---- launch: the throttle ----
 
         [Theory]
@@ -83,6 +94,53 @@ namespace ClaudiaKermin.Kerboscript.Tests
         public void In_thick_air_the_throttle_floor_keeps_thrust_at_least_equal_to_weight(double pressureRatio, double mass, double g, double thrust, string floor)
         {
             Assert.Equal(floor, One("round(launch_throttle_floor(" + pressureRatio + ", " + mass + ", " + g + ", " + thrust + "), 3)"));
+        }
+
+        // ---- launch: the ascent, flown offline (launch_ascent_sim.ks) ----
+
+        // launch_no_flip's ascent (target_ap 60 km, throttle_max_q 12 kPa) in the offline sim, with the
+        // turn hold on or off: the result lines by their first word, and the whole printout.
+        private static (System.Collections.Generic.Dictionary<string, string> Result, string Track) Ascent(bool hold, double dragArea, double maxQ = 12000, double targetAp = 60000)
+        {
+            var sim = System.IO.File.ReadAllText(System.IO.Path.Combine(System.AppContext.BaseDirectory, "launch_ascent_sim.ks"));
+            var lines = Run(sim + "\nsim_ascent(lexicon(\"target_ap\", " + targetAp + ", \"max_q\", " + maxQ
+                + ", \"turn_start_speed\", 60, \"turn_shape\", 0.45, \"max_aoa\", 5, \"drag_area\", " + dragArea + ", \"hold\", " + (hold ? "true" : "false") + ")).");
+            var result = lines.Where(l => !l.StartsWith("track ")).ToDictionary(l => l.Split(' ')[0], l => l.Substring(l.IndexOf(' ') + 1));
+            return (result, string.Join("\n", lines));
+        }
+
+        // #235: the pitch program turned a q-limited craft over by altitude while its thrust, held to about
+        // its weight, couldn't hold the path up; the path fell over and the craft stalled near 10 km.
+        [Theory]
+        [InlineData(0.5)]
+        [InlineData(1.0)]
+        public void Without_the_turn_hold_a_q_limited_craft_stalls_low_in_the_climb(double dragArea)
+        {
+            var (result, track) = Ascent(false, dragArea);
+            Assert.True(result["stalled"].StartsWith("True"), track);
+            var at = double.Parse(result["stalled"].Split(' ').Last());
+            Assert.InRange(at, 8000, 14000);
+        }
+
+        [Theory]
+        [InlineData(0.5)]
+        [InlineData(1.0)]
+        [InlineData(1.5)]
+        public void With_the_turn_hold_a_q_limited_craft_climbs_to_its_cutoff_without_leaving_the_airflow(double dragArea)
+        {
+            var (result, track) = Ascent(true, dragArea);
+            Assert.True(result["stalled"].StartsWith("False"), track);
+            Assert.True(double.Parse(result["coast_ap"]) >= 59700, track);
+            Assert.True(double.Parse(result["max_q"]) < 15000, track);
+            Assert.True(double.Parse(result["min_twr"]) > 0.95, track);
+            // The nose never runs ahead of (below) the prograde by more than max_aoa.
+            Assert.True(double.Parse(result["max_lead"]) <= 5, track);
+        }
+
+        [Fact]
+        public void Without_throttle_max_q_the_turn_hold_changes_nothing()
+        {
+            Assert.Equal(Ascent(false, 0.5, -1, 80000).Track, Ascent(true, 0.5, -1, 80000).Track);
         }
 
         // ---- launch: heading and the plane ----

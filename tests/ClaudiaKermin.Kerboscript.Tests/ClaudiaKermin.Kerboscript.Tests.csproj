@@ -26,6 +26,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="launch_ascent_sim.ks" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../src/ClaudiaKermin.Core/ClaudiaKermin.Core.csproj" />
   </ItemGroup>
 </Project>

@@ -15,7 +15,7 @@ local p0 is ship:body:atm:altitudepressure(0).
 local worst_aoa is 0.
 local min_twr is 100.
 local watching is true.
-// test_aoa_track: one sample per 500 m of climb, "alt m t s aoa deg off-vertical deg q Pa thrust %"
+// test_aoa_track: one sample per 500 m of climb, "alt m t s aoa deg off-vertical deg q Pa thrust % vertical speed m/s up"
 // joined by "; ", and test_stagings: the altitude of each staging, for #224's control-loss diagnosis.
 local aoa_track is "".
 local stagings is "".
@@ -27,7 +27,8 @@ when true then {
       + round(vang(ship:facing:forevector, ship:srfprograde:vector), 1) + " aoa "
       + round(vang(ship:facing:forevector, ship:up:vector), 1) + " vert "
       + round(ship:q * constant:atmtokpa * 1000) + " Pa "
-      + round(ship:thrust / max(ship:availablethrust, 0.001) * 100) + " %; ".
+      + round(ship:thrust / max(ship:availablethrust, 0.001) * 100) + " % "
+      + round(ship:verticalspeed) + " m/s up; ".
     set next_sample to next_sample + 500.
   }
   if stage:number <> last_stage {
