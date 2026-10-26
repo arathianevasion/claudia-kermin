@@ -857,6 +857,12 @@ namespace ClaudiaKermin.Core.Missions
             if (running && mission.RunningProcessor.HasValue)
                 _commands.Add(new AbortScript(mission.RunningProcessor.Value, "the player ended the Mission"));
             if (mission.PendingSequence != null && mission.PendingSequence.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
+            // End Mission on a Failed Debrief's wait records the Mission as finished, as the auto-end did before it waited on the player.
+            if (mission.Stage == MissionStage.AwaitingReducedGoal)
+            {
+                mission.Stage = MissionStage.Ended;
+                RecordFinished(mission);
+            }
             try
             {
                 MissionFolder.WriteEnded(mission.Folder, mission.Id, mission.Stage.ToString());

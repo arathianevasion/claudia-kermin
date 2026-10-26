@@ -506,7 +506,7 @@ namespace ClaudiaKermin.Core.Tests
             undocked.HasKosProcessor = true;
             mission.Send(new VesselsSeen(new[] { Vessel("probe", "Probe", processors: Processor), undocked }));
             mission.Send(new KosRunEnded(Finished(), start.RunId));
-            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingReducedGoal && !v.Busy);
 
             Assert.Equal(3105u, mission.TakeCommands().OfType<MakeCraftSafe>().Single().ProcessorPartId);
         }
@@ -526,7 +526,7 @@ namespace ClaudiaKermin.Core.Tests
             undocked.HasKosProcessor = true;
             mission.Send(new VesselsSeen(new[] { Vessel("probe", "Probe", processors: Processor), undocked }));
             mission.Send(new KosRunEnded(Finished(), start.RunId));
-            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingReducedGoal && !v.Busy);
 
             Assert.Equal(4001u, mission.TakeCommands().OfType<MakeCraftSafe>().Single().ProcessorPartId);
         }

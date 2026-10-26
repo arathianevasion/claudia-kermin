@@ -341,7 +341,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             var start = ToRunning(mission);
             mission.Send(new KosRunEnded(Finished(), start.RunId));
-            DrainUntil(mission, v => v.Stage == MissionStage.Ended);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingReducedGoal && !v.Busy);
             mission.TakeCommands();
 
             // The adapter found the craft unloaded: nothing owed is re-issued while it stays unloaded.

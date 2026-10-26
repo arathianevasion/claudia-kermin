@@ -454,6 +454,26 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void EndingAFailedMissionWithNoReducedGoalRecordsItInTheMissionsListAsFailed()
+        {
+            var rig = new Rig(this, DebriefJson("Failed", ",\"follow_up\":\"end_mission\",\"follow_up_text\":\"\""));
+            var start = rig.RunToRunning();
+            var id = rig.Mission.View.MissionId;
+            rig.Mission.Send(new KosRunEnded(Finished(), start.RunId));
+            rig.DrainUntil(v => v.Stage == MissionStage.AwaitingReducedGoal);
+
+            rig.Mission.Send(new EndMission());
+
+            Assert.Equal(MissionStage.None, rig.Mission.View.Stage);
+            var entry = Assert.Single(rig.Mission.View.Missions, m => m.Id == id);
+            Assert.Equal(MissionStatus.Ended, entry.Status);
+            Assert.Equal("Failed", entry.FinalDebrief.Outcome);
+            Assert.True(entry.CanDelete);
+            Assert.False(entry.CanResume);
+            Assert.True(File.Exists(Path.Combine(_save.Path, "ClaudiaKermin", "missions", id, MissionStore.FinishedFile)));
+        }
+
+        [Fact]
         public void RetryWithANoteAfterAFailedDebriefWithNoReducedGoalAsksClaudiaForOne()
         {
             var rig = new Rig(this, DebriefJson("Failed", ",\"follow_up\":\"end_mission\",\"follow_up_text\":\"\""),
