@@ -246,7 +246,8 @@ namespace ClaudiaKermin.Core.Missions
         public const string AlertNotice =
             "Judge this Alert now, briefly: reply with kind \"alert\" and alert filled in. verdict \"carry_on\" lets the sequence "
             + "go on (for one more Alert on it, set set_follow_up_threshold to true and give follow_up_threshold in the check's units); \"abort\" recommends that "
-            + "the player press Abort. You never abort the sequence yourself, and the script keeps running until the player acts.";
+            + "the player press Abort. You never abort the sequence yourself, and the script keeps running until the player acts. "
+            + "No Planning Tool is available during an Alert: don't call one.";
 
         public const string QuestionNotice =
             "Answer the player's question: reply with kind \"answer\". Change nothing else; any pending plan stays as it is.";

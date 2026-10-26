@@ -38,13 +38,19 @@ namespace ClaudiaKermin.Core.Tests
         /// <summary>When set, the margin recheck of a Debrief gets this response instead of a Pass.</summary>
         public ScriptedResponse Recheck;
 
+        /// <summary>When not empty, margin recheck requests (each step of a recheck's tool loop) take these in order before <see cref="Recheck"/>.</summary>
+        public readonly System.Collections.Generic.Queue<ScriptedResponse> Rechecks = new System.Collections.Generic.Queue<ScriptedResponse>();
+
         public IHttpStream Open(HttpRequestSpec request, CancellationToken cancel)
         {
             if (!request.Body.Contains("\"required\":[\"summary\",\"findings\"")) return _mission.Open(request, cancel);
-            if (Recheck != null && request.Body.Contains("Margin recheck after a Maneuver Sequence"))
+            if ((Recheck != null || Rechecks.Count > 0) && request.Body.Contains("Margin recheck after a Maneuver Sequence"))
             {
-                lock (_checks) _checks.Requests.Add(request);
-                return new ScriptedStream(Recheck);
+                lock (_checks)
+                {
+                    _checks.Requests.Add(request);
+                    return new ScriptedStream(Rechecks.Count > 0 ? Rechecks.Dequeue() : Recheck);
+                }
             }
             return _checks.Open(request, cancel);
         }

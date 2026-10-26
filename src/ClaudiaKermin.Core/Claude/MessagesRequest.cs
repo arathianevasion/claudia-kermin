@@ -5,13 +5,18 @@ using System.Collections.Generic;
 
 namespace ClaudiaKermin.Core.Claude
 {
-    /// <summary>A client tool. Always strict, so Claude's input matches the schema exactly.</summary>
+    /// <summary>A client tool. Strict by default, so Claude's input matches the schema exactly.</summary>
     public sealed class ToolDefinition
     {
         public string Name;
         public string Description;
-        /// <summary>The JSON Schema as JSON text; needs <c>additionalProperties: false</c> and <c>required</c>.</summary>
+        /// <summary>The JSON Schema as JSON text; needs <c>additionalProperties: false</c> and <c>required</c> when strict.</summary>
         public string InputSchemaJson;
+        /// <summary>
+        /// False for the Planning Tools (#265): a strict schema counts against the reply schema's grammar budget, so their
+        /// schemas go unenforced and the Planning Tools module validates the input itself.
+        /// </summary>
+        public bool Strict = true;
     }
 
     /// <summary>
@@ -61,7 +66,9 @@ namespace ClaudiaKermin.Core.Claude
                 foreach (var tool in Tools)
                 {
                     json.BeginObject().Field("name", tool.Name).Field("description", tool.Description)
-                        .Name("input_schema").Raw(tool.InputSchemaJson).Field("strict", true).EndObject();
+                        .Name("input_schema").Raw(tool.InputSchemaJson);
+                    if (tool.Strict) json.Field("strict", true);
+                    json.EndObject();
                 }
                 json.EndArray();
                 json.Name("tool_choice").BeginObject().Field("type", "auto").EndObject();
