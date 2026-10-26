@@ -56,7 +56,7 @@ namespace ClaudiaKermin.Core.Tools
                 if (atLimit) outcomes[i] = PlanningJson.Error(LimitReached);
                 else if (refused != null) outcomes[i] = PlanningJson.Error(refused);
                 else if (ran >= MaxCallsPerStep)
-                    outcomes[i] = PlanningJson.Error("at most " + MaxCallsPerStep + " tool calls run in one step; call this again in the next");
+                    outcomes[i] = PlanningJson.Error("at most " + MaxCallsPerStep + " calls run in one step; call this again in the next");
                 else
                 {
                     ran++;

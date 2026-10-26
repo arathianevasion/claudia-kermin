@@ -377,7 +377,7 @@ namespace ClaudiaKermin.Core.Tests
             var results = Results(transport.Requests[1]);
             Assert.Equal(Enumerable.Range(0, 7).Select(i => "toolu_par_" + i), results.Select(r => r.GetProperty("tool_use_id").GetString()));
             Assert.All(results.Take(6), r => Assert.Equal("{\"together\":true}", r.GetProperty("content").GetString()));
-            Assert.Equal("at most 6 tool calls run in one step; call this again in the next", ErrorOf(results[6]));
+            Assert.Equal("at most 6 calls run in one step; call this again in the next", ErrorOf(results[6]));
         }
 
         [Fact]

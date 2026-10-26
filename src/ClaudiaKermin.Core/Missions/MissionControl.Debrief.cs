@@ -222,7 +222,11 @@ namespace ClaudiaKermin.Core.Missions
             {
                 if (result != null && result.Status == StreamStatus.Completed && result.Message.StopReason == StopReason.ToolUse && mission.DeferredRestore == null)
                 {
-                    RecheckToolsCalled(mission, turn, result.Message);
+                    // The step is charged like any request: the 80% warning, and a Pause at the cap (which ends the recheck below).
+                    AfterCharge(mission);
+                    if (mission != _mission) return;
+                    if (mission.Stage == MissionStage.Paused) RecheckAnswered(mission, turn, null, "the Mission was Paused", null);
+                    else RecheckToolsCalled(mission, turn, result.Message);
                     return;
                 }
                 string problem;
@@ -284,6 +288,12 @@ namespace ClaudiaKermin.Core.Missions
                 {
                     Note(LogKind.Notice, "Planning Tool " + call.Name + " for the margin recheck (" + Shorten(call.InputJson) + "): " + (call.IsError ? "error: " : "") + call.Summary);
                     Event(mission, "tool", "margin_recheck " + call.Name + " " + call.InputJson + " -> " + (call.IsError ? "error: " : "") + call.Summary);
+                }
+                // Paused while the tools ran: the recheck ends here, and the Debrief waits for Retry with what it has.
+                if (mission.Stage == MissionStage.Paused)
+                {
+                    RecheckAnswered(mission, turn, null, "the Mission was Paused", null);
+                    return;
                 }
                 var worst = RequestCharge.WorstCase(_config.Prices, mission.Model, gate.RecheckRequest);
                 if (mission.Committed + worst + DebriefReserve(mission, turn) > mission.SpendingCap)
