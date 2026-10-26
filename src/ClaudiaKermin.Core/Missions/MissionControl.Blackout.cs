@@ -118,7 +118,6 @@ namespace ClaudiaKermin.Core.Missions
             Begin(new Turn
             {
                 Purpose = Purpose.Question,
-                Effort = "low",
                 UserText = said,
                 Notice = MissionPrompts.QuestionNotice,
                 Waits = true,

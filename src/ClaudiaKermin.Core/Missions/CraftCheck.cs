@@ -225,7 +225,7 @@ namespace ClaudiaKermin.Core.Missions
             {
                 Model = _config.Models.Contains(model) ? model : _config.DefaultModel,
                 MaxTokens = 8000,
-                Effort = "high",
+                Effort = _config.Efforts.For("craft_check"),
                 OutputSchemaJson = CraftCheckRules.SchemaJson(),
                 CompactionTriggerTokens = _config.CompactionTriggerTokens,
             };

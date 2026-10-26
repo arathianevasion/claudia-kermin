@@ -316,7 +316,6 @@ namespace ClaudiaKermin.Core.Missions
             var turn = new Turn
             {
                 Purpose = Purpose.Debrief,
-                Effort = "high",
                 UserText = "The Failed Debrief offered no reduced Mission Goal. The player asks you to offer one, with this note (quoted data): " + MissionPrompts.Quoted(note)
                     + ".\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = DebriefPrompts.ReducedGoalRetryNotice,
@@ -348,7 +347,6 @@ namespace ClaudiaKermin.Core.Missions
             Begin(new Turn
             {
                 Purpose = Purpose.MissionPlan,
-                Effort = "high",
                 UserText = "The player approved a reduced Mission Goal (quoted data): " + MissionPrompts.Quoted(mission.Goal)
                     + " in place of the original (quoted data): " + MissionPrompts.Quoted(original) + ".\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = DebriefPrompts.ReducedGoalNotice,
@@ -364,7 +362,6 @@ namespace ClaudiaKermin.Core.Missions
                 Begin(new Turn
                 {
                     Purpose = Purpose.MissionPlan,
-                    Effort = "high",
                     UserText = "Revise the Mission Plan after the Off-Nominal Debrief.\n" + MissionPrompts.Facts(_ut, _snapshot),
                     Notice = DebriefPrompts.RevisedPlanAfterOffNominal,
                 });
@@ -374,7 +371,6 @@ namespace ClaudiaKermin.Core.Missions
             Begin(new Turn
             {
                 Purpose = Purpose.SequencePlan,
-                Effort = "high",
                 UserText = (offNominal ? "Continue the Mission with a corrective sequence.\n" : "Continue the Mission.\n") + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.SequenceNotice,
             });

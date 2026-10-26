@@ -644,8 +644,9 @@ namespace ClaudiaKermin.Core.Tests
                     ScriptedResponse.Fixture("text.sse"));
                 Run(Client(transport), dump: dump);
 
-                var files = System.IO.Directory.GetFiles(directory);
-                var text = System.IO.File.ReadAllText(Assert.Single(files));
+                // The request body is saved beside the stream file, once however many attempts there were.
+                Assert.Single(System.IO.Directory.GetFiles(directory, "*.json"));
+                var text = System.IO.File.ReadAllText(Assert.Single(System.IO.Directory.GetFiles(directory, "*.sse")));
                 Assert.Equal(": attempt 1\n" + Fixtures.Text("overloaded-error.sse") + ": attempt 2\n" + Fixtures.Text("text.sse"), text);
             }
             finally

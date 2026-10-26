@@ -279,7 +279,6 @@ namespace ClaudiaKermin.Core.Missions
                 turn = mission.HandBack ? HandBackTurn(mission) : new Turn
                 {
                     Purpose = Purpose.Debrief,
-                    Effort = "high",
                     UserText = MissionPrompts.RunReport(plan, StoppedOutcome(mission, mission.OwedOutcome), CrossingsText(mission)) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
                     Notice = MissionPrompts.DebriefNotice,
                 };
@@ -289,7 +288,6 @@ namespace ClaudiaKermin.Core.Missions
                 turn = new Turn
                 {
                     Purpose = Purpose.SequencePlan,
-                    Effort = "high",
                     UserText = "Continue the Mission.\n" + MissionPrompts.Facts(_ut, _snapshot),
                     Notice = MissionPrompts.SequenceNotice,
                 };

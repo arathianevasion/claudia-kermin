@@ -163,6 +163,13 @@ namespace ClaudiaKermin.Core.Tests
         public readonly StringBuilder Text = new StringBuilder();
         public readonly List<int> Attempts = new List<int>();
 
+        public readonly List<string> Bodies = new List<string>();
+
+        public void WriteRequest(int requestId, string body)
+        {
+            lock (Text) Bodies.Add(body);
+        }
+
         public void Write(int requestId, int attempt, string rawEvent)
         {
             lock (Text)

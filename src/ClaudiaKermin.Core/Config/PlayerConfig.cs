@@ -37,6 +37,9 @@ namespace ClaudiaKermin.Core.Config
         /// <summary>What each model costs; add models with <c>price.&lt;model&gt; = input, output</c> lines (USD per million tokens).</summary>
         public PriceTable Prices = PriceTable.Default();
 
+        /// <summary>The effort of each reply kind (<c>effort.&lt;kind&gt; = low|medium|high</c>); not a Mission Setting, never shown to the player.</summary>
+        public EffortTable Efforts = new EffortTable();
+
         /// <summary>The delta-v margin the Craft Check wants over the Delta-v Map, in percent.</summary>
         public int CraftCheckMarginPercent = 15;
 
@@ -127,7 +130,10 @@ namespace ClaudiaKermin.Core.Config
             + "check_dv_used = 120%\n"
             + "check_duration = 150%\n"
             + "check_ec = 10%\n"
-            + "check_fuel_margin = 10%\n";
+            + "check_fuel_margin = 10%\n"
+            + "# Effort (low, medium or high) per reply kind; uncomment a line to change one kind. Kinds: mission_plan, sequence_plan, debrief,\n"
+            + "# reply, change, settings, craft_check, margin_recheck (all high), question, alert (low). A bad entry keeps the default.\n"
+            + "# effort.debrief = high\n";
 
         /// <summary>Loads the file, writing it with defaults first if it does not exist.</summary>
         public static PlayerConfig LoadOrCreate(string directory)
@@ -148,6 +154,11 @@ namespace ClaudiaKermin.Core.Config
                 if (eq < 0) continue;
                 var name = line.Substring(0, eq).Trim();
                 var value = line.Substring(eq + 1).Trim();
+                if (name.StartsWith(EffortTable.Prefix, StringComparison.Ordinal))
+                {
+                    config.Efforts.Read(name, value);
+                    continue;
+                }
                 if (name.StartsWith("price.", StringComparison.Ordinal))
                 {
                     var rates = value.Split(',');
