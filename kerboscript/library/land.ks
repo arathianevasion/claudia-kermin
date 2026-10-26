@@ -41,9 +41,9 @@
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block.
 //| Extra results: slope (degrees where it came to rest), touchdown_speed_actual (m/s),
 //| touchdown_h_speed (m/s sideways at touchdown), lean (degrees from upright once settled),
-//| reversals (times the descent turned back after braking began; 0 normally), distance_to_target (m from the site asked for, or the spot chosen for "any"), best_effort
-//| (true if nothing within max_divert was flat enough and it landed on the least steep spot
-//| found), burn_start_ut (when the braking burn was planned to start; -1 if it never got that far),
+//| reversals (times the descent turned back after braking began; 0 normally), distance_to_target
+//| (m from the site asked for, or the spot chosen for "any"), best_effort (true if nothing within
+//| max_divert was flat enough and it landed on the least steep spot found), burn_start_ut (when the braking burn was planned to start; -1 if it never got that far),
 //| impact_ut (when the orbit after the deorbit burn meets the ground at the site's height; -1 if it
 //| clears it or it never got that far); geo (lat, lng, alt) is the common field once landed. Fails with "land flies airless
 //| bodies only", an orbit it can't land from, a site off the ground track, no daylight pass,
@@ -711,7 +711,8 @@ function land_coast {
 }
 
 // The powered descent onto aim, to touchdown and a settled craft. Sets best_effort, reversals,
-// touchdown_speed_actual and touchdown_h_speed in extra. Returns "" or why it failed.
+// touchdown_speed_actual and touchdown_h_speed in extra (and lean, if settling fails). Returns "" or
+// why it failed.
 function land_descend {
   parameter ctx, aim, extra.
   local opt is ctx:opt.
@@ -755,6 +756,10 @@ function land_descend {
         set axis to v_h.
         if v_h:mag < 1 {
           set axis to to_site.
+        }
+        // Stopped over the site: any axis will do, as long as it has a direction.
+        if vxcl(up_v, axis):mag < 1 {
+          set axis to ship:north:vector.
         }
         // Is the ground at the site flat enough? If not, divert to flatter ground now, while the
         // descent has the whole braking distance to take the new site in (a later move could put
@@ -815,6 +820,8 @@ function land_descend {
   until time:seconds > settle_ut {
     local ticked is claudia_tick(ctx, 0).
     if ticked <> "" {
+      // A part lost as it tips stops the settle: report how far over it went.
+      set extra:lean to round(vang(ship:facing:forevector, ship:up:vector), 1).
       return ticked.
     }
     wait 0.
