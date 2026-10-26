@@ -30,7 +30,6 @@ namespace ClaudiaKermin.Core.Missions
                 Begin(new Turn
                 {
                     Purpose = Purpose.Change,
-                    Effort = "high",
                     UserText = MissionPrompts.PlayerWantsChange(turn.PlayerText),
                     Notice = MissionPrompts.ChangeNotice(missionPlan),
                 });

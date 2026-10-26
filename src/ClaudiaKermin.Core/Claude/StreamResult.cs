@@ -53,5 +53,8 @@ namespace ClaudiaKermin.Core.Claude
     public interface IRawStreamDump
     {
         void Write(int requestId, int attempt, string rawEvent);
+
+        /// <summary>The request body as sent, already redacted of any API key; saved once per request, next to its events.</summary>
+        void WriteRequest(int requestId, string body);
     }
 }

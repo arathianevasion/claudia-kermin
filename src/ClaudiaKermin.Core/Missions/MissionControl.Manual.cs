@@ -226,7 +226,6 @@ namespace ClaudiaKermin.Core.Missions
             return new Turn
             {
                 Purpose = Purpose.Debrief,
-                Effort = "high",
                 UserText = MissionPrompts.HandBackReport(plan, mission.ManualPlanned, mission.ManualOrigin, mission.HandBackMessage)
                     + MissionPrompts.CrossedChecks(CrossingsText(mission)) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.HandBackDebriefNotice(mission.ManualPlanned),
@@ -241,7 +240,6 @@ namespace ClaudiaKermin.Core.Missions
             Begin(new Turn
             {
                 Purpose = Purpose.MissionPlan,
-                Effort = "high",
                 UserText = "Revise the Mission Plan.\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.RevisedPlanNotice,
                 Waits = true,
@@ -297,7 +295,6 @@ namespace ClaudiaKermin.Core.Missions
             Begin(new Turn
             {
                 Purpose = missionPlan ? Purpose.MissionPlan : Purpose.SequencePlan,
-                Effort = "high",
                 UserText = MissionPrompts.ReplanBecauseCraftChanged(stale, missionPlan) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = missionPlan ? MissionPrompts.PlanNotice : MissionPrompts.SequenceNotice,
             });

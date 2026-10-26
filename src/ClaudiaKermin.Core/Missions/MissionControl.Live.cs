@@ -201,7 +201,6 @@ namespace ClaudiaKermin.Core.Missions
             Begin(new Turn
             {
                 Purpose = Purpose.Alert,
-                Effort = "low",
                 UserText = MissionPrompts.Alert(mission.PendingSequence, crossing.Describe(), crossing.Check.Why) + "\n" + CompactFacts(mission),
                 Notice = MissionPrompts.AlertNotice,
                 Crossing = crossing,

@@ -9,7 +9,7 @@ namespace ClaudiaKermin.Core.Claude
 {
     /// <summary>
     /// Writes raw stream events to <c>request-&lt;session start&gt;-&lt;id&gt;.sse</c> in a folder, as received, with a comment line
-    /// at the start of each attempt. A debug tool: only used when <c>debug_tools</c> is on.
+    /// at the start of each attempt, and the request body beside it as <c>request-&lt;session start&gt;-&lt;id&gt;.json</c>. A debug tool: only used when <c>debug_tools</c> is on.
     /// </summary>
     public sealed class FileStreamDump : IRawStreamDump
     {
@@ -28,6 +28,15 @@ namespace ClaudiaKermin.Core.Claude
         private string PathFor(int requestId)
         {
             return Path.Combine(_directory, "request-" + _session + "-" + requestId.ToString(CultureInfo.InvariantCulture) + ".sse");
+        }
+
+        public void WriteRequest(int requestId, string body)
+        {
+            lock (_gate)
+            {
+                Directory.CreateDirectory(_directory);
+                File.WriteAllText(Path.ChangeExtension(PathFor(requestId), ".json"), body, new UTF8Encoding(false));
+            }
         }
 
         public void Write(int requestId, int attempt, string rawEvent)

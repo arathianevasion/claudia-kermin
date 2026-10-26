@@ -106,6 +106,7 @@ namespace ClaudiaKermin.Core.Claude
             var timer = Stopwatch.StartNew();
             var body = request.ToJson();
             var result = new StreamResult();
+            if (dump != null) DumpRequest(dump, id, body);
             var retriesBefore = 0;
             var retriesAfter = 0;
 
@@ -364,6 +365,26 @@ namespace ClaudiaKermin.Core.Claude
                 _log(RequestTag(id) + " raw dump failed");
             }
         }
+
+        /// <summary>Saves the body with the API key (and anything shaped like one) replaced: a player may have typed it into a Mission Goal.</summary>
+        private void DumpRequest(IRawStreamDump dump, int id, string body)
+        {
+            try
+            {
+                var key = _apiKey();
+                var redacted = string.IsNullOrEmpty(key) ? body : body.Replace(key, Redacted);
+                dump.WriteRequest(id, KeyShape.Replace(redacted, Redacted));
+            }
+            catch (Exception)
+            {
+                // A debug dump must never break the request.
+                _log(RequestTag(id) + " request dump failed");
+            }
+        }
+
+        private const string Redacted = "[redacted]";
+        private static readonly System.Text.RegularExpressions.Regex KeyShape =
+            new System.Text.RegularExpressions.Regex("sk-ant-[A-Za-z0-9_-]+");
 
         private static string RequestTag(int id)
         {

@@ -342,6 +342,7 @@ namespace ClaudiaKermin.Core.Missions
             _mission = mission;
             Note(LogKind.Player, "Mission Goal: " + goal);
             RecordStart(mission);
+            LogEffortProblems(mission);
             FoldCraftCheckCost(mission, _craftCheck.TakeCost());
             // Started from the editor with her not aboard: the mod puts her in a free seat (the Craft Check made sure there is one).
             if (!mission.Remote && _scene == GameScene.Editor && _snapshot != null && !_snapshot.ClaudiaAboard && _snapshot.FreeSeats > 0)
@@ -398,7 +399,6 @@ namespace ClaudiaKermin.Core.Missions
             Begin(new Turn
             {
                 Purpose = Purpose.MissionPlan,
-                Effort = "high",
                 UserText = "Mission Goal, in the player's words (quoted data): " + MissionPrompts.Quoted(mission.Goal) + "\n"
                     + MissionPrompts.MissionMode(mission.Remote)
                     + MissionPrompts.ModeFacts(mission.Remote, _snapshot) + "\n"
@@ -492,7 +492,6 @@ namespace ClaudiaKermin.Core.Missions
                 Begin(new Turn
                 {
                     Purpose = Purpose.SequencePlan,
-                    Effort = "high",
                     UserText = "The player approved the Mission Plan.\n"
                         + (newGoal != null ? "The Mission Goal is now (quoted data): " + MissionPrompts.Quoted(newGoal) + "\n" : "")
                         + MissionPrompts.Facts(_ut, _snapshot),
@@ -553,7 +552,6 @@ namespace ClaudiaKermin.Core.Missions
             Begin(new Turn
             {
                 Purpose = Purpose.Reply,
-                Effort = "high",
                 UserText = MissionPrompts.PlayerReplied(text),
                 Notice = MissionPrompts.ReplyNotice(_mission.Stage == MissionStage.AwaitingPlanApproval),
             });
@@ -568,7 +566,6 @@ namespace ClaudiaKermin.Core.Missions
             Begin(new Turn
             {
                 Purpose = Purpose.Change,
-                Effort = "high",
                 UserText = MissionPrompts.PlayerWantsChange(text),
                 Notice = MissionPrompts.ChangeNotice(_mission.Stage == MissionStage.AwaitingPlanApproval),
             });
@@ -587,7 +584,6 @@ namespace ClaudiaKermin.Core.Missions
             Begin(new Turn
             {
                 Purpose = Purpose.Question,
-                Effort = "low",
                 // While Running it carries a compact craft snapshot; it never touches the run.
                 UserText = MissionPrompts.PlayerAsks(text) + (running ? "\n" + CompactFacts(mission) : ""),
                 Notice = mission.AwaitingApproval ? MissionPrompts.QuestionWithPlanPendingNotice : MissionPrompts.QuestionNotice,
@@ -638,7 +634,6 @@ namespace ClaudiaKermin.Core.Missions
             Begin(new Turn
             {
                 Purpose = Purpose.SequencePlan,
-                Effort = "high",
                 UserText = MissionPrompts.LateApprovalReplan(_ut, plan.ExpectedDeltaV, next) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.LateReplanNotice,
                 Waits = true,
@@ -725,7 +720,6 @@ namespace ClaudiaKermin.Core.Missions
             Begin(new Turn
             {
                 Purpose = Purpose.Settings,
-                Effort = "high",
                 UserText = MissionPrompts.SettingsChanged(edited) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.SettingsNotice,
             });
@@ -764,7 +758,6 @@ namespace ClaudiaKermin.Core.Missions
             var turn = new Turn
             {
                 Purpose = Purpose.Debrief,
-                Effort = "high",
                 UserText = MissionPrompts.RunReport(mission.PendingSequence, outcome, CrossingsText(mission)) + "\n" + ChildRunNote(mission) + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.DebriefNotice,
             };
@@ -876,8 +869,32 @@ namespace ClaudiaKermin.Core.Missions
 
         // ---- Requests ----
 
+        /// <summary>The effort table's entry for a turn's reply kind (<see cref="Config.EffortTable"/>); the Margin recheck has its own request.</summary>
+        private string EffortFor(Purpose purpose)
+        {
+            switch (purpose)
+            {
+                case Purpose.MissionPlan: return _config.Efforts.For("mission_plan");
+                case Purpose.SequencePlan: return _config.Efforts.For("sequence_plan");
+                case Purpose.Debrief: return _config.Efforts.For("debrief");
+                case Purpose.Reply: return _config.Efforts.For("reply");
+                case Purpose.Change: return _config.Efforts.For("change");
+                case Purpose.Question: return _config.Efforts.For("question");
+                case Purpose.Settings: return _config.Efforts.For("settings");
+                case Purpose.Alert: return _config.Efforts.For("alert");
+                default: return _config.Efforts.For("margin_recheck");
+            }
+        }
+
+        /// <summary>A bad entry in the config's effort table keeps its default; the Mission's event log says so, once, as the Mission begins or loads.</summary>
+        private void LogEffortProblems(Mission mission)
+        {
+            foreach (var problem in _config.Efforts.Problems) Event(mission, "effort_table", problem);
+        }
+
         private void Begin(Turn turn)
         {
+            if (turn.Effort == null) turn.Effort = EffortFor(turn.Purpose);
             var mission = _mission;
             if (mission.Pending != null)
             {
@@ -901,6 +918,7 @@ namespace ClaudiaKermin.Core.Missions
 
             if (turn.Messages == null)
             {
+                if (turn.Effort == null) turn.Effort = EffortFor(turn.Purpose);
                 turn.Messages = new List<Message>();
                 if (turn.Effort != mission.Effort) turn.Messages.Add(Message.SystemEffort(turn.Effort));
                 turn.Messages.Add(Message.UserText(turn.UserText));
@@ -1227,7 +1245,6 @@ namespace ClaudiaKermin.Core.Missions
             Begin(new Turn
             {
                 Purpose = turn.Purpose,
-                Effort = "high",
                 ChildVesselRetry = true,
                 Waits = turn.Waits,
                 // The refused turn was never committed to the conversation, so what it asked (the player's words, the new settings) goes again.
@@ -1276,7 +1293,6 @@ namespace ClaudiaKermin.Core.Missions
                 Begin(new Turn
                 {
                     Purpose = Purpose.SequencePlan,
-                    Effort = "high",
                     ScriptRewrite = true,
                     UserText = MissionPrompts.ScriptCheckFailed(problems),
                     Notice = MissionPrompts.RewriteNotice,
@@ -1335,7 +1351,6 @@ namespace ClaudiaKermin.Core.Missions
             Begin(new Turn
             {
                 Purpose = Purpose.SequencePlan,
-                Effort = "high",
                 // A Re-plan is a new plan, so it gets its own automatic rewrite; a retry of the script doesn't.
                 ScriptRewrite = !replan,
                 UserText = replan ? MissionPrompts.ReplanAfterScriptCheck(mission.UnsafeProblems)
