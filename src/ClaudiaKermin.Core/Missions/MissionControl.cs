@@ -59,6 +59,7 @@ namespace ClaudiaKermin.Core.Missions
             _hasKey = hasKey;
             _scriptCheck = scriptCheck;
             _craftCheck = new CraftCheckFlow(client, background, config, hasKey, CraftCheckCompleted);
+            Tools = PlanningTools.Default(scriptCheck);
             Rebuild();
         }
 
