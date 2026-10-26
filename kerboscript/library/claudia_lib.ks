@@ -34,8 +34,10 @@
 //| (r, v, q, node, transfer, ...): kOS won't compile the script. An unknown option fails the block at once
 //| with reason "unknown option <name>". Every block also takes the common options:
 //|   drop_empty [empty list]: part names or tags (e.g. list("fuelTank", "side tanks")); the auto-staging fires the
-//|     decoupler that holds them once every tank it would drop is empty, in the very burn that empties them,
-//|     and never one that still holds fuel or the part running the script. The result then lists dropped.
+//|     decoupler that holds them once every tank it would drop is empty (fuel, oxidizer, solid fuel, mono and
+//|     xenon all count), in the very burn that empties them, and never one that still holds fuel, is below
+//|     stage_limit or holds the part running the script. Only burning blocks use it (launch, ascend, land,
+//|     exec_node, circularize and the blocks that fly them); the result then lists dropped.
 //|   min_ec_pct [10]: abort when electric charge falls below this percent of capacity.
 //|   max_duration [per block]: abort when the block has run this many seconds, waits included.
 //|   abort_on_part_loss [true]: abort when the craft loses a part other than by the block's own staging.
@@ -429,7 +431,8 @@ function claudia_note_dropped {
 }
 
 // Fires the decoupler of every part in drop_empty whose tanks are all empty, together with every other
-// part leaving with it, and notes the names in ctx:dropped. Looks twice a second.
+// part leaving with it, and notes the names of the parts that left in ctx:dropped. Looks twice a second.
+// A decoupler is tried once (ctx:drop_tried), and never one below stage_limit.
 function claudia_drop_empty {
   parameter ctx.
   local wanted is ctx:opt:drop_empty.
@@ -437,19 +440,16 @@ function claudia_drop_empty {
     return.
   }
   set ctx:drop_ut to time:seconds.
-  local seen is list().
-  local fired is false.
+  local fired is list().
+  local fired_parts is list().
   for p in ship:parts {
     if claudia_drop_matches(p:name, p:tag, wanted) {
       local d is claudia_decoupler_of(p).
-      if not d:istype("String") and not seen:contains(d:uid) {
-        seen:add(d:uid).
+      if not d:istype("String") and not ctx:drop_tried:contains(d:uid) and d:stage >= ctx:opt:stage_limit {
         local gone is claudia_dropped_with(d).
         local amounts is list().
         local capacities is list().
-        local dropped_names is list().
         for g in gone {
-          dropped_names:add(g:name).
           for res in g:resources {
             if claudia_is_propellant(res:name) and res:capacity > 0 {
               amounts:add(res:amount).
@@ -457,18 +457,33 @@ function claudia_drop_empty {
             }
           }
         }
-        if claudia_tanks_empty(amounts, capacities) and not claudia_drop_holds_core(gone) and claudia_fire_decoupler(d) {
-          for n in dropped_names {
-            ctx:dropped:add(n).
+        // Nested, not one "and": firing is a side effect and must only follow the guards.
+        if claudia_tanks_empty(amounts, capacities) {
+          if not claudia_drop_holds_core(gone) {
+            ctx:drop_tried:add(d:uid).
+            if claudia_fire_decoupler(d) {
+              fired:add(d:uid).
+              for g in gone {
+                fired_parts:add(g).
+              }
+            }
           }
-          set fired to true.
         }
       }
     }
   }
-  if fired {
+  if fired:length > 0 {
     // Let the dropped parts leave before counting what the craft should still have.
     wait 0.5.
+    local left is list().
+    for p in ship:parts {
+      left:add(p:uid).
+    }
+    for g in fired_parts {
+      if not left:contains(g:uid) {
+        ctx:dropped:add(g:name).
+      }
+    }
     set ctx:parts to ship:parts:length.
     set ctx:last_ut to time:seconds.
   }
@@ -662,6 +677,7 @@ function claudia_begin {
     "dv_used", 0,
     "parts", ship:parts:length,
     "dropped", list(),
+    "drop_tried", list(),
     "drop_ut", 0).
 }
 

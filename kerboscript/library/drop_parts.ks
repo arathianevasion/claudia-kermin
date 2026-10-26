@@ -12,8 +12,8 @@
 //| Options:
 //|   parts [required]: a list of part names or tags (e.g. list("radialTank", "boosters")), or one name.
 //|     Each must match a part on the craft.
-//|   plus min_ec_pct, max_duration [60], abort_on_part_loss and stage_limit as for every block (this
-//|     block never burns, so staging and aborts do not apply; its own drops are not part loss).
+//|   The common options are accepted but do nothing here: it never burns, stages or waits, and its own
+//|     drops are not part loss. It ignores stage_limit: you named the parts, so they go.
 //| It drops whatever the decoupler holds, fuel or not, so name only what you mean to lose; use the
 //| drop_empty option on a burning block to drop tanks only once they are empty. It refuses a part with
 //| no decoupler, and one whose drop would take the part running the script or the root part, and
@@ -87,7 +87,7 @@ function drop_parts {
   local gone is list().
   for d in decouplers {
     for g in claudia_dropped_with(d) {
-      gone:add(g:name).
+      gone:add(g).
     }
   }
   local fired is 0.
@@ -102,8 +102,15 @@ function drop_parts {
   if fired = 0 or extra:parts_dropped <= 0 {
     return claudia_finish(ctx, false, "nothing separated: the decouplers did not fire", extra).
   }
-  for n in gone {
-    ctx:dropped:add(n).
+  // Report only the parts that really left.
+  local left is list().
+  for p in ship:parts {
+    left:add(p:uid).
+  }
+  for g in gone {
+    if not left:contains(g:uid) {
+      ctx:dropped:add(g:name).
+    }
   }
   return claudia_finish(ctx, true, "", extra).
 }
