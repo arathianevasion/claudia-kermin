@@ -39,7 +39,7 @@
 //|   stage_limit [0]: auto-staging stages on flameout but never below this stage number, and never
 //|     fires a stage holding parachutes or heat-shield separation. Out of fuel at the limit fails.
 //| A block returns a result lexicon (it does not report). Common fields: success (boolean), reason
-//| ("" on success), dv_used (m/s), dv_remaining (m/s, stock estimate), duration (s), body,
+//| ("" on success), dv_used (m/s), dv_remaining (m/s, stock estimate; -1 and a dv_remaining_note at a trickle throttle), duration (s), body,
 //| situation (e.g. "ORBITING"), orbit (lexicon ap, pe in m, inc in degrees) or, when landed,
 //| splashed or on the pad, geo (lexicon lat, lng, alt), and stage (current stage number); plus the
 //| block's extra results. An abort leaves the craft safe (throttle 0, SAS holding attitude) and
@@ -529,6 +529,21 @@ function claudia_fly_node {
   return "".
 }
 
+// Stock delta-v reads 0 while an engine runs at a trickle of throttle (under 5%), so it can be trusted
+// only at throttle 0 or from 5% up.
+function claudia_dv_trusted {
+  parameter throttle_now.
+  return throttle_now <= 0 or throttle_now >= 0.05.
+}
+
+// The stock delta-v left (m/s), or -1 (unknown) at a trickle throttle.
+function claudia_dv_remaining {
+  if not claudia_dv_trusted(ship:control:mainthrottle) {
+    return -1.
+  }
+  return round(ship:deltav:current, 1).
+}
+
 // The block's result lexicon: the Script Result's common fields plus extra (the block's own).
 function claudia_finish {
   parameter ctx, success, reason, extra.
@@ -536,7 +551,7 @@ function claudia_finish {
     "success", success,
     "reason", reason,
     "dv_used", round(ctx:dv_used, 1),
-    "dv_remaining", round(ship:deltav:current, 1),
+    "dv_remaining", claudia_dv_remaining(),
     "duration", round(time:seconds - ctx:start_ut, 1),
     "body", ship:body:name,
     "situation", status,
@@ -545,6 +560,9 @@ function claudia_finish {
     set result["geo"] to lexicon("lat", round(ship:geoposition:lat, 4), "lng", round(ship:geoposition:lng, 4), "alt", round(ship:altitude)).
   } else {
     set result["orbit"] to lexicon("ap", round(ship:apoapsis), "pe", round(ship:periapsis), "inc", round(ship:orbit:inclination, 2)).
+  }
+  if not claudia_dv_trusted(ship:control:mainthrottle) {
+    set result["dv_remaining_note"] to "unknown: stock delta-v reads 0 while the engines run at a trickle throttle".
   }
   for key in extra:keys {
     set result[key] to extra[key].
