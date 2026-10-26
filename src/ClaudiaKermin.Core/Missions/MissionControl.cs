@@ -718,10 +718,7 @@ namespace ClaudiaKermin.Core.Missions
             }
             if (mission.Stage == MissionStage.AwaitingSequenceApproval)
             {
-                if (mission.PendingSequence != null && mission.PendingSequence.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
-                mission.PendingSequence = null;
-                if (mission.SequenceCounted) mission.SequencesProposed--;
-                mission.SequenceCounted = false;
+                DropPendingSequence(mission);
             }
             mission.ConfirmPrompt = null;
             mission.Stage = MissionStage.Planning;
@@ -1347,12 +1344,26 @@ namespace ClaudiaKermin.Core.Missions
             });
         }
 
+        /// <summary>
+        /// Drops the pending Sequence Plan unflown: its Due Time alarm goes, and it stops counting towards
+        /// <c>SequencesProposed</c>, so the plan bar and the rest-of-plan figures don't run a step ahead (#263).
+        /// Not for a plan that is asked for again as the same sequence (the unsafe-script and late-Approval re-plans,
+        /// a script that fails its check on load): those keep <c>SequenceCounted</c> so the retry isn't counted twice.
+        /// </summary>
+        private void DropPendingSequence(Mission mission)
+        {
+            if (mission.PendingSequence != null && mission.PendingSequence.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
+            mission.PendingSequence = null;
+            if (mission.SequenceCounted) mission.SequencesProposed--;
+            mission.SequenceCounted = false;
+        }
+
         private void Revised(Mission mission, MissionReply reply, bool planPending)
         {
             if (reply.MissionPlan != null && (planPending || (mission.AwaitingApproval && ChangesGoal(reply))))
             {
                 // A new goal makes the pending Sequence Plan, if that is what waited, moot.
-                mission.PendingSequence = null;
+                DropPendingSequence(mission);
                 OfferMissionPlan(mission, reply.MissionPlan);
             }
             else if (!planPending && reply.SequencePlan != null && (reply.SequencePlan.Manual || reply.SequencePlan.Script.Trim().Length > 0)) OfferSequencePlan(mission, reply.SequencePlan);
