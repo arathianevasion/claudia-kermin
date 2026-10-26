@@ -132,7 +132,10 @@ namespace ClaudiaKermin.Core.Tests
 
             // The Debrief asked about the rest of the plan with the transfer and the landing still to fly.
             var debriefRequest = LastUserText(transport.Requests[4]);
-            var rest = debriefRequest.Substring(debriefRequest.IndexOf("still to fly in the Mission Plan", StringComparison.Ordinal));
+            var at = debriefRequest.IndexOf("still to fly in the Mission Plan", StringComparison.Ordinal);
+            Assert.True(at >= 0, "the Debrief request doesn't list the rest of the plan");
+            var rest = debriefRequest.Substring(at);
+            Assert.DoesNotContain("Reach orbit.", rest);
             Assert.Contains("Mun transfer", rest);
             Assert.Contains("Mun landing", rest);
         }
