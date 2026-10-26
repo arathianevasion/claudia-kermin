@@ -80,6 +80,10 @@ _Avoid_: report (what a script does with its Script Result), evaluation, review
 The Craft Check run again inside every Debrief, on the craft as it is now against the Maneuver Sequences still to fly in the Mission Plan; charged to the Mission like any other request, and skipped when the Spending Cap has no room for it beside the Debrief.
 _Avoid_: second Craft Check, re-check
 
+**Second look**:
+The mod asking Claudia again, thinking harder, for a Debrief, Craft Check, Margin recheck or Sequence Plan when her first reply says she is unsure, and why; the second reply replaces the first, which is never kept, and is skipped when the Spending Cap has no room for it.
+_Avoid_: retry (which is the player's), escalation, re-ask
+
 **Nominal**:
 A Debrief outcome: the Maneuver Sequence ended within its Sequence Plan's tolerances.
 
@@ -156,12 +160,16 @@ _Avoid_: primitives, stdlib, script bundle
 One reusable flight routine in the Core Library (e.g. launch, transfer_to, land) that Claudia sets up for a Maneuver Sequence.
 _Avoid_: primitive, routine, module
 
+**Planning Tool**:
+A read-only calculation the mod runs for Claudia while she plans (e.g. predicting the orbit after a burn, finding a landing site), whose answer shapes the plan; it never changes the game, and only Building Blocks fly the craft.
+_Avoid_: function, tool call, API, flight computer
+
 **Mission Script**:
 A script Claudia writes for one Mission to carry out a Maneuver Sequence, kept with that Mission.
 _Avoid_: generated script, glue script
 
 **Custom Script**:
-A Mission Script written from scratch instead of from Building Blocks, used when no Building Block fits.
+A Mission Script with flight logic of its own beyond running Building Blocks in order, branching on their Script Results, staging, adding the maneuver node an exec_node call flies, and reporting (e.g. a hand-written landing-site search before a land call), used where no Building Block fits; a script that calls no Building Block at all is one too.
 _Avoid_: raw script, freeform script
 
 **Script Result**:
