@@ -90,7 +90,7 @@ function transfer_to_synodic {
 // RSVP's options for the ejection burn: it creates the first node only, and costs each trial as
 // the ejection plus a circular capture at target_pe, the orbit circularize(at pe) flies afterwards,
 // so the window is the cheapest overall rather than the fastest. Time of flight is left to RSVP's
-// default (it tries the Hohmann time first).
+// default (it starts at the Hohmann time, and with the interval below stays there).
 //
 // The search spans one synodic period from earliest: the time between windows, which covers every
 // phase of the target against the craft, so RSVP finds the next window (#228). A longer span only
@@ -101,13 +101,15 @@ function transfer_to_synodic {
 // The interval is how far apart RSVP seeds its local searches (kerboscript/rsvp/search.ks): a seed
 // every search_interval, each a hill climb with a first step of search_interval / 10 that stops once
 // the step is under step_threshold, max(120, 0.002 * search_interval) s. RSVP's default for a moon is
-// half the craft's period, about 980 s from 100 km: two seeds a window, each step 98 s, under the
-// threshold, so no climb ran and RSVP took the better of two departures (1649 m/s against about 860
-// for a Hohmann transfer). A hill climb needs an interval of 1200 s or more, and then never steps
-// finer than 120 s, 22 degrees round a 100 km orbit, so instead the interval is span / 100: 101
-// departures, 20 s apart for the Mun from 100 km, each tried at the Hohmann time of flight. That is
-// how the 839 m/s node was found, over 142 departures whose phase against the Mun drifted 14 s each,
-// and it costs fewer Lambert solves than that search did.
+// half the craft's period, about 980 s from 100 km: each step 98 s, under the threshold, so no climb
+// ran, and over one synodic period RSVP took the best of three departures (1649 m/s against about
+// 860 for a Hohmann transfer). A hill climb needs an interval of 1200 s or more, and then never
+// steps finer than 120 s, 22 degrees round a 100 km orbit, so instead the interval is span / 100:
+// about 100 departures, 20 s apart for the Mun from 100 km, each tried at the Hohmann time of flight.
+// That is how the merged search over a Mun period found its 839 m/s node, over 142 departures whose
+// phase against the Mun drifted 14 s each, and this costs fewer Lambert solves than that did. (An
+// inclined target such as Minmus is tried the same way; the mid-course correction takes up what the
+// fixed time of flight misses.)
 function transfer_to_rsvp_options {
   parameter earliest, target_pe, craft_period, target_period.
   local span is transfer_to_synodic(craft_period, target_period).
@@ -174,7 +176,7 @@ function transfer_to {
   if not planned:success or not hasnode {
     return claudia_finish(ctx, false, transfer_to_rsvp_reason(planned), extra).
   }
-  // The ejection burn may be far off (window "next" up to about an orbit away, a UT window
+  // The ejection burn may be far off (window "next" up to a synodic period away, a UT window
   // further): exec_node warps there on rails, with no cap (ADR 0004).
   set extra:ejection_wait to round(nextnode:time - ctx:start_ut).
   if opt:max_duration:istype("String") {

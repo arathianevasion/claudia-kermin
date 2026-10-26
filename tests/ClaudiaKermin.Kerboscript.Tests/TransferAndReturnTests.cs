@@ -117,7 +117,8 @@ namespace ClaudiaKermin.Kerboscript.Tests
         // #228: a craft in a 100 km Kerbin orbit (1960 s) against the Mun (138984 s). A window comes round
         // every 1988 s. One synodic period covers every phase of the Mun against the craft, so RSVP finds
         // the next window, not the cheapest of the 70 in a Mun orbit (60,000 s away in-game). The interval
-        // seeds 101 departures 20 s apart: the default seeded two, which found 1649 m/s against about 860.
+        // seeds about 100 departures 20 s apart: the default seeded three, which found 1649 m/s against
+        // about 860.
         [Fact]
         public void The_options_passed_to_rsvp_search_the_next_window_densely_and_capture_at_target_pe()
         {
