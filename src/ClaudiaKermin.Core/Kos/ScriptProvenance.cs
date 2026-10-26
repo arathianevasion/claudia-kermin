@@ -23,7 +23,7 @@ namespace ClaudiaKermin.Core.Kos
         private static readonly Regex Token = new Regex(@"[A-Za-z_][A-Za-z0-9_]*|:|\(|\.", RegexOptions.Compiled);
 
         private static readonly Regex AddNode = new Regex(@"\badd\s+node\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        private static readonly Regex ExecNodeNext = new Regex(@"\s*\.\s*((local\s+)?\w+\s+(is|to)\s+)?exec_node\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex ExecNodeNext = new Regex(@"\s*\.\s*((local\s+\w+\s+is|set\s+\w+\s+to|\w+\s+is)\s+)?exec_node\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         /// <summary>Statements that fly the craft or touch files directly, whatever the script around them does.</summary>
         private static readonly HashSet<string> ControlStatements = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

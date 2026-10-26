@@ -72,6 +72,28 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ALoopAfterAnotherBlockIsStillRead()
+        {
+            Assert.Contains(ScriptLints.Warnings("launch().\nif true { print 1. }\n" + FuelStaging), w => w.Contains("staging loop"));
+            Assert.Contains(ScriptLints.Warnings("local await is 1.\n" + FuelStaging), w => w.Contains("staging loop"));
+        }
+
+        [Fact]
+        public void ABlockCalledInALoopWithATargetIsNotASiteSearch()
+        {
+            Assert.Empty(ScriptLints.Warnings("for t in targets { land(lexicon(\"target\", latlng(t:lat, t:lng))). }\n"));
+            Assert.Empty(ScriptLints.Warnings("until ship:altitude > 70000 { print ship:maxthrust. if true { stage. } }\n"));
+        }
+
+        [Fact]
+        public void AReasonAlreadyHoldingTheLintTextIsNotRepeated()
+        {
+            var lint = ScriptLints.Warnings(FuelStaging).Single();
+            var plan = Reply(FuelStaging).SequencePlan;
+            Assert.Equal(1, plan.CustomScriptReason.Split(new[] { lint }, System.StringSplitOptions.None).Length - 1);
+        }
+
+        [Fact]
         public void WaitUntilIsNotALoop()
         {
             Assert.Empty(ScriptLints.Warnings("wait until stage:liquidfuel < 1.\nstage.\nif true { print nextnode. }\n"));

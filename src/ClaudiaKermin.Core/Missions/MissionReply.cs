@@ -388,7 +388,7 @@ namespace ClaudiaKermin.Core.Missions
                 if (proposed.CustomScript)
                 {
                     var reason = (JsonNode.Str(sequence["custom_script_reason"]) ?? "").Trim();
-                    proposed.CustomScriptReason = string.Join(" ", new[] { reason.Length > 0 ? reason : "It is not built from Building Blocks alone." }.Concat(lints));
+                    proposed.CustomScriptReason = string.Join(" ", new[] { reason.Length > 0 ? reason : "It is not built from Building Blocks alone." }.Concat(lints.Where(l => !reason.Contains(l))));
                 }
             }
 

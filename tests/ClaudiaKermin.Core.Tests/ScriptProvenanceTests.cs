@@ -71,6 +71,7 @@ namespace ClaudiaKermin.Core.Tests
         {
             Assert.False(ScriptProvenance.IsCustom("add node(time:seconds + 60, 0, 0, 10).\nexec_node().\n"));
             Assert.False(ScriptProvenance.IsCustom("ADD NODE(time:seconds + 60, 0, 0, max(1, 2)).\nlocal r is exec_node(lexicon(\"min_ec_pct\", 10)).\n"));
+            Assert.False(ScriptProvenance.IsCustom("add node(time:seconds + 60, 0, 0, 10).\nset res to exec_node().\n"));
         }
 
         [Fact]

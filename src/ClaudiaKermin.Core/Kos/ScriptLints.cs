@@ -18,12 +18,13 @@ namespace ClaudiaKermin.Core.Kos
     public static class ScriptLints
     {
         private static readonly Regex LoopKeyword = new Regex(@"\b(for|until|from|when)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        private static readonly Regex SiteSearch = new Regex(@"\blatlng\s*\(|\bgeopositionlatlng\b|\bterrainheight\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex SiteSearch = new Regex(@"\blatlng\s*\(|\bgeopositionlatlng\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex TerrainRead = new Regex(@"\bterrainheight\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly Regex NextPatch = new Regex(@":\s*nextpatch\b|\bnextpatch\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly Regex NodeUse = new Regex(@"\bnode\s*\(|\bnextnode\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly Regex Staging = new Regex(@"\bstage\s*\.", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly Regex FuelWatch = new Regex(
-            @"\bstage\s*:\s*(liquidfuel|oxidizer|solidfuel|resources|deltav)\b|\b(liquidfuel|oxidizer|solidfuel|availablethrust|maxthrust)\b|:\s*amount\b",
+            @"\bstage\s*:\s*(liquidfuel|oxidizer|solidfuel|resources|deltav)\b|\b(liquidfuel|oxidizer|solidfuel)\b",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         /// <summary>One warning per lint that fires, each naming the first line of the loop it found; empty for a clean script.</summary>
@@ -38,7 +39,7 @@ namespace ClaudiaKermin.Core.Kos
             {
                 var body = code.Substring(loop.Start, loop.End - loop.Start);
                 var line = 1 + code.Take(loop.Start).Count(c => c == '\n');
-                if (siteLine == 0 && SiteSearch.IsMatch(body)) siteLine = line;
+                if (siteLine == 0 && SiteSearch.IsMatch(body) && TerrainRead.IsMatch(body)) siteLine = line;
                 if (nudgeLine == 0 && NextPatch.IsMatch(body) && NodeUse.IsMatch(body)) nudgeLine = line;
                 if (fuelLine == 0 && Staging.IsMatch(body) && FuelWatch.IsMatch(body)) fuelLine = line;
             }
@@ -60,12 +61,13 @@ namespace ClaudiaKermin.Core.Kos
         /// <summary>Each loop's text from its keyword to the end of its last braced block.</summary>
         private static IEnumerable<Span> Loops(string code)
         {
+            var consumed = 0; // the end of the last loop read, so a "from {..} until .." is one loop, not two
             foreach (Match m in LoopKeyword.Matches(code))
             {
+                if (m.Index < consumed) continue;
                 var before = code.Substring(0, m.Index).TrimEnd();
                 if (before.EndsWith(":")) continue; // a suffix
-                if (m.Value.Equals("until", StringComparison.OrdinalIgnoreCase)
-                    && (before.EndsWith("wait", StringComparison.OrdinalIgnoreCase) || before.EndsWith("}"))) continue; // "wait until x." has no block; "from {..} until" is read from "from"
+                if (m.Value.Equals("until", StringComparison.OrdinalIgnoreCase) && Regex.IsMatch(before, @"\bwait$", RegexOptions.IgnoreCase)) continue; // "wait until x." has no block
                 var end = m.Index + m.Length;
                 var groups = m.Value.Equals("from", StringComparison.OrdinalIgnoreCase) ? 3 : 1;
                 var found = false;
@@ -78,7 +80,9 @@ namespace ClaudiaKermin.Core.Kos
                     end = close + 1;
                     found = true;
                 }
-                if (found) yield return new Span { Start = m.Index, End = end };
+                if (!found) continue;
+                consumed = end;
+                yield return new Span { Start = m.Index, End = end };
             }
         }
 
