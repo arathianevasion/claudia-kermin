@@ -107,24 +107,34 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "round(transfer_to_synodic({0}, {1}), 6)", a, b)));
         }
 
-        // A craft in a 1960 s orbit is searched against the Mun's 138984 s: the span must reach round to the
-        // Mun's phase (#228: a span of one craft orbit, the craft's synodic period, left the Mun's phase
-        // to chance and found 1649 m/s against about 860 for a Hohmann transfer).
-        [Theory]
-        [InlineData(1960, 138984, "138984")]
-        [InlineData(138984, 1960, "138984")]
-        [InlineData(2, 3, "6")]
-        [InlineData(5, 5, "5")]
-        public void The_departure_is_searched_over_the_longer_period_or_a_synodic_period_if_that_is_longer(double a, double b, string expected)
+        private static string[] RsvpOptions(double craftPeriod, double targetPeriod)
         {
-            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "round(transfer_to_search_duration({0}, {1}), 6)", a, b)));
+            return Run(string.Format(CultureInfo.InvariantCulture,
+                "local o is transfer_to_rsvp_options(1300, 30000, {0}, {1}). print o:keys:length. print o:create_maneuver_nodes. print o:final_orbit_periapsis. print o:final_orbit_type. print o:earliest_departure. print round(o:search_duration, 3). print round(o:search_interval, 3). print o:haskey(\"max_time_of_flight\").",
+                craftPeriod, targetPeriod));
+        }
+
+        // #228: a craft in a 100 km Kerbin orbit (1960 s) against the Mun (138984 s). A window comes round
+        // every 1988 s. One synodic period covers every phase of the Mun against the craft, so RSVP finds
+        // the next window, not the cheapest of the 70 in a Mun orbit (60,000 s away in-game). The interval
+        // seeds about 100 departures 20 s apart: the default seeded three, which found 1649 m/s against
+        // about 860.
+        [Fact]
+        public void The_options_passed_to_rsvp_search_the_next_window_densely_and_capture_at_target_pe()
+        {
+            Assert.Equal(new[] { "6", "first", "30000", "circular", "1300", "1988.036", "19.88", "False" }, RsvpOptions(1960, 138984));
         }
 
         [Fact]
-        public void The_options_passed_to_rsvp_search_the_whole_phase_and_capture_at_target_pe()
+        public void The_search_is_the_same_whichever_orbit_is_the_craft()
         {
-            var printed = Run("local o is transfer_to_rsvp_options(1300, 30000, 1960, 138984). print o:keys:length. print o:create_maneuver_nodes. print o:final_orbit_periapsis. print o:final_orbit_type. print o:earliest_departure. print o:search_duration. print o:haskey(\"max_time_of_flight\"). print o:haskey(\"search_interval\").");
-            Assert.Equal(new[] { "5", "first", "30000", "circular", "1300", "138984", "False", "False" }, printed);
+            Assert.Equal(RsvpOptions(1960, 138984), RsvpOptions(138984, 1960));
+        }
+
+        [Fact]
+        public void Equal_periods_search_one_period_rather_than_forever()
+        {
+            Assert.Equal(new[] { "6", "first", "30000", "circular", "1300", "5000", "50", "False" }, RsvpOptions(5000, 5000));
         }
 
         // ---- Coordinate descent ----
