@@ -57,7 +57,7 @@ namespace ClaudiaKermin.Core.Config
         /// <summary>Reads one <c>effort.&lt;kind&gt;</c> entry from the config file. <paramref name="name"/> includes the prefix.</summary>
         public void Read(string name, string value)
         {
-            var kind = name.Substring(Prefix.Length);
+            var kind = name.Substring(Prefix.Length).Trim().ToLowerInvariant();
             if (!_efforts.ContainsKey(kind))
             {
                 _problems.Add("Config entry " + name + " is not a reply kind; ignored.");

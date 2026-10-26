@@ -882,11 +882,12 @@ namespace ClaudiaKermin.Core.Missions
                 case Purpose.Question: return _config.Efforts.For("question");
                 case Purpose.Settings: return _config.Efforts.For("settings");
                 case Purpose.Alert: return _config.Efforts.For("alert");
-                default: return _config.Efforts.For("margin_recheck");
+                case Purpose.Margin: return _config.Efforts.For("margin_recheck");
+                default: throw new ArgumentOutOfRangeException("purpose");
             }
         }
 
-        /// <summary>A bad entry in the config's effort table keeps its default; the Mission's event log says so, once, as the Mission begins or loads.</summary>
+        /// <summary>A bad entry in the config's effort table keeps its default; the Mission's event log says so, once, as the Mission starts.</summary>
         private void LogEffortProblems(Mission mission)
         {
             foreach (var problem in _config.Efforts.Problems) Event(mission, "effort_table", problem);

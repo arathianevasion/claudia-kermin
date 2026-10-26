@@ -455,7 +455,6 @@ namespace ClaudiaKermin.Core.Missions
             }
             RestoreBlackout(mission, state);
             if (_config.DebugTools) mission.Dump = new FileStreamDump(Path.Combine(mission.Folder, "stream-dumps"));
-            LogEffortProblems(mission);
 
             // Spend is never the save's: the cost log is never rewound, so a load cannot refund anything.
             var cost = MissionStore.ReadCostTotals(mission.Folder);
