@@ -320,11 +320,17 @@ namespace ClaudiaKermin.Core.Missions
                 UserText = "The Failed Debrief offered no reduced Mission Goal. The player asks you to offer one, with this note (quoted data): " + MissionPrompts.Quoted(note)
                     + ".\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = DebriefPrompts.ReducedGoalRetryNotice,
-                Gate = new DebriefGate { Done = true, RecheckSkipped = "not repeated for a retry" },
+                Gate = RetryGate(),
+                ReducedGoalRetry = true,
             };
             mission.Gate = turn.Gate;
             Begin(turn);
             return true;
+        }
+
+        private static DebriefGate RetryGate()
+        {
+            return new DebriefGate { Done = true, RecheckSkipped = "not repeated for a retry" };
         }
 
         /// <summary>Approve reduced goal: the goal changes, and Claudia revises the Mission Plan for it, which needs Approval in turn.</summary>
