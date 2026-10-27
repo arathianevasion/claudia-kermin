@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using ClaudiaKermin.Adapter;
 using ClaudiaKermin.Core;
@@ -177,6 +178,7 @@ namespace ClaudiaKermin.KOS
             else
             {
                 run.Run.Trace.WaitEnded(WarpTracing.Real, WarpTracing.Ut);
+                run.Cancel.WaitEnded();
             }
         }
 
@@ -188,13 +190,14 @@ namespace ClaudiaKermin.KOS
         }
 
         /// <summary>From <see cref="PlayerWarpWatch.RateChanged"/>: a player's drop cancels every running program's wait.</summary>
-        private void OnRateChanged(double from, double to, bool byPlayer)
+        private void OnRateChanged(double from, double to, bool byPlayer, bool askedHigher)
         {
             foreach (var run in _runs.Values)
             {
-                if (run.Run.HasEnded || !run.Cancel.RateChanged(from, to, byPlayer)) continue;
+                if (run.Run.HasEnded || !run.Cancel.RateChanged(from, to, byPlayer, askedHigher)) continue;
                 run.Run.Trace.PlayerDropped(WarpTracing.Real, WarpTracing.Ut, from, to);
-                Debug.Log(ModInfo.LogTag + " the player lowered warp from " + from + "x to " + to + "x: WARPCANCELLED for '" + run.Label + "'");
+                Debug.Log(ModInfo.LogTag + " the player lowered warp from " + from.ToString("0.##", CultureInfo.InvariantCulture) + "x to "
+                    + to.ToString("0.##", CultureInfo.InvariantCulture) + "x: WARPCANCELLED for '" + run.Label + "'");
             }
         }
 

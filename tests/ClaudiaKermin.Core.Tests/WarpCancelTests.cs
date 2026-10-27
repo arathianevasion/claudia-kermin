@@ -60,20 +60,42 @@ namespace ClaudiaKermin.Core.Tests
             Assert.False(cancel.Cancelled);
         }
 
+        [Fact]
+        public void ACancelOutsideAWaitDoesntCountButOneStaysReadableAfterItsWaitEnds()
+        {
+            var cancel = new WarpCancel();
+            Assert.False(cancel.RateChanged(1000, 1, byPlayer: true));
+            Assert.False(cancel.Cancelled);
+            cancel.WaitStarted();
+            cancel.RateChanged(1000, 1, byPlayer: true);
+            cancel.WaitEnded();
+            Assert.True(cancel.Cancelled);
+        }
+
+        [Fact]
+        public void APlayersRaiseThatKspClampedLowerIsNotACancel()
+        {
+            var cancel = new WarpCancel();
+            cancel.WaitStarted();
+            // The player pressed '.' at 100x; KSP's altitude limit only allows 10x.
+            Assert.False(cancel.RateChanged(100, 10, byPlayer: true, askedHigher: true));
+            Assert.False(cancel.Cancelled);
+        }
+
         // ---- whose change it was ----
 
         [Theory]
-        [InlineData(WarpChangeSource.PlayerControl, false, false, true)]
-        [InlineData(WarpChangeSource.KspClamp, false, false, false)]
-        [InlineData(WarpChangeSource.KspClamp, true, true, false)]
-        [InlineData(WarpChangeSource.Other, false, false, false)]
-        // A warp-to's own steps belong to whoever started it, unless the player pressed a warp key during it.
-        [InlineData(WarpChangeSource.WarpToStep, false, false, false)]
-        [InlineData(WarpChangeSource.WarpToStep, true, false, true)]
-        [InlineData(WarpChangeSource.WarpToStep, false, true, true)]
-        public void AChangeIsThePlayersFromTheirControlsOrTheirWarpTo(WarpChangeSource source, bool warpToIsPlayers, bool warpKeyDown, bool expected)
+        [InlineData(WarpChangeSource.PlayerControl, false, true)]
+        [InlineData(WarpChangeSource.KspClamp, false, false)]
+        [InlineData(WarpChangeSource.KspClamp, true, false)]
+        [InlineData(WarpChangeSource.Other, false, false)]
+        [InlineData(WarpChangeSource.Other, true, false)]
+        // A warp-to's own steps (its arrival, a kOS WARP under it) aren't the player's, unless a warp key is down: its coroutine reads them.
+        [InlineData(WarpChangeSource.WarpToStep, false, false)]
+        [InlineData(WarpChangeSource.WarpToStep, true, true)]
+        public void AChangeIsThePlayersFromTheirControlsOrAWarpKeyDuringAWarpTo(WarpChangeSource source, bool warpKeyDown, bool expected)
         {
-            Assert.Equal(expected, PlayerWarp.IsPlayers(source, warpToIsPlayers, warpKeyDown));
+            Assert.Equal(expected, PlayerWarp.IsPlayers(source, warpKeyDown));
         }
 
         // ---- the warp trace ----

@@ -22,15 +22,19 @@ namespace ClaudiaKermin.Core.Kos
     /// <summary>Telling the player's warp changes from KSP's and the script's (#336).</summary>
     public static class PlayerWarp
     {
+        /// <summary>
+        /// Whether a rate change was the player's: their controls, or a warp-to's step while a warp key is down (its
+        /// coroutine reads the keys itself and changes the rate before cancelling). A warp-to's other steps (its own
+        /// arrival, a script's <c>WARP</c> under it) aren't, whoever started it.
+        /// </summary>
         /// <param name="source">Where the change happened.</param>
-        /// <param name="warpToIsPlayers">The warp-to running (or starting) was the player's, from a stock warp-to button.</param>
-        /// <param name="warpKeyDown">A warp key (<c>,</c> <c>.</c> <c>/</c>) is down this frame: the warp-to coroutine reads the keys itself.</param>
-        public static bool IsPlayers(WarpChangeSource source, bool warpToIsPlayers, bool warpKeyDown)
+        /// <param name="warpKeyDown">A warp key (<c>,</c> <c>.</c> <c>/</c>) is down this frame.</param>
+        public static bool IsPlayers(WarpChangeSource source, bool warpKeyDown)
         {
             switch (source)
             {
                 case WarpChangeSource.PlayerControl: return true;
-                case WarpChangeSource.WarpToStep: return warpToIsPlayers || warpKeyDown;
+                case WarpChangeSource.WarpToStep: return warpKeyDown;
                 default: return false;
             }
         }
@@ -38,24 +42,38 @@ namespace ClaudiaKermin.Core.Kos
 
     /// <summary>
     /// The player's warp cancel for one mod-started run (#336, ADR 0008): <c>ADDONS:CLAUDIA:WARPCANCELLED</c>. It turns
-    /// true when the player lowers or stops warp, rails or physics, and resets when the script's next wait starts
-    /// (<c>WAITSTART</c>), so a cancel holds for the rest of that wait and the next wait starts fresh. Raising warp isn't
-    /// a cancel, and neither is KSP's own drop. Who made a change is <see cref="PlayerWarp.IsPlayers"/>'s call.
+    /// true when the player lowers or stops warp, rails or physics, during the script's current wait, and resets when the
+    /// next wait starts (<c>WAITSTART</c>), so a cancel holds for the rest of that wait, is still readable once the wait
+    /// returns, and the next wait starts fresh. Raising warp isn't a cancel, and neither is KSP's own drop. Who made a
+    /// change is <see cref="PlayerWarp.IsPlayers"/>'s call.
     /// </summary>
     public sealed class WarpCancel
     {
-        /// <summary>The player lowered or stopped warp since the current wait began (or since the run began, before its first wait).</summary>
+        private bool _waiting;
+
+        /// <summary>The player lowered or stopped warp during the current (or the last) wait.</summary>
         public bool Cancelled { get; private set; }
 
+        /// <summary>A Core Library wait began (<c>WAITSTART</c>): a fresh start.</summary>
         public void WaitStarted()
         {
+            _waiting = true;
             Cancelled = false;
         }
 
-        /// <summary>The warp rate changed from one rate to another. Returns true when it was the player lowering or stopping warp.</summary>
-        public bool RateChanged(double from, double to, bool byPlayer)
+        /// <summary>The wait ended (<c>WAITEND</c>); <see cref="Cancelled"/> keeps its value until the next wait starts.</summary>
+        public void WaitEnded()
         {
-            if (!byPlayer || to >= from) return false;
+            _waiting = false;
+        }
+
+        /// <summary>
+        /// The warp rate changed from one rate to another. askedHigher: the change asked for a higher rate and KSP's limits
+        /// clamped it lower, so a player's raise isn't read as a cancel. Returns true when it cancelled the wait.
+        /// </summary>
+        public bool RateChanged(double from, double to, bool byPlayer, bool askedHigher = false)
+        {
+            if (!_waiting || !byPlayer || askedHigher || to >= from) return false;
             Cancelled = true;
             return true;
         }

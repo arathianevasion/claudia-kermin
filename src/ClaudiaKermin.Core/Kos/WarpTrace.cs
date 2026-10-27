@@ -228,13 +228,14 @@ namespace ClaudiaKermin.Core.Kos
             if (_lastRequest != null) _lastRequest.RateReached = Math.Max(_lastRequest.RateReached, rate);
 
             var fell = _waiting && _lastRate > At1x && rate <= At1x && ut < Target() - EndMargin;
-            // KSP lerps a stop down over a few frames, so the player's fall comes after PlayerDropped named it. A rise on
-            // the way means warp was asked for again, and a later fall is someone else's.
-            if (_playerFall && (rate <= At1x || rate > _lastRate))
+            // KSP lerps a stop down over a few frames, so the player's fall comes after PlayerDropped named it.
+            if (_playerFall && rate <= At1x)
             {
-                if (rate <= At1x) fell = false;
+                fell = false;
                 _playerFall = false;
             }
+            // A rise on the way down means warp was asked for again: a later fall is someone else's.
+            if (rate > _lastRate) _playerFall = false;
             _fellFrom = fell ? _lastRate : (double?)null;
             _lastSampleReal = real;
             _lastRate = rate;
@@ -257,20 +258,7 @@ namespace ClaudiaKermin.Core.Kos
             var from = _fellFrom ?? _lastRate;
             _fellFrom = null;
             _lastRate = 1;
-            _entries.Add(new WarpTraceEntry
-            {
-                Kind = WarpTraceKind.Drop,
-                Block = Innermost(),
-                RealS = real - _startReal,
-                Ut = ut,
-                TargetUt = _waiting ? Target() : (double?)null,
-                Mode = _lastRequest == null ? "" : _lastRequest.Mode,
-                RateReached = from,
-                RateTo = 1,
-                Refusal = refusal ?? "",
-                Drop = why ?? "",
-            });
-            foreach (var block in OpenBlocks()) block.Drops++;
+            AddDrop(real, ut, from, 1, why, refusal);
             // The next request is a fresh one, not this one reaching a rate.
             _lastRequest = null;
         }
@@ -282,23 +270,28 @@ namespace ClaudiaKermin.Core.Kos
         public void PlayerDropped(double real, double ut, double from, double to)
         {
             if (!_waiting) return;
+            AddDrop(real, ut, from, to, "player", "");
+            if (to > At1x) return;
+            _playerFall = true;
+            _lastRequest = null;
+        }
+
+        private void AddDrop(double real, double ut, double from, double to, string why, string refusal)
+        {
             _entries.Add(new WarpTraceEntry
             {
                 Kind = WarpTraceKind.Drop,
                 Block = Innermost(),
                 RealS = real - _startReal,
                 Ut = ut,
-                TargetUt = Target(),
+                TargetUt = _waiting ? Target() : (double?)null,
                 Mode = _lastRequest == null ? "" : _lastRequest.Mode,
                 RateReached = from,
                 RateTo = to,
-                Refusal = "",
-                Drop = "player",
+                Refusal = refusal ?? "",
+                Drop = why ?? "",
             });
             foreach (var block in OpenBlocks()) block.Drops++;
-            if (to > At1x) return;
-            _playerFall = true;
-            _lastRequest = null;
         }
 
         /// <summary>
