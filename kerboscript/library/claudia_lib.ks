@@ -1232,15 +1232,6 @@ function claudia_descend {
   return lexicon("x", best, "cost", best_cost).
 }
 
-// RSVP's lexicon of functions, loaded on first use: a bundled file's top-level statements would
-// only run after the Mission Script ends, so RSVP's main is a function called here.
-function claudia_rsvp {
-  if not (defined rsvp) {
-    rsvp_file_main().
-  }
-  return rsvp.
-}
-
 // The first patch of orb's path (orb itself or a later one) around dest:
 // lexicon("orbit", that patch, "soi_ut", UT it begins), or "none" if the path never gets there.
 function claudia_patch {

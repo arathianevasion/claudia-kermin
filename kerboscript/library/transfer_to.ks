@@ -3,7 +3,7 @@
 //
 // Building Block transfer_to, the spec's `transfer` (kOS already has a built-in TRANSFER, for moving
 // resources, which a function may not hide): flies from orbit around a body to an encounter with
-// one of its moons, planning the ejection with RSVP v9 (bundled, kerboscript/rsvp/NOTE.md). Built on
+// one of its moons, finding the ejection with ADDONS:CLAUDIA:EJECTIONBURN. Built on
 // claudia_lib.ks and exec_node.ks (the patch, descent and mid-course correction helpers it shares with
 // return are in claudia_lib.ks); block-only helpers are prefixed transfer_to_. The "//|" lines are
 // Claudia's docs for it; the first is its summary.
@@ -11,15 +11,15 @@
 @lazyglobal off.
 
 //| transfer_to(options): flies from orbit to an encounter with a moon of the body the craft orbits (the
-//| Mun or Minmus from Kerbin): RSVP v9 plans the ejection burn, exec_node flies it, and a mid-course
+//| Mun or Minmus from Kerbin): the mod's ejection solver finds the burn, exec_node flies it, and a mid-course
 //| correction halfway through the coast aims for target_pe. It ends after the correction, before
 //| arrival. (It is the spec's transfer block: kOS's own TRANSFER moves resources.)
 //| Options:
 //|   target [required]: the body to reach, a name ("Mun") or a body (body("Minmus")).
 //|   target_pe [required]: periapsis altitude at the target, m.
-//|   window ["next"]: "next" departs in the next transfer window from 5 minutes ahead (RSVP
-//|     searches one synodic period, the time between windows: about 33 minutes for the Mun from a
-//|     100 km orbit); a time (UT seconds) searches the same span from that time instead. The block
+//|   window ["next"]: "next" departs in the next transfer window once the craft can have turned to
+//|     the burn (one synodic period, the time between windows, is searched: about 33 minutes for the
+//|     Mun from a 100 km orbit); a time (UT seconds) searches the same span from that time. The block
 //|     warps on rails to the window however far off it is: no Due Time is needed for it.
 //|   correction [true]: false leaves out the mid-course correction.
 //|   max_duration ["auto"]: the time to the planned arrival plus 900 s.
@@ -28,18 +28,16 @@
 //| target_pe_actual (m, the periapsis predicted at the target), correction_dv (m/s the correction
 //| burned; 0 when the prediction was already within 1 km of target_pe, the fix was under 0.1 m/s,
 //| or correction is false).
-//| ejection_node_dv (m/s the ejection node asked for: RSVP's choice), ejection_dv_used (m/s the
+//| ejection_node_dv (m/s the ejection node asked for), ejection_dv_used (m/s the
 //| ejection burn used) and ejection_burn_time (s the engines burned): a dv_used well above the node
-//| means the burn wasted thrust; a node well above the delta-v a Hohmann transfer needs means RSVP
-//| chose it. All -1 when the block failed before the ejection burn was flown.
-//| ejection_wait (s from the block's start to the ejection node RSVP planned; for window "next" at
-//| most a synodic period and 5 minutes, plus RSVP's run): -1 when the block failed before RSVP
-//| planned the node.
+//| means the burn wasted thrust. All -1 when the block failed before the ejection burn was flown.
+//| ejection_wait (s from the block's start to the ejection node; for window "next" at most a
+//| synodic period plus the turn time): -1 when the block failed before the node was planned.
 //| Fails with "target is required", "target_pe is required", an option value it can't read, "no body
 //| named <x>", a target that doesn't orbit the craft's body, "not in orbit", "a maneuver node is
-//| already planned: remove it first", "rsvp found no transfer: <why>", "no encounter with
+//| already planned: remove it first", "found no transfer: <why>", "no encounter with
 //| <target> after the ejection burn" (or "after the correction"), an exec_node failure (that burn's
-//| node is left in place), or an abort. The craft must be the active vessel (RSVP checks).
+//| node is left in place), or an abort. The craft must be the active vessel.
 //| Capture is not part of transfer_to: once inside the target's sphere of influence, fly
 //| `circularize(lexicon("at", "pe"))`: in the same sequence or the next, after
 //| `coast(lexicon("until", res:encounter_ut + 60))` (no Due Time needed).
@@ -76,67 +74,6 @@ function transfer_to_unreadable {
   return claudia_correction_unreadable(opt:correction).
 }
 
-// Seconds between one departure window and the next for orbits of these periods (s); the longer
-// period if they are the same.
-function transfer_to_synodic {
-  parameter period_a, period_b.
-  local beat is abs(1 / period_a - 1 / period_b).
-  if beat < 1e-12 {
-    return max(period_a, period_b).
-  }
-  return 1 / beat.
-}
-
-// RSVP's options for the ejection burn: it creates the first node only, and costs each trial as
-// the ejection plus a circular capture at target_pe, the orbit circularize(at pe) flies afterwards,
-// so the window is the cheapest overall rather than the fastest. Time of flight is left to RSVP's
-// default (it starts at the Hohmann time, and with the interval below stays there).
-//
-// The search spans one synodic period from earliest: the time between windows, which covers every
-// phase of the target against the craft, so RSVP finds the next window (#228). A longer span only
-// adds windows that, from a circular orbit, cost the same to a few m/s, so RSVP picks one by noise:
-// a whole Mun period (RSVP's default) planned a window 60,000 s away and the craft drained its
-// charge waiting for it.
-//
-// The interval is how far apart RSVP seeds its local searches (kerboscript/rsvp/search.ks): a seed
-// every search_interval, each a hill climb with a first step of search_interval / 10 that stops once
-// the step is under step_threshold, max(120, 0.002 * search_interval) s. RSVP's default for a moon is
-// half the craft's period, about 980 s from 100 km: each step 98 s, under the threshold, so no climb
-// ran, and over one synodic period RSVP took the best of three departures (1649 m/s against about
-// 860 for a Hohmann transfer). A hill climb needs an interval of 1200 s or more, and then never
-// steps finer than 120 s, 22 degrees round a 100 km orbit, so instead the interval is span / 100:
-// about 100 departures, 20 s apart for the Mun from 100 km, each tried at the Hohmann time of flight.
-// That is how the merged search over a Mun period found its 839 m/s node, over 142 departures whose
-// phase against the Mun drifted 14 s each, and this costs fewer Lambert solves than that did. (An
-// inclined target such as Minmus is tried the same way; the mid-course correction takes up what the
-// fixed time of flight misses.)
-function transfer_to_rsvp_options {
-  parameter earliest, target_pe, craft_period, target_period.
-  local span is transfer_to_synodic(craft_period, target_period).
-  return lexicon(
-    "create_maneuver_nodes", "first",
-    "final_orbit_periapsis", target_pe,
-    "final_orbit_type", "circular",
-    "earliest_departure", earliest,
-    "search_duration", span,
-    "search_interval", span / 100).
-}
-
-// RSVP's failure as a reason: "rsvp found no transfer: <its problems>".
-function transfer_to_rsvp_reason {
-  parameter planned.
-  local texts is list().
-  if planned:haskey("problems") {
-    for key in planned:problems:keys {
-      texts:add(planned:problems[key]).
-    }
-  }
-  if texts:length = 0 {
-    return "rsvp found no transfer".
-  }
-  return "rsvp found no transfer: " + texts:join("; ").
-}
-
 function transfer_to {
   parameter options is lexicon().
   local extra is lexicon("encounter_ut", -1, "target_pe_actual", -1, "correction_dv", 0,
@@ -168,19 +105,24 @@ function transfer_to {
     return claudia_finish(ctx, false, "a maneuver node is already planned: remove it first", extra).
   }
 
-  local earliest is claudia_earliest(time:seconds, opt:window).
-
-  // RSVP searches the next window for the cheapest departure, and adds the ejection node; on
-  // failure it removes every node.
-  local planned is claudia_rsvp():goto(dest, transfer_to_rsvp_options(earliest, opt:target_pe, ship:orbit:period, dest:orbit:period)).
-  if not planned:success or not hasnode {
-    return claudia_finish(ctx, false, transfer_to_rsvp_reason(planned), extra).
+  // The solver finds the cheapest ejection in the next window and gives its node's components. The
+  // calls are block-internal (ADR 0006, ADR 0007), so they sit in the block. The earliest departure
+  // leaves time to turn to the burn, which exec_node does before it warps.
+  local turn is addons:claudia:turntime(lexicon("max_stopping_time", steeringmanager:maxstoppingtime)).
+  if turn:error <> "" {
+    return claudia_finish(ctx, false, turn:error, extra).
   }
+  local found is addons:claudia:ejectionburn(lexicon("target", dest:name, "target_pe", opt:target_pe,
+    "earliest_ut", ctx:start_ut + turn:turn_time, "window", opt:window)).
+  if found:error <> "" {
+    return claudia_finish(ctx, false, found:error, extra).
+  }
+  add node(found:ut, found:radial, found:normal, found:prograde).
   // The ejection burn may be far off (window "next" up to a synodic period away, a UT window
   // further): exec_node warps there on rails, with no cap (ADR 0004).
-  set extra:ejection_wait to round(nextnode:time - ctx:start_ut).
+  set extra:ejection_wait to round(found:ut - ctx:start_ut).
   if opt:max_duration:istype("String") {
-    set opt:max_duration to planned:predicted:arrival:time - ctx:start_ut + 900.
+    set opt:max_duration to found:arrival_ut - ctx:start_ut + 900.
   }
 
   local ejected is claudia_burn(ctx, nextnode).

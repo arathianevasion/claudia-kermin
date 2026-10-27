@@ -535,9 +535,9 @@ namespace ClaudiaKermin.ScriptCheck.Tests
         [Theory]
         [InlineData("transfer_to")]
         [InlineData("return")]
-        public void EachBlockTestScriptBundledWithTheLibraryAndRsvpPasses(string test)
+        public void EachBlockTestScriptBundledWithTheLibraryPasses(string test)
         {
-            // transfer_to plans with the bundled RSVP; return calls the block kOS lets be named return.
+            // transfer_to calls the ejection solver inline; return calls the block kOS lets be named return.
             var script = File.ReadAllText(Path.Combine(RepoRoot(), "tests", "blocks", test, "test.ks"));
             AssertAllowed(CoreLibrary.Bundle(script));
         }

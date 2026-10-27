@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Andrew Watson
 //
 // tune_pe block test (patch next): the Mission Script the debug block test runner starts (bundled with
-// the Core Library and RSVP, as for a real Mission). The reference craft arrives in a 100 km circular
+// the Core Library, as for a real Mission). The reference craft arrives in a 100 km circular
 // Kerbin orbit with no stage fired. transfer_to puts it on a Mun encounter near 30 km; tune_pe must
 // then move the Mun periapsis to 50 km within the default 1 km tolerance and 50 m/s.
 

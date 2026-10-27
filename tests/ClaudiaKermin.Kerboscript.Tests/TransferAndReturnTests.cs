@@ -10,7 +10,7 @@ using Xunit;
 namespace ClaudiaKermin.Kerboscript.Tests
 {
     /// <summary>
-    /// The transfer and return blocks' pure helpers and the bundled RSVP, run on kOS.Safe
+    /// The transfer and return blocks' pure helpers, run on kOS.Safe
     /// through the real bundle. Flying them needs KSP: those are the block tests in tests/blocks.
     /// </summary>
     public class TransferAndReturnTests
@@ -28,22 +28,6 @@ namespace ClaudiaKermin.Kerboscript.Tests
         private static double Number(string expression)
         {
             return double.Parse(One(expression), CultureInfo.InvariantCulture);
-        }
-
-        // ---- RSVP ----
-
-        [Fact]
-        public void Rsvp_loads_from_the_bundle_with_every_function_it_exports_but_compile_to()
-        {
-            var printed = Run("claudia_rsvp(). print rsvp:length. print rsvp:haskey(\"goto\"). print rsvp:haskey(\"line_search\"). print rsvp:haskey(\"time_at_periapsis\"). print rsvp:haskey(\"compile_to\").");
-            Assert.Equal(new[] { "31", "True", "True", "True", "False" }, printed);
-        }
-
-        [Fact]
-        public void Rsvp_loads_once_however_often_a_block_asks_for_it()
-        {
-            // A second load would add every export again, which a lexicon refuses.
-            Assert.Equal("31", One("claudia_rsvp():length + 0 * claudia_rsvp():length"));
         }
 
         // ---- transfer options ----
@@ -79,15 +63,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal("", Unreadable("\"target\", \"Mun\", \"target_pe\", 30000, \"window\", 5000, \"correction\", false"));
         }
 
-        [Fact]
-        public void An_rsvp_failure_gives_its_problems_as_the_reason()
-        {
-            Assert.Equal("rsvp found no transfer: Existing maneuver node already exists; Option 'search_duration' is '-1', expected positive number",
-                One("transfer_to_rsvp_reason(lexicon(\"success\", false, \"problems\", lexicon(102, \"Existing maneuver node already exists\", 4, \"Option 'search_duration' is '-1', expected positive number\")))"));
-            Assert.Equal("rsvp found no transfer", One("transfer_to_rsvp_reason(lexicon(\"success\", false))"));
-        }
-
-        // ---- Departure span ----
+        // ---- Earliest departure ----
 
         [Theory]
         [InlineData("\"next\"", "1300")]
@@ -96,45 +72,6 @@ namespace ClaudiaKermin.Kerboscript.Tests
         public void The_departure_is_searched_from_five_minutes_ahead_or_from_the_window(string window, string earliest)
         {
             Assert.Equal(earliest, One("claudia_earliest(1000, " + window + ")"));
-        }
-
-        [Theory]
-        [InlineData(2, 3, "6")]
-        [InlineData(3, 2, "6")]
-        [InlineData(5, 5, "5")]
-        public void The_next_window_comes_round_once_a_synodic_period(double a, double b, string expected)
-        {
-            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "round(transfer_to_synodic({0}, {1}), 6)", a, b)));
-        }
-
-        private static string[] RsvpOptions(double craftPeriod, double targetPeriod)
-        {
-            return Run(string.Format(CultureInfo.InvariantCulture,
-                "local o is transfer_to_rsvp_options(1300, 30000, {0}, {1}). print o:keys:length. print o:create_maneuver_nodes. print o:final_orbit_periapsis. print o:final_orbit_type. print o:earliest_departure. print round(o:search_duration, 3). print round(o:search_interval, 3). print o:haskey(\"max_time_of_flight\").",
-                craftPeriod, targetPeriod));
-        }
-
-        // #228: a craft in a 100 km Kerbin orbit (1960 s) against the Mun (138984 s). A window comes round
-        // every 1988 s. One synodic period covers every phase of the Mun against the craft, so RSVP finds
-        // the next window, not the cheapest of the 70 in a Mun orbit (60,000 s away in-game). The interval
-        // seeds about 100 departures 20 s apart: the default seeded three, which found 1649 m/s against
-        // about 860.
-        [Fact]
-        public void The_options_passed_to_rsvp_search_the_next_window_densely_and_capture_at_target_pe()
-        {
-            Assert.Equal(new[] { "6", "first", "30000", "circular", "1300", "1988.036", "19.88", "False" }, RsvpOptions(1960, 138984));
-        }
-
-        [Fact]
-        public void The_search_is_the_same_whichever_orbit_is_the_craft()
-        {
-            Assert.Equal(RsvpOptions(1960, 138984), RsvpOptions(138984, 1960));
-        }
-
-        [Fact]
-        public void Equal_periods_search_one_period_rather_than_forever()
-        {
-            Assert.Equal(new[] { "6", "first", "30000", "circular", "1300", "5000", "50", "False" }, RsvpOptions(5000, 5000));
         }
 
         // ---- Coordinate descent ----
@@ -160,6 +97,21 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         // ---- return ----
+
+        // return's periapsis time was RSVP's time_at_periapsis; mean anomaly is zero at periapsis.
+        [Theory]
+        [InlineData(700000, 90, "0.75")]
+        [InlineData(700000, 270, "0.25")]
+        [InlineData(-9000000, -10, null)]
+        public void The_next_periapsis_comes_when_the_mean_anomaly_reaches_zero(double a, double meanAnomaly, string orbits)
+        {
+            var orb = string.Format(CultureInfo.InvariantCulture,
+                "lexicon(\"body\", lexicon(\"mu\", 3.5316e12), \"semimajoraxis\", {0}, \"meananomalyatepoch\", {1}, \"epoch\", 1000)", a, meanAnomaly);
+            // A hyperbola's mean anomaly runs on from negative: 10 degrees short is 10 / 360 of a "period" at its mean motion.
+            var fraction = orbits ?? (10 / 360.0).ToString(CultureInfo.InvariantCulture);
+            var expected = string.Format(CultureInfo.InvariantCulture, "round(return_pe_ut({0}) - 1000 - {1} * 2 * 3.141592653589793 * sqrt(abs({2}) ^ 3 / 3.5316e12), 3)", orb, fraction, a);
+            Assert.Equal("0", One(expected));
+        }
 
         [Fact]
         public void Return_options_take_the_spec_defaults()

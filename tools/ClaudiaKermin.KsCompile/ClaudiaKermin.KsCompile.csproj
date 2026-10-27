@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <!--
-  The Script Check from the command line: CI runs it over every shipped script (the Core Library, RSVP
+  The Script Check from the command line: CI runs it over every shipped script (the Core Library
   and the debug scripts) with the same code the mod runs (ClaudiaKermin.ScriptCheck). Not part of the mod.
   kOS.Safe comes from a local kOS install (KOSPluginsDir) or, in CI, from the public kOS release, and is
   copied next to the tool so it can run.
