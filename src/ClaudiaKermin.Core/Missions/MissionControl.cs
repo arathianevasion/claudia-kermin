@@ -200,6 +200,8 @@ namespace ClaudiaKermin.Core.Missions
             public DebriefGate Gate;
             /// <summary>The tool loop's steps so far (MissionControl.Tools.cs): each added Claude's tool_use reply and its results to <see cref="Messages"/>.</summary>
             public int ToolSteps;
+            /// <summary>What the turn has used over all its requests, for the per-plan log (MissionControl.PlanLog.cs); a rewrite after a failed Script Check carries its turn's on.</summary>
+            public TurnStats Stats = new TurnStats();
             /// <summary>The step limit's "reply now" results have gone: another tool call fails the turn.</summary>
             public bool ToolLimitSent;
             /// <summary>The Game Snapshot taken for the turn when its messages were built: what its tools calculate from.</summary>
@@ -981,6 +983,7 @@ namespace ClaudiaKermin.Core.Missions
             LogCost(mission, "pending", worstCase, "");
             mission.InFlight = true;
             mission.Activity = Thinking(turn);
+            turn.Stats.Sent();
             turn.Cancel = new CancellationTokenSource();
             var cancel = turn.Cancel.Token;
             var dump = mission.Dump;
@@ -1178,7 +1181,9 @@ namespace ClaudiaKermin.Core.Missions
             mission.Activity = "";
             turn.Cancel.Dispose();
             // Settled and logged before the reply is applied, which may send the next request.
+            var spentBefore = mission.Spent;
             Settle(mission, turn, result);
+            turn.Stats.Ended(mission.Spent - spentBefore, result != null && result.Status == StreamStatus.Completed ? result.Message : null);
             LogCost(mission, mission.Settlement, mission.Settled, mission.Outcome);
             // The Mission was dropped (End Mission, or another save loaded) while this request ran.
             if (mission != _mission) return;
@@ -1311,6 +1316,7 @@ namespace ClaudiaKermin.Core.Missions
             var planPending = mission.Stage == MissionStage.AwaitingPlanApproval;
             // The Script Check (ADR 0003) comes first: the player never sees a plan whose script fails it.
             var offered = SequenceOffered(turn.Purpose, reply, planPending);
+            IList<string> checkWarnings = new List<string>();
             if (offered != null)
             {
                 var check = CheckScript(offered);
@@ -1319,6 +1325,7 @@ namespace ClaudiaKermin.Core.Missions
                     ScriptCheckFailed(mission, turn, offered, check.Problems);
                     return;
                 }
+                checkWarnings = check.Warnings;
             }
 
             // Only a vessel that left the craft may be a Child Vessel: the player never sees a plan that names another.
@@ -1346,6 +1353,7 @@ namespace ClaudiaKermin.Core.Missions
                     break;
                 case Purpose.Debrief:
                     Debriefed(mission, reply);
+                    LogDebrief(mission, turn, reply.Debrief);
                     break;
                 case Purpose.Reply:
                     // ADR 0002: Claude's reading of typed words never starts anything; only a button press does.
@@ -1363,6 +1371,7 @@ namespace ClaudiaKermin.Core.Missions
                     Alerted(mission, turn, reply);
                     break;
             }
+            if (reply.SequencePlan != null && ReferenceEquals(mission.PendingSequence, reply.SequencePlan)) LogPlan(mission, turn, reply.SequencePlan, checkWarnings);
         }
 
         /// <summary>The ids a Mission Plan this reply would offer names as Child Vessels without their having left the craft; empty if it offers none.</summary>
@@ -1453,6 +1462,7 @@ namespace ClaudiaKermin.Core.Missions
                 {
                     Purpose = Purpose.SequencePlan,
                     ScriptRewrite = true,
+                    Stats = turn.Stats,
                     UserText = MissionPrompts.ScriptCheckFailed(problems),
                     Notice = MissionPrompts.RewriteNotice,
                 });

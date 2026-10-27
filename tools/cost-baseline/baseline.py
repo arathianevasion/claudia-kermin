@@ -420,6 +420,102 @@ def mission_stats(M, prices_total=None):
     return S, legs
 
 
+def load_plans(folder):
+    """The Mission's per-plan log (plans.jsonl, #286): one dict per readable plan line; a bad line is skipped."""
+    plans = []
+    try:
+        with open(os.path.join(folder, 'plans.jsonl'), encoding='utf-8', errors='replace') as f:
+            for line in f:
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(d, dict) and d.get('event') == 'plan':
+                    plans.append(d)
+    except OSError:
+        pass
+    return plans
+
+
+def _num(d, key):
+    v = d.get(key) if isinstance(d, dict) else None
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else 0
+
+
+def _cell(x):
+    """Untrusted text in one table cell: no pipe, no line break, and a bounded length."""
+    return re.sub(r'[|\r\n]+', ' ', str(x))[:60]
+
+
+def _counts(d):
+    """A {name: count} object as text, e.g. 'predict_burn x2, stage_performance'."""
+    if not isinstance(d, dict) or not d:
+        return '-'
+    return ', '.join(k if n == 1 else '%s x%d' % (k, n) for k, n in sorted(d.items()) if isinstance(n, int))
+
+
+def plans_report(plans):
+    """Markdown lines of per-plan figures. `plans` is a list of (mission id, plan line dict) from `load_plans`."""
+    out = []
+    if not plans:
+        return out
+    out.append('## Per Sequence Plan (from `plans.jsonl`)')
+    out.append('')
+    out.append('Cost is the plan\'s own requests (tool steps, a Second look, a cut-off retry, a Script Check rewrite); the '
+               'Debrief\'s cost is in its own column. Thinking tokens are estimated: the API reports output tokens only, so '
+               'it is the output less three characters a token of the visible reply.')
+    out.append('')
+    out.append('| Mission | Plan | Name | Effort | Tools | Blocks | Custom (code lines) | Lints | Requests | Cost | Thinking | '
+               'Reply time | Second look | Cut-off retry | Debrief | Debrief cost |')
+    out.append('|---|---:|---|---|---|---|---|---:|---:|---:|---:|---:|---|---|---|---:|')
+    for mid, p in plans:
+        deb = p.get('debrief') if isinstance(p.get('debrief'), dict) else None
+        out.append('| %s | %s | %s | %s | %s | %s | %s | %d | %d | $%.4f | %s | %s | %s | %s | %s | %s |' % (
+            _cell(mid), _cell(p.get('plan', '?')), _cell(p.get('name', '')), _cell(p.get('effort', '')),
+            _cell(_counts(p.get('tools'))), _cell(_counts(p.get('blocks'))),
+            ('yes (%d)' % _num(p, 'custom_lines')) if p.get('custom_script') else 'no',
+            len(p.get('lints') or []), _num(p, 'requests'), _num(p, 'cost'), tok(_num(p, 'thinking_tokens')),
+            '%.1f s' % _num(p, 'reply_seconds'), 'yes' if p.get('second_look') else 'no',
+            'yes' if p.get('cut_off_retry') else 'no', _cell(deb.get('outcome', '?')) if deb else 'not yet',
+            ('$%.4f' % _num(deb, 'cost')) if deb else '-'))
+    out.append('')
+
+    def group(label, ps):
+        if not ps:
+            return
+        costs = [_num(p, 'cost') for p in ps]
+        secs = [_num(p, 'reply_seconds') for p in ps]
+        debs = [p['debrief'] for p in ps if isinstance(p.get('debrief'), dict)]
+        bad = sum(1 for d in debs if d.get('outcome') in ('Off-Nominal', 'Failed'))
+        with_deb = [_num(p, 'cost') + _num(p['debrief'], 'cost') for p in ps if isinstance(p.get('debrief'), dict)]
+        out.append('| %s | %d | $%.4f | $%.4f | %s | %s | %s | %d | %d | %d | %s |' % (
+            label, len(ps), sum(costs), statistics.mean(costs), fmt_s(q(secs, .5)), fmt_s(q(secs, .9)),
+            tok(sum(_num(p, 'thinking_tokens') for p in ps)), sum(1 for p in ps if p.get('second_look')),
+            sum(1 for p in ps if p.get('cut_off_retry')), sum(1 for p in ps if _num(p, 'tool_calls')),
+            ('%d of %d Off-Nominal or Failed; $%.4f a debriefed plan' % (bad, len(debs), statistics.mean(with_deb)))
+            if debs else 'no Debrief yet'))
+
+    every = [p for _, p in plans]
+    out.append('| Plans | Count | Cost | Mean cost | Reply p50 | p90 | Thinking | Second looks | Cut-off retries | '
+               'Used tools | Debriefs |')
+    out.append('|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|')
+    group('All', every)
+    group('Custom Script', [p for p in every if p.get('custom_script')])
+    group('Building Blocks only', [p for p in every if not p.get('custom_script')])
+    group('With lints', [p for p in every if p.get('lints')])
+    called = collections.Counter()
+    for p in every:
+        if isinstance(p.get('tools'), dict):
+            for name, n in p['tools'].items():
+                if isinstance(n, int):
+                    called[name] += n
+    if called:
+        out.append('')
+        out.append('Planning Tool calls: ' + ', '.join('%s %d' % kv for kv in sorted(called.items())))
+    out.append('')
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('saves', nargs='?', default=os.path.expanduser('~/KSP_spike/saves'))
@@ -515,6 +611,8 @@ def main():
     w('')
     w('Legs are distinct Sequence Plan names within a Mission; the total sums per-Mission counts.')
     w('')
+    plans = [(os.path.basename(f.rstrip('/')), p) for f in folders for p in load_plans(f)]
+    out.extend(plans_report(plans))
 
     # Check the computed cost against the mod's own paid amounts.
     diffs = []

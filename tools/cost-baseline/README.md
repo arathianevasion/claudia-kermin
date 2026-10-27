@@ -29,6 +29,22 @@ python3 -I tools/cost-baseline/baseline.py ~/KSP_spike/saves --out docs/research
 - Prices are in `PRICES` at the top of the script. Check them against
   <https://platform.claude.com/docs/en/about-claude/pricing> before each run.
 
+## Per-plan log (`plans.jsonl`, #286)
+
+The mod writes one JSON line per Sequence Plan offered to `plans.jsonl` in the Mission folder, and `baseline.py` adds a
+"Per Sequence Plan" section from it: a row per plan, then totals for all plans, Custom Scripts, Building Blocks only and plans
+with lints. The log is rewritten, not appended to: when that sequence's Debrief commits, the latest plan's line gains a
+`debrief` object (`outcome`, and the Debrief turn's own `effort`, `requests`, `cost`, `second_look`, ...). The rewrite is atomic.
+A plan whose Debrief has not come shows "not yet".
+
+Fields of a line: `plan` (1, 2, ... in the file), `name`, `purpose` (the turn that made it), `manual`, `tools` and `tool_calls`
+(Planning Tools called, with counts), `blocks` (Building Blocks the script calls, with counts), `custom_script`, `custom_lines`
+(lines of code, not blank or comment), `lints`, `effort`, `requests`, `output_tokens`, `thinking_tokens`, `reply_seconds`,
+`cost` (what the plan's requests added to the Mission's spend), `second_look` (the reason, or null), `cut_off_retry`,
+`script_rewrite`, `at`. The figures cover every request of the turn that made the plan, including a discarded first reply, tool
+steps, and a Script Check rewrite; they restart from zero if the game is loaded mid-turn. `thinking_tokens` is an estimate: the
+API reports output tokens only, so it is the output less the visible reply at three characters a token.
+
 ## Replay screen for effort cuts (`replay.py`)
 
 Proves an effort cut on recorded requests (#269, spec #265). Developer tooling outside the mod; stdlib only.

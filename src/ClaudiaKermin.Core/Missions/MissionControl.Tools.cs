@@ -129,6 +129,7 @@ namespace ClaudiaKermin.Core.Missions
                 if (atLimit) turn.ToolLimitSent = true;
                 foreach (var call in step.Calls)
                 {
+                    turn.Stats.Called(call.Name);
                     Note(LogKind.Notice, "Planning Tool " + call.Name + " (" + Shorten(call.InputJson) + "): " + (call.IsError ? "error: " : "") + call.Summary);
                     Event(mission, "tool", call.Name + " " + call.InputJson + " -> " + (call.IsError ? "error: " : "") + call.Summary);
                 }
