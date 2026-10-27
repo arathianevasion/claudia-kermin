@@ -276,7 +276,8 @@ namespace ClaudiaKermin.Core.Missions
         }
 
         /// <summary>Re-plan: after "Couldn't produce a safe script", or when the craft changed beyond the pending plan's tolerances.</summary>
-        private void Replanned()
+        /// <param name="inAdvance">The re-plan is the player's Approval given in advance (a Blackout, Auto Mode: MissionControl.AutoMode.cs), not their button.</param>
+        private void Replanned(bool inAdvance = false)
         {
             var mission = _mission;
             if (mission != null && mission.Stage == MissionStage.UnsafeScript)
@@ -287,17 +288,22 @@ namespace ClaudiaKermin.Core.Missions
             var stale = StaleBecause(mission);
             if (stale.Length == 0 || !CanAnswerPlan) return;
             var missionPlan = mission.Stage == MissionStage.AwaitingPlanApproval;
-            // In a Blackout Claudia re-plans herself (MissionControl.Blackout.cs); otherwise it is the player's button.
-            Note(mission.Blackout ? LogKind.Notice : LogKind.Player, "Re-plan: the craft changed (" + stale + ").");
+            Note(inAdvance ? LogKind.Notice : LogKind.Player, "Re-plan: the craft changed (" + stale + ").");
             mission.ConfirmPrompt = null;
             mission.PlanBaseline = null;
             mission.Stage = missionPlan ? MissionStage.Planning : MissionStage.Sequencing;
-            Begin(new Turn
+            Begin(ReplanTurn(stale, missionPlan));
+        }
+
+        /// <summary>The turn that asks for the stale plan again; also the probe the Auto Mode room check prices.</summary>
+        private Turn ReplanTurn(string stale, bool missionPlan)
+        {
+            return new Turn
             {
                 Purpose = missionPlan ? Purpose.MissionPlan : Purpose.SequencePlan,
                 UserText = MissionPrompts.ReplanBecauseCraftChanged(stale, missionPlan) + "\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = missionPlan ? MissionPrompts.PlanNotice : MissionPrompts.SequenceNotice,
-            });
+            };
         }
     }
 }

@@ -50,6 +50,8 @@ namespace ClaudiaKermin.Core.Missions
         public bool DueNotified;
         /// <summary>The Mission is remote: Claudia is at Mission Control, not aboard. A save from before this existed reads as crewed.</summary>
         public bool Remote;
+        /// <summary>The Mission is in Auto Mode: the player's Approval is given in advance. A save from before this existed reads as off.</summary>
+        public bool AutoMode;
         /// <summary>While Paused for EVA science: what the player is to do by hand; "" otherwise.</summary>
         public string EvaScience = "";
         /// <summary>In Manual Control (or its Hand back Debrief): the stretch was planned, so its Debrief is judged against the target.</summary>
@@ -134,6 +136,7 @@ namespace ClaudiaKermin.Core.Missions
                 { "vesselName", VesselName },
                 { "dueNotified", DueNotified ? "true" : "false" },
                 { "remote", Remote ? "true" : "false" },
+                { "auto_mode", AutoMode ? "true" : "false" },
                 { "evaScience", EvaScience },
                 { "manualPlanned", ManualPlanned ? "true" : "false" },
                 { "manualOrigin", ManualOrigin },
@@ -193,6 +196,7 @@ namespace ClaudiaKermin.Core.Missions
                 VesselName = Get(values, "vesselName"),
                 DueNotified = Get(values, "dueNotified") == "true",
                 Remote = Get(values, "remote") == "true",
+                AutoMode = Get(values, "auto_mode") == "true",
                 EvaScience = Get(values, "evaScience"),
                 ManualPlanned = Get(values, "manualPlanned") == "true",
                 ManualOrigin = Get(values, "manualOrigin"),

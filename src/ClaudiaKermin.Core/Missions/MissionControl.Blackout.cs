@@ -53,7 +53,7 @@ namespace ClaudiaKermin.Core.Missions
             _craftLink = seen.Linked;
         }
 
-        /// <summary>After every input: a Blackout begins or ends with the link, and a plan in hand flies under the approved Mission Plan.</summary>
+        /// <summary>After every input: a Blackout begins or ends with the link, and a plan in hand may have the player's Approval in advance (MissionControl.AutoMode.cs).</summary>
         private void CheckBlackout()
         {
             var mission = _mission;
@@ -66,7 +66,7 @@ namespace ClaudiaKermin.Core.Missions
             var dark = !MissionOver && FollowsCraft(mission) && _craftLink == false;
             if (dark && !mission.Blackout) BlackoutBegins(mission);
             else if (!dark && mission.Blackout && _craftLink != false) BlackoutEnds(mission);
-            FlyInBlackout(mission);
+            ApproveInAdvance(mission);
         }
 
         private void BlackoutBegins(Mission mission)
@@ -124,52 +124,21 @@ namespace ClaudiaKermin.Core.Missions
             });
         }
 
-        /// <summary>
-        /// In a Blackout, a plan in hand needs no Approval: the player approved the Mission Plan. A Sequence Plan runs and a
-        /// revised Mission Plan is taken, each recorded for the player with her reasons. The first Mission Plan (no sequence
-        /// asked for yet), a manual stretch and a plan with a Due Time wait for the player.
-        /// </summary>
-        private void FlyInBlackout(Mission mission)
+        /// <summary>A plan that waits for the player even in a Blackout (<see cref="ApproveInAdvance"/>) says so in the log, once.</summary>
+        private void WaitsForLink(Mission mission, AdvanceWait wait, string planName)
         {
-            if (!mission.Blackout || MissionOver || !CanAnswerPlan || mission.Declined) return;
-            mission.ConfirmPrompt = null;
-            var stale = StaleBecause(mission);
-            if (mission.Stage == MissionStage.AwaitingPlanApproval)
+            switch (wait)
             {
-                if (mission.SequencesProposed == 0)
-                {
+                case AdvanceWait.FirstMissionPlan:
                     WaitsForLink(mission, "The Mission Plan waits for your Approval when the link returns: you haven't approved one yet.");
-                    return;
-                }
-                if (stale.Length > 0)
-                {
-                    Replanned();
-                    return;
-                }
-                mission.BlackoutRevisions.Add("Mission Plan revised: " + mission.Plan.Why);
-                Approval();
-                return;
+                    break;
+                case AdvanceWait.ManualStretch:
+                    WaitsForLink(mission, "The manual stretch " + MissionPrompts.Quoted(planName) + " waits for you when the link returns.");
+                    break;
+                case AdvanceWait.DueTime:
+                    WaitsForLink(mission, "The Sequence Plan " + MissionPrompts.Quoted(planName) + " has a Due Time for you, so it waits for the link.");
+                    break;
             }
-            var plan = mission.PendingSequence;
-            if (plan == null) return;
-            if (plan.Manual)
-            {
-                WaitsForLink(mission, "The manual stretch " + MissionPrompts.Quoted(plan.Name) + " waits for you when the link returns.");
-                return;
-            }
-            // A Due Time is a wait that needs the player (ADR 0004), so the plan waits for the link even once it is reached.
-            if (plan.DueTimeUt.HasValue)
-            {
-                WaitsForLink(mission, "The Sequence Plan " + MissionPrompts.Quoted(plan.Name) + " has a Due Time for you, so it waits for the link.");
-                return;
-            }
-            if (stale.Length > 0)
-            {
-                Replanned();
-                return;
-            }
-            mission.BlackoutRevisions.Add("Sequence Plan " + MissionPrompts.Quoted(plan.Name) + " flown without Approval: " + plan.Why);
-            Approval();
         }
 
         private void WaitsForLink(Mission mission, string text)

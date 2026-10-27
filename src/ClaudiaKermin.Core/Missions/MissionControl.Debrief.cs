@@ -200,8 +200,11 @@ namespace ClaudiaKermin.Core.Missions
             probe.Messages.AddRange(Sent(mission));
             probe.Messages.Add(Message.UserText(turn.UserText));
             probe.Messages.Add(Message.SystemText(turn.Notice));
-            return _config.Prices.WorstCase(mission.Model, (probe.ToJson().Length + 4000 + 2) / 3, probe.MaxTokens);
+            return _config.Prices.WorstCase(mission.Model, (probe.ToJson().Length + ProbeSlack + 2) / 3, probe.MaxTokens);
         }
+
+        /// <summary>Characters of slack a probed request carries for what can't be known yet (the recheck's text, the run's report).</summary>
+        private const int ProbeSlack = 4000;
 
         /// <summary>The recheck came back (or failed): it is paid for, its findings join the Debrief request, and the request goes.</summary>
         private void Rechecked(Mission mission, Turn turn, Turn probe, StreamResult result)
@@ -518,13 +521,18 @@ namespace ClaudiaKermin.Core.Missions
                 });
                 return;
             }
-            var offNominal = debrief.Outcome == "Off-Nominal";
-            Begin(new Turn
+            Begin(NextSequenceTurn(debrief.Outcome == "Off-Nominal"));
+        }
+
+        /// <summary>The Sequence Plan request after a Debrief; also the probe the Auto Mode room check prices (MissionControl.AutoMode.cs).</summary>
+        private Turn NextSequenceTurn(bool offNominal)
+        {
+            return new Turn
             {
                 Purpose = Purpose.SequencePlan,
                 UserText = (offNominal ? "Continue the Mission with a corrective sequence.\n" : "Continue the Mission.\n") + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.SequenceNotice,
-            });
+            };
         }
     }
 

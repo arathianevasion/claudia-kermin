@@ -227,6 +227,7 @@ namespace ClaudiaKermin.Core.Tests
                 config.DefaultDaylightLanding = false;
                 config.DefaultTimeVersusDeltaV = Missions.TimeVersusDeltaV.MostEfficient;
                 config.DefaultRemote = true;
+                config.DefaultAutoMode = true;
                 config.SaveDefaults(dir.Sub);
 
                 var loaded = PlayerConfig.LoadOrCreate(dir.Sub);
@@ -236,6 +237,7 @@ namespace ClaudiaKermin.Core.Tests
                 Assert.False(loaded.DefaultDaylightLanding);
                 Assert.Equal(Missions.TimeVersusDeltaV.MostEfficient, loaded.DefaultTimeVersusDeltaV);
                 Assert.True(loaded.DefaultRemote);
+                Assert.True(loaded.DefaultAutoMode);
             }
         }
 
@@ -258,6 +260,7 @@ namespace ClaudiaKermin.Core.Tests
                     + "daylight_landing = true\n"
                     + "time_vs_dv = Balanced\n"
                     + "default_remote = false\n"
+                    + "default_auto_mode = false\n"
                     + "runaway_multiplier = 250%\n");
 
                 var config = PlayerConfig.LoadOrCreate(dir.Sub);
@@ -266,6 +269,7 @@ namespace ClaudiaKermin.Core.Tests
                 config.DefaultDaylightLanding = false;
                 config.DefaultTimeVersusDeltaV = Missions.TimeVersusDeltaV.Fastest;
                 config.DefaultRemote = true;
+                config.DefaultAutoMode = true;
                 config.SaveDefaults(dir.Sub);
 
                 Assert.Equal(
@@ -280,6 +284,7 @@ namespace ClaudiaKermin.Core.Tests
                     + "daylight_landing = false\n"
                     + "time_vs_dv = Fastest\n"
                     + "default_remote = true\n"
+                    + "default_auto_mode = true\n"
                     + "runaway_multiplier = 250%\n",
                     File.ReadAllText(path));
                 Assert.Equal(2.5, PlayerConfig.LoadOrCreate(dir.Sub).RunawayMultiplier);
@@ -293,17 +298,20 @@ namespace ClaudiaKermin.Core.Tests
             {
                 Directory.CreateDirectory(dir.Sub);
                 var path = Path.Combine(dir.Sub, PlayerConfig.FileName);
-                // An older file: no default_remote, and the player deleted the cap line. No final newline either.
+                // An older file: no default_remote or default_auto_mode, and the player deleted the cap line. No final newline either.
                 File.WriteAllText(path, "# old\r\ndebug_tools = false\r\nmodels = claude-sonnet-5-5\r\ndaylight_landing = true\r\ntime_vs_dv = Balanced");
 
                 var config = PlayerConfig.LoadOrCreate(dir.Sub);
                 config.DefaultRemote = true;
+                config.DefaultAutoMode = true;
                 config.SaveDefaults(dir.Sub);
 
                 var text = File.ReadAllText(path);
                 Assert.StartsWith("# old\r\ndebug_tools = false\r\nmodels = claude-sonnet-5-5\r\ndaylight_landing = true\r\ntime_vs_dv = Balanced\r\n", text);
-                Assert.EndsWith("default_spending_cap = 10\r\n# Mission type prefilled in the start form: false is crewed (Claudia flies aboard), true is remote (Claudia at Mission Control).\r\ndefault_remote = true\r\n", text);
+                Assert.EndsWith("default_spending_cap = 10\r\n# Mission type prefilled in the start form: false is crewed (Claudia flies aboard), true is remote (Claudia at Mission Control).\r\ndefault_remote = true\r\n"
+                    + "# Start new Missions in Auto Mode: Claudia's plans after the first Mission Plan are approved for you while the Spending Cap has room.\r\ndefault_auto_mode = true\r\n", text);
                 Assert.True(PlayerConfig.LoadOrCreate(dir.Sub).DefaultRemote);
+                Assert.True(PlayerConfig.LoadOrCreate(dir.Sub).DefaultAutoMode);
             }
         }
 
@@ -314,6 +322,16 @@ namespace ClaudiaKermin.Core.Tests
             {
                 Assert.False(PlayerConfig.LoadOrCreate(dir.Sub).DefaultRemote);
                 Assert.Contains("default_remote = false", File.ReadAllText(Path.Combine(dir.Sub, PlayerConfig.FileName)));
+            }
+        }
+
+        [Fact]
+        public void ANewConfigFileStartsMissionsWithAutoModeOff()
+        {
+            using (var dir = new TempDir())
+            {
+                Assert.False(PlayerConfig.LoadOrCreate(dir.Sub).DefaultAutoMode);
+                Assert.Contains("default_auto_mode = false", File.ReadAllText(Path.Combine(dir.Sub, PlayerConfig.FileName)));
             }
         }
 

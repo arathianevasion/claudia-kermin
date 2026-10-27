@@ -328,6 +328,8 @@ namespace ClaudiaKermin.Core.Missions
         public string PauseReason = "";
         /// <summary>The Mission is flown remotely: Claudia is at Mission Control, not aboard.</summary>
         public bool Remote;
+        /// <summary>The Mission is in Auto Mode: Claudia's plans after the first Mission Plan are approved as they arrive, while the Spending Cap has room.</summary>
+        public bool AutoMode;
         /// <summary>While Paused for EVA science: what the player is to do by hand, then Resume; "" otherwise.</summary>
         public string EvaScience = "";
         /// <summary>

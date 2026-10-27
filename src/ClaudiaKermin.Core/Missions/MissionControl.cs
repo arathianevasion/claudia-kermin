@@ -130,6 +130,7 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is DeleteMission) DeleteRequested(((DeleteMission)input).Id);
             else if (input is GoToMissionVessel) GoToMissionVesselRequested(((GoToMissionVessel)input).Id);
             else if (input is CraftLinkSeen) CraftLinkReported((CraftLinkSeen)input);
+            else if (input is SetAutoMode) AutoModeSet(((SetAutoMode)input).On);
             CheckDue();
             CheckBlackout();
             CheckScriptWarp();
@@ -357,6 +358,7 @@ namespace ClaudiaKermin.Core.Missions
                 Folder = MissionFolder.For(_saveDirectory, id),
                 Stage = MissionStage.WaitingForFlight,
                 Remote = start.Remote,
+                AutoMode = _config.DefaultAutoMode,
             };
             // Frozen for the whole Mission, so the cached prefix never changes.
             mission.System.Add(MissionPrompts.BaseLayer);
@@ -1261,7 +1263,7 @@ namespace ClaudiaKermin.Core.Missions
             if (mission.DeferredRestore != null) return;
 
             Apply(mission, turn, reply, message.FallbackRan ? message.Model ?? "" : "");
-            if (mission == _mission) FlyInBlackout(mission);
+            if (mission == _mission) ApproveInAdvance(mission);
 
             SendQueued(mission);
         }
@@ -1938,6 +1940,7 @@ namespace ClaudiaKermin.Core.Missions
                 view.Activity = view.Busy ? mission.Activity : "";
                 view.PauseReason = mission.PauseReason;
                 view.Remote = mission.Remote;
+                view.AutoMode = mission.AutoMode;
                 view.EvaScience = mission.EvaScience;
                 view.ConfirmPrompt = mission.ConfirmPrompt;
                 view.CapWait = mission.CapWaitText;
