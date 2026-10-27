@@ -151,7 +151,7 @@ namespace ClaudiaKermin.KOS
         {
             var shared = Gated();
             if (shared != null)
-                Gate(shared, new GateCall { Target = GateTarget.TimeWarp, Suffix = "MODE", IsSet = true, Value = modeString == null ? "" : modeString.ToString() });
+                Gate(shared, WithPhysicsWarp(shared, new GateCall { Target = GateTarget.TimeWarp, Suffix = "MODE", IsSet = true, Value = modeString == null ? "" : modeString.ToString() }));
         }
 
         private static void WarpIndexPrefix(ScalarIntValue newIndex)
@@ -193,14 +193,24 @@ namespace ClaudiaKermin.KOS
 
         private static void GateWarp(SharedObjects shared, int index)
         {
-            Gate(shared, new GateCall
+            Gate(shared, WithPhysicsWarp(shared, new GateCall
             {
                 Target = GateTarget.TimeWarp,
                 Suffix = "WARP",
                 IsSet = true,
                 WarpRateIndex = index,
                 PhysicsWarpMode = TimeWarp.WarpMode == TimeWarp.Modes.LOW,
-            });
+            }));
+        }
+
+        /// <summary>Adds what the physics-warp gate needs (ADR 0008): the switch, the warp now in force, and whether the processor's craft is on a Coast.</summary>
+        private static GateCall WithPhysicsWarp(SharedObjects shared, GateCall call)
+        {
+            call.PhysicsWarpAllowed = KosGates.PhysicsWarpAllowed;
+            call.CurrentWarpIndex = TimeWarp.CurrentRateIndex;
+            var vessel = shared.KSPPart == null ? null : shared.KSPPart.vessel;
+            call.OnCoast = vessel != null && CoastGuard.OnCoast(vessel);
+            return call;
         }
 
         private static void ArchiveWritePrefix()

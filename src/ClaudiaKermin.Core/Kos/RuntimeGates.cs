@@ -52,6 +52,18 @@ namespace ClaudiaKermin.Core.Kos
         /// <summary>KSP's warp mode is physics warp now.</summary>
         public bool PhysicsWarpMode;
 
+        /// <summary>The warp rate index now in force; the mode switch to PHYSICS is allowed only at 0 (1x).</summary>
+        public int CurrentWarpIndex;
+
+        /// <summary>The craft is on a Coast now (<see cref="CoastCheck"/>).</summary>
+        public bool OnCoast;
+
+        /// <summary>
+        /// Physics warp is allowed at all: the <c>physics_warp</c> player config now, and the Mission Setting later (ADR 0008).
+        /// False unless the caller sets it, so a forgotten input refuses.
+        /// </summary>
+        public bool PhysicsWarpAllowed;
+
         /// <summary>The vessel, part or module belongs to a vessel other than the running processor's.</summary>
         public bool OtherVessel;
 
@@ -85,6 +97,19 @@ namespace ClaudiaKermin.Core.Kos
             "DEPLOY", "RESET", "TRANSMIT", "DUMP", "DUMPDATA", "COLLECTALL",
             "ACTIVATE", "DEACTIVATE");
 
+        /// <summary>The highest warp rate index physics warp may reach: 4x (<c>WARP</c> 0 to 3).</summary>
+        public const int MaxPhysicsWarpIndex = 3;
+
+        /// <summary>
+        /// Physics warp from a mod-started program (ADR 0008): only with the switch on and on a Coast, and within
+        /// <paramref name="otherLimit"/> (the cap, or the mode switch's 1x); null if it may go ahead.
+        /// </summary>
+        private static string PhysicsWarpRefusal(GateCall call, string what, string otherLimit)
+        {
+            var why = !call.PhysicsWarpAllowed ? "physics warp is off" : !call.OnCoast ? "off a Coast" : otherLimit;
+            return why == null ? null : "physics warp (" + what + ", " + why + ")";
+        }
+
         /// <summary>What the call tries, for "blocked: …", if a gate refuses it; null if it may go ahead.</summary>
         public static string Refuses(GateCall call)
         {
@@ -98,11 +123,11 @@ namespace ClaudiaKermin.Core.Kos
                     return call.IsSet ? "SET CONFIG:" + suffix : null;
                 case GateTarget.TimeWarp:
                     if (suffix == "MODE" && string.Equals((call.Value ?? "").Trim(), "PHYSICS", StringComparison.OrdinalIgnoreCase))
-                        return "physics warp (warp mode PHYSICS)";
+                        return PhysicsWarpRefusal(call, "warp mode PHYSICS", call.CurrentWarpIndex > 0 ? "not at 1x" : null);
                     if (suffix == "WARP" && call.PhysicsWarpMode && call.WarpRateIndex > 0)
-                        return "physics warp (warp " + call.WarpRateIndex + ")";
+                        return PhysicsWarpRefusal(call, "warp " + call.WarpRateIndex, call.WarpRateIndex > MaxPhysicsWarpIndex ? "above the 4x cap" : null);
                     // KSP's warp-to warps in whatever mode is set, never changing it (issue #133): in physics
-                    // mode it would physics-warp past the WARP gate, so it is refused there. Rails mode is fine.
+                    // mode it would physics-warp past the WARP gate, so it is refused there (ADR 0004). Rails mode is fine.
                     if (suffix == "WARPTO" && call.PhysicsWarpMode)
                         return "physics warp (WARPTO in warp mode PHYSICS)";
                     return null;
@@ -184,6 +209,12 @@ namespace ClaudiaKermin.Core.Kos
         {
             int runId;
             return processor.HasValue && _runs.TryGetValue(processor.Value, out runId) ? runId : (int?)null;
+        }
+
+        /// <summary>The gated processors' part <c>persistentId</c>s.</summary>
+        public IEnumerable<uint> Processors
+        {
+            get { return _runs.Keys; }
         }
 
         /// <summary>True while any processor is gated; the patches check this first, as most calls happen with none.</summary>

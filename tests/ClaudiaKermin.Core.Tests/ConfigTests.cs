@@ -88,6 +88,22 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void PhysicsWarpIsOnByDefaultWrittenToTheFileAndReadFromIt()
+        {
+            using (var dir = new TempDir())
+            {
+                Assert.True(PlayerConfig.LoadOrCreate(dir.Sub).PhysicsWarp);
+                var path = Path.Combine(dir.Sub, PlayerConfig.FileName);
+                Assert.Contains("physics_warp = true", File.ReadAllText(path));
+
+                File.WriteAllText(path, "physics_warp = false\n");
+                Assert.False(PlayerConfig.LoadOrCreate(dir.Sub).PhysicsWarp);
+                File.WriteAllText(path, "physics_warp = TRUE\n");
+                Assert.True(PlayerConfig.LoadOrCreate(dir.Sub).PhysicsWarp);
+            }
+        }
+
+        [Fact]
         public void SavingAnEmptyKeyIsRejected()
         {
             using (var dir = new TempDir())

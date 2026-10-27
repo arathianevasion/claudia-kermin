@@ -43,7 +43,6 @@ namespace ClaudiaKermin.ScriptCheck
         private readonly List<string> _findings = new List<string>();
         private readonly HashSet<string> _seen = new HashSet<string>();
         private readonly HashSet<string> _otherVesselVariables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private readonly HashSet<string> _timewarpVariables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         /// <summary>Another vessel is passed to a user function somewhere, so any parameter may hold one.</summary>
         private bool _otherVesselPassed;
         private bool _recording;
@@ -109,7 +108,6 @@ namespace ClaudiaKermin.ScriptCheck
             {
                 merged.Alternatives.AddRange(Each(value));
                 merged.OtherVessel |= value.OtherVessel;
-                if (value.Suffix == "timewarp") merged.Suffix = "timewarp";
             }
             return merged;
         }
@@ -161,7 +159,7 @@ namespace ClaudiaKermin.ScriptCheck
                 Suffix(receiver, id, line);
                 stack.Push(new Value
                 {
-                    Suffix = receiver.Variable != null && _timewarpVariables.Contains(receiver.Variable) && id == "mode" ? "mode" : id,
+                    Suffix = id,
                     OtherVessel = receiver.OtherVessel,
                 });
                 return;
@@ -291,7 +289,6 @@ namespace ClaudiaKermin.ScriptCheck
                 return new Value
                 {
                     Variable = name,
-                    Suffix = _timewarpVariables.Contains(name) ? "timewarp" : null,
                     OtherVessel = name == "target" || _otherVesselVariables.Contains(name),
                 };
             }
@@ -322,19 +319,15 @@ namespace ClaudiaKermin.ScriptCheck
             else if (AnyVariable(receiver, "addons")) Found(line, "SET ADDONS:" + id.ToUpperInvariant(), ForbiddenList.OtherAddons);
             if (id == "activevessel") Found(line, what, ForbiddenList.SwitchVessels);
             if (id == "bootfilename") Found(line, what, ForbiddenList.SetBootFiles);
-            if (id == "mode" && !IsText(value, "rails") && (receiver.Suffix == "timewarp" || MayBeText(value, "physics")))
-                Found(line, "SET TIMEWARP:MODE", ForbiddenList.PhysicsWarp);
             if (receiver.OtherVessel) Found(line, what + " on another vessel", ForbiddenList.OtherVessels);
         }
 
         private void Stored(string id, Value value, int line)
         {
-            if (id == "warpmode" && !IsText(value, "rails")) Found(line, "SET WARPMODE", ForbiddenList.PhysicsWarp);
             if (AnyVariable(value, "config")) Found(line, "CONFIG held in a variable", ForbiddenList.ChangeConfig);
             if (AnyVariable(value, "addons")) Found(line, "ADDONS held in a variable", ForbiddenList.OtherAddons);
             var name = id.TrimEnd('*');
             if (value.OtherVessel || (value.Parameter && _otherVesselPassed)) _otherVesselVariables.Add(name);
-            if (value.Suffix == "timewarp") _timewarpVariables.Add(name);
         }
 
         /// <summary>
