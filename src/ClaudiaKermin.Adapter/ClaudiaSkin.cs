@@ -224,6 +224,14 @@ namespace ClaudiaKermin.Adapter
             return GUILayout.Button(text, _textButton, Prepend(GUILayout.Height(MinClickable), options));
         }
 
+        /// <summary>The widest a button labelled <paramref name="text"/> comes out in any of the action-row styles, margins not included.</summary>
+        public static float ButtonWidth(string text)
+        {
+            Build();
+            var content = new GUIContent(text);
+            return Mathf.Max(_primary.CalcSize(content).x, _secondaryButton.CalcSize(content).x, _toggleOn.CalcSize(content).x, _disabledButton.CalcSize(content).x);
+        }
+
         /// <summary>A secondary button that stays pressed: accent border and fill while <paramref name="on"/>. Returns true when clicked.</summary>
         public static bool ToggleButton(bool on, string text, params GUILayoutOption[] options)
         {
@@ -381,12 +389,32 @@ namespace ClaudiaKermin.Adapter
         /// <summary>A toggle switch with its label on the left; the whole row is the click target.</summary>
         public static bool Switch(bool on, string label, string tooltip = "")
         {
+            return Switch(on, label, tooltip, false);
+        }
+
+        private const float SwitchTrackWidth = 40;
+
+        /// <summary>The width a fitted <see cref="Switch(bool, string, string, bool)"/> takes: the label, the gap and the 40 px track.</summary>
+        public static float SwitchWidth(string label)
+        {
             Build();
-            var row = GUILayoutUtility.GetRect(new GUIContent(label), _body, GUILayout.Height(MinClickable + 4), GUILayout.ExpandWidth(true));
+            return _body.CalcSize(new GUIContent(label)).x + Gap + SwitchTrackWidth;
+        }
+
+        /// <summary>
+        /// A <see cref="Switch(bool, string, string)"/> that, with <paramref name="fit"/>, takes only <see cref="SwitchWidth"/> and a
+        /// button's height so it sits level with buttons in a row; without it, it fills the width as the Settings window's switches do.
+        /// </summary>
+        public static bool Switch(bool on, string label, string tooltip, bool fit)
+        {
+            Build();
+            var row = fit
+                ? GUILayoutUtility.GetRect(new GUIContent(label), _body, GUILayout.Height(ButtonHeight), GUILayout.Width(SwitchWidth(label)), GUILayout.ExpandWidth(false))
+                : GUILayoutUtility.GetRect(new GUIContent(label), _body, GUILayout.Height(MinClickable + 4), GUILayout.ExpandWidth(true));
             if (GUI.Button(row, new GUIContent("", tooltip), GUIStyle.none)) on = !on;
             if (Event.current.type == EventType.Repaint)
             {
-                const float w = 40, h = 22;
+                const float w = SwitchTrackWidth, h = 22;
                 var track = new Rect(row.xMax - w, row.y + (row.height - h) / 2, w, h);
                 _body.Draw(new Rect(row.x, row.y, row.width - w - Gap, row.height), new GUIContent(label), false, false, false, false);
                 (on ? _switchOn : _switchOff).Draw(track, false, false, false, false);

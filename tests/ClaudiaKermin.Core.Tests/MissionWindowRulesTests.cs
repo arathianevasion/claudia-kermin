@@ -549,5 +549,27 @@ namespace ClaudiaKermin.Core.Tests
             view.CurrentSequence = 1;
             Assert.Equal("step 2 of 3", MissionWindowRules.Step(view));
         }
+
+        [Fact]
+        public void TheAutoModeSwitchStaysOnTheRowWhenItFits()
+        {
+            // 12 + 300 + 8 + 116 + 12 = 448 exactly fills a 448 px panel.
+            Assert.False(MissionWindowRules.AutoModeWraps(448, 300, 116, 12, 8));
+            Assert.False(MissionWindowRules.AutoModeWraps(500, 300, 116, 12, 8));
+        }
+
+        [Fact]
+        public void TheAutoModeSwitchDropsToItsOwnLineWhenTheRowIsTooNarrow()
+        {
+            Assert.True(MissionWindowRules.AutoModeWraps(447, 300, 116, 12, 8));
+            Assert.True(MissionWindowRules.AutoModeWraps(430, 300, 116, 12, 8));
+        }
+
+        [Fact]
+        public void ApproveAloneLeavesRoomForTheSwitchAtTheMinimumWidth()
+        {
+            // Approve (about 76 px with its margin) and the switch fit the 430 px minimum at 1.2 scale, so no wrap at normal widths.
+            Assert.False(MissionWindowRules.AutoModeWraps(430, 92, 140, 14, 10));
+        }
     }
 }
