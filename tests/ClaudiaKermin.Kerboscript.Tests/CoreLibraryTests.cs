@@ -533,10 +533,16 @@ namespace ClaudiaKermin.Kerboscript.Tests
 
         [Theory]
         // Over on_deg, the gate due: with a deadline the wheels can't make, turning; one they can, nothing changes.
-        [InlineData("\"error\", 34, \"gate\", true, \"left_s\", 30", "True|turning")]
-        [InlineData("\"error\", 34, \"gate\", true, \"left_s\", 60", "False|")]
+        [InlineData("\"error\", 19, \"gate\", true, \"left_s\", 30", "True|turning")]
+        [InlineData("\"error\", 19, \"gate\", true, \"left_s\", 60", "False|")]
+        // Over big_deg (20): a big turn, with time to spare, a missed deadline or no deadline; 15 degrees with time left stays off.
+        [InlineData("\"error\", 94, \"gate\", true, \"left_s\", 600", "True|big turn")]
+        [InlineData("\"error\", 94, \"gate\", true, \"left_s\", 5", "True|big turn")]
+        [InlineData("\"error\", 34, \"gate\", true", "True|big turn")]
+        [InlineData("\"error\", 15, \"gate\", true, \"left_s\", 600", "False|")]
+        [InlineData("\"error\", 94, \"gate\", true, \"monoprop\", 0", "False|")]
         // With no deadline (launch, ascend, land's braking), crossing on_deg is enough.
-        [InlineData("\"error\", 34, \"gate\", true", "True|falling behind")]
+        [InlineData("\"error\", 19, \"gate\", true", "True|falling behind")]
         // Wheels with no pitch or yaw torque, with or without a deadline.
         [InlineData("\"error\", 34, \"gate\", true, \"wheels_s\", -1", "True|no wheel torque")]
         [InlineData("\"error\", 34, \"gate\", true, \"wheels_s\", -1, \"left_s\", 600", "True|no wheel torque")]
@@ -592,19 +598,28 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [Fact]
         public void A_custom_rcs_tolerance_moves_the_thresholds()
         {
-            const string tolerance = "claudia_options(lexicon(\"rcs_tolerance\", lexicon(\"on_deg\", 30, \"aligned_deg\", 5)), exec_node_defaults(), \"auto\"):opt:rcs_tolerance";
+            const string tolerance = "claudia_options(lexicon(\"rcs_tolerance\", lexicon(\"on_deg\", 30, \"big_deg\", 180, \"aligned_deg\", 5)), exec_node_defaults(), \"auto\"):opt:rcs_tolerance";
             Assert.Equal("False|", Decide("\"error\", 25, \"gate\", true", tolerance));
             Assert.Equal("True|falling behind", Decide("\"error\", 31, \"gate\", true", tolerance));
             Assert.Equal("False|aligned", Decide("\"rcs\", true, \"error\", 4, \"rate\", 0.2", tolerance));
         }
 
         [Fact]
+        public void A_big_deg_at_or_under_on_deg_acts_as_on_deg()
+        {
+            const string tolerance = "claudia_options(lexicon(\"rcs_tolerance\", lexicon(\"on_deg\", 30, \"big_deg\", 5)), exec_node_defaults(), \"auto\"):opt:rcs_tolerance";
+            Assert.Equal("False|", Decide("\"error\", 30, \"gate\", true, \"left_s\", 600", tolerance));
+            Assert.Equal("True|big turn", Decide("\"error\", 31, \"gate\", true, \"left_s\", 600", tolerance));
+        }
+
+        [Fact]
         public void A_partial_rcs_tolerance_merges_with_the_defaults()
         {
             var printed = Run("local c is claudia_options(lexicon(\"rcs_tolerance\", lexicon(\"aligned_deg\", 1)), exec_node_defaults(), \"auto\"). print c:error. "
-                + "local t is c:opt:rcs_tolerance. print t:on_deg. print t:aligned_deg. print t:aligned_rate.\n"
-                + "local d is claudia_options(lexicon(), exec_node_defaults(), \"auto\"):opt:rcs_tolerance. print d:on_deg. print d:aligned_deg. print d:aligned_rate.");
-            Assert.Equal(new[] { "", "10", "1", "0.5", "10", "2", "0.5" }, printed);
+                + "local t is c:opt:rcs_tolerance. print t:on_deg. print t:aligned_deg. print t:aligned_rate. print t:big_deg.\n"
+                + "local d is claudia_options(lexicon(), exec_node_defaults(), \"auto\"):opt:rcs_tolerance. print d:on_deg. print d:aligned_deg. print d:aligned_rate. print d:big_deg.\n"
+                + "local b is claudia_options(lexicon(\"rcs_tolerance\", lexicon(\"big_deg\", 45)), exec_node_defaults(), \"auto\"):opt:rcs_tolerance. print b:big_deg. print b:on_deg.");
+            Assert.Equal(new[] { "", "10", "1", "0.5", "20", "10", "2", "0.5", "20", "45", "10" }, printed);
         }
 
         [Theory]
@@ -612,9 +627,10 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [InlineData("\"tight\"")]
         [InlineData("lexicon(\"on_dg\", 5)")]
         [InlineData("lexicon(\"on_deg\", \"5\")")]
+        [InlineData("lexicon(\"big_deg\", \"20\")")]
         public void A_bad_rcs_tolerance_fails_the_block(string value)
         {
-            Assert.Equal("rcs_tolerance must be a lexicon of on_deg, aligned_deg (degrees) and aligned_rate (deg/s), given as numbers",
+            Assert.Equal("rcs_tolerance must be a lexicon of on_deg, big_deg, aligned_deg (degrees) and aligned_rate (deg/s), given as numbers",
                 One("claudia_options(lexicon(\"rcs_tolerance\", " + value + "), exec_node_defaults(), \"auto\"):error"));
         }
 

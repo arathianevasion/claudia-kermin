@@ -60,7 +60,7 @@ namespace ClaudiaKermin.Core.Missions
             + "\"periapsis\", \"dv_used\", \"situation\"). A script that ends without reporting counts as failed. Keep "
             + "scripts short and safe: lock steering and throttle explicitly, unlock them and set the throttle to zero "
             + "before reporting, and stage only as the plan says. The mod turns SAS off when a script starts, because SAS "
-            + "fights kOS steering. Blocks manage RCS themselves (RCS Use): leave it to them, or use claudia_rcs_translate for "
+            + "fights kOS steering. Blocks manage RCS themselves (RCS Use, which includes big turns even with time to spare): leave it to them, or use claudia_rcs_translate for "
             + "translation. Never switch SAS on: the Script Check rejects it, because SAS fights kOS steering and fires RCS through holds.\n\n"
             + "Forbidden in every script: saving, loading, reverting or quickloading the game; switching or launching "
             + "vessels; pausing the game; physics warp off a Coast (under engine or RCS thrust) or with the Physics warp Mission Setting off; reading, writing, copying or deleting files "
