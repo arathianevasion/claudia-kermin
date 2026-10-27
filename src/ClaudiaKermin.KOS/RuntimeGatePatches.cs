@@ -179,8 +179,9 @@ namespace ClaudiaKermin.KOS
             var shared = Gated();
             if (shared == null) return;
             Gate(shared, new GateCall { Target = GateTarget.TimeWarp, Suffix = "WARPTO", PhysicsWarpMode = TimeWarp.WarpMode == TimeWarp.Modes.LOW });
-            // KSP picks the rate, up to its fastest, so a refusal is checked against the top of the table.
-            TraceRequest(shared, __0 == null ? (double?)null : __0.GetDoubleValue(), null, WarpTracing.Refusal(TimeWarp.fetch == null ? 1 : TimeWarp.fetch.warpRates.Length - 1));
+            // KSP picks the cap a frame later, so only an outright refusal (no warp above 1x) is read here; a lower cap
+            // shows as the rate reached.
+            TraceRequest(shared, __0 == null ? (double?)null : __0.GetDoubleValue(), null, WarpTracing.Refusal(1));
         }
 
         /// <summary>A warp request the gates let through, into the run's warp trace (#335).</summary>

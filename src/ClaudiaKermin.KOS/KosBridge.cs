@@ -190,9 +190,16 @@ namespace ClaudiaKermin.KOS
             var real = WarpTracing.Real;
             var ut = WarpTracing.Ut;
             var rate = TimeWarp.CurrentRate;
+            var paused = FlightDriver.Pause;
             foreach (var run in _runs.Values)
             {
-                if (run.Run.HasEnded || !run.Run.Trace.Sample(real, ut, rate)) continue;
+                if (run.Run.HasEnded) continue;
+                if (paused)
+                {
+                    run.Run.Trace.Paused(real);
+                    continue;
+                }
+                if (!run.Run.Trace.Sample(real, ut, rate)) continue;
                 // Until #336 marks the player's own changes, a player's cancel reads as a cut (with no KSP message).
                 run.Run.Trace.Dropped(real, ut, ScriptWarpHold.Held ? "held" : "cut", WarpTracing.Refusal(1));
             }

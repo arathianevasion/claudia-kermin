@@ -228,6 +228,12 @@ namespace ClaudiaKermin.Core.Kos
             return fell;
         }
 
+        /// <summary>A frame with the game paused, instead of a <see cref="Sample"/>: the real time since the last sample isn't time at 1x.</summary>
+        public void Paused(double real)
+        {
+            _lastSampleReal = real;
+        }
+
         /// <summary>
         /// Warp dropped to 1x, for why ("cut", "held", "player", "thrust"), with KSP's refusal message if its limits explain it.
         /// Called after a <see cref="Sample"/> that returned true, or by the mod when it drops warp itself or sees who did, before

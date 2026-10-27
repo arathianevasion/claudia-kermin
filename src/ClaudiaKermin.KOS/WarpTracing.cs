@@ -58,8 +58,8 @@ namespace ClaudiaKermin.KOS
         }
 
         /// <summary>
-        /// KSP's message if its rails limits would refuse or lower a warp to rateIndex now (the last index for a
-        /// <c>WARPTO</c>, where KSP picks the rate up to it), else "". Physics warp has no such limits.
+        /// KSP's message if its rails limits would refuse or lower a warp to rateIndex now (1 for a <c>WARPTO</c>, where
+        /// KSP picks the rate itself), else "". Physics warp has no such limits.
         /// </summary>
         public static string Refusal(int rateIndex)
         {

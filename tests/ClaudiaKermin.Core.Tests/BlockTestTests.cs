@@ -322,6 +322,20 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void RealTimeWithTheGamePausedIsNotTimeAt1x()
+        {
+            var trace = new WarpTrace(0);
+            trace.BlockStarted("coast", 0);
+            trace.WaitStarted(0, 1000, 9000);
+            trace.Sample(0, 1000, 1);
+            trace.Sample(2, 1002, 1);
+            // The player paused for a minute.
+            trace.Paused(62);
+            trace.Sample(63, 1003, 1);
+            Assert.Equal(3.0, trace.Blocks[0].RealSAt1x);
+        }
+
+        [Fact]
         public void ANestedBlockCountsItsOwnFirstRequestAndSoDoesTheBlockAroundIt()
         {
             var trace = new WarpTrace(0);
