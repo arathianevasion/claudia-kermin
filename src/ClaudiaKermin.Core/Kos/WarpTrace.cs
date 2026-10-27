@@ -13,7 +13,7 @@ namespace ClaudiaKermin.Core.Kos
     {
         /// <summary>The program asked for warp (<c>WARPTO</c>, or a <c>WARP</c> or <c>RATE</c> above 1x).</summary>
         Request,
-        /// <summary>The rate fell to 1x mid-wait, before the warp's target.</summary>
+        /// <summary>The rate fell to 1x mid-wait, before the warp's target, or the player lowered it.</summary>
         Drop,
     }
 
@@ -42,12 +42,15 @@ namespace ClaudiaKermin.Core.Kos
         /// <summary>A request: the highest rate seen after it, until the next request or its wait ended. A drop: the rate it fell from.</summary>
         public double RateReached { get; internal set; }
 
+        /// <summary>A drop: the rate it fell to, 1 but for the player lowering warp to a rate above 1x. 0 for a request.</summary>
+        public double RateTo { get; internal set; }
+
         /// <summary>KSP's refusal message when it refused or lowered the rate (its <c>getMaxOnRailsRateIdx</c> limits), else "".</summary>
         public string Refusal { get; internal set; }
 
         /// <summary>
-        /// A drop's cause: "cut" (KSP, or no one the mod could name), and as the mod learns to tell them apart "held"
-        /// (WARPHOLD), "player" and "thrust" (physics warp off a Coast). "" for a request.
+        /// A drop's cause: "cut" (KSP, or no one the mod could name), "held" (WARPHOLD), "player" (the player lowered or
+        /// stopped warp, #336) and, as the mod learns to tell it apart, "thrust" (physics warp off a Coast). "" for a request.
         /// </summary>
         public string Drop { get; internal set; }
 
@@ -136,6 +139,8 @@ namespace ClaudiaKermin.Core.Kos
         private double _lastRate = 1;
         /// <summary>The rate a fall to 1x came from, between the <see cref="Sample"/> that saw it and the <see cref="Dropped"/> naming it.</summary>
         private double? _fellFrom;
+        /// <summary>The player stopped warp (<see cref="PlayerDropped"/>), so the fall to 1x that follows is already named.</summary>
+        private bool _playerFall;
 
         /// <param name="startReal">The real time (any clock in seconds) the run started at.</param>
         public WarpTrace(double startReal)
@@ -197,6 +202,7 @@ namespace ClaudiaKermin.Core.Kos
             };
             _entries.Add(entry);
             _lastRequest = entry;
+            _playerFall = false;
             foreach (var block in OpenBlocks())
             {
                 if (!block.FirstRequestRealS.HasValue) block.FirstRequestRealS = entry.RealS - block.StartRealS;
@@ -222,6 +228,14 @@ namespace ClaudiaKermin.Core.Kos
             if (_lastRequest != null) _lastRequest.RateReached = Math.Max(_lastRequest.RateReached, rate);
 
             var fell = _waiting && _lastRate > At1x && rate <= At1x && ut < Target() - EndMargin;
+            // KSP lerps a stop down over a few frames, so the player's fall comes after PlayerDropped named it.
+            if (_playerFall && rate <= At1x)
+            {
+                fell = false;
+                _playerFall = false;
+            }
+            // A rise on the way down means warp was asked for again: a later fall is someone else's.
+            if (rate > _lastRate) _playerFall = false;
             _fellFrom = fell ? _lastRate : (double?)null;
             _lastSampleReal = real;
             _lastRate = rate;
@@ -244,6 +258,26 @@ namespace ClaudiaKermin.Core.Kos
             var from = _fellFrom ?? _lastRate;
             _fellFrom = null;
             _lastRate = 1;
+            AddDrop(real, ut, from, 1, why, refusal);
+            // The next request is a fresh one, not this one reaching a rate.
+            _lastRequest = null;
+        }
+
+        /// <summary>
+        /// The player lowered or stopped warp (#336), from one rate to another, at the moment they did. Traced only inside
+        /// a wait, as a <c>player</c> drop; a stop to 1x isn't reported again by the <see cref="Sample"/> that sees the fall.
+        /// </summary>
+        public void PlayerDropped(double real, double ut, double from, double to)
+        {
+            if (!_waiting) return;
+            AddDrop(real, ut, from, to, "player", "");
+            if (to > At1x) return;
+            _playerFall = true;
+            _lastRequest = null;
+        }
+
+        private void AddDrop(double real, double ut, double from, double to, string why, string refusal)
+        {
             _entries.Add(new WarpTraceEntry
             {
                 Kind = WarpTraceKind.Drop,
@@ -253,12 +287,11 @@ namespace ClaudiaKermin.Core.Kos
                 TargetUt = _waiting ? Target() : (double?)null,
                 Mode = _lastRequest == null ? "" : _lastRequest.Mode,
                 RateReached = from,
+                RateTo = to,
                 Refusal = refusal ?? "",
                 Drop = why ?? "",
             });
             foreach (var block in OpenBlocks()) block.Drops++;
-            // The next request is a fresh one, not this one reaching a rate.
-            _lastRequest = null;
         }
 
         /// <summary>
@@ -287,7 +320,8 @@ namespace ClaudiaKermin.Core.Kos
                     ? "request real " + Seconds(e.RealS) + ", UT " + Whole(e.Ut) + ", target " + (e.TargetUt.HasValue ? Whole(e.TargetUt.Value) : "none")
                       + ", " + e.Mode + ", asked " + (e.RateAsked.HasValue ? Rate(e.RateAsked.Value) : "KSP's pick") + ", reached " + Rate(e.RateReached)
                       + ", attempt " + e.Attempt
-                    : "drop (" + e.Drop + ") real " + Seconds(e.RealS) + ", UT " + Whole(e.Ut) + ", from " + Rate(e.RateReached);
+                    : "drop (" + e.Drop + ") real " + Seconds(e.RealS) + ", UT " + Whole(e.Ut) + ", from " + Rate(e.RateReached)
+                      + (e.RateTo > At1x ? ", to " + Rate(e.RateTo) : "");
                 if (e.Refusal.Length > 0) line += ", KSP: " + e.Refusal;
                 if (e.Block.Length > 0) line += ", in " + e.Block;
                 lines.Add(line);

@@ -51,7 +51,8 @@
 //| sets reason "abort <option>: <detail>". Waits use on-rails warp only, back at 1x at least 30 s before
 //| a burn, and have no cap: a block waits for its window or daylight however long, and coast holds
 //| until a UT. Warp drops to 1x when the Mission needs the player and resumes after; the player may
-//| cancel it. Don't warp yourself (physics warp is blocked). Report the Script Result yourself, once, at the end, e.g.
+//| cancel it and the wait won't override them: ADDONS:CLAUDIA:WARPCANCELLED is then true until the next wait
+//| starts. Don't warp yourself (physics warp is blocked). Report the Script Result yourself, once, at the end, e.g.
 //| `addons:claudia:report(res).`, or a lexicon of your own with at least success and reason.
 
 // ---- Options ----
@@ -624,8 +625,9 @@ function claudia_warp_step {
 }
 
 // Waits until ut, warping on rails and back at 1x lead seconds before it (at least 30). Warp is
-// asked for once, so a player who cancels it is never overridden; but once the mod has held warp at
-// 1x (a Pause, link loss, the Spending Cap, a stock alarm) it is asked for again when the hold ends.
+// asked for once; once the mod has held warp at 1x (a Pause, link loss, the Spending Cap, a stock
+// alarm) it is asked for again when the hold ends, unless the player lowered or stopped warp during
+// this wait (ADDONS:CLAUDIA:WARPCANCELLED, reset by waitstart), so the player is never overridden.
 // Physics warp is never used: the mode is set to rails first (and the runtime gates refuse physics
 // warp anyway). Keeps ticking, so the common aborts still apply. Returns "" or an abort reason.
 // The wait is marked for the mod's warp trace (WAITSTART, WAITEND), which times it at 1x.
@@ -644,7 +646,7 @@ function claudia_warp_to {
       kuniverse:timewarp:warpto(warp_end).
       set want to false.
     }
-    if held {
+    if held and not addons:claudia:warpcancelled {
       set want to true.
     }
     local reason is claudia_tick(ctx, 0).
