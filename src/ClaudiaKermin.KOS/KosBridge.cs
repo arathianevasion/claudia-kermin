@@ -168,8 +168,34 @@ namespace ClaudiaKermin.KOS
         {
             ActiveRun run;
             if (!_runs.TryGetValue(partId, out run) || run.Run.HasEnded) return;
-            if (warpEnd.HasValue) run.Run.Trace.WaitStarted(WarpTracing.Real, WarpTracing.Ut, warpEnd.Value);
-            else run.Run.Trace.WaitEnded(WarpTracing.Real, WarpTracing.Ut);
+            if (warpEnd.HasValue)
+            {
+                run.Run.Trace.WaitStarted(WarpTracing.Real, WarpTracing.Ut, warpEnd.Value);
+                // The next wait starts fresh after the player cancelled one (ADR 0008).
+                run.Cancel.WaitStarted();
+            }
+            else
+            {
+                run.Run.Trace.WaitEnded(WarpTracing.Real, WarpTracing.Ut);
+            }
+        }
+
+        /// <summary>For <c>ADDONS:CLAUDIA:WARPCANCELLED</c>: the player lowered or stopped warp during the program's current wait. False for programs the mod didn't start.</summary>
+        public bool WarpCancelled(uint partId)
+        {
+            ActiveRun run;
+            return _runs.TryGetValue(partId, out run) && !run.Run.HasEnded && run.Cancel.Cancelled;
+        }
+
+        /// <summary>From <see cref="PlayerWarpWatch.RateChanged"/>: a player's drop cancels every running program's wait.</summary>
+        private void OnRateChanged(double from, double to, bool byPlayer)
+        {
+            foreach (var run in _runs.Values)
+            {
+                if (run.Run.HasEnded || !run.Cancel.RateChanged(from, to, byPlayer)) continue;
+                run.Run.Trace.PlayerDropped(WarpTracing.Real, WarpTracing.Ut, from, to);
+                Debug.Log(ModInfo.LogTag + " the player lowered warp from " + from + "x to " + to + "x: WARPCANCELLED for '" + run.Label + "'");
+            }
         }
 
         /// <summary>
@@ -199,8 +225,8 @@ namespace ClaudiaKermin.KOS
                     run.Run.Trace.Paused(real);
                     continue;
                 }
+                // A player's stop was named when they made it (OnRateChanged), so this fall is the mod's hold or KSP's.
                 if (!run.Run.Trace.Sample(real, ut, rate)) continue;
-                // Until #336 marks the player's own changes, a player's cancel reads as a cut (with no KSP message).
                 run.Run.Trace.Dropped(real, ut, ScriptWarpHold.Held ? "held" : "cut", WarpTracing.Refusal(1));
             }
         }
@@ -211,11 +237,13 @@ namespace ClaudiaKermin.KOS
             // The adapter's Mission driver starts approved scripts through this.
             ScriptRunner.Current = this;
             GameEvents.onGameSceneLoadRequested.Add(OnSceneLoadRequested);
+            PlayerWarpWatch.RateChanged += OnRateChanged;
         }
 
         private void OnDestroy()
         {
             GameEvents.onGameSceneLoadRequested.Remove(OnSceneLoadRequested);
+            PlayerWarpWatch.RateChanged -= OnRateChanged;
             foreach (var pending in _pending) Guard(() => pending.OnRefused("Left Flight before the script could start."));
             _pending.Clear();
             while (_events.Count > 0) Guard(_events.Dequeue());
@@ -411,6 +439,8 @@ namespace ClaudiaKermin.KOS
             public readonly string Label;
             public readonly ClaudiaAddon Addon;
             public readonly KosRun Run;
+            /// <summary>ADDONS:CLAUDIA:WARPCANCELLED for this run.</summary>
+            public readonly WarpCancel Cancel = new WarpCancel();
             public readonly Action<RunOutcome> OnOutcome;
             public readonly Action<string> OnBlocked;
             public int EndedFrame = int.MaxValue;

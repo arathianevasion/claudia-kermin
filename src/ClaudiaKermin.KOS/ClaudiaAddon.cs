@@ -39,6 +39,9 @@ namespace ClaudiaKermin.KOS
             // like BLOCKSTART: a report to the mod, not a calculation (ADR 0006), so the Script Check allows them anywhere.
             AddSuffix("WAITSTART", new OneArgsSuffix<ScalarValue>(WaitStart, "A wait began; its warp must be over by this UT"));
             AddSuffix("WAITEND", new NoArgsVoidSuffix(WaitEnd, "The wait ended"));
+            // The player lowered or stopped warp during this wait (#336, ADR 0008); the next WAITSTART resets it. Waits, and a
+            // Custom Script's own loop, stop asking for warp once it is true, so the player is never overridden.
+            AddSuffix("WARPCANCELLED", new Suffix<BooleanValue>(WarpCancelled, "The player lowered or stopped warp during the current wait"));
             AddTerrainSuffixes();
             AddHeatSuffixes();
             AddToolSuffixes();
@@ -124,6 +127,12 @@ namespace ClaudiaKermin.KOS
         {
             var bridge = KosBridge.Instance;
             if (shared.KSPPart != null && bridge != null && warpEnd != null) bridge.OnWait(shared.KSPPart.persistentId, warpEnd.GetDoubleValue());
+        }
+
+        private BooleanValue WarpCancelled()
+        {
+            var bridge = KosBridge.Instance;
+            return shared.KSPPart != null && bridge != null && bridge.WarpCancelled(shared.KSPPart.persistentId);
         }
 
         private void WaitEnd()
