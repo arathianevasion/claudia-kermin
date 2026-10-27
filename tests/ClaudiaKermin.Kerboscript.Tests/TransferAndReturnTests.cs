@@ -63,6 +63,33 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal("", Unreadable("\"target\", \"Mun\", \"target_pe\", 30000, \"window\", 5000, \"correction\", false"));
         }
 
+        // ---- The correction after a missed ejection (#363) ----
+
+        private static string[] CorrectionAsk(string maxDuration, string auto, string dvLeft)
+        {
+            // Block started at UT 1000, now UT 5000, a 133 s turn (the #363 craft's TURNTIME).
+            return Run("local q is transfer_to_correction_ask(\"Mun\", 30000, 5000, 133, 1000, " + maxDuration + ", " + auto + ", " + dvLeft
+                + "). print q:keys:join(\",\"). print q:earliest_ut. for k in list(\"latest_ut\", \"max_dv\") { if q:haskey(k) { print q[k]. } }");
+        }
+
+        [Fact]
+        public void The_correction_is_asked_for_once_the_craft_can_turn_to_it_and_no_dearer_than_its_delta_v()
+        {
+            Assert.Equal(new[] { "target,target_pe,earliest_ut,max_dv", "5193", "412.5" }, CorrectionAsk("30000", "true", "412.5"));
+        }
+
+        [Fact]
+        public void A_max_duration_the_script_gave_leaves_two_minutes_to_burn_the_correction_in()
+        {
+            Assert.Equal(new[] { "target,target_pe,earliest_ut,latest_ut,max_dv", "5193", "20880", "412.5" }, CorrectionAsk("20000", "false", "412.5"));
+        }
+
+        [Fact]
+        public void An_unknown_delta_v_sets_no_limit()
+        {
+            Assert.Equal(new[] { "target,target_pe,earliest_ut", "5193" }, CorrectionAsk("30000", "true", "-1"));
+        }
+
         // ---- Earliest departure ----
 
         [Theory]
