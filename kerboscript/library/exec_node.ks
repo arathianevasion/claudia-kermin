@@ -12,17 +12,19 @@
 //|   node ["next"]: the node to fly, "next" or a node from ALLNODES.
 //|   max_residual [0.5]: m/s the node may still need when the burn ends; more fails the block.
 //|   lead ["half_burn"]: when to start, in seconds before the node; "half_burn" starts early by the
-//|     time it takes to burn half the node's delta-v.
+//|     time it takes to burn half the node's delta-v, over every stage the burn uses.
 //|   rcs_trim [false]: true trims a residual above max_residual with RCS translation (up to 60 s).
 //|   max_duration ["auto"]: the wait to the burn plus twice the burn time plus 300 s.
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block.
 //| Extra results: node_dv (m/s the node asked for before the burn), residual (m/s the node still
-//| needed when the block ended), burn_time (s the engines burned). Fails with "no maneuver node",
+//| needed when the block ended), burn_time (s the engines burned), late_start_s (s the burn began
+//| late; 0 on time), turn_s and turn_time (s the turn took, and its prediction), not_aligned (turns
+//| given up after 120 s). It turns to the node before warping. Fails with "no maneuver node",
 //| "no thrust", "no usable torque" (no reaction wheel running and no RCS on to turn with), a node
 //| or lead it can't read, "residual <x> m/s is over max_residual", out of fuel, or an abort; on
 //| failure the node is left in place.
 //| Plan the node yourself first (ADD NODE(time, radial, normal, prograde)); the node must be far
-//| enough ahead to turn and start the burn (lead plus about 30 s).
+//| enough ahead to turn and start the burn (lead plus about a minute).
 //| Example: `add node(time:seconds + 600, 0, 0, 120). local res is exec_node(). addons:claudia:report(res).`
 
 // The block's own options and defaults (max_duration "auto" is resolved once the burn is known).
@@ -46,23 +48,9 @@ function exec_node_unreadable {
   return "".
 }
 
-// Burn timing for a node: lexicon("burn_time", s, "lead", s, "start_in", s from now).
-// lead_opt is "half_burn" or seconds before the node.
-function exec_node_timing {
-  parameter dv, mass_t, thrust_kn, isp, node_eta, lead_opt.
-  local burn is claudia_burn_time(dv, mass_t, thrust_kn, isp).
-  local lead is 0.
-  if lead_opt:istype("String") {
-    set lead to claudia_burn_time(dv / 2, mass_t, thrust_kn, isp).
-  } else {
-    set lead to lead_opt.
-  }
-  return lexicon("burn_time", burn, "lead", lead, "start_in", node_eta - lead).
-}
-
 function exec_node {
   parameter options is lexicon().
-  local extra is lexicon("node_dv", -1, "residual", -1, "burn_time", 0).
+  local extra is lexicon("node_dv", -1, "residual", -1, "burn_time", 0, "late_start_s", 0, "turn_s", 0, "turn_time", 0, "not_aligned", 0).
   local ctx is claudia_begin("exec_node", options, exec_node_defaults(), "auto").
   if ctx:error <> "" {
     return claudia_finish(ctx, false, ctx:error, extra).
@@ -91,6 +79,7 @@ function exec_node {
   if turn:error <> "" {
     return claudia_finish(ctx, false, turn:error, extra).
   }
+  set extra:turn_time to round(turn:turn_time, 1).
 
   // A craft whose engines aren't lit yet stages into them (within stage_limit).
   local lit is claudia_stage_into_engines(ctx).
@@ -98,22 +87,19 @@ function exec_node {
     return claudia_finish(ctx, false, lit, extra).
   }
 
-  local timing is exec_node_timing(nd:deltav:mag, ship:mass, ship:availablethrust, claudia_engine_isp(), nd:eta, opt:lead).
-  if timing:burn_time < 0 {
-    return claudia_finish(ctx, false, "no thrust", extra).
-  }
-  local start_ut is time:seconds + timing:start_in.
   if opt:max_duration:istype("String") {
-    set opt:max_duration to max(0, timing:start_in) + 2 * timing:burn_time + 300.
+    local timing is claudia_burn_timing(nd:deltav:mag, claudia_burn_stages(opt:stage_limit), nd:eta, opt:lead).
+    set opt:max_duration to max(0, timing:start_in) + 2 * max(0, timing:burn_time) + 300.
   }
-  // Point at the burn as it is now (raw-frame vectors drift during warp); the craft turns once warp
-  // drops to 1x, 30 s before the start.
-  lock steering to nd:deltav.
-  local waited is claudia_wait_until(ctx, start_ut).
-  if waited <> "" {
+  // Turn first, then warp to the burn start worked out from every stage the burn uses.
+  local burn is claudia_warp_to_burn(ctx, nd, opt:lead, turn:turn_time).
+  set extra:turn_s to burn:turn_s.
+  set extra:not_aligned to burn:not_aligned.
+  if burn:error <> "" {
     claudia_make_safe().
-    return claudia_finish(ctx, false, waited, extra).
+    return claudia_finish(ctx, false, burn:error, extra).
   }
+  set extra:late_start_s to claudia_late_start(time:seconds, burn:start_ut).
 
   local steer is nd:deltav.
   lock steering to steer.
