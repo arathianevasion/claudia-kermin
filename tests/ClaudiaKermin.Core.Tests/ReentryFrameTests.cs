@@ -22,6 +22,13 @@ namespace ClaudiaKermin.Core.Tests
     /// before BodyFrame reads latitude and longitude. The adapter's SurfaceUnder skipped Zup, so the frame it gave was off by
     /// InverseRotAngle, which grows with the body's turn. <see cref="StockFrames"/> models that.
     /// </para>
+    /// <para>
+    /// The same error explains the landing (2.0093, 41.7287), 485 km from the second prediction and 1217.6 km from KSC, if the
+    /// predictor's own fall was right: InverseRotAngle of about -46.2 degrees at the second call and -116.1 at the first (69.9
+    /// apart, as above) puts both predictions on 41.7 east, so the first's "0.03 km from KSC" was wrong too and the accuracy gate
+    /// passed on it. The log has no InverseRotAngle to confirm that, so the block-call lines now give it. The 2.1 degrees (22
+    /// km) of latitude the frame can't explain; the spent stage riding down, unstable, is the likely cause.
+    /// </para>
     /// </summary>
     public sealed class ReentryFrameTests
     {

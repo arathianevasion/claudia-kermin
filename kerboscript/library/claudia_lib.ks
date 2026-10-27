@@ -360,13 +360,21 @@ function claudia_decoupler_of {
   return "".
 }
 
-// Every part that leaves with decoupler d (the parts whose decoupler it is).
+// Every part that leaves with decoupler d: the parts whose decoupler it is, and those held by a
+// decoupler further out on what it drops (a decoupler's own decoupler is read from its parent).
 function claudia_dropped_with {
   parameter d.
   local found is list().
   for p in ship:parts {
     local other is claudia_decoupler_of(p).
-    if not other:istype("String") and other:uid = d:uid {
+    until other:istype("String") or other:uid = d:uid {
+      if other:hasparent {
+        set other to claudia_decoupler_of(other:parent).
+      } else {
+        set other to "".
+      }
+    }
+    if not other:istype("String") {
       found:add(p).
     }
   }
@@ -408,10 +416,7 @@ function claudia_drop_plan {
             return plan.
           }
           seen:add(d:uid).
-          plan:decouplers:add(d).
-          for g in with {
-            plan:gone:add(g).
-          }
+          claudia_drop_add(plan, d, with).
         }
       }
     }
@@ -423,28 +428,17 @@ function claudia_drop_plan {
   return plan.
 }
 
-// claudia_drop_plan's lexicon for the decouplers that fire at stage number stage_num (kOS's
-// PART:STAGE, as reentry's jettison_stage) and the parts leaving with them.
-function claudia_stage_drop_plan {
-  parameter stage_num.
-  local plan is lexicon("error", "", "decouplers", list(), "gone", list()).
-  for p in ship:parts {
-    if claudia_is_decoupler(p) and p:stage = stage_num {
-      local with is claudia_dropped_with(p).
-      if claudia_drop_holds_core(with) {
-        set plan:error to "stage " + stage_num + "'s " + p:name + " would drop the part running the script".
-        return plan.
-      }
-      plan:decouplers:add(p).
-      for g in with {
-        plan:gone:add(g).
-      }
+// Adds decoupler d, and the parts leaving with it (with) not already there, to a drop plan: one
+// decoupler may sit on what another drops.
+function claudia_drop_add {
+  parameter plan, d, with.
+  plan:decouplers:add(d).
+  local had is claudia_drop_uids(plan).
+  for g in with {
+    if not had:contains(g:uid) {
+      plan:gone:add(g).
     }
   }
-  if plan:decouplers:length = 0 {
-    set plan:error to "no decoupler fires at stage " + stage_num.
-  }
-  return plan.
 }
 
 // The kOS UIDs of the parts a drop plan sends away, as the reentry predictor's leave_out takes them.

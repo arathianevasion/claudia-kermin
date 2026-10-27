@@ -64,10 +64,10 @@ function drop_parts {
     return claudia_finish(ctx, false, plan:error, extra).
   }
   local before is ship:parts:length.
-  local fired is claudia_fire_drop(ctx, plan).
+  local not_fired is claudia_fire_drop(ctx, plan).
   set extra:parts_dropped to before - ship:parts:length.
-  if fired <> "" {
-    return claudia_finish(ctx, false, fired, extra).
+  if not_fired <> "" {
+    return claudia_finish(ctx, false, not_fired, extra).
   }
   return claudia_finish(ctx, true, "", extra).
 }
