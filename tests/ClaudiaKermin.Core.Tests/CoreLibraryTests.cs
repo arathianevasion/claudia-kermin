@@ -39,6 +39,44 @@ namespace ClaudiaKermin.Core.Tests
             Assert.True(bad.Count == 0, string.Join("\n", bad));
         }
 
+        // #325: land's `local deorbit is node(...)` hid the deorbit Building Block, so `add deorbit.` cast a function delegate.
+        [Fact]
+        public void NoLocalParameterOrSetTargetInTheBundleOrATestScriptSharesANameWithACoreLibraryFunction()
+        {
+            // The functions every file can see: the first-party library and kslib. RSVP's nested functions are scoped inside
+            // their rsvp_file_* wrapper, so they are not in the set, but RSVP's own locals are still checked against it.
+            var global = CoreLibrary.Files.Concat(CoreLibrary.Vendored).ToList();
+            var functions = new System.Collections.Generic.HashSet<string>(global.SelectMany(f => KosBuiltinNames.FunctionNames(f.Source)));
+            Assert.Contains("deorbit", functions);
+            var bad = new System.Collections.Generic.List<string>();
+            foreach (var file in global.Concat(CoreLibrary.Rsvp))
+                bad.AddRange(KosBuiltinNames.ClashesWithFunctions(file.Name, file.Source, functions));
+            var root = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory);
+            while (root != null && !System.IO.File.Exists(System.IO.Path.Combine(root.FullName, "ClaudiaKermin.sln"))) root = root.Parent;
+            Assert.NotNull(root);
+            foreach (var dir in new[] { "blocks", "tools" })
+                foreach (var file in System.IO.Directory.GetFiles(System.IO.Path.Combine(root.FullName, "tests", dir), "*.ks", System.IO.SearchOption.AllDirectories))
+                    bad.AddRange(KosBuiltinNames.ClashesWithFunctions(file.Substring(root.FullName.Length + 1), System.IO.File.ReadAllText(file), functions));
+            Assert.True(bad.Count == 0, string.Join("\n", bad));
+        }
+
+        [Theory]
+        [InlineData("local deorbit is node(1, 0, 0, 2).")]
+        [InlineData("parameter ctx, deorbit.")]
+        [InlineData("for deorbit in list(1) { }")]
+        [InlineData("set deorbit to 1.")]
+        public void TheFunctionNameCheckCatchesEachKindOfDeclaration(string code)
+        {
+            Assert.NotEmpty(KosBuiltinNames.ClashesWithFunctions("t", code, new System.Collections.Generic.HashSet<string> { "deorbit" }));
+        }
+
+        [Fact]
+        public void TheFunctionNameCheckIgnoresTheFunctionsOwnDeclarationCommentsAndStrings()
+        {
+            var names = new System.Collections.Generic.HashSet<string> { "deorbit" };
+            Assert.Empty(KosBuiltinNames.ClashesWithFunctions("t", "function deorbit {\n}\n// local deorbit is 1.\nlocal v is \"set deorbit to 1.\".\nlocal descent_node is 1.", names));
+        }
+
         [Theory]
         [InlineData("local north is 1.")]
         [InlineData("global encounter is 2.")]
