@@ -30,8 +30,8 @@ namespace ClaudiaKermin.Core.Kos
 
         /// <summary>
         /// The script's last <c>ADDONS:CLAUDIA:REPORT</c> lexicon when Finished. A run that ended inside a block that had traced
-        /// its state (<see cref="KosRun.BlockTraced"/>) and never reported has one the mod made instead (#365): success false,
-        /// block, reason and last_state. Null otherwise.
+        /// its state (<see cref="KosRun.BlockTraced"/>) with no Script Result carries the mod's stand-in (#365): success false,
+        /// block, reason and last_state, with the run's kind unchanged. Null otherwise.
         /// </summary>
         public IDictionary<string, object> Report { get; private set; }
 
@@ -164,7 +164,7 @@ namespace ClaudiaKermin.Core.Kos
             {
                 { "success", false },
                 { "block", _tracedBlock },
-                { "reason", "the run ended inside " + _tracedBlock + " with no Script Result (the craft may have been destroyed); last_state is the block's last traced state, from the mod" },
+                { "reason", "the run ended inside " + _tracedBlock + " with no Script Result; last_state is the block's last traced state, from the mod" },
                 { "last_state", _tracedState },
             };
         }

@@ -10,7 +10,7 @@ namespace ClaudiaKermin.Core.Kos
 {
     /// <summary>
     /// A Building Block's trace line (<c>ADDONS:CLAUDIA:BLOCKTRACE</c>, #365): a lexicon of its state, written to KSP.log
-    /// as it comes, the way the warp trace is, so a craft lost mid-block can be diagnosed afterwards. land traces its
+    /// as it comes, the way the warp trace is, so a craft destroyed mid-block can be diagnosed afterwards. land traces its
     /// descent every 2 s and at each phase change.
     /// </summary>
     public static class BlockTrace

@@ -435,7 +435,7 @@ function land_guide {
     }
   }
   return lexicon("al", al, "cr", cr, "up", split:v, "h_ref", h_ref, "vv", vv_want,
-    "vh", min(st:v_top, land_vh_target(st:s, a_h_most, margin)), "to_go", to_go).
+    "vh", min(st:v_top, land_vh_target(st:s, split:h, margin)), "to_go", to_go).
 }
 
 // The descent's phase, for its trace: "fall" before braking, "braking" while over 50 m/s across the
@@ -1013,7 +1013,7 @@ function land_descend {
         gear on.
       }
     }
-    // The descent trace, for the log: a craft lost mid-descent leaves its last line as the block's state.
+    // The descent trace, for the log: a craft destroyed mid-descent leaves its last line as the block's state.
     local phase is land_phase(braking, v_h:mag, want:h_ref).
     if land_trace_due(phase, last_phase, time:seconds, last_trace_ut) {
       addons:claudia:blocktrace("land", lexicon("phase", phase, "h", round(h), "radar", round(radar), "v_h", round(v_h:mag, 1),
