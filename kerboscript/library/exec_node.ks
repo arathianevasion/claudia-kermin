@@ -18,8 +18,8 @@
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block.
 //| Extra results: node_dv (m/s the node asked for before the burn), residual (m/s the node still
 //| needed when the block ended), burn_time (s the engines burned), late_start_s (s the burn began
-//| after its start; 0 on time), not_aligned (turns given up after 120 s). It turns to the node before
-//| warping. Fails with "no maneuver node",
+//| late; 0 on time), turn_s and turn_time (s the turn took, and its prediction), not_aligned (turns
+//| given up after 120 s). It turns to the node before warping. Fails with "no maneuver node",
 //| "no thrust", "no usable torque" (no reaction wheel running and no RCS on to turn with), a node
 //| or lead it can't read, "residual <x> m/s is over max_residual", out of fuel, or an abort; on
 //| failure the node is left in place.

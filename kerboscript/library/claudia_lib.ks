@@ -819,28 +819,34 @@ function claudia_aligned_to {
 }
 
 // Turns to nd's burn vector (steering must be locked to it) until aligned, for at most 120 s and
-// never past start_ut. Returns lexicon error ("" or an abort reason), aligned, seconds (taken).
+// never past start_ut. Returns lexicon error ("" or an abort reason), timed_out (120 s passed
+// unaligned: it prints "not aligned" and goes on), seconds (taken). At the start the burn itself
+// waits for the craft to point within 10 degrees, so running into it isn't a time-out.
 function claudia_turn_to_burn {
   parameter ctx, nd, start_ut.
   local began is time:seconds.
-  local give_up is min(began + 120, start_ut).
   local reason is "".
-  until claudia_aligned_to(nd) or time:seconds >= give_up {
+  until claudia_aligned_to(nd) or time:seconds >= min(began + 120, start_ut) {
     set reason to claudia_tick(ctx, 0).
     if reason <> "" {
       break.
     }
     wait 0.
   }
-  return lexicon("error", reason, "aligned", claudia_aligned_to(nd), "seconds", round(time:seconds - began, 1)).
+  local timed_out is reason = "" and time:seconds >= began + 120 and not claudia_aligned_to(nd).
+  if timed_out {
+    print ctx:block + ": not aligned after 120 s, " + round(vang(ship:facing:forevector, nd:deltav), 1) + " deg off".
+  }
+  return lexicon("error", reason, "timed_out", timed_out, "seconds", round(time:seconds - began, 1)).
 }
 
 // Before a burn (spec #314): works out the burn from every stage it will use (to stage_limit), turns
 // to nd, works it out again, then warps, back at 1x max(30 s, turn_time) before the burn start and
 // never past it. turn_time: TURNTIME's for the craft; lead_opt as for claudia_burn_timing. A turn
-// that isn't aligned after 120 s (or by the start) goes on anyway and counts in not_aligned. While
-// warp is asked for, a drop to 1x with the craft off the burn ends the warp, and it turns again
-// before warping on. Leaves steering locked to nd. Returns lexicon error ("", "no thrust" or an
+// that isn't aligned after 120 s goes on anyway and counts in not_aligned (a start that comes first
+// isn't counted: the burn waits to point within 10 degrees). While warp is asked for, a drop to 1x
+// with the craft off the burn ends the warp, and it turns again before warping on; the planned drop
+// leaves max(30 s, turn_time) at 1x, steering, before the start. Leaves steering locked to nd. Returns lexicon error ("", "no thrust" or an
 // abort reason), start_ut, burn_time (s), turn_s (s the first turn took), not_aligned.
 function claudia_warp_to_burn {
   parameter ctx, nd, lead_opt, turn_time.
@@ -854,7 +860,7 @@ function claudia_warp_to_burn {
   lock steering to nd:deltav.
   local turned is claudia_turn_to_burn(ctx, nd, time:seconds + timing:start_in).
   set out:turn_s to turned:seconds.
-  if not turned:aligned {
+  if turned:timed_out {
     set out:not_aligned to 1.
   }
   if turned:error <> "" {
@@ -865,7 +871,7 @@ function claudia_warp_to_burn {
   set out:burn_time to timing:burn_time.
   local start_ut is time:seconds + timing:start_in.
   set out:start_ut to start_ut.
-  local recheck is turned:aligned.
+  local recheck is not turned:timed_out.
   until time:seconds >= start_ut {
     local warp_end is claudia_warp_end(start_ut, turn_time).
     local check is recheck.
@@ -885,7 +891,7 @@ function claudia_warp_to_burn {
         set out:error to turned:error.
         return out.
       }
-      if not turned:aligned {
+      if turned:timed_out {
         set out:not_aligned to out:not_aligned + 1.
         set recheck to false.
       }
