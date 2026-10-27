@@ -65,6 +65,8 @@ namespace ClaudiaKermin.Core.Missions
             /// <summary>Crossings since the last Debrief, which lists them.</summary>
             public readonly List<Crossing> Crossings = new List<Crossing>();
             public LiveReadings Readings;
+            /// <summary>The snapshot the stock delta-v checks last judged; another input on the same snapshot is not a second reading.</summary>
+            public GameSnapshot JudgedSnapshot;
             /// <summary>The Building Block running now, from the kOS bridge; "" between blocks.</summary>
             public string CurrentBlock = "";
             public int BlocksDone;
@@ -106,6 +108,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.Checks.Clear();
             foreach (var check in TelemetryDefaults.Fill(plan, _config)) mission.Checks.Add(new LiveCheck { Check = check });
             mission.Crossings.Clear();
+            mission.JudgedSnapshot = null;
             mission.CurrentBlock = "";
             mission.BlocksDone = 0;
             mission.AbortRecommendation = "";
@@ -167,8 +170,12 @@ namespace ClaudiaKermin.Core.Missions
             var mission = _mission;
             if (mission == null || mission.Stage != MissionStage.Running || !mission.RunId.HasValue) return;
             mission.Readings = Readings(mission);
+            var snapshot = MissionVesselSnapshot(mission);
+            var fresh = !ReferenceEquals(snapshot, mission.JudgedSnapshot);
+            mission.JudgedSnapshot = snapshot;
             foreach (var live in mission.Checks)
             {
+                if (!fresh && live.Check.NeedsConfirmation) continue;
                 var reading = mission.Readings.Of(live.Check);
                 if (!live.Fired)
                 {

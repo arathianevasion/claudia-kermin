@@ -551,6 +551,19 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AnInputThatIsNotANewSnapshotIsNotASecondDeltaVReading()
+        {
+            var mission = RunningWith(QuantityCheck("delta_v_used", "above", 50));
+
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            mission.Send(new UtAdvanced(OnPad().Ut + 1));
+            mission.Send(new UtAdvanced(OnPad().Ut + 2));
+            Assert.Equal(0, CrossedLines(mission));
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            Assert.Equal(1, CrossedLines(mission));
+        }
+
+        [Fact]
         public void AnAltitudeCheckStillFiresOnItsFirstCrossing()
         {
             var mission = RunningWith(QuantityCheck("altitude", "above", 100));
