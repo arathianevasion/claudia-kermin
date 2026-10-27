@@ -27,7 +27,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [Fact]
         public void The_options_take_the_spec_defaults()
         {
-            Assert.Equal("required|auto|10|auto", One("deorbit_defaults():values:join(\"|\") + \"|\" + claudia_options(lexicon(), deorbit_defaults(), \"auto\"):opt:max_duration"));
+            Assert.Equal("required|auto|10|none|auto", One("deorbit_defaults():values:join(\"|\") + \"|\" + claudia_options(lexicon(), deorbit_defaults(), \"auto\"):opt:max_duration"));
         }
 
         [Theory]
@@ -35,6 +35,11 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [InlineData("lexicon(\"target\", lexicon(\"lat\", -0.1, \"lng\", -74.5))")]
         [InlineData("lexicon(\"target\", \"ksc\", \"max_wait\", 3600, \"accuracy_km\", 25)")]
         [InlineData("lexicon(\"target\", \"ksc\", \"max_wait\", \"auto\", \"stage_limit\", 1, \"drop_empty\", \"tank\")")]
+        [InlineData("lexicon(\"target\", \"ksc\", \"separate\", 1)")]
+        [InlineData("lexicon(\"target\", \"ksc\", \"separate\", 0)")]
+        [InlineData("lexicon(\"target\", \"ksc\", \"separate\", \"transfer\")")]
+        [InlineData("lexicon(\"target\", \"ksc\", \"separate\", list(\"fuelTank.long\", \"transfer\"))")]
+        [InlineData("lexicon(\"target\", \"ksc\", \"separate\", \"none\")")]
         public void Options_it_can_use_pass(string options)
         {
             Assert.Equal("", Unreadable(options));
@@ -51,6 +56,11 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [InlineData("lexicon(\"target\", \"ksc\", \"max_wait\", 0)", "max_wait must be 'auto' or seconds above 0, not 0")]
         [InlineData("lexicon(\"target\", \"ksc\", \"accuracy_km\", -1)", "accuracy_km must be km above 0, not -1")]
         [InlineData("lexicon(\"target\", \"ksc\", \"accuracy_km\", \"close\")", "accuracy_km must be km above 0, not close")]
+        [InlineData("lexicon(\"target\", \"ksc\", \"separate\", -1)", "separate must be 'none', a stage number or part names or tags, not -1")]
+        [InlineData("lexicon(\"target\", \"ksc\", \"separate\", 1.5)", "separate must be 'none', a stage number or part names or tags, not 1.5")]
+        [InlineData("lexicon(\"target\", \"ksc\", \"separate\", \"\")", "separate must be 'none', a stage number or part names or tags, not ''")]
+        [InlineData("lexicon(\"target\", \"ksc\", \"separate\", list())", "separate must be 'none', a stage number or part names or tags, not an empty list")]
+        [InlineData("lexicon(\"target\", \"ksc\", \"separate\", lexicon())", "separate must be 'none', a stage number or part names or tags, not a Lexicon")]
         public void An_option_value_it_cannot_use_is_refused(string options, string reason)
         {
             Assert.Equal(reason, Unreadable(options));
@@ -112,10 +122,32 @@ namespace ClaudiaKermin.Kerboscript.Tests
         public void The_burn_search_is_asked_for_the_site_window_ground_accuracy_and_isp()
         {
             var printed = KosHarness.Run(CoreLibrary.Bundle(
-                "local q is deorbit_query(lexicon(\"lat\", -0.0972, \"lng\", -74.5577), 1240, 21549.425, -150, 10, 320).\n"
-                + "print q:lat. print q:lng. print q:earliest_ut. print q:max_wait. print q:ground_alt. print q:accuracy_km. print q:isp.")).ToArray();
+                "local q is deorbit_query(lexicon(\"lat\", -0.0972, \"lng\", -74.5577), 1240, 21549.425, -150, 10, 320, list()).\n"
+                + "print q:lat. print q:lng. print q:earliest_ut. print q:max_wait. print q:ground_alt. print q:accuracy_km. print q:isp. print q:leave_out:length.")).ToArray();
             // Water's ground is the sea, not the sea bed.
-            Assert.Equal(new[] { "-0.0972", "-74.5577", "1240", "21549.425", "0", "10", "320" }, printed);
+            Assert.Equal(new[] { "-0.0972", "-74.5577", "1240", "21549.425", "0", "10", "320", "0" }, printed);
+        }
+
+        [Fact]
+        public void Parts_to_separate_are_left_out_of_the_burn_search_and_the_burn_does_not_lighten_what_stays()
+        {
+            var printed = KosHarness.Run(CoreLibrary.Bundle(
+                "local q is deorbit_query(lexicon(\"lat\", 0, \"lng\", 0), 1240, 3600, 0, 10, 320, list(\"11\", \"12\")).\n"
+                + "print q:leave_out:join(\",\"). print q:isp.")).ToArray();
+            // The burn's propellant is in the stage it drops: the craft that re-enters weighs what it does now.
+            Assert.Equal(new[] { "11,12", "0" }, printed);
+        }
+
+        // ---- after the burn ----
+
+        [Theory]
+        [InlineData("lexicon(\"error\", \"\", \"error_km\", 3.2)", 10, "")]
+        [InlineData("lexicon(\"error\", \"\", \"error_km\", 10)", 10, "")]
+        [InlineData("lexicon(\"error\", \"\", \"error_km\", 733.48)", 10, "the burn is flown, but the craft is predicted to land 733 km from the target, over accuracy_km 10: it is coming down, so call reentry")]
+        [InlineData("lexicon(\"error\", \"the craft skips out of Kerbin's atmosphere and does not fall back in\")", 10, "the burn is flown, but its landing can't be predicted (the craft skips out of Kerbin's atmosphere and does not fall back in)")]
+        public void Success_is_a_landing_predicted_within_accuracy_after_the_burn(string after, double accuracy, string reason)
+        {
+            Assert.Equal(reason, One("deorbit_after_burn(" + after + ", " + accuracy + ")"));
         }
 
         [Fact]

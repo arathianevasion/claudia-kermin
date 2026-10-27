@@ -384,6 +384,111 @@ function claudia_drop_holds_core {
   return false.
 }
 
+// What dropping the parts named in names (part names or tags) takes: lexicon("error", "" or why it
+// can't, "decouplers", the decouplers to fire, "gone", every part leaving with them). Fires nothing;
+// a name that can't be dropped makes the whole drop fail, so nothing goes.
+function claudia_drop_plan {
+  parameter names.
+  local plan is lexicon("error", "", "decouplers", list(), "gone", list()).
+  local seen is list().
+  for wanted in names {
+    local matched is false.
+    for p in ship:parts {
+      if claudia_drop_matches(p:name, p:tag, list(wanted)) {
+        set matched to true.
+        local d is claudia_decoupler_of(p).
+        if d:istype("String") {
+          set plan:error to wanted + " has no decoupler".
+          return plan.
+        }
+        if not seen:contains(d:uid) {
+          local with is claudia_dropped_with(d).
+          if claudia_drop_holds_core(with) {
+            set plan:error to wanted + " would drop the part running the script".
+            return plan.
+          }
+          seen:add(d:uid).
+          plan:decouplers:add(d).
+          for g in with {
+            plan:gone:add(g).
+          }
+        }
+      }
+    }
+    if not matched {
+      set plan:error to "no part matches " + wanted.
+      return plan.
+    }
+  }
+  return plan.
+}
+
+// claudia_drop_plan's lexicon for the decouplers that fire at stage number stage_num (kOS's
+// PART:STAGE, as reentry's jettison_stage) and the parts leaving with them.
+function claudia_stage_drop_plan {
+  parameter stage_num.
+  local plan is lexicon("error", "", "decouplers", list(), "gone", list()).
+  for p in ship:parts {
+    if claudia_is_decoupler(p) and p:stage = stage_num {
+      local with is claudia_dropped_with(p).
+      if claudia_drop_holds_core(with) {
+        set plan:error to "stage " + stage_num + "'s " + p:name + " would drop the part running the script".
+        return plan.
+      }
+      plan:decouplers:add(p).
+      for g in with {
+        plan:gone:add(g).
+      }
+    }
+  }
+  if plan:decouplers:length = 0 {
+    set plan:error to "no decoupler fires at stage " + stage_num.
+  }
+  return plan.
+}
+
+// The kOS UIDs of the parts a drop plan sends away, as the reentry predictor's leave_out takes them.
+function claudia_drop_uids {
+  parameter plan.
+  local uids is list().
+  for g in plan:gone {
+    uids:add(g:uid).
+  }
+  return uids.
+}
+
+// Fires a drop plan's decouplers, lets the parts leave, notes the names of those that really left in
+// ctx:dropped and takes the craft as it now is (a drop the block chose is not part loss). Returns ""
+// or "nothing separated: the decouplers did not fire".
+function claudia_fire_drop {
+  parameter ctx, plan.
+  local before is ship:parts:length.
+  local fired is 0.
+  for d in plan:decouplers {
+    if claudia_fire_decoupler(d) {
+      set fired to fired + 1.
+    }
+  }
+  // Let the dropped parts leave before counting.
+  wait 0.5.
+  local left_count is before - ship:parts:length.
+  set ctx:parts to ship:parts:length.
+  if fired = 0 or left_count <= 0 {
+    return "nothing separated: the decouplers did not fire".
+  }
+  // Report only the parts that really left.
+  local left is list().
+  for p in ship:parts {
+    left:add(p:uid).
+  }
+  for g in plan:gone {
+    if not left:contains(g:uid) {
+      ctx:dropped:add(g:name).
+    }
+  }
+  return "".
+}
+
 // The event, of a decoupler module's event names, that drops what it holds; "" if it has none. kOS
 // names an event by its menu text, which a part may rename (stock HeatShield1's ModuleDecouple lists
 // "jettison heat shield", not "decouple"), so the known names come first, then any that says it.

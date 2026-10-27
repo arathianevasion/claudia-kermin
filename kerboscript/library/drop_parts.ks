@@ -59,58 +59,15 @@ function drop_parts {
     return claudia_finish(ctx, false, names, extra).
   }
   // Work out every decoupler to fire before firing any, so a name that can't be dropped drops nothing.
-  local decouplers is list().
-  local seen is list().
-  for wanted in names {
-    local matched is false.
-    for p in ship:parts {
-      if claudia_drop_matches(p:name, p:tag, list(wanted)) {
-        set matched to true.
-        local d is claudia_decoupler_of(p).
-        if d:istype("String") {
-          return claudia_finish(ctx, false, wanted + " has no decoupler", extra).
-        }
-        if not seen:contains(d:uid) {
-          if claudia_drop_holds_core(claudia_dropped_with(d)) {
-            return claudia_finish(ctx, false, wanted + " would drop the part running the script", extra).
-          }
-          seen:add(d:uid).
-          decouplers:add(d).
-        }
-      }
-    }
-    if not matched {
-      return claudia_finish(ctx, false, "no part matches " + wanted, extra).
-    }
+  local plan is claudia_drop_plan(names).
+  if plan:error <> "" {
+    return claudia_finish(ctx, false, plan:error, extra).
   }
   local before is ship:parts:length.
-  local gone is list().
-  for d in decouplers {
-    for g in claudia_dropped_with(d) {
-      gone:add(g).
-    }
-  }
-  local fired is 0.
-  for d in decouplers {
-    if claudia_fire_decoupler(d) {
-      set fired to fired + 1.
-    }
-  }
-  // Let the dropped parts leave before counting.
-  wait 0.5.
+  local fired is claudia_fire_drop(ctx, plan).
   set extra:parts_dropped to before - ship:parts:length.
-  if fired = 0 or extra:parts_dropped <= 0 {
-    return claudia_finish(ctx, false, "nothing separated: the decouplers did not fire", extra).
-  }
-  // Report only the parts that really left.
-  local left is list().
-  for p in ship:parts {
-    left:add(p:uid).
-  }
-  for g in gone {
-    if not left:contains(g:uid) {
-      ctx:dropped:add(g:name).
-    }
+  if fired <> "" {
+    return claudia_finish(ctx, false, fired, extra).
   }
   return claudia_finish(ctx, true, "", extra).
 }

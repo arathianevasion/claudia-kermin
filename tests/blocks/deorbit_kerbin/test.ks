@@ -3,10 +3,11 @@
 //
 // deorbit block test, Kerbin to KSC: the Mission Script the debug block test runner starts (bundled
 // with the Core Library, as for a real Mission). The reference craft arrives in an 80 km circular
-// equatorial orbit with no stage fired. deorbit chooses and flies the burn for KSC; reentry then brings
-// it down, dropping the tank and engine (stage 1) once the heating is over, under its parachute. The
-// Script Result is deorbit's, plus where it actually came down: miss_km against the landing deorbit
-// predicted after its burn, target_km against KSC. KSP.log has the predictor's own lines.
+// equatorial orbit with no stage fired. deorbit chooses the burn for KSC for the probe capsule alone,
+// flies it, then drops the spent tank and engine (separate 1, the stage-1 decoupler) and predicts the
+// capsule's landing again; reentry then brings the capsule down under its parachute (#326). The Script
+// Result is deorbit's, plus where it actually came down: miss_km against the landing deorbit predicted
+// after its burn and separation, target_km against KSC. KSP.log has the predictor's own lines.
 
 @lazyglobal off.
 
@@ -20,7 +21,7 @@ function test_km {
 }
 
 local aim is deorbit_ksc().
-local result is deorbit(lexicon("target", "ksc", "stage_limit", 2)).
+local result is deorbit(lexicon("target", "ksc", "stage_limit", 2, "separate", 1)).
 print "deorbit test: success " + result:success + ", burn at " + result:burn_ut + ", dv " + result:dv_used + ", predicted " + result:predicted_geo + " (" + result:predicted_error_km + " km off), " + result:reason.
 // The checker compares a field with a literal only, so the test reports the comparisons it needs; a
 // distance it never measured stays far over its check.
@@ -29,7 +30,7 @@ set result["miss_km"] to 9999.
 set result["target_km"] to 9999.
 set result["actual_geo"] to lexicon().
 if result:burn_ut > 0 {
-  local down is reentry(lexicon("jettison_stage", 1)).
+  local down is reentry(lexicon("jettison_stage", "none")).
   set result["reentry_success"] to down:success.
   set result["reentry_reason"] to down:reason.
   set result["landed_or_splashed"] to status = "LANDED" or status = "SPLASHED".
