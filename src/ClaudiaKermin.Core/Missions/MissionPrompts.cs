@@ -442,6 +442,22 @@ namespace ClaudiaKermin.Core.Missions
                 + Rounded(startLeft.Value) + " m/s, now " + Rounded(nowLeft.Value) + " m/s).";
         }
 
+        /// <summary>
+        /// The Debrief's line on the monopropellant the whole run used, from stock's amount at its start and now (dropped
+        /// monopropellant counts as used); null when the craft carried none at the start; says why when a reading is missing.
+        /// </summary>
+        public static string RunMonopropellantLine(double? startAmount, GameSnapshot now)
+        {
+            if (startAmount.HasValue && startAmount.Value <= 0) return null;
+            var nowAmount = LiveReadings.MonopropellantOf(now);
+            string why = null;
+            if (!startAmount.HasValue) why = "no monopropellant reading at the run's start";
+            else if (!nowAmount.HasValue) why = "the craft's readings aren't available now";
+            if (why != null) return "Monopropellant used this run: unknown (" + why + ").";
+            return "Monopropellant used this run: " + Rounded(System.Math.Max(0, startAmount.Value - nowAmount.Value)) + " units ("
+                + Rounded(startAmount.Value) + " at start, " + Rounded(nowAmount.Value) + " now).";
+        }
+
         private static string Rounded(double value)
         {
             return value.ToString("#,0", CultureInfo.InvariantCulture);

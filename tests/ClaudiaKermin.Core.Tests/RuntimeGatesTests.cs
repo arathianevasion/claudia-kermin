@@ -199,6 +199,15 @@ namespace ClaudiaKermin.Core.Tests
             Assert.False(CoastCheck.IsCoast(null, new[] { true }));
         }
 
+        [Theory]
+        [InlineData(new[] { 12.5 }, new[] { false }, "physics warp dropped: engine thrust")]
+        [InlineData(new[] { 0.0 }, new[] { true }, "physics warp dropped: RCS thrust")]
+        [InlineData(new[] { 3.0 }, new[] { true }, "physics warp dropped: engine and RCS thrust")]
+        public void TheDroppedLogNamesWhetherAnEngineOrRcsTrippedIt(double[] thrusts, bool[] rcs, string expected)
+        {
+            Assert.Equal(expected, CoastCheck.DroppedLog(thrusts, rcs));
+        }
+
         [Fact]
         public void WarpIsDroppedOnlyWhenPhysicsWarpedAboveOneTimesOffACoast()
         {

@@ -203,6 +203,13 @@ namespace ClaudiaKermin.Core.Missions
             return snapshot.Stages.Sum(s => s.DeltaVVac);
         }
 
+        /// <summary>The craft's stock MonoPropellant, in units, across all its tanks (0 when it carries none); null when there is no snapshot.</summary>
+        public static double? MonopropellantOf(GameSnapshot snapshot)
+        {
+            if (snapshot == null) return null;
+            return snapshot.Resources.Where(r => string.Equals(r.Name, "MonoPropellant", StringComparison.OrdinalIgnoreCase)).Sum(r => r.Amount);
+        }
+
         /// <summary>This reading of a check's quantity; null when it can't be measured now.</summary>
         public double? Of(TelemetryCheck check)
         {
