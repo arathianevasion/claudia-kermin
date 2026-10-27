@@ -77,7 +77,7 @@ namespace ClaudiaKermin.Core.Tools
             SnapshotBody at;
             Conic orbit;
             BodyFrame frame;
-            var problem = Reentry(snapshot, body, out at, out orbit, out frame);
+            var problem = Reentry(snapshot, body, null, out at, out orbit, out frame);
             if (problem != null) return Error(problem);
             var plan = Tools.DeorbitBurn.Find(at, orbit, new DeorbitAsk
             {
@@ -102,7 +102,10 @@ namespace ClaudiaKermin.Core.Tools
 
         /// <summary>
         /// <c>ADDONS:CLAUDIA:REENTRYIMPACT</c>, for <c>deorbit</c> once it has burned: where the craft's orbit as it is now comes
-        /// down, by the reentry predictor. Takes <c>ground_alt</c> (m) and, for the distance, <c>lat</c> and <c>lng</c>. Gives
+        /// down, by the reentry predictor. Takes <c>ground_alt</c> (m) and, for the distance, <c>lat</c> and <c>lng</c>. Given
+        /// <c>orbit_sma</c>, <c>orbit_ecc</c>, <c>orbit_inc</c>, <c>orbit_lan</c>, <c>orbit_argpe</c>, <c>orbit_mna</c> (degrees, as kOS
+        /// gives them), <c>orbit_epoch</c> (UT) and <c>orbit_body</c> (name), it predicts that orbit instead of the craft's: <c>return</c>
+        /// asks it of its planned path round Kerbin before the craft is there. Gives
         /// <c>error</c> "", <c>lat</c>, <c>lng</c>, <c>landing_ut</c> and <c>error_km</c> (-1 without a target); or only
         /// <c>error</c>, saying why there is no landing point.
         /// </summary>
@@ -113,7 +116,7 @@ namespace ClaudiaKermin.Core.Tools
             SnapshotBody at;
             Conic orbit;
             BodyFrame frame;
-            var problem = Reentry(snapshot, body, out at, out orbit, out frame);
+            var problem = Reentry(snapshot, body, ask, out at, out orbit, out frame);
             if (problem != null) return Error(problem);
             var landing = ReentryPredictor.Predict(at, orbit, snapshot.Ut, Number(ask, "ground_alt", 0), craft.MassKg, air, craft, frame);
             if (landing.Error != null) return Error(landing.Error);
@@ -126,12 +129,26 @@ namespace ClaudiaKermin.Core.Tools
         }
 
         /// <summary>The body, the craft's orbit and how the frame sits on the body, for a reentry call; or why there are none.</summary>
-        private static string Reentry(GameSnapshot snapshot, IPlanningBody body, out SnapshotBody at, out Conic orbit, out BodyFrame frame)
+        private static string Reentry(GameSnapshot snapshot, IPlanningBody body, IDictionary<string, object> ask, out SnapshotBody at, out Conic orbit, out BodyFrame frame)
         {
             at = null;
             orbit = null;
             frame = null;
             var elements = snapshot == null ? null : snapshot.Orbit;
+            if (ask != null && ask.ContainsKey("orbit_sma"))
+            {
+                elements = new SnapshotOrbit
+                {
+                    SemiMajorAxis = Number(ask, "orbit_sma", 0),
+                    Eccentricity = Number(ask, "orbit_ecc", 0),
+                    Inclination = Number(ask, "orbit_inc", 0),
+                    Lan = Number(ask, "orbit_lan", 0),
+                    ArgumentOfPeriapsis = Number(ask, "orbit_argpe", 0),
+                    MeanAnomalyAtEpoch = Number(ask, "orbit_mna", 0) * Math.PI / 180,
+                    Epoch = Number(ask, "orbit_epoch", 0),
+                    Body = ask.ContainsKey("orbit_body") ? ask["orbit_body"] as string : null,
+                };
+            }
             if (elements == null || elements.SemiMajorAxis == 0) return "the Game Snapshot has no orbit for the craft";
             var name = string.IsNullOrEmpty(elements.Body) ? snapshot.Body : elements.Body;
             at = new BodySystem(snapshot.Bodies).Find(name);
