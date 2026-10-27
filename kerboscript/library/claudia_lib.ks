@@ -729,15 +729,169 @@ function claudia_mean_anomaly {
 
 // ---- Burns ----
 
-// Seconds to burn dv (m/s) from mass (t) at thrust (kN) and isp (s); -1 with no thrust.
-function claudia_burn_time {
-  parameter dv, mass_t, thrust_kn, isp.
-  if thrust_kn <= 0 or isp <= 0 {
+// Seconds to burn dv (m/s) over the stages a burn uses, in burn order: each a lexicon dv (m/s it
+// has), duration (s to burn it all) and isp (s), as stock's delta-v gives them (claudia_burn_stages).
+// Each stage is burned out before the next; within the last one, the rocket equation from its full
+// mass (its duration over 1 - e^(-dv/ve)), or a straight share of its duration with no isp. A burn
+// past the last stage runs on at that stage's rate. -1 if no stage has delta-v. Pure: literals
+// rather than CONSTANT:G0 and CONSTANT:E (KSP's g0 is 9.80665).
+function claudia_staged_burn_time {
+  parameter dv, stages.
+  local left is dv.
+  local total is 0.
+  local last is 0.
+  for st in stages {
+    if st:dv > 0 and st:duration > 0 {
+      set last to st.
+      if left <= st:dv {
+        if st:isp <= 0 {
+          return total + st:duration * left / st:dv.
+        }
+        local ve is st:isp * 9.80665.
+        return total + st:duration * (1 - 2.718281828459045 ^ (-left / ve)) / (1 - 2.718281828459045 ^ (-st:dv / ve)).
+      }
+      set total to total + st:duration.
+      set left to left - st:dv.
+    }
+  }
+  if last:istype("Scalar") {
     return -1.
   }
-  // Literals rather than CONSTANT:G0 and CONSTANT:E, so this stays pure (KSP's g0 is 9.80665).
-  local ve is isp * 9.80665.
-  return mass_t * ve / thrust_kn * (1 - 2.718281828459045 ^ (-dv / ve)).
+  return total + last:duration * left / last:dv.
+}
+
+// The stages a burn starting now can use, from the current one down to stage_limit, for
+// claudia_staged_burn_time: stock's vacuum delta-v and burn time for each, and the vacuum isp of the
+// engines burning in it (lit by then and not yet dropped).
+function claudia_burn_stages {
+  parameter stage_limit.
+  local stages is list().
+  local engs is list().
+  list engines in engs.
+  from { local s is stage:number. } until s < max(0, stage_limit) step { set s to s - 1. } do {
+    local sdv is ship:stagedeltav(s).
+    local thrusts is list().
+    local isps is list().
+    for e in engs {
+      if e:stage >= s and e:decoupledin < s {
+        thrusts:add(e:possiblethrustat(0)).
+        isps:add(e:ispat(0)).
+      }
+    }
+    stages:add(lexicon("dv", sdv:vacuum, "duration", sdv:duration, "isp", claudia_mean_isp(thrusts, isps))).
+  }
+  return stages.
+}
+
+// Burn timing for a node dv (m/s) node_eta s from now over stages (claudia_burn_stages):
+// lexicon("burn_time", s, "lead", s, "start_in", s from now). lead_opt: "half_burn" (start early by
+// the time to burn half the node's delta-v) or seconds before the node. burn_time -1: no thrust. Pure.
+function claudia_burn_timing {
+  parameter dv, stages, node_eta, lead_opt.
+  local burn is claudia_staged_burn_time(dv, stages).
+  local lead is lead_opt.
+  if lead_opt:istype("String") {
+    set lead to max(0, claudia_staged_burn_time(dv / 2, stages)).
+  }
+  return lexicon("burn_time", burn, "lead", lead, "start_in", node_eta - lead).
+}
+
+// Aligned for a burn: within 2 degrees of it and turning under 0.5 deg/s. Pure.
+function claudia_aligned {
+  parameter angle_deg, rate_deg_s.
+  return angle_deg < 2 and rate_deg_s < 0.5.
+}
+
+// Seconds (to 0.1) a burn starting at now started after its start_ut; 0 within a second of it (a
+// tick, warp settling) or early. Pure.
+function claudia_late_start {
+  parameter now, start_ut.
+  if now - start_ut < 1 {
+    return 0.
+  }
+  return round(now - start_ut, 1).
+}
+
+// Whether the craft is aligned with nd's burn vector now.
+function claudia_aligned_to {
+  parameter nd.
+  return claudia_aligned(vang(ship:facing:forevector, nd:deltav), ship:angularvel:mag * constant:radtodeg).
+}
+
+// Turns to nd's burn vector (steering must be locked to it) until aligned, for at most 120 s and
+// never past start_ut. Returns lexicon error ("" or an abort reason), aligned, seconds (taken).
+function claudia_turn_to_burn {
+  parameter ctx, nd, start_ut.
+  local began is time:seconds.
+  local give_up is min(began + 120, start_ut).
+  local reason is "".
+  until claudia_aligned_to(nd) or time:seconds >= give_up {
+    set reason to claudia_tick(ctx, 0).
+    if reason <> "" {
+      break.
+    }
+    wait 0.
+  }
+  return lexicon("error", reason, "aligned", claudia_aligned_to(nd), "seconds", round(time:seconds - began, 1)).
+}
+
+// Before a burn (spec #314): works out the burn from every stage it will use (to stage_limit), turns
+// to nd, works it out again, then warps, back at 1x max(30 s, turn_time) before the burn start and
+// never past it. turn_time: TURNTIME's for the craft; lead_opt as for claudia_burn_timing. A turn
+// that isn't aligned after 120 s (or by the start) goes on anyway and counts in not_aligned. While
+// warp is asked for, a drop to 1x with the craft off the burn ends the warp, and it turns again
+// before warping on. Leaves steering locked to nd. Returns lexicon error ("", "no thrust" or an
+// abort reason), start_ut, burn_time (s), turn_s (s the first turn took), not_aligned.
+function claudia_warp_to_burn {
+  parameter ctx, nd, lead_opt, turn_time.
+  local out is lexicon("error", "", "start_ut", 0, "burn_time", -1, "turn_s", 0, "not_aligned", 0).
+  local timing is claudia_burn_timing(nd:deltav:mag, claudia_burn_stages(ctx:opt:stage_limit), nd:eta, lead_opt).
+  if timing:burn_time < 0 {
+    set out:error to "no thrust".
+    return out.
+  }
+  // Points at the burn as it is now (raw-frame vectors drift during warp).
+  lock steering to nd:deltav.
+  local turned is claudia_turn_to_burn(ctx, nd, time:seconds + timing:start_in).
+  set out:turn_s to turned:seconds.
+  if not turned:aligned {
+    set out:not_aligned to 1.
+  }
+  if turned:error <> "" {
+    set out:error to turned:error.
+    return out.
+  }
+  set timing to claudia_burn_timing(nd:deltav:mag, claudia_burn_stages(ctx:opt:stage_limit), nd:eta, lead_opt).
+  set out:burn_time to timing:burn_time.
+  local start_ut is time:seconds + timing:start_in.
+  set out:start_ut to start_ut.
+  local recheck is turned:aligned.
+  until time:seconds >= start_ut {
+    local warp_end is claudia_warp_end(start_ut, turn_time).
+    local check is recheck.
+    // A drop KSP made (not a hold, not the player) while there's warp left to ask for, off the burn.
+    local off_burn is {
+      return check and kuniverse:timewarp:rate <= 1 and time:seconds < warp_end - 5
+        and not addons:claudia:warphold and not addons:claudia:warpcancelled and not claudia_aligned_to(nd).
+    }.
+    local waited is claudia_warp_to(ctx, start_ut, turn_time, off_burn).
+    if waited <> "" {
+      set out:error to waited.
+      return out.
+    }
+    if time:seconds < start_ut {
+      set turned to claudia_turn_to_burn(ctx, nd, start_ut).
+      if turned:error <> "" {
+        set out:error to turned:error.
+        return out.
+      }
+      if not turned:aligned {
+        set out:not_aligned to out:not_aligned + 1.
+        set recheck to false.
+      }
+    }
+  }
+  return out.
 }
 
 // The combined isp of engines burning together, from lists of their thrusts and isps.
