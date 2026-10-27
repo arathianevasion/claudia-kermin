@@ -1337,7 +1337,11 @@ function claudia_rcs_translate {
   parameter ctx, on.
   set ctx:rcs_translating to on.
   if on {
-    local decided is claudia_rcs_decide(lexicon("rcs", rcs, "steering", steeringmanager:enabled, "monoprop", claudia_monoprop():amount,
+    local monoprop is claudia_monoprop():amount.
+    if ctx:rcs_dry {
+      set monoprop to 0.
+    }
+    local decided is claudia_rcs_decide(lexicon("rcs", rcs, "steering", steeringmanager:enabled, "monoprop", monoprop,
       "translating", true), ctx:opt:rcs_tolerance).
     if decided:reason <> "" {
       claudia_rcs_switch(decided["on"], decided:reason, lexicon("rate_dps", round(ship:angularvel:mag * constant:radtodeg, 2))).
