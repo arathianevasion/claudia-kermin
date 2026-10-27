@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Andrew Watson
 
 using System;
+using System.Collections.Generic;
 using ClaudiaKermin.Core.Tools;
 using UnityEngine;
 
@@ -9,9 +10,11 @@ namespace ClaudiaKermin.Adapter
 {
     /// <summary>
     /// The numbers the turn-time model (<see cref="TurnTime"/>) needs, read from a vessel: the torque its running reaction wheels
-    /// (none with no electric charge aboard) and its RCS thrusters can give (RCS propellant isn't checked) (stock's <c>ITorqueProvider.GetPotentialTorque</c>, the weaker direction on each axis), whether
-    /// RCS is on, and stock's moment of inertia (<c>Vessel.MOI</c>). Both are in the vessel's control frame: x is pitch, z is yaw.
-    /// Gimbals and control surfaces are left out, as there's no thrust or air on a Coast. Main thread; reads only.
+    /// (none with no electric charge aboard) can give (stock's <c>ITorqueProvider.GetPotentialTorque</c>, the weaker direction on
+    /// each axis); its RCS nozzles, worked into torque as kOS does (<see cref="RcsTorque"/>, kOS #2814: stock's call is broken for
+    /// <c>ModuleRCS</c>); whether it has MonoPropellant; and stock's moment of inertia (<c>Vessel.MOI</c>). All are in the
+    /// vessel's control frame: x is pitch, z is yaw. Gimbals and control surfaces are left out, as there's no thrust or air on a
+    /// Coast. Main thread; reads only.
     /// </summary>
     public static class TurnCraftReader
     {
@@ -19,17 +22,21 @@ namespace ClaudiaKermin.Adapter
         {
             var craft = new TurnCraft
             {
-                RcsOn = vessel.ActionGroups[KSPActionGroup.RCS],
                 MoiPitch = vessel.MOI.x,
                 MoiYaw = vessel.MOI.z,
             };
-            // Wheels turn on electric charge: a craft with none left can't use them.
+            // Wheels turn on electric charge: a craft with none left can't use them. RCS fires on MonoPropellant.
             var charge = 0.0;
+            var monoprop = 0.0;
             foreach (var part in vessel.parts)
             {
                 var ec = part.Resources.Get("ElectricCharge");
                 if (ec != null) charge += ec.amount;
+                var mp = part.Resources.Get("MonoPropellant");
+                if (mp != null) monoprop += mp.amount;
             }
+            craft.RcsUsable = monoprop > 0;
+            var nozzles = new List<RcsThruster>();
             foreach (var part in vessel.parts)
             {
                 foreach (var module in part.Modules)
@@ -41,14 +48,36 @@ namespace ClaudiaKermin.Adapter
                         craft.WheelPitch += Weaker(wheel, 0);
                         craft.WheelYaw += Weaker(wheel, 2);
                     }
-                    else if (rcs != null && rcs.isEnabled && rcs.rcsEnabled)
+                    else if (rcs != null)
                     {
-                        craft.RcsPitch += Weaker(rcs, 0);
-                        craft.RcsYaw += Weaker(rcs, 2);
+                        AddNozzles(vessel, rcs, nozzles);
                     }
                 }
             }
+            var torque = RcsTorque.Sum(nozzles);
+            craft.RcsPitch = torque.Pitch;
+            craft.RcsYaw = torque.Yaw;
             return craft;
+        }
+
+        /// <summary>
+        /// The module's nozzles, as kOS's <c>CorrectedGetPotentialTorque</c> reads them. kOS also skips a module that is off
+        /// (<c>!rcs_active</c>) or flamed out; here the switch doesn't matter, and propellant is <see cref="TurnCraft.RcsUsable"/>'s
+        /// (<c>flameout</c> is only set while a nozzle is asked to fire).
+        /// </summary>
+        private static void AddNozzles(Vessel vessel, ModuleRCS rcs, List<RcsThruster> nozzles)
+        {
+            if (rcs.part.ShieldedFromAirstream || !rcs.rcsEnabled || !rcs.isEnabled || rcs.isJustForShow) return;
+            var com = vessel.CurrentCoM;
+            var frame = vessel.ReferenceTransform;
+            var thrust = rcs.thrusterPower * rcs.thrustPercentage * 0.01;
+            foreach (var nozzle in rcs.thrusterTransforms)
+            {
+                if (nozzle == null) continue;
+                var at = frame.InverseTransformDirection(nozzle.position - com);
+                var dir = frame.InverseTransformDirection(rcs.useZaxis ? -nozzle.forward : -nozzle.up);
+                nozzles.Add(new RcsThruster { X = at.x, Y = at.y, Z = at.z, DirX = dir.x, DirY = dir.y, DirZ = dir.z, Thrust = thrust });
+            }
         }
 
         /// <summary>The smaller of the torque one way and the other about <paramref name="axis"/> (kN·m).</summary>
