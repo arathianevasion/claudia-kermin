@@ -193,6 +193,8 @@ function exec_node_rcs_trim {
   parameter ctx, nd, done_dv.
   local rcs_was is rcs.
   rcs on.
+  // RCS Use leaves RCS alone while translating (claudia_rcs_translate replaces this in #401).
+  set ctx:rcs_translating to true.
   local stop_ut is time:seconds + 60.
   local reason is "".
   until nd:deltav:mag < done_dv or time:seconds > stop_ut {
@@ -208,6 +210,7 @@ function exec_node_rcs_trim {
     wait 0.
   }
   set ship:control:neutralize to true.
+  set ctx:rcs_translating to false.
   set rcs to rcs_was.
   return reason.
 }

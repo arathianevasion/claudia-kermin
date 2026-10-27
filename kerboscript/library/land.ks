@@ -1287,6 +1287,8 @@ function land_descend {
   // still turning onto its first command, flying by land_turning_s until it is pointed and braking (#380).
   local turn_left is 0.
   local first_turn is false.
+  // RCS Use: the pre-point has until braking is planned to start; braking itself has no deadline.
+  set ctx:turn_by to extra:burn_start_ut.
 
   until status = "LANDED" or status = "SPLASHED" {
     local up_v is ship:up:vector.
@@ -1351,6 +1353,7 @@ function land_descend {
       // the site falls behind, or if the ground comes up first.
       if land_brake_due(dist, vdot(v_h, to_site), v_h:mag, -v_v, h, land_brake_accel(a_max, g), opt:burn_margin, turn_left) {
         set braking to true.
+        set ctx:turn_by to 0.
         set extra:braking_began_ut to round(time:seconds, 1).
         set first_turn to true.
         set h_start to max(500, h).
