@@ -52,8 +52,7 @@ namespace ClaudiaKermin.Adapter
     public sealed class ReentryCraft : IReentryCraft
     {
         private static readonly double[] Machs = MachTable();
-        /// <summary>A drag cube's faces in stock's order (DragCubeList.faceDirections, internal there).</summary>
-        private static readonly Vector3[] Faces = { Vector3.right, Vector3.left, Vector3.up, Vector3.down, Vector3.forward, Vector3.back };
+        private static readonly Vector3[] Faces = DragCubeDrag.Faces;
         private readonly double[] _area = new double[Machs.Length];
         private readonly double _mass;
 
@@ -67,19 +66,14 @@ namespace ClaudiaKermin.Adapter
             {
                 if (Gone(part, gone)) continue;
                 if (gone.Count > 0) _mass += (part.mass + part.GetResourceMass()) * 1000;
-                if (part.ShieldedFromAirstream || part.DragCubes == null || part.DragCubes.None) continue;
+                if (!DragCubeDrag.MeetsAir(part)) continue;
                 var local = part.partTransform.InverseTransformDirection(flow);
                 var bared = BaredFaces(part, gone);
                 for (var i = 0; i < Machs.Length; i++)
                 {
-                    if (bared != null)
-                    {
-                        _area[i] += AreaDrag(part.DragCubes, bared, local, (float)Machs[i]);
-                        continue;
-                    }
-                    var data = default(DragCubeList.CubeData);
-                    part.DragCubes.AddSurfaceDragDirection(local, (float)Machs[i], ref data);
-                    _area[i] += data.areaDrag;
+                    _area[i] += bared != null
+                        ? DragCubeDrag.Area(part.DragCubes, bared, local, (float)Machs[i])
+                        : DragCubeDrag.Area(part, local, (float)Machs[i]);
                 }
             }
         }
@@ -110,20 +104,6 @@ namespace ClaudiaKermin.Adapter
             return areas;
         }
 
-        /// <summary>Stock's DragCubeList.AddSurfaceDragDirection's areaDrag (decompiled), with the face areas given.</summary>
-        private static double AreaDrag(DragCubeList cubes, float[] areas, Vector3 direction, float mach)
-        {
-            double sum = 0;
-            for (var f = 0; f < Faces.Length; f++)
-            {
-                var dot = Vector3.Dot(direction, Faces[f]);
-                var area = areas[f] * PhysicsGlobals.DragCurveValue(cubes.SurfaceCurves, (dot + 1) * 0.5f, mach);
-                var cd = cubes.WeightedDrag[f];
-                sum += area * (cd < 1 ? Mathf.Pow(cubes.DragCurveCd.Evaluate(cd), cubes.DragCurveCdPower.Evaluate(mach)) : cd);
-            }
-            return sum;
-        }
-
         public double MassKg
         {
             get { return _mass; }
@@ -132,8 +112,7 @@ namespace ClaudiaKermin.Adapter
         public double DragArea(double mach, double densitySpeed)
         {
             var area = Interpolate(mach);
-            return area * PhysicsGlobals.DragCubeMultiplier * PhysicsGlobals.DragMultiplier
-                * PhysicsGlobals.DragCurvePseudoReynolds.Evaluate((float)densitySpeed);
+            return area * DragCubeDrag.Multiplier * PhysicsGlobals.DragCurvePseudoReynolds.Evaluate((float)densitySpeed);
         }
 
         private double Interpolate(double mach)

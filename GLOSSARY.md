@@ -56,6 +56,14 @@ _Avoid_: step, phase, maneuver (alone), burn
 A stretch of flight with no engine or RCS thrust, in an atmosphere or not (e.g. launch's climb out of the air after cutoff, a fall under parachutes, the fall before a landing burn); the only stretch on which a Mission Script may use physics warp.
 _Avoid_: drift, glide, cruise
 
+**Boost stage**:
+A stage that lights while the craft is on a suborbital trajectory (periapsis below the atmosphere top, or below the surface where there is no air), in or out of the atmosphere; a stage that lights suborbital stays a Boost stage even if its burn reaches orbit. It may have a thrust-to-weight ratio below 1 when the climb before it was steep enough.
+_Avoid_: booster, lower stage, first stage
+
+**Orbital stage**:
+A stage that lights while the craft is already in orbit: transfers, plane changes and the burns that follow.
+_Avoid_: upper stage, insertion stage, sustainer
+
 **Mission Plan**:
 The ordered list of Maneuver Sequences Claudia intends to fly to reach a Mission Goal, each with its delta-v budget and Due Time or rough timing; approved once to start the Mission and revised as Debriefs require.
 _Avoid_: flight plan, roadmap

@@ -64,6 +64,12 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The vessel's id (its persistent GUID) in Flight, for the Go to button; "" in the editor.</summary>
         public string VesselId = "";
         public List<SnapshotPart> Parts = new List<SnapshotPart>();
+        /// <summary>
+        /// The craft's drag flying nose first: (Mach, m²) keys, drag (N) = ½ρv² × the area, stock's multipliers included and
+        /// its pseudo-Reynolds curve (1 in the air a launch climbs through) left out. Read once for the whole craft as it
+        /// stands; empty when not read (an older recording). Only the recording JSON carries it: Planning Tools read it.
+        /// </summary>
+        public List<double[]> NoseDrag = new List<double[]>();
     }
 
     /// <summary>Distances in metres (from sea level), angles in degrees, times in seconds.</summary>
@@ -201,7 +207,10 @@ namespace ClaudiaKermin.Core.Missions
             return ToJson(true);
         }
 
-        /// <summary>The same; the bodies are left out for the turns that already carry the Delta-v Map.</summary>
+        /// <summary>
+        /// The same; Claudia's turns leave out the bodies (they already carry the Delta-v Map) and the craft's drag table (only
+        /// Planning Tools read it).
+        /// </summary>
         public string ToJson(bool withBodies)
         {
             var json = new JsonWriter().BeginObject()
@@ -248,7 +257,14 @@ namespace ClaudiaKermin.Core.Missions
                 foreach (var tag in part.Tags) json.String(tag);
                 json.EndArray().EndObject();
             }
-            json.EndArray().EndObject();
+            json.EndArray();
+            if (withBodies && Craft.NoseDrag.Count > 0)
+            {
+                json.Name("nose_drag").BeginArray();
+                foreach (var key in Craft.NoseDrag) json.BeginArray().Number(key[0]).Number(key[1]).EndArray();
+                json.EndArray();
+            }
+            json.EndObject();
             json.Name("stages").BeginArray();
             foreach (var stage in Stages)
             {
@@ -308,7 +324,7 @@ namespace ClaudiaKermin.Core.Missions
             return json.EndObject().ToString();
         }
 
-        private static List<double[]> IspCurve(JsonNode keys)
+        private static List<double[]> Keys(JsonNode keys)
         {
             if (keys == null) return new List<double[]>();
             return keys.Items.Where(k => k.Items.Count >= 2)
@@ -350,6 +366,7 @@ namespace ClaudiaKermin.Core.Missions
                 snapshot.Craft.Stage = (int)(JsonNode.Long(craft["stage"]) ?? 0);
                 snapshot.Craft.Seats = (int)(JsonNode.Long(craft["seats"]) ?? 0);
                 snapshot.Craft.VesselId = JsonNode.Str(craft["vessel_id"]) ?? "";
+                snapshot.Craft.NoseDrag = Keys(craft["nose_drag"]);
                 var parts = craft["parts"];
                 if (parts != null)
                 {
@@ -375,7 +392,7 @@ namespace ClaudiaKermin.Core.Missions
                             ThrustVacKn = JsonNode.Double(part["thrust_vac_kn"]) ?? 0,
                             ThrustAslKn = JsonNode.Double(part["thrust_asl_kn"]) ?? 0,
                             IspVac = JsonNode.Double(part["isp_vac"]) ?? 0,
-                            IspCurve = IspCurve(part["isp_curve"]),
+                            IspCurve = Keys(part["isp_curve"]),
                             ChargeMax = JsonNode.Double(part["ec_max"]) ?? 0,
                         });
                     }
