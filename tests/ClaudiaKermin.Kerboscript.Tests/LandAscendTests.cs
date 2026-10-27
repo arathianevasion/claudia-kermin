@@ -50,13 +50,22 @@ namespace ClaudiaKermin.Kerboscript.Tests
 
         [Theory]
         [InlineData(0, 30, "True")]
-        [InlineData(20000, 5, "True")]
+        [InlineData(20000, 21, "True")]
         [InlineData(20001, 30, "False")]
-        [InlineData(0, 4.9, "False")]
+        [InlineData(0, 21, "True")]
+        [InlineData(0, 20, "False")]
+        [InlineData(0, 5, "False")]
         [InlineData(0, -40, "False")]
-        public void A_daylight_pass_is_within_20_km_of_the_track_with_the_sun_5_degrees_up(double cross, double sun, string expected)
+        public void A_daylight_pass_is_within_20_km_of_the_track_with_the_sun_over_20_degrees_up(double cross, double sun, string expected)
         {
             Assert.Equal(expected, One(string.Format(System.Globalization.CultureInfo.InvariantCulture, "land_lit_near({0}, {1})", cross, sun)));
+        }
+
+        [Fact]
+        public void The_kerboscript_daylight_threshold_agrees_with_find_landing_sites_at_20()
+        {
+            Assert.Equal(20, Core.Tools.LandingSiteSearch.MinSunElevationDeg);
+            Assert.Equal(Core.Tools.LandingSiteSearch.MinSunElevationDeg.ToString(CultureInfo.InvariantCulture), One("land_daylight_sun_deg()"));
         }
 
         [Fact]
@@ -213,7 +222,7 @@ function search {
         public void The_pass_search_traces_a_dark_pass_and_takes_the_next_lit_one()
         {
             var printed = MunSearch("{ parameter t. if t < t0 - 1000 { return -20. } return 40. }", OnTrack, "land_search_starts(now, given, period)");
-            Assert.Equal(new[] { "0", "search", "pass: dark: the sun -20 degrees up, under 5", "pass: chosen" }, printed);
+            Assert.Equal(new[] { "0", "search", "pass: dark: the sun -20 degrees up, not over 20", "pass: chosen" }, printed);
         }
 
         [Fact]
@@ -232,7 +241,7 @@ function search {
             // The first pass whose touchdown is after t0 + 20000: the 8th after t0's (t0 + 22157 - 108).
             Assert.Equal("8", printed[0]);
             Assert.Equal("pass: chosen", printed.Last());
-            Assert.Contains("pass: dark: the sun -30 degrees up, under 5", printed);
+            Assert.Contains("pass: dark: the sun -30 degrees up, not over 20", printed);
         }
 
         [Fact]
@@ -245,9 +254,11 @@ function search {
 
         [Theory]
         [InlineData(25000, 30, true, "off the ground track by 25 km, over 20")]
-        [InlineData(1000, 4.9, true, "dark: the sun 4.9 degrees up, under 5")]
+        [InlineData(1000, 15, true, "dark: the sun 15 degrees up, not over 20")]
+        [InlineData(1000, 20, true, "dark: the sun 20 degrees up, not over 20")]
         [InlineData(1000, -40, false, "")]
-        [InlineData(20000, 5, true, "")]
+        [InlineData(1000, 15, false, "")]
+        [InlineData(20000, 21, true, "")]
         public void A_pass_is_rejected_off_the_track_or_dark_and_says_which(double cross, double sun, bool daylight, string expected)
         {
             Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "land_pass_rejected({0}, {1}, {2})", cross, sun, daylight ? "true" : "false")));

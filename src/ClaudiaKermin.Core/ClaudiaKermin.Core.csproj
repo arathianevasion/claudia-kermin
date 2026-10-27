@@ -17,6 +17,7 @@
     <InternalsVisibleTo Include="ClaudiaKermin.Core.Tests" />
     <InternalsVisibleTo Include="ClaudiaKermin.SchemaProbe" />
     <InternalsVisibleTo Include="ClaudiaKermin.ScriptCheck.Tests" />
+    <InternalsVisibleTo Include="ClaudiaKermin.Kerboscript.Tests" />
   </ItemGroup>
 
   <!-- The Core Library ships inside the core, so bundling a Mission Script reads no files. -->

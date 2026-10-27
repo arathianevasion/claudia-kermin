@@ -68,8 +68,8 @@ namespace ClaudiaKermin.Core.Tools
     /// </summary>
     internal static class LandingSiteSearch
     {
-        /// <summary>The sun must be at least this high at the pass for a daylight site, degrees.</summary>
-        public const double MinSunElevationDeg = 5;
+        /// <summary>Daylight (GLOSSARY.md): the sun must be more than this high at the pass for a daylight site, degrees. The same as land_daylight_sun_deg in land.ks.</summary>
+        public const double MinSunElevationDeg = 20;
         public const double MaxWindowHours = 48;
         /// <summary>How far inside its biome a site is wanted by default, m: about the landing accuracy.</summary>
         public const double DefaultEdgeMarginM = 5000;
@@ -125,7 +125,7 @@ namespace ClaudiaKermin.Core.Tools
                 }
                 result.AfterBiome = candidates.Count;
                 if (query.Daylight)
-                    candidates = candidates.Where(c => c.Sample.SunElevation >= MinSunElevationDeg).ToList();
+                    candidates = candidates.Where(c => c.Sample.SunElevation > MinSunElevationDeg).ToList();
             }
             else
             {
