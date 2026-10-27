@@ -29,10 +29,21 @@ namespace ClaudiaKermin.Core.Config
         /// <summary>USD.</summary>
         public decimal DefaultSpendingCap = 10m;
 
-        /// <summary>Input tokens at which server-side compaction runs.</summary>
+        /// <summary>
+        /// The compaction threshold, in input tokens: past it a Mission compacts at the next start of Running whose Sequence
+        /// Plan expects at least <see cref="CompactionMinRunSeconds"/> (#268); the basic chat compacts server-side at it.
+        /// </summary>
         public int CompactionTriggerTokens = 150000;
-        /// <summary>The API rejects a compaction trigger below this.</summary>
+        /// <summary>The API rejects a threshold compaction trigger below this; a Mission keeps the same floor.</summary>
         public const int MinCompactionTriggerTokens = 50000;
+        /// <summary>
+        /// The hard ceiling, in input tokens: past it a Mission compacts at the next turn boundary, however short the sequence.
+        /// Sonnet 5.5 and Opus 5.5 have a 1M-token context window, so this is far inside it; it bounds what a long run of
+        /// short sequences costs per request. Never below the threshold.
+        /// </summary>
+        public int CompactionCeilingTokens = 180000;
+        /// <summary>A Sequence Plan expecting at least this long gives a compaction time to finish before the Debrief needs the conversation.</summary>
+        public double CompactionMinRunSeconds = 120;
 
         /// <summary>What each model costs; add models with <c>price.&lt;model&gt; = input, output</c> lines (USD per million tokens).</summary>
         public PriceTable Prices = PriceTable.Default();
@@ -98,7 +109,7 @@ namespace ClaudiaKermin.Core.Config
             + "default_spending_cap = 10\n"
             + "# Delta-v margin, in percent, the Craft Check wants over the Delta-v Map.\n"
             + "craft_check_margin = 15\n"
-            + "# Input tokens at which the conversation is compacted server-side (at least 50000).\n"
+            + "# Input tokens past which a Mission's conversation is compacted at the next long sequence (at least 50000).\n"
             + "compaction_trigger = 150000\n"
             + "# Price table, USD per million tokens (input, output). A model not listed is charged at the highest price here.\n"
             + "# Add a model you want to try at your own risk: price.<model> = input, output\n"

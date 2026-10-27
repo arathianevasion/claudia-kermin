@@ -250,7 +250,8 @@ namespace ClaudiaKermin.Core.Tests
                     Assert.Equal("1h", layer.GetProperty("cache_control").GetProperty("ttl").GetString());
                 Assert.Equal(bodies[0].GetProperty("system").GetRawText(), system.GetRawText());
                 Assert.Equal("json_schema", body.GetProperty("output_config").GetProperty("format").GetProperty("type").GetString());
-                Assert.Equal(90000, body.GetProperty("context_management").GetProperty("edits")[0].GetProperty("trigger").GetProperty("value").GetInt32());
+                // Compaction is its own request now (#268): no reply turn carries the threshold edit.
+                Assert.False(body.TryGetProperty("context_management", out _));
             }
             // Each request carries only the reply parts it can come back as (#199): the Mission Plan the planning
             // schema; the Sequence Plan, and a question once the Mission Plan is approved, the flight schema.

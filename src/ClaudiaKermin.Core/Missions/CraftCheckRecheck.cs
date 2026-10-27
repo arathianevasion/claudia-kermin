@@ -27,7 +27,6 @@ namespace ClaudiaKermin.Core.Missions
                 MaxTokens = 8000,
                 Effort = _config.Efforts.For("margin_recheck"),
                 OutputSchemaJson = CraftCheckRules.SchemaJson(),
-                CompactionTriggerTokens = _config.CompactionTriggerTokens,
             };
             request.Tools.AddRange(Tools.Definitions(ClaudiaKermin.Core.Tools.ToolOffer.CraftCheck));
             request.System.Add(CraftCheckPrompts.System);

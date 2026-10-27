@@ -562,7 +562,7 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("https://api.anthropic.com/v1/messages", request.Url);
             var headers = request.Headers.ToDictionary(h => h.Key, h => h.Value);
             Assert.Equal("2026-10-21", headers["anthropic-version"]);
-            Assert.Equal("server-side-fallback-2026-07-01,compact-2026-01-12,mid-conversation-output-config-2026-07-01", headers["anthropic-beta"]);
+            Assert.Equal("server-side-fallback-2026-07-01,compact-2026-01-12,compact-2026-09-04,mid-conversation-output-config-2026-07-01", headers["anthropic-beta"]);
             Assert.Equal(Key, headers["x-api-key"]);
             Assert.Equal("application/json", headers["Content-Type"]);
 
@@ -576,9 +576,9 @@ namespace ClaudiaKermin.Core.Tests
                 Assert.Equal("low", root.GetProperty("output_config").GetProperty("effort").GetString());
                 Assert.Equal("1h", root.GetProperty("cache_control").GetProperty("ttl").GetString());
                 Assert.Equal("You are Claudia.", root.GetProperty("system")[0].GetProperty("text").GetString());
-                var edit = root.GetProperty("context_management").GetProperty("edits")[0];
-                Assert.Equal("compact_20260112", edit.GetProperty("type").GetString());
-                Assert.Equal(150000, edit.GetProperty("trigger").GetProperty("value").GetInt32());
+                // No compaction unless the request asks for it (#268): neither the threshold edit nor the on-demand field.
+                Assert.False(root.TryGetProperty("context_management", out _));
+                Assert.False(root.TryGetProperty("compaction", out _));
                 Assert.Equal("How far is the Mun?", root.GetProperty("messages")[0].GetProperty("content")[0].GetProperty("text").GetString());
                 Assert.False(root.TryGetProperty("tool_choice", out _));
             }

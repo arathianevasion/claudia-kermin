@@ -195,7 +195,7 @@ namespace ClaudiaKermin.Core.Missions
             var probe = new MessagesRequest { Model = mission.Model, MaxTokens = MissionPrompts.MaxTokens, OutputSchemaJson = MissionReply.FlightSchemaJson };
             probe.Tools.AddRange(_tools.Definitions(ToolOffer.Mission));
             probe.System.AddRange(mission.System);
-            probe.Messages.AddRange(mission.Conversation);
+            probe.Messages.AddRange(Sent(mission));
             probe.Messages.Add(Message.UserText(turn.UserText));
             probe.Messages.Add(Message.SystemText(turn.Notice));
             return _config.Prices.WorstCase(mission.Model, (probe.ToJson().Length + 4000 + 2) / 3, probe.MaxTokens);

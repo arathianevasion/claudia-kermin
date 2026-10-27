@@ -18,8 +18,8 @@ transport. None came from a live API call, and none holds a key.
 
 - `mission-plan-manual.sse`: a Mission Plan of a link check then a manual stretch ("Hop", `manual: true`).
 
-- `mission-plan-compacted.sse`: the Mission Plan reply to a long transcript (180000 tokens in): a compaction block
-  with a summary holding quotes, a newline and non-ASCII text, then the plan, and a compaction iteration in `usage`.
+- On-demand compaction responses (#268) are built in `MissionCompactionTests`: the signed block whole in
+  `content_block_start`, stop reason `compaction`, and the cost in a `compaction` iteration.
 
 - `craft-check-*.sse`: Craft Check replies (a summary and findings by code): pass, two Warnings, a Blocker with a Warning,
   and a finding outside the fixed lists.

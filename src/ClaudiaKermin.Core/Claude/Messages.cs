@@ -84,7 +84,10 @@ namespace ClaudiaKermin.Core.Claude
         }
     }
 
-    /// <summary>A server-side compaction summary; must be sent back so the API can drop what it replaced.</summary>
+    /// <summary>
+    /// A server-side compaction summary; must be sent back so the API can drop what it replaced. An on-demand block carries a
+    /// signature and must go back byte for byte, which <see cref="RawJson"/> does.
+    /// </summary>
     public sealed class CompactionBlock : ContentBlock
     {
         /// <summary>The summary, or null when the API returned none.</summary>
@@ -224,6 +227,8 @@ namespace ClaudiaKermin.Core.Claude
         MaxTokens,
         Refusal,
         ModelContextWindowExceeded,
+        /// <summary>An on-demand compaction request wrote its summary: the response is the <c>compaction</c> block alone.</summary>
+        Compaction,
         /// <summary>A stop reason outside the typed set; see <see cref="AssistantMessage.RawStopReason"/>.</summary>
         Other,
     }
@@ -305,6 +310,7 @@ namespace ClaudiaKermin.Core.Claude
                 case "max_tokens": return StopReason.MaxTokens;
                 case "refusal": return StopReason.Refusal;
                 case "model_context_window_exceeded": return StopReason.ModelContextWindowExceeded;
+                case "compaction": return StopReason.Compaction;
                 default: return StopReason.Other;
             }
         }

@@ -341,10 +341,13 @@ namespace ClaudiaKermin.Core.Missions
             if (existing != null && existing.Id != target)
             {
                 if (existing.InFlight) existing.Pending.Cancel.Cancel();
+                CancelCompaction(existing);
                 _mission = null;
                 existing = null;
             }
             if (restore == null) return;
+            // The reloaded Mission is built afresh from the save and its folder: a summary still being written is not for it.
+            CancelCompaction(existing);
 
             if (existing != null && existing.InFlight)
             {
@@ -442,8 +445,11 @@ namespace ClaudiaKermin.Core.Missions
             {
                 mission.System.AddRange(transcript.System);
                 mission.Conversation.AddRange(transcript.Messages);
-                foreach (var m in transcript.Messages)
-                    if (m.Effort != null) mission.Effort = m.Effort;
+                // The compaction block in force comes back with the messages it stands in for (#268).
+                mission.CompactionBlock = transcript.Compaction;
+                mission.CompactedMessages = transcript.CompactedMessages;
+                mission.ContextTokens = transcript.ContextTokens;
+                mission.Effort = SentEffort(mission);
                 // The Mission log is the transcript's again: the player's words, Claudia's lines, the plan cards and the Debriefs.
                 mission.Log.AddRange(MissionLogRebuild.From(transcript, state.Goal, mission.VesselName, _config, MissionStore.ReadNotices(mission.Folder)));
                 mission.LogRebuilt = transcript.Messages.Count > 0;

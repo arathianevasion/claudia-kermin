@@ -38,8 +38,12 @@ namespace ClaudiaKermin.Core.Claude
         /// <summary>Pinned in code; changed only with a mod release.</summary>
         public const string ApiVersion = "2026-10-21";
 
-        /// <summary>Pinned in code; changed only with a mod release.</summary>
-        public const string BetaHeaders = "server-side-fallback-2026-07-01,compact-2026-01-12,mid-conversation-output-config-2026-07-01";
+        /// <summary>
+        /// Pinned in code; changed only with a mod release. Both compaction betas: the Mission compacts on demand
+        /// (compact-2026-09-04), the basic chat at a threshold, and a Mission transcript from before #268 may still hold a
+        /// threshold block.
+        /// </summary>
+        public const string BetaHeaders = "server-side-fallback-2026-07-01,compact-2026-01-12,compact-2026-09-04,mid-conversation-output-config-2026-07-01";
 
         public static string UserAgent
         {

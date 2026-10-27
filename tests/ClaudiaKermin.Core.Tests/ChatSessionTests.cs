@@ -197,6 +197,24 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void TheBasicChatKeepsThresholdCompactionAtItsConfiguredTrigger()
+        {
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("text.sse"));
+            var chat = Session(transport);
+            chat.CompactionTriggerTokens = 90000;
+            chat.Send("How far is the Mun?");
+            DrainUntil(() => !chat.Busy);
+
+            using (var body = JsonDocument.Parse(transport.Requests[0].Body))
+            {
+                var edit = body.RootElement.GetProperty("context_management").GetProperty("edits")[0];
+                Assert.Equal("compact_20260112", edit.GetProperty("type").GetString());
+                Assert.Equal(90000, edit.GetProperty("trigger").GetProperty("value").GetInt32());
+                Assert.False(body.RootElement.TryGetProperty("compaction", out _));
+            }
+        }
+
+        [Fact]
         public void AFallbackServedReplySaysWhoAnswered()
         {
             var chat = Session(new StreamingFakeTransport(ScriptedResponse.Fixture("compaction-fallback.sse")));

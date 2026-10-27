@@ -96,7 +96,7 @@ namespace ClaudiaKermin.Core.Chat
         /// <summary>The model for chat outside a Mission; the Loader sets the player config's default.</summary>
         public string Model = DefaultModel;
 
-        /// <summary>From the player config.</summary>
+        /// <summary>From the player config. The basic chat keeps threshold compaction; a Mission compacts on demand (#268).</summary>
         public int CompactionTriggerTokens = 150000;
 
         /// <summary>Sends the player's message. False when it was empty, a reply is in progress or there is no key.</summary>
