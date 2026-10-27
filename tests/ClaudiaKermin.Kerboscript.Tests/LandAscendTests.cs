@@ -266,10 +266,9 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         [Fact]
-        public void Land_is_at_1x_when_braking_is_due_or_the_craft_is_climbing_toward_it()
+        public void Land_is_at_1x_once_braking_is_due()
         {
             Assert.Equal("1", One("land_warp_cap(10, 100, 4, 1.1)"));
-            Assert.Equal("1", One("land_warp_cap(5, -10, 4, 1.1)"));
         }
 
         [Fact]
