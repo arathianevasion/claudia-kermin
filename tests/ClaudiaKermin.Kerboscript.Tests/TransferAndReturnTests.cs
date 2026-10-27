@@ -170,6 +170,56 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal("target_pe must be metres above 0, not 0", One("return_unreadable(claudia_options(lexicon(\"target_pe\", 0), return_defaults(), \"auto\"):opt)"));
         }
 
+        private static string ReturnUnreadable(string options)
+        {
+            return One("return_unreadable(claudia_options(" + options + ", return_defaults(), \"auto\"):opt)");
+        }
+
+        [Fact]
+        public void Return_takes_no_target_by_default()
+        {
+            Assert.Equal("none|False", One("claudia_options(lexicon(), return_defaults(), \"auto\"):opt:target + \"|\" + return_aims(claudia_options(lexicon(), return_defaults(), \"auto\"):opt)"));
+        }
+
+        [Theory]
+        [InlineData("lexicon(\"target\", \"ksc\")")]
+        [InlineData("lexicon(\"target\", lexicon(\"lat\", -0.1, \"lng\", -74.5))")]
+        [InlineData("lexicon(\"target\", \"ksc\", \"target_pe\", 40000, \"correction\", false)")]
+        [InlineData("lexicon(\"target\", \"none\")")]
+        public void Return_takes_the_targets_deorbit_takes(string options)
+        {
+            Assert.Equal("", ReturnUnreadable(options));
+        }
+
+        [Theory]
+        [InlineData("lexicon(\"target\", \"kerbin\")", "target must be LATLNG(lat, lng), lexicon(\"lat\", x, \"lng\", y) or \"ksc\", not 'kerbin'")]
+        [InlineData("lexicon(\"target\", lexicon(\"lat\", 1))", "target must be LATLNG(lat, lng), lexicon(\"lat\", x, \"lng\", y) or \"ksc\", not a lexicon without lat and lng")]
+        [InlineData("lexicon(\"target\", lexicon(\"lat\", 95, \"lng\", 0))", "target's lat must be from -90 to 90, not 95")]
+        [InlineData("lexicon(\"target\", 3)", "target must be LATLNG(lat, lng), lexicon(\"lat\", x, \"lng\", y) or \"ksc\", not a Scalar")]
+        public void Return_refuses_a_target_it_cannot_read(string options, string reason)
+        {
+            Assert.Equal(reason, ReturnUnreadable(options));
+        }
+
+        [Fact]
+        public void Return_asks_the_predictor_for_the_path_it_means_with_its_elements_and_the_target()
+        {
+            var stub = "local kerbin is lexicon(\"name\", \"Kerbin\"). local orb is lexicon(\"semimajoraxis\", 9e6, \"eccentricity\", 0.9, \"inclination\", 2, \"lan\", 3, \"argumentofperiapsis\", 4, \"meananomalyatepoch\", 5, \"epoch\", 6, \"body\", kerbin). ";
+            var asked = Run(stub + "local q is return_impact_query(orb, lexicon(\"lat\", -0.1, \"lng\", -74.5), -20). print q:keys:length. print q:lat. print q:lng. print q:ground_alt. print q:orbit_sma. print q:orbit_ecc. print q:orbit_inc. print q:orbit_lan. print q:orbit_argpe. print q:orbit_mna. print q:orbit_epoch. print q:orbit_body.");
+            Assert.Equal(new[] { "11", "-0.1", "-74.5", "0", "9000000", "0.9", "2", "3", "4", "5", "6", "Kerbin" }, asked);
+        }
+
+        [Fact]
+        public void An_aimed_correction_lowers_the_km_to_the_target_and_otherwise_draws_the_path_into_the_air()
+        {
+            var patch = "local p is lexicon(\"orbit\", lexicon(\"periapsis\", 80000), \"soi_ut\", 0). ";
+            Assert.Equal("12.5", Run(patch + "print claudia_aim_cost({ parameter o. return 12.5. }, p, 35000).").Single());
+            // No landing: worse than any real one, and nearer to the target periapsis is better.
+            Assert.Equal("10045", Run(patch + "print claudia_aim_cost({ parameter o. return -1. }, p, 35000).").Single());
+            // No path to Kerbin at all.
+            Assert.Equal("100000", One("claudia_aim_cost({ parameter o. return 1. }, \"none\", 35000)"));
+        }
+
         // A worked example: from a 30 km Mun orbit to a 35 km Kerbin periapsis (stock body values).
         private const string MunReturn = "return_ejection(3.5316e12, 12000000, 635000, 6.5138398e10, 230000)";
 

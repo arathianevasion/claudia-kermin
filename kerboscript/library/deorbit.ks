@@ -45,7 +45,7 @@ function deorbit_defaults {
 
 // The launch pad at KSC, on Kerbin.
 function deorbit_ksc {
-  return lexicon("lat", -0.0972, "lng", -74.5577).
+  return claudia_ksc().
 }
 
 // How far ahead the burn is at the soonest, s: time to warp out, turn and lead the burn.
@@ -56,27 +56,9 @@ function deorbit_lead_s {
 // "" or why an option value isn't one the block can use.
 function deorbit_unreadable {
   parameter opt.
-  local t is opt:target.
-  local target_rule is "target must be LATLNG(lat, lng), lexicon(" + char(34) + "lat" + char(34) + ", x, " + char(34) + "lng" + char(34) + ", y) or " + char(34) + "ksc" + char(34) + ", not ".
-  if t:istype("String") {
-    if t = "required" {
-      return "target is required".
-    }
-    if t <> "ksc" {
-      return target_rule + "'" + t + "'".
-    }
-  } else if t:istype("Lexicon") {
-    if not (t:haskey("lat") and t:haskey("lng")) {
-      return target_rule + "a lexicon without lat and lng".
-    }
-    if not (t:lat:istype("Scalar") and t:lng:istype("Scalar")) {
-      return target_rule + "a lexicon whose lat and lng aren't numbers".
-    }
-    if abs(t:lat) > 90 {
-      return "target's lat must be from -90 to 90, not " + t:lat.
-    }
-  } else if not t:istype("GeoCoordinates") {
-    return target_rule + "a " + t:typename.
+  local bad_target is claudia_target_unreadable(opt:target).
+  if bad_target <> "" {
+    return bad_target.
   }
   if opt:max_wait:istype("String") {
     if opt:max_wait <> "auto" {
@@ -107,20 +89,7 @@ function deorbit_body_problem {
 // The target as lexicon("error", "" or why not, "lat", deg, "lng", deg) on the body named body_name.
 function deorbit_site {
   parameter target_opt, body_name.
-  local site is lexicon("error", "", "lat", 0, "lng", 0).
-  if target_opt:istype("String") {
-    if body_name <> "Kerbin" {
-      set site:error to "ksc is on Kerbin, and the craft orbits " + body_name + ": give a LATLNG there".
-      return site.
-    }
-    local ksc is deorbit_ksc().
-    set site:lat to ksc:lat.
-    set site:lng to ksc:lng.
-  } else {
-    set site:lat to target_opt:lat.
-    set site:lng to target_opt:lng.
-  }
-  return site.
+  return claudia_target_site(target_opt, body_name).
 }
 
 // max_wait in seconds: opt_value, or one turn of the body (rotation_period s) for "auto".
@@ -144,7 +113,7 @@ function deorbit_query {
 // A predicted landing (a block call's result with lat and lng) as the block reports it.
 function deorbit_geo {
   parameter landing.
-  return lexicon("lat", round(landing:lat, 4), "lng", round(landing:lng, 4)).
+  return claudia_geo(landing).
 }
 
 // "" or why the delta-v left (dv_left m/s; 0 or less when stock can't say) won't fly a burn of dv m/s.
