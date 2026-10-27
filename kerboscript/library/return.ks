@@ -19,13 +19,22 @@
 //|   window ["next"]: "next" ejects at the burn point's next pass, in the craft's next orbit from 5
 //|     minutes ahead; a time (UT seconds) ejects at its first pass from that time. The block warps
 //|     on rails to the pass however far off it is.
+//|   target ["none"]: LATLNG(lat, lng), lexicon("lat", x, "lng", y) or "ksc": where to come down. The
+//|     mid-course correction then aims the landing point the mod's reentry predictor gives (the craft's
+//|     own drag, held retrograde as reentry flies it) at the target, with target_pe only drawing a path
+//|     that misses the air towards it; the ejection burn is unchanged. "none" aims for target_pe only.
+//|     The landing is hard to steer from here: read predicted_error_km, and when it is too far for the
+//|     Mission Goal, capture at Kerbin and call deorbit instead. Aim a splashdown offshore.
 //|   correction [true]: false leaves out the mid-course correction.
 //|   max_duration ["auto"]: the time to the predicted reentry plus 900 s.
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block; each burn gets them too.
 //| Extra results: kerbin_pe (m, the predicted Kerbin periapsis), reentry_ut (UT of the predicted
-//| entry into Kerbin's atmosphere, or of periapsis if that is above it).
-//| The correction is skipped when the prediction is already within 1 km of target_pe or the fix is
-//| under 0.1 m/s. When leaving the moon's sphere of influence comes before halfway, the block warps
+//| entry into Kerbin's atmosphere, or of periapsis if that is above it), predicted_geo (lexicon lat,
+//| lng: where the craft is predicted to come down, from the path it is on after the correction, with
+//| the prediction leaving out parachutes and lift; empty without a target or a prediction) and
+//| predicted_error_km (km from the target to predicted_geo; -1 without one).
+//| The correction is skipped when the prediction is already within 1 km of target_pe (with a target:
+//| within 2 km of it) or the fix is under 0.1 m/s. When leaving the moon's sphere of influence comes before halfway, the block warps
 //| through that first, however long it takes.
 //| Fails with an option value it can't read, "not in orbit", "already orbiting Kerbin: lower the
 //| periapsis with exec_node instead", "return starts from orbit around a moon of Kerbin, not <body>",
@@ -39,7 +48,24 @@
 
 // The block's own options and defaults.
 function return_defaults {
-  return lexicon("target_pe", 35000, "window", "next", "correction", true).
+  return lexicon("target_pe", 35000, "window", "next", "correction", true, "target", "none").
+}
+
+// Whether the Mission Script gave a landing target.
+function return_aims {
+  parameter opt.
+  return not (opt:target:istype("String") and opt:target = "none").
+}
+
+// What return asks ADDONS:CLAUDIA:REENTRYIMPACT: where the path orb round Kerbin comes down, and how
+// far that is from site (lat, lng) whose ground is ground_alt m (sea level for water). The path begins
+// at from_ut (the craft may not be on it yet), so the fall is taken from there. Pure.
+function return_impact_query {
+  parameter orb, from_ut, site, ground_alt.
+  return lexicon("lat", site:lat, "lng", site:lng, "ground_alt", max(0, ground_alt), "from_ut", from_ut,
+    "orbit_sma", orb:semimajoraxis, "orbit_ecc", orb:eccentricity, "orbit_inc", orb:inclination,
+    "orbit_lan", orb:lan, "orbit_argpe", orb:argumentofperiapsis, "orbit_mna", orb:meananomalyatepoch,
+    "orbit_epoch", orb:epoch, "orbit_body", orb:body:name).
 }
 
 // "" or why an option value isn't one the block can use.
@@ -48,6 +74,12 @@ function return_unreadable {
   local pe is claudia_pe_unreadable(opt:target_pe).
   if pe <> "" {
     return pe.
+  }
+  if return_aims(opt) {
+    local bad_target is claudia_target_unreadable(opt:target).
+    if bad_target <> "" {
+      return bad_target.
+    }
   }
   local window is claudia_window_unreadable(opt:window).
   if window <> "" {
@@ -127,7 +159,7 @@ function return_ejection_time {
 
 function return {
   parameter options is lexicon().
-  local extra is lexicon("kerbin_pe", -1, "reentry_ut", -1).
+  local extra is lexicon("kerbin_pe", -1, "reentry_ut", -1, "predicted_geo", lexicon(), "predicted_error_km", -1).
   local ctx is claudia_begin("return", options, return_defaults(), "auto").
   if ctx:error <> "" {
     return claudia_finish(ctx, false, ctx:error, extra).
@@ -151,6 +183,31 @@ function return {
   local planet is moon:body.
   if hasnode {
     return claudia_finish(ctx, false, "a maneuver node is already planned: remove it first", extra).
+  }
+
+  // With a target, the correction aims the predicted landing at it. The prediction is the mod's reentry
+  // predictor, a block-internal call (ADR 0007): inline here, asked of a path round Kerbin that the craft
+  // may not be on yet.
+  local aim is 0.
+  local predict is 0.
+  if return_aims(opt) {
+    local site is claudia_target_site(opt:target, planet:name).
+    if site:error <> "" {
+      return claudia_finish(ctx, false, site:error, extra).
+    }
+    local ground_alt is planet:geopositionlatlng(site:lat, site:lng):terrainheight.
+    set predict to {
+      parameter orb, from_ut.
+      return addons:claudia:reentryimpact(return_impact_query(orb, from_ut, site, ground_alt)).
+    }.
+    set aim to {
+      parameter orb, from_ut.
+      local landing is predict(orb, from_ut).
+      if landing:error <> "" {
+        return -1.
+      }
+      return landing:error_km.
+    }.
   }
 
   local earliest is claudia_earliest(time:seconds, opt:window).
@@ -197,7 +254,7 @@ function return {
       claudia_make_safe().
       return claudia_finish(ctx, false, ticked, extra).
     }
-    local fixed is claudia_correct(ctx, planet, opt:target_pe, return_reentry_ut(home:orbit)).
+    local fixed is claudia_correct(ctx, planet, opt:target_pe, return_reentry_ut(home:orbit), aim).
     if fixed:reason <> "" {
       return claudia_finish(ctx, false, fixed:reason, extra).
     }
@@ -208,5 +265,13 @@ function return {
   }
   set extra:kerbin_pe to round(home:orbit:periapsis).
   set extra:reentry_ut to round(return_reentry_ut(home:orbit)).
+  if return_aims(opt) {
+    // Where the path flown comes down, after the correction's own error.
+    local landing is predict(home:orbit, home:soi_ut).
+    if landing:error = "" {
+      set extra:predicted_geo to claudia_geo(landing).
+      set extra:predicted_error_km to round(landing:error_km, 2).
+    }
+  }
   return claudia_finish(ctx, true, "", extra).
 }

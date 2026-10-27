@@ -236,6 +236,39 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void The_impact_call_given_an_orbit_predicts_that_one_not_the_crafts()
+        {
+            // The craft sits in a safe 80 km orbit (#283): return asks for the path it has planned, kOS's elements in degrees.
+            var sma = (2 * ReentrySim.R + 80000 + 30000) / 2;
+            var ecc = (ReentrySim.R + 80000 - (ReentrySim.R + 30000)) / (2 * sma);
+            var planned = BlockCalls.ReentryImpact(Ask("lat", 0.0, "lng", 0.0, "ground_alt", 0.0, "orbit_sma", sma, "orbit_ecc", ecc, "orbit_inc", 0.0,
+                "orbit_lan", 0.0, "orbit_argpe", 180.0, "orbit_mna", 180.0, "orbit_epoch", 0.0, "orbit_body", "Kerbin"),
+                Snapshot(), new Sphere(), new ReentrySim.Atmosphere(), new ReentrySim.Capsule());
+            var asFlown = BlockCalls.ReentryImpact(Ask("lat", 0.0, "lng", 0.0, "ground_alt", 0.0), Snapshot(pe: 30000), new Sphere(), new ReentrySim.Atmosphere(), new ReentrySim.Capsule());
+            Assert.Equal("", planned["error"]);
+            Assert.Equal((double)asFlown["lng"], (double)planned["lng"], 6);
+            Assert.Equal((double)asFlown["error_km"], (double)planned["error_km"], 6);
+        }
+
+        [Fact]
+        public void The_impact_call_falls_from_from_ut_not_from_an_earlier_pass_of_the_same_orbit()
+        {
+            // The 80 km by 30 km orbit is at apoapsis at UT 0 and 1800ish: a path that begins then falls on its next pass.
+            var now = BlockCalls.ReentryImpact(Ask("ground_alt", 0.0), Snapshot(pe: 30000), new Sphere(), new ReentrySim.Atmosphere(), new ReentrySim.Capsule());
+            var later = BlockCalls.ReentryImpact(Ask("ground_alt", 0.0, "from_ut", 2500.0), Snapshot(pe: 30000), new Sphere(), new ReentrySim.Atmosphere(), new ReentrySim.Capsule());
+            Assert.Equal("", later["error"]);
+            Assert.True((double)later["landing_ut"] > 2500);
+            Assert.True((double)now["landing_ut"] < 2500);
+        }
+
+        [Fact]
+        public void The_impact_call_given_an_orbit_round_a_body_with_no_air_says_so()
+        {
+            var mun = BlockCalls.ReentryImpact(Ask("orbit_sma", 230000.0, "orbit_ecc", 0.0, "orbit_body", "Mun"), Snapshot(), new Sphere(), new ReentrySim.Atmosphere(), new ReentrySim.Capsule());
+            Assert.Equal("body has no atmosphere", mun["error"]);
+        }
+
+        [Fact]
         public void The_impact_call_on_an_orbit_above_the_air_says_so()
         {
             var high = BlockCalls.ReentryImpact(Ask(), Snapshot(), new Sphere(), new ReentrySim.Atmosphere(), new ReentrySim.Capsule());

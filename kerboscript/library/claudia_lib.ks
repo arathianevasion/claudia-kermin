@@ -834,6 +834,65 @@ function claudia_correction_unreadable {
   return "".
 }
 
+// The launch pad at KSC, on Kerbin.
+function claudia_ksc {
+  return lexicon("lat", -0.0972, "lng", -74.5577).
+}
+
+// "" or why a landing target isn't one a block can use: LATLNG(lat, lng), lexicon("lat", x, "lng", y)
+// or "ksc". The string "required" is a block's default for a target the script must give.
+function claudia_target_unreadable {
+  parameter t.
+  local target_rule is "target must be LATLNG(lat, lng), lexicon(" + char(34) + "lat" + char(34) + ", x, " + char(34) + "lng" + char(34) + ", y) or " + char(34) + "ksc" + char(34) + ", not ".
+  if t:istype("String") {
+    if t = "required" {
+      return "target is required".
+    }
+    if t <> "ksc" {
+      return target_rule + "'" + t + "'".
+    }
+  } else if t:istype("Lexicon") {
+    if not (t:haskey("lat") and t:haskey("lng")) {
+      return target_rule + "a lexicon without lat and lng".
+    }
+    if not (t:lat:istype("Scalar") and t:lng:istype("Scalar")) {
+      return target_rule + "a lexicon whose lat and lng aren't numbers".
+    }
+    if abs(t:lat) > 90 {
+      return "target's lat must be from -90 to 90, not " + t:lat.
+    }
+  } else if not t:istype("GeoCoordinates") {
+    return target_rule + "a " + t:typename.
+  }
+  return "".
+}
+
+// A readable target (claudia_target_unreadable) as lexicon("error", "" or why not, "lat", deg,
+// "lng", deg) on the body named body_name.
+function claudia_target_site {
+  parameter target_opt, body_name.
+  local site is lexicon("error", "", "lat", 0, "lng", 0).
+  if target_opt:istype("String") {
+    if body_name <> "Kerbin" {
+      set site:error to "ksc is on Kerbin, and the craft orbits " + body_name + ": give a LATLNG there".
+      return site.
+    }
+    local ksc is claudia_ksc().
+    set site:lat to ksc:lat.
+    set site:lng to ksc:lng.
+  } else {
+    set site:lat to target_opt:lat.
+    set site:lng to target_opt:lng.
+  }
+  return site.
+}
+
+// A predicted landing (a block call's result with lat and lng) as a block reports it.
+function claudia_geo {
+  parameter landing.
+  return lexicon("lat", round(landing:lat, 4), "lng", round(landing:lng, 4)).
+}
+
 // The earliest departure (UT): 5 minutes from now, time to plan, turn and lead the burn, or window
 // if that is a later UT.
 function claudia_earliest {
@@ -945,13 +1004,39 @@ function claudia_burn {
   return burned.
 }
 
+// km the predicted landing may be from the target before the aimed correction stops looking.
+function claudia_aim_good_km {
+  return 2.
+}
+
+// What an aimed correction (claudia_correct with aim) lowers for the path orb: the km from the
+// target to where it lands; over any real landing (Kerbin is under 2000 km round) when it misses
+// the atmosphere, so the search first moves towards the air by target_pe, or 1e5 with no path to dest.
+// p is claudia_patch's result for the path.
+function claudia_aim_cost {
+  parameter aim, p, target_pe.
+  if p:istype("String") {
+    return 1e5.
+  }
+  local km is aim(p:orbit, p:soi_ut).
+  if km < 0 {
+    return 1e4 + abs(p:orbit:periapsis - target_pe) / 1000.
+  }
+  return km.
+}
+
 // The mid-course correction: a node halfway between now and arrive_ut, aimed at target_pe at dest,
 // flown with exec_node. A sphere-of-influence change before halfway (leaving a moon on the way home)
 // is waited out first (on rails, however long), so the node is placed on the orbit it will be on. Nothing is burned
 // when the prediction is already within 1 km of target_pe or the fix is under 0.1 m/s.
+// aim, when given (a delegate of an orbit patch round dest and the UT it begins, that returns the km
+// its predicted landing is from the target, or -1 if it doesn't come down), makes the correction aim the landing at the
+// target instead: target_pe then only draws a path that misses the atmosphere towards it, and
+// nothing is burned when the landing is already within claudia_aim_good_km() of the target.
 // Returns lexicon("reason", "" or why the block fails, "dv", m/s burned).
 function claudia_correct {
-  parameter ctx, dest, target_pe, arrive_ut.
+  parameter ctx, dest, target_pe, arrive_ut, aim is 0.
+  local aiming is not aim:istype("Scalar").
   local done is lexicon("reason", "", "dv", 0).
   local mid is (time:seconds + arrive_ut) / 2.
   if ship:orbit:hasnextpatch {
@@ -966,7 +1051,13 @@ function claudia_correct {
       }
     }
   }
-  if abs(claudia_pe_error(ship:orbit, dest, target_pe)) <= 1000 {
+  local good is 100.
+  if aiming {
+    set good to claudia_aim_good_km().
+    if claudia_aim_cost(aim, claudia_patch(ship:orbit, dest), target_pe) <= good {
+      return done.
+    }
+  } else if abs(claudia_pe_error(ship:orbit, dest, target_pe)) <= 1000 {
     return done.
   }
 
@@ -977,8 +1068,11 @@ function claudia_correct {
     set nd:radialout to x[0].
     set nd:normal to x[1].
     set nd:prograde to x[2].
+    if aiming {
+      return claudia_aim_cost(aim, claudia_patch(nd:orbit, dest), target_pe).
+    }
     return abs(claudia_pe_error(nd:orbit, dest, target_pe)).
-  }, list(0, 0, 0), list(1, 1, 1), 10, 100).
+  }, list(0, 0, 0), list(1, 1, 1), 10, good).
   set nd:radialout to found:x[0].
   set nd:normal to found:x[1].
   set nd:prograde to found:x[2].

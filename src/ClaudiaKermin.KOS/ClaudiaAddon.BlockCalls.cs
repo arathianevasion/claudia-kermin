@@ -26,7 +26,7 @@ namespace ClaudiaKermin.KOS
             AddSuffix("DEORBITBURN", new OneArgsSuffix<Lexicon, Lexicon>(DeorbitBurn,
                 "Core Library only (deorbit): the deorbit burn that lands on lat, lng by the reentry predictor; lexicon error, burn_ut, prograde, normal, radial, dv, lat, lng, error_km, ..."));
             AddSuffix("REENTRYIMPACT", new OneArgsSuffix<Lexicon, Lexicon>(ReentryImpact,
-                "Core Library only (deorbit): where the orbit as it is now comes down, held retrograde; lexicon error, lat, lng, landing_ut, error_km"));
+                "Core Library only (deorbit, return): where the orbit as it is now, or the one given as orbit_sma, orbit_ecc, ..., comes down, held retrograde; lexicon error, lat, lng, landing_ut, error_km"));
         }
 
         private Lexicon DeorbitBurn(Lexicon input)
