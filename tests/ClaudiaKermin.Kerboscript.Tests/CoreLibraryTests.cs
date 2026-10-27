@@ -89,6 +89,27 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(new[] { "0.2", "10" }, printed);
         }
 
+        // ---- Common options passed on ----
+
+        [Fact]
+        public void The_common_opts_helper_returns_the_common_keys_and_their_values_but_nothing_block_specific()
+        {
+            var printed = Run("local o is claudia_common_opts(claudia_merge_options(lexicon(\"min_ec_pct\", 25, \"stage_limit\", 2, \"max_residual\", 0.2), "
+                + "claudia_merge_options(lexicon(\"max_residual\", 1), claudia_common_defaults(600)))). "
+                + "print o:keys:length. print o:min_ec_pct. print o:stage_limit. print o:abort_on_part_loss. print o:drop_empty:length. print o:rcs_tolerance:on_deg. "
+                + "print o:haskey(\"max_residual\"). print o:haskey(\"max_duration\").");
+            Assert.Equal(new[] { "5", "25", "2", "True", "0", "10", "False", "False" }, printed);
+        }
+
+        [Fact]
+        public void The_common_opts_helper_follows_a_key_added_to_the_common_defaults()
+        {
+            // Redefine the defaults with one more key: the helper must see it without its own list changing.
+            var printed = Run("function claudia_common_defaults { parameter max_duration. return lexicon(\"min_ec_pct\", 10, \"max_duration\", max_duration, \"new_opt\", 7). } "
+                + "local o is claudia_common_opts(claudia_common_defaults(0)). print o:haskey(\"new_opt\"). print o:haskey(\"max_duration\").");
+            Assert.Equal(new[] { "True", "False" }, printed);
+        }
+
         // ---- Aborts ----
 
         private const string Opt = "claudia_merge_options(lexicon(\"max_duration\", 600), claudia_common_defaults(0))";

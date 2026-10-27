@@ -65,6 +65,21 @@ function claudia_common_defaults {
     "rcs_tolerance", claudia_rcs_defaults()).
 }
 
+// A new lexicon of just the common options in opt, for a block that flies another block; add the
+// inner block's own keys (node, ...) to it. Its keys come from claudia_common_defaults, so a new
+// common option is passed on without another edit. max_duration is left out: each caller sets it
+// from what is left of its own budget, or leaves the inner block its default.
+function claudia_common_opts {
+  parameter opt.
+  local common is lexicon().
+  for key in claudia_common_defaults(0):keys {
+    if key <> "max_duration" {
+      set common[key] to opt[key].
+    }
+  }
+  return common.
+}
+
 // rcs_tolerance's defaults (RCS Use): on over on_deg degrees of steering error; Aligned within aligned_deg
 // and turning under aligned_rate deg/s.
 function claudia_rcs_defaults {
@@ -1480,7 +1495,9 @@ function claudia_add_result {
 function claudia_fly_node {
   parameter ctx, nd.
   local opt is ctx:opt.
-  local inner is exec_node(lexicon("node", nd, "min_ec_pct", opt:min_ec_pct, "abort_on_part_loss", opt:abort_on_part_loss, "stage_limit", opt:stage_limit, "drop_empty", opt:drop_empty, "rcs_tolerance", opt:rcs_tolerance)).
+  local flight is claudia_common_opts(opt).
+  set flight:node to nd.
+  local inner is exec_node(flight).
   claudia_add_result(ctx, inner).
   if not inner:success {
     remove nd.
@@ -1743,7 +1760,8 @@ function claudia_pe_error {
 function claudia_burn_options {
   parameter ctx, nd.
   local opt is ctx:opt.
-  local burn is lexicon("node", nd, "min_ec_pct", opt:min_ec_pct, "abort_on_part_loss", opt:abort_on_part_loss, "stage_limit", opt:stage_limit, "drop_empty", opt:drop_empty, "rcs_tolerance", opt:rcs_tolerance).
+  local burn is claudia_common_opts(opt).
+  set burn:node to nd.
   if opt:max_duration:istype("Scalar") {
     set burn:max_duration to max(1, opt:max_duration - (time:seconds - ctx:start_ut)).
   }

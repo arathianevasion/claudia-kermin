@@ -156,15 +156,11 @@ function circularize {
   local nd is node(plan:ut, plan:radial, 0, plan:prograde).
   add nd.
   // The burn is judged by the eccentricity it leaves, not exec_node's residual.
-  local flown is exec_node(lexicon(
-    "node", nd,
-    "max_residual", 1000000,
-    "max_duration", opt:max_duration,
-    "min_ec_pct", opt:min_ec_pct,
-    "abort_on_part_loss", opt:abort_on_part_loss,
-    "stage_limit", opt:stage_limit,
-    "rcs_tolerance", opt:rcs_tolerance,
-    "drop_empty", opt:drop_empty)).
+  local flight is claudia_common_opts(opt).
+  set flight:node to nd.
+  set flight:max_residual to 1000000.
+  set flight:max_duration to opt:max_duration. // circularize hands its own budget on; claudia_common_opts leaves max_duration out
+  local flown is exec_node(flight).
   set ctx:dv_used to flown:dv_used.
   claudia_note_dropped(ctx, flown).
   set extra:ecc to round(ship:orbit:eccentricity, 5).
