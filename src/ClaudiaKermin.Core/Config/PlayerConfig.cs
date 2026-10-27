@@ -101,6 +101,9 @@ namespace ClaudiaKermin.Core.Config
         /// </summary>
         public bool PhysicsWarp = true;
 
+        /// <summary>kOS's <c>CONFIG:IPU</c> while a Mission Script is Running (ADR 0008); kOS allows 50 to 2000.</summary>
+        public int ScriptIpu = 1000;
+
         public string DefaultModel
         {
             get { return Models[0]; }
@@ -158,6 +161,8 @@ namespace ClaudiaKermin.Core.Config
             + "check_fuel_margin = 10%\n"
             + "# Let a Mission Script use physics warp (up to 4x) while the craft is on a Coast, with no engine or RCS thrust.\n"
             + "physics_warp = true\n"
+            + "# kOS instructions per update (CONFIG:IPU, 50 to 2000) while a Mission Script runs; your own value is put back when it stops.\n"
+            + "script_ipu = 1000\n"
             + "# Effort (low, medium or high) per reply kind; uncomment a line to change one kind. Kinds: mission_plan, sequence_plan, debrief,\n"
             + "# reply, change, settings, craft_check, margin_recheck (all high), question, alert (low). A bad entry keeps the default.\n"
             + "# effort.debrief = high\n";
@@ -268,6 +273,11 @@ namespace ClaudiaKermin.Core.Config
                         break;
                     case "physics_warp":
                         config.PhysicsWarp = !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
+                        break;
+                    case "script_ipu":
+                        int ipu;
+                        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out ipu))
+                            config.ScriptIpu = Kos.ScriptIpu.Clamp(ipu);
                         break;
                     case "runaway_multiplier":
                         // "300%" or "3". Below 100% would stop a script before its own plan says it ends.
