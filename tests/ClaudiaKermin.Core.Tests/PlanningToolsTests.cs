@@ -107,10 +107,10 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
-        public void The_shipped_tools_are_stage_performance_on_every_request_kind()
+        public void The_shipped_tools_are_predict_burn_on_mission_turns_and_stage_performance_on_every_request_kind()
         {
             var tools = PlanningTools.Default();
-            Assert.Equal(new[] { "stage_performance" }, tools.Definitions(ToolOffer.Mission).Select(t => t.Name).ToArray());
+            Assert.Equal(new[] { "predict_burn", "stage_performance" }, tools.Definitions(ToolOffer.Mission).Select(t => t.Name).ToArray());
             Assert.Equal(new[] { "stage_performance" }, tools.Definitions(ToolOffer.CraftCheck).Select(t => t.Name).ToArray());
         }
 
@@ -123,8 +123,8 @@ namespace ClaudiaKermin.Core.Tests
             using (var doc = JsonDocument.Parse(request.ToJson()))
             {
                 var sent = doc.RootElement.GetProperty("tools").EnumerateArray().ToList();
-                Assert.False(sent[0].TryGetProperty("strict", out _));
-                Assert.True(sent[1].GetProperty("strict").GetBoolean());
+                Assert.All(sent.Take(sent.Count - 1), t => Assert.False(t.TryGetProperty("strict", out _)));
+                Assert.True(sent.Last().GetProperty("strict").GetBoolean());
                 Assert.Equal("auto", doc.RootElement.GetProperty("tool_choice").GetProperty("type").GetString());
             }
         }

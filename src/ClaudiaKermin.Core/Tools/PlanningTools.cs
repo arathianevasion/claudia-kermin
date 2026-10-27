@@ -95,7 +95,7 @@ namespace ClaudiaKermin.Core.Tools
         /// <summary>Every tool the mod ships, in the fixed order the tools list is sent in (so the cached prefix never changes).</summary>
         public static PlanningTools Default()
         {
-            return new PlanningTools(new IPlanningTool[] { new StagePerformance() });
+            return new PlanningTools(new IPlanningTool[] { new PredictBurn(), new StagePerformance() });
         }
 
         /// <summary>The tools list for a request kind, in registration order: identical on every request of the kind.</summary>

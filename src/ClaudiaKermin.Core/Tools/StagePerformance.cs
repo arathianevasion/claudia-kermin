@@ -74,7 +74,7 @@ namespace ClaudiaKermin.Core.Tools
 
             var atm = surface ? at.SeaLevelAtm : 0;
             var gravity = at.SurfaceGravity;
-            var rows = snapshot.Stages.Select(s => Row(snapshot, s, atm, gravity)).ToList();
+            var rows = Rows(snapshot, atm, gravity);
 
             var json = new JsonWriter().BeginObject()
                 .Field("body", at.Name)
@@ -109,7 +109,13 @@ namespace ClaudiaKermin.Core.Tools
             };
         }
 
-        private sealed class StageRow
+        /// <summary>A row per stage at <paramref name="atm"/> atmospheres, with TWR at <paramref name="gravity"/>; <c>predict_burn</c> reads the vacuum rows for burn times.</summary>
+        internal static List<StageRow> Rows(GameSnapshot snapshot, double atm, double gravity)
+        {
+            return snapshot.Stages.Select(s => Row(snapshot, s, atm, gravity)).ToList();
+        }
+
+        internal sealed class StageRow
         {
             public int Stage;
             public double DeltaV;
