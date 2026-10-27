@@ -20,7 +20,7 @@ namespace ClaudiaKermin.Core.Missions
     {
         public static readonly string[] Reasons =
         {
-            "turning", "falling behind", "no wheel torque", "translating", "aligned", "steering released", "block end", "no monoprop",
+            "turning", "falling behind", "big turn", "no wheel torque", "translating", "aligned", "steering released", "block end", "no monoprop",
         };
 
         public bool On;

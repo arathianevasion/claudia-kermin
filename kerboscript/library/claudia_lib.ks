@@ -43,7 +43,7 @@
 //|   abort_on_part_loss [true]: abort when the craft loses a part other than by the block's own staging.
 //|   stage_limit [0]: auto-staging stages on flameout but never below this stage number, and never
 //|     fires a stage holding parachutes or heat-shield separation. Out of fuel at the limit fails.
-//|   rcs_tolerance [lexicon("on_deg", 10, "aligned_deg", 2, "aligned_rate", 0.5)]: RCS Use. Blocks switch RCS on only when the steering error is over on_deg and the reaction wheels can't make the turn in time, and off once the craft is Aligned: within aligned_deg and turning under aligned_rate deg/s, or within aligned_deg for 3 s. Aligned also lets a burn start, so loosening it loosens burn pointing. Give only the keys you change.
+//|   rcs_tolerance [lexicon("on_deg", 10, "big_deg", 20, "aligned_deg", 2, "aligned_rate", 0.5)]: RCS Use. Blocks switch RCS on when the steering error is over big_deg (a big turn, even with time to spare), or over on_deg and the reaction wheels can't make the turn in time (big_deg at or under on_deg acts as on_deg), and off once the craft is Aligned: within aligned_deg and turning under aligned_rate deg/s, or within aligned_deg for 3 s. Aligned also lets a burn start, so loosening it loosens burn pointing. Give only the keys you change.
 //| A block returns a result lexicon (it does not report). Common fields: success (boolean), reason
 //| ("" on success), dv_used (m/s), dv_remaining (m/s, stock estimate; -1 and a dv_remaining_note at a trickle throttle), duration (s), body,
 //| situation (e.g. "ORBITING"), orbit (lexicon ap, pe in m, inc in degrees) or, when landed,
@@ -80,10 +80,11 @@ function claudia_common_opts {
   return common.
 }
 
-// rcs_tolerance's defaults (RCS Use): on over on_deg degrees of steering error; Aligned within aligned_deg
+// rcs_tolerance's defaults (RCS Use): on over on_deg degrees of steering error when the wheels fall short,
+// and over big_deg whatever the time left (a big turn); Aligned within aligned_deg
 // and turning under aligned_rate deg/s.
 function claudia_rcs_defaults {
-  return lexicon("on_deg", 10, "aligned_deg", 2, "aligned_rate", 0.5).
+  return lexicon("on_deg", 10, "big_deg", 20, "aligned_deg", 2, "aligned_rate", 0.5).
 }
 
 // "" if every key in opts is a known option (a key of defaults), else "unknown option <key>".
@@ -136,7 +137,7 @@ function claudia_options {
   if tolerance_ok {
     set merged:rcs_tolerance to claudia_merge_options(merged:rcs_tolerance, claudia_rcs_defaults()).
   } else if error = "" {
-    set error to "rcs_tolerance must be a lexicon of on_deg, aligned_deg (degrees) and aligned_rate (deg/s), given as numbers".
+    set error to "rcs_tolerance must be a lexicon of on_deg, big_deg, aligned_deg (degrees) and aligned_rate (deg/s), given as numbers".
   }
   return lexicon("error", error, "opt", merged).
 }
@@ -1261,6 +1262,9 @@ function claudia_rcs_decide {
     if s:wheels_s < 0 {
       set want to true.
       set reason to "no wheel torque".
+    } else if s:error > max(tol:big_deg, tol:on_deg) {
+      set want to true.
+      set reason to "big turn".
     } else if s:left_s < 0 {
       set want to true.
       set reason to "falling behind".
