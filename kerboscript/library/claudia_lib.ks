@@ -1097,7 +1097,8 @@ function claudia_turn_to_burn {
 // turn_time: TURNTIME's for the craft; lead_opt as for claudia_burn_timing. A Burn Start over an hour
 // away is first warped to an hour before it (claudia_far_warp_ut), through any SOI changes, with
 // steering not locked to nd and no turn (a KSP cut there only means warp is asked for again); the turn
-// starts as soon as that warp is back at 1x, at most 30 s before the hour point, with no wait at 1x. A turn that isn't aligned after 120 s goes on anyway and counts in
+// starts as soon as that warp is back at 1x, 30 s before the hour point (claudia_warp_end), with no wait at 1x.
+// A turn that isn't aligned after 120 s goes on anyway and counts in
 // not_aligned (a start that comes first isn't counted: the burn waits to point within 10 degrees).
 // While warp is asked for, a drop to 1x with the craft off the burn ends the warp, and it turns again
 // before warping on; each SOI leg's lead follows its own re-turn. Leaves steering locked to nd.
