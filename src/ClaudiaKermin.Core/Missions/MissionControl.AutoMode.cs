@@ -26,6 +26,11 @@ namespace ClaudiaKermin.Core.Missions
             /// script), it waits for the player rather than being approved again on every input (not saved).
             /// </summary>
             public object AutoModeApprovedFor;
+            /// <summary>
+            /// Auto Mode re-planned an unsafe script, and no plan has passed the Script Check since: a second failure waits
+            /// for the player (not saved).
+            /// </summary>
+            public bool AutoModeReplanned;
         }
 
         /// <summary>What a plan in hand waits for, though the player's Approval was given in advance.</summary>
@@ -39,6 +44,8 @@ namespace ClaudiaKermin.Core.Missions
             DueTime,
             /// <summary>Auto Mode only: the Spending Cap has no room for the Debrief and next plan request that follow.</summary>
             NoRoom,
+            /// <summary>Auto Mode only: the script failed the Script Check again after Auto Mode's re-plan.</summary>
+            ScriptFailedAgain,
         }
 
         /// <summary>The Auto Mode checkbox, in any stage of a Mission in play. Ticking it lets the check below approve a plan that waits.</summary>
@@ -49,6 +56,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.AutoMode = on;
             mission.AutoModeHeldFor = null;
             mission.AutoModeApprovedFor = null;
+            mission.AutoModeReplanned = false;
             Event(mission, "auto_mode", on ? "on" : "off");
         }
 
@@ -58,11 +66,17 @@ namespace ClaudiaKermin.Core.Missions
         /// player, and a stale plan is re-planned. Under Auto Mode (and no Blackout, whose own rules stand) an approval or
         /// re-plan also needs room in the Spending Cap (<see cref="AutoModeRoom"/>). The Approval itself is
         /// <see cref="Approval"/>, so the Script Check, the late-window and the Due Time rules hold as for the player's button.
+        /// Auto Mode also answers what Blackout leaves for the player (<see cref="AutoModeAnswers"/>): an Abort
+        /// recommendation, a reduced goal and an unsafe script.
         /// </summary>
         private void ApproveInAdvance(Mission mission)
         {
             if (!mission.Blackout && !mission.AutoMode) return;
-            if (MissionOver || !CanAnswerPlan || mission.Declined) return;
+            if (MissionOver) return;
+            if (mission.AutoMode && AutoModeAnswers(mission)) return;
+            if (!CanAnswerPlan || mission.Declined) return;
+            // A plan waits for Approval, so it passed the Script Check on arrival: the next unsafe script gets its own re-plan.
+            mission.AutoModeReplanned = false;
             // ADR 0002: typed words never start anything, so a pending "approve?" is moot once Approval stands.
             if (mission.Blackout) mission.ConfirmPrompt = null;
             var missionPlan = mission.Stage == MissionStage.AwaitingPlanApproval;
@@ -92,7 +106,7 @@ namespace ClaudiaKermin.Core.Missions
             object inHand = missionPlan ? (object)mission.Plan : plan;
             if (!mission.Blackout && mission.AutoModeApprovedFor == inHand) return;
             var stale = StaleBecause(mission);
-            if (!mission.Blackout && !AutoModeRoom(mission, inHand, stale, missionPlan))
+            if (!mission.Blackout && !AutoModeRoom(mission, inHand, stale.Length > 0 ? ReplanTurn(stale, missionPlan) : null))
             {
                 WaitsForPlayer(mission, AdvanceWait.NoRoom, missionPlan ? "" : plan.Name);
                 return;
@@ -110,9 +124,53 @@ namespace ClaudiaKermin.Core.Missions
             else
             {
                 mission.AutoModeApprovedFor = inHand;
-                Note(LogKind.Notice, AutoModeApproved);
+                Note(LogKind.Notice, AutoModeApprovedNote);
             }
             Approval();
+        }
+
+        /// <summary>
+        /// What Auto Mode answers beyond Blackout's rules (spec #327, "One approve-in-advance path" and "Abort"). An Abort
+        /// recommendation is taken as if the player pressed Abort, in a Blackout too and with no room check: stopping
+        /// costs nothing. A reduced goal on offer is approved, and an unsafe script re-planned once per plan, each subject
+        /// to the room check with the request it starts priced in (no room check in a Blackout, as for any plan there).
+        /// True: the stage was Auto Mode's to answer, whether it answered or left it waiting.
+        /// </summary>
+        private bool AutoModeAnswers(Mission mission)
+        {
+            if (mission.AbortRecommendation.Length > 0)
+            {
+                AbortTaken(byAutoMode: true);
+                // Not taken: the run is already being stopped, or there is nothing to abort it on. Either way it is moot, and
+                // left standing it would hold the script's warp and show itself if Auto Mode were unticked.
+                mission.AbortRecommendation = "";
+            }
+            if (mission.InFlight) return false;
+            if (mission.Stage == MissionStage.AwaitingReducedGoal && mission.ReducedGoal.Length > 0)
+            {
+                if (!mission.Blackout && !AutoModeRoom(mission, mission.ReducedGoal, ReducedGoalTurn(mission)))
+                {
+                    WaitsForPlayer(mission, AdvanceWait.NoRoom, "");
+                    return true;
+                }
+                ReducedGoalAccepted(inAdvance: true);
+                return true;
+            }
+            if (mission.Stage != MissionStage.UnsafeScript) return false;
+            if (mission.AutoModeReplanned)
+            {
+                WaitsForPlayer(mission, AdvanceWait.ScriptFailedAgain, "");
+                return true;
+            }
+            if (!mission.Blackout && !AutoModeRoom(mission, mission.UnsafeProblems, ScriptRetryTurn(mission, null, replan: true)))
+            {
+                WaitsForPlayer(mission, AdvanceWait.NoRoom, "");
+                return true;
+            }
+            mission.AutoModeReplanned = true;
+            Note(LogKind.Notice, AutoModeReplannedNote);
+            ScriptRetried(null, replan: true);
+            return true;
         }
 
         /// <summary>
@@ -126,14 +184,15 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>
         /// The room check: Committed plus the worst case of the Debrief after the plan and of the Sequence Plan request after
-        /// that (and of the re-plan itself, for a stale plan) fits the Spending Cap. Worst cases by the formula
+        /// that (and of <paramref name="starts"/>, the request an approval or re-plan starts itself: a stale plan's re-plan,
+        /// an unsafe script's, a reduced goal's Mission Plan) fits the Spending Cap. Worst cases by the formula
         /// <see cref="MaySend"/> uses, never past costs, so Auto Mode can't approve a plan whose Debrief would be refused
         /// (ADR 0009). A tool loop charges per step, so <see cref="MaySend"/> stays the backstop.
         /// </summary>
-        private bool AutoModeRoom(Mission mission, object inHand, string stale, bool missionPlan)
+        private bool AutoModeRoom(Mission mission, object inHand, Turn starts)
         {
             var worst = AutoModeReserve(mission);
-            if (stale.Length > 0) worst += RequestCharge.WorstCase(_config.Prices, mission.Model, BuildRequest(mission, ReplanTurn(stale, missionPlan)));
+            if (starts != null) worst += RequestCharge.WorstCase(_config.Prices, mission.Model, BuildRequest(mission, starts));
             if (mission.Committed + worst <= mission.SpendingCap) return true;
             if (mission.AutoModeHeldFor != inHand)
             {
@@ -165,7 +224,9 @@ namespace ClaudiaKermin.Core.Missions
         }
 
         /// <summary>Logged after a plan's card when Auto Mode approves it.</summary>
-        private const string AutoModeApproved = "Approved by Auto Mode.";
+        private const string AutoModeApprovedNote = "Approved by Auto Mode.";
+        /// <summary>Logged after the "Couldn't produce a safe script" card when Auto Mode re-plans it.</summary>
+        private const string AutoModeReplannedNote = "Re-planned by Auto Mode.";
     }
 
     /// <summary>The Auto Mode checkbox: the player's Approval given in advance for this Mission, or taken back. Accepted in any stage of a Mission in play.</summary>

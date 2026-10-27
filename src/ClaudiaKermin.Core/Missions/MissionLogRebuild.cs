@@ -156,7 +156,7 @@ namespace ClaudiaKermin.Core.Missions
         }
 
         /// <summary>
-        /// " (blocked: …)", " (timed out)", " (aborted by the player)" or "": the reason the mod stopped the run, which the
+        /// " (blocked: …)", " (timed out)", " (aborted by the player)", " (aborted by Auto Mode)" or "": the reason the mod stopped the run, which the
         /// turn asking for the Debrief carried in its "kOS run ended: Aborted (reason)." line. Any other reason on that line
         /// (the game was loaded, Manual Control) is not the mod stopping the run and never reached the live title.
         /// </summary>
@@ -170,7 +170,7 @@ namespace ClaudiaKermin.Core.Missions
             var open = line.IndexOf(" (", System.StringComparison.Ordinal);
             if (open < 0 || !line.EndsWith(").", System.StringComparison.Ordinal)) return "";
             var reason = line.Substring(open + 2, line.Length - open - 4);
-            var stop = reason == RunawayStop.Reason || reason == "aborted by the player" || reason.StartsWith("blocked: ", System.StringComparison.Ordinal);
+            var stop = reason == RunawayStop.Reason || reason == MissionControl.AbortedByThePlayer || reason == MissionControl.AbortedByAutoMode || reason.StartsWith("blocked: ", System.StringComparison.Ordinal);
             return stop ? " (" + reason + ")" : "";
         }
 
