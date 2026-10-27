@@ -443,9 +443,9 @@ function reentry {
     // The next parachute or shield drop, by height (falling at the vertical speed) or by speed (slowing
     // at the sampled rate); the air-pressure test is not predicted.
     local descent is -ship:verticalspeed.
-    set event_eta to -1.
+    set event_eta to reentry_eta_to(agl, reentry_warp_low_agl(), descent).
     if not shield_gone {
-      set event_eta to reentry_eta_first(reentry_eta_to(agl, reentry_shield_last_agl(), descent), reentry_eta_to(last_speed, reentry_shield_speed(), decel)).
+      set event_eta to reentry_eta_first(event_eta, reentry_eta_first(reentry_eta_to(agl, reentry_shield_last_agl(), descent), reentry_eta_to(last_speed, reentry_shield_speed(), decel))).
     }
     if opt:chute_mode = "safe" and not mains_out {
       local chute_eta is 0.
