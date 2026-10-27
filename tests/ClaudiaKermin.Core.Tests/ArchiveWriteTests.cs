@@ -12,7 +12,7 @@ namespace ClaudiaKermin.Core.Tests
 {
     /// <summary>
     /// The runtime Archive gate (#49) refuses any Archive write from a processor running a mod-started
-    /// program, so nothing the Core Library bundles (blocks, RSVP, vendored KSLib) may write to 0:.
+    /// program, so nothing the Core Library bundles (blocks, vendored KSLib) may write to 0:.
     /// </summary>
     public class ArchiveWriteTests
     {
@@ -35,7 +35,7 @@ namespace ClaudiaKermin.Core.Tests
         public void TheCoreLibraryBundleContainsNoArchiveWrite()
         {
             var offences = new List<string>();
-            foreach (var file in CoreLibrary.Files.Concat(CoreLibrary.Rsvp).Concat(CoreLibrary.Vendored))
+            foreach (var file in CoreLibrary.Files.Concat(CoreLibrary.Vendored))
             {
                 var n = 0;
                 foreach (var raw in file.Source.Split('\n'))

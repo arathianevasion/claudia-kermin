@@ -52,7 +52,7 @@ jobs:
         run: dotnet build tools/ClaudiaKermin.KsCompile -c Release -p:KOSPluginsDir="$KOS_PLUGINS_DIR"
 
       # Every shipped script under kerboscript/ (the Core Library in kerboscript/library, and the
-      # debug scripts; RSVP too once it lands there) and the block test scripts: a compile error or
+      # debug scripts) and the block test scripts: a compile error or
       # a forbidden call fails CI.
       - name: Script Check the shipped kerboscript and the block test scripts
         run: dotnet run --project tools/ClaudiaKermin.KsCompile -c Release --no-build -- kerboscript tests/blocks

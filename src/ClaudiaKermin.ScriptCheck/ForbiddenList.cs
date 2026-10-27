@@ -73,7 +73,7 @@ namespace ClaudiaKermin.ScriptCheck
         /// <summary>The ADDONS suffixes a script may use: Claudia's own addon, and asking whether an addon is there.</summary>
         public static readonly HashSet<string> AllowedAddonSuffixes = Set("claudia available hasaddon");
 
-        /// <summary>The names of the functions the Core Library (with RSVP and the vendored scripts) defines, as the mod bundles it.</summary>
+        /// <summary>The names of the functions the Core Library (with the vendored scripts) defines, as the mod bundles it.</summary>
         public static readonly Lazy<HashSet<string>> LibraryFunctions = new Lazy<HashSet<string>>(() =>
         {
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

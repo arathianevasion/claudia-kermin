@@ -38,7 +38,7 @@ namespace ClaudiaKermin.KOS
         {
             var watch = Stopwatch.StartNew();
             var node = BlockCalls.EjectionBurn(KosValues.ToDictionary(input), SnapshotReader.Read(shared.Vessel));
-            // The search's time, against the minutes RSVP took, and the node, so block tests can read it back from KSP.log.
+            // The search's time, against the minutes the old RSVP search took, and the node, so block tests can read it back from KSP.log.
             Debug.Log(ModInfo.LogTag + " block call EJECTIONBURN took " + Ms(watch) + " ms: " + (node["error"] as string == ""
                 ? string.Format(CultureInfo.InvariantCulture, "node at UT {0:0.0}, prograde {1:0.00}, normal {2:0.00}, radial {3:0.00} m/s ({4:0.0} m/s); Pe {5:0} m at UT {6:0}; searched {7:0} s from UT {8:0.0}",
                     node["ut"], node["prograde"], node["normal"], node["radial"], node["dv"], node["target_pe_actual"], node["arrival_ut"], node["synodic"], node["search_from"])

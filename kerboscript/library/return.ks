@@ -123,11 +123,24 @@ function return_time_to_pe {
   return mean / sqrt(mu / abs(a) ^ 3).
 }
 
+// UT of the next periapsis of the orbit patch orb: mean anomaly is zero there, negative before it on
+// a hyperbola, and an ellipse's wraps into its next orbit.
+function return_pe_ut {
+  parameter orb.
+  local n is sqrt(orb:body:mu / abs(orb:semimajoraxis ^ 3)).
+  local pi is 3.141592653589793.
+  local delta is -orb:meananomalyatepoch * pi / 180.
+  if delta < 0 {
+    set delta to delta + 2 * pi.
+  }
+  return orb:epoch + delta / n.
+}
+
 // UT of the craft entering the atmosphere on the orbit patch orb (or of periapsis, if it stays
 // above the atmosphere).
 function return_reentry_ut {
   parameter orb.
-  local pe_ut is claudia_rsvp():time_at_periapsis(orb).
+  local pe_ut is return_pe_ut(orb).
   local top is orb:body:radius + orb:body:atm:height.
   return pe_ut - return_time_to_pe(orb:semimajoraxis, orb:eccentricity, orb:body:mu, top).
 }

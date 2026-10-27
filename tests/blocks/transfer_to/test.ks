@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Andrew Watson
 //
 // transfer_to block test: the Mission Script the debug block test runner starts (bundled with the
-// Core Library and RSVP, as for a real Mission). The reference craft arrives in a 100 km circular
+// Core Library, as for a real Mission). The reference craft arrives in a 100 km circular
 // Kerbin orbit with no stage fired; the ejection burn stages into its engine (stage_limit 2 keeps
 // the decoupler and chute). transfer_to must reach a Mun encounter near a 30 km periapsis.
 

@@ -47,11 +47,9 @@ namespace ClaudiaKermin.Core.Kos
         public const string DocPrefix = "//|";
         public const string SharedFile = "claudia_lib";
         private const string ResourcePrefix = "ClaudiaKermin.Core.library.";
-        private const string RsvpResourcePrefix = "ClaudiaKermin.Core.rsvp.";
         private const string VendoredPrefix = "ClaudiaKermin.Core.kslib.";
 
         private static readonly Lazy<IList<LibraryFile>> LoadedFiles = new Lazy<IList<LibraryFile>>(Load);
-        private static readonly Lazy<IList<LibraryFile>> LoadedRsvp = new Lazy<IList<LibraryFile>>(LoadRsvp);
         private static readonly Lazy<IList<LibraryFile>> LoadedVendored = new Lazy<IList<LibraryFile>>(LoadVendored);
 
         /// <summary>The shared helpers first, then every block by name.</summary>
@@ -75,18 +73,8 @@ namespace ClaudiaKermin.Core.Kos
         }
 
         /// <summary>
-        /// RSVP v9's files (<c>kerboscript/rsvp/</c>), by name. Not Building Blocks: <c>transfer_to</c> loads
-        /// them through <c>claudia_rsvp()</c>; see <c>kerboscript/rsvp/NOTE.md</c>.
-        /// </summary>
-        public static IList<LibraryFile> Rsvp
-        {
-            get { return LoadedRsvp.Value; }
-        }
-
-        /// <summary>
         /// One compile unit: the Mission Script first (so kOS's line numbers in its errors match what
-        /// Claudia wrote), then the Core Library, then RSVP (each file as a function
-        /// <c>rsvp_file_&lt;name&gt;</c>). There is no wait cap to pass in: waits warp inside the script (ADR 0004).
+        /// Claudia wrote), then the Core Library, then the vendored scripts. There is no wait cap to pass in: waits warp inside the script (ADR 0004).
         /// kOS hoists file-level functions, so the script can call blocks defined after it. The
         /// library's own <c>@lazyglobal</c> and <c>@clobberbuiltins</c> lines are dropped: kOS allows the directive only at the top.
         /// </summary>
@@ -102,19 +90,6 @@ namespace ClaudiaKermin.Core.Kos
                     if (IsDirective(line)) continue;
                     text.Append(line).Append('\n');
                 }
-            }
-            // RSVP's files are programs of their own (parameter export., file-level locals), so each
-            // becomes the body of one function, called by claudia_rsvp() (kerboscript/rsvp/NOTE.md).
-            text.Append("// ---- RSVP v9 (GPL-3.0, https://github.com/maneatingape/rsvp), bundled by Claudia Kermin ----\n");
-            foreach (var file in Rsvp)
-            {
-                text.Append("function rsvp_file_").Append(file.Name).Append(" {\n");
-                foreach (var line in file.Source.Split('\n'))
-                {
-                    if (line.TrimStart().StartsWith("@lazyglobal", StringComparison.OrdinalIgnoreCase)) continue;
-                    text.Append(line).Append('\n');
-                }
-                text.Append("}\n");
             }
             return text.ToString();
         }
@@ -171,11 +146,6 @@ namespace ClaudiaKermin.Core.Kos
                 .OrderBy(f => f.IsBlock ? 1 : 0)
                 .ThenBy(f => f.Name, StringComparer.Ordinal)
                 .ToList();
-        }
-
-        private static IList<LibraryFile> LoadRsvp()
-        {
-            return Resources(RsvpResourcePrefix).OrderBy(f => f.Name, StringComparer.Ordinal).ToList();
         }
 
         private static IList<LibraryFile> LoadVendored()
