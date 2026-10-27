@@ -56,6 +56,14 @@ _Avoid_: step, phase, maneuver (alone), burn
 A stretch of flight with no engine or RCS thrust, in an atmosphere or not (e.g. launch's climb out of the air after cutoff, a fall under parachutes, the fall before a landing burn); the only stretch on which a Mission Script may use physics warp.
 _Avoid_: drift, glide, cruise
 
+**RCS Use**:
+A stretch on which a Mission Script has RCS switched on, always for a stated reason: turning when the reaction wheels alone can't make the turn in time, settling an attitude error the wheels can't, or translating. Outside RCS Use, RCS is off, whatever the player set before launch, so a craft holding attitude on a Coast doesn't fire thrusters.
+_Avoid_: RCS mode, RCS assist
+
+**Aligned**:
+The craft points at its steering target (a maneuver node's burn, prograde, retrograde, a launch heading) within a set tolerance and has stopped turning, or has stayed within it for a few seconds while the target itself turns. Being Aligned both lets a burn start and ends RCS Use for a turn; Claudia can tighten or loosen the tolerance per block.
+_Avoid_: on target, settled, pointed
+
 **Boost stage**:
 A stage that lights while the craft is on a suborbital trajectory (periapsis below the atmosphere top, or below the surface where there is no air), in or out of the atmosphere; a stage that lights suborbital stays a Boost stage even if its burn reaches orbit. It may have a thrust-to-weight ratio below 1 when the climb before it was steep enough.
 _Avoid_: booster, lower stage, first stage
