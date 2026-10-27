@@ -70,14 +70,102 @@ namespace ClaudiaKermin.Kerboscript.Tests
         {
             Assert.Equal("", One("land_unreadable(claudia_options(lexicon(\"target\", \"any\"), land_defaults(), \"auto\"):opt)"));
             Assert.Equal("", One("land_unreadable(claudia_options(lexicon(\"target\", lexicon(\"lat\", 1, \"lng\", 2)), land_defaults(), \"auto\"):opt)"));
-            Assert.Equal("target must be \"any\", LATLNG(lat, lng) or lexicon(\"lat\", x, \"lng\", y), not 'somewhere'",
+            Assert.Equal("target must be \"any\", LATLNG(lat, lng), lexicon(\"lat\", x, \"lng\", y) or lexicon(\"biome\", name), not 'somewhere'",
                 One("land_unreadable(claudia_options(lexicon(\"target\", \"somewhere\"), land_defaults(), \"auto\"):opt)"));
-            Assert.Equal("target must be \"any\", LATLNG(lat, lng) or lexicon(\"lat\", x, \"lng\", y), not a lexicon without lat and lng",
+            Assert.Equal("target must be \"any\", LATLNG(lat, lng), lexicon(\"lat\", x, \"lng\", y) or lexicon(\"biome\", name), not a lexicon without lat and lng",
                 One("land_unreadable(claudia_options(lexicon(\"target\", lexicon(\"lat\", 1)), land_defaults(), \"auto\"):opt)"));
             Assert.Equal("max_slope must be a number of degrees from 0 to 45",
                 One("land_unreadable(claudia_options(lexicon(\"max_slope\", 60), land_defaults(), \"auto\"):opt)"));
             Assert.Equal("touchdown_speed must be a speed above 0 m/s",
                 One("land_unreadable(claudia_options(lexicon(\"touchdown_speed\", 0), land_defaults(), \"auto\"):opt)"));
+        }
+
+        // ---- land: a biome target (#281) ----
+
+        private static string Unreadable(string target)
+        {
+            return One("land_unreadable(claudia_options(lexicon(\"target\", " + target + "), land_defaults(), \"auto\"):opt)");
+        }
+
+        [Theory]
+        [InlineData("lexicon(\"biome\", \"Midlands\")")]
+        [InlineData("lexicon(\"BIOME\", \"Northern Basin\")")]
+        [InlineData("lexicon(\"biome\", \"Midlands\", \"near\", lexicon(\"lat\", 2, \"lng\", -30))")]
+        public void Land_reads_a_biome_target_with_an_optional_near_point(string target)
+        {
+            Assert.Equal("", Unreadable(target));
+            Assert.Equal("True", One("land_is_biome(" + target + ")"));
+        }
+
+        [Theory]
+        [InlineData("lexicon(\"biome\", \"\")", "target's biome must be a biome's name, e.g. \"Midlands\"")]
+        [InlineData("lexicon(\"biome\", \"  \")", "target's biome must be a biome's name, e.g. \"Midlands\"")]
+        [InlineData("lexicon(\"biome\", 3)", "target's biome must be a biome's name, e.g. \"Midlands\"")]
+        [InlineData("lexicon(\"biome\", \"Midlands\", \"lat\", 1)", "a biome target takes only biome and near, not lat")]
+        [InlineData("lexicon(\"biome\", \"Midlands\", \"near\", lexicon(\"lat\", 1))", "target's near must be LATLNG(lat, lng) or lexicon(\"lat\", x, \"lng\", y) with numbers")]
+        [InlineData("lexicon(\"biome\", \"Midlands\", \"near\", lexicon(\"lat\", 1, \"lng\", \"west\"))", "target's near must be LATLNG(lat, lng) or lexicon(\"lat\", x, \"lng\", y) with numbers")]
+        [InlineData("lexicon(\"biome\", \"Midlands\", \"near\", \"ksc\")", "target's near must be LATLNG(lat, lng) or a lat/lng lexicon, not a String")]
+        public void Land_says_why_a_biome_target_is_unreadable(string target, string expected)
+        {
+            Assert.Equal(expected, Unreadable(target));
+        }
+
+        [Fact]
+        public void A_biome_targets_other_options_are_still_read()
+        {
+            Assert.Equal("max_slope must be a number of degrees from 0 to 45",
+                One("land_unreadable(claudia_options(lexicon(\"target\", lexicon(\"biome\", \"Midlands\"), \"max_slope\", 60), land_defaults(), \"auto\"):opt)"));
+        }
+
+        [Theory]
+        [InlineData("\"any\"")]
+        [InlineData("lexicon(\"lat\", 1, \"lng\", 2)")]
+        public void A_site_or_any_is_not_a_biome_target(string target)
+        {
+            Assert.Equal("False", One("land_is_biome(" + target + ")"));
+        }
+
+        [Fact]
+        public void A_biome_target_asks_the_site_search_for_its_biome_daylight_slope_and_the_next_3_orbits()
+        {
+            // A 2000 s orbit: 3 orbits is 6000 s, 1.667 h.
+            var printed = Run(
+                "local q is land_site_query(lexicon(\"biome\", \"Midlands\"), true, 8, 2000).\n"
+                + "print q:biome. print q:daylight. print q:max_slope_deg. print round(q:within_hours, 3). print q:haskey(\"near\").");
+            Assert.Equal(new[] { "Midlands", "True", "8", "1.667", "False" }, printed);
+        }
+
+        [Fact]
+        public void A_biome_targets_near_point_goes_to_the_site_search_as_latitude_and_longitude()
+        {
+            var printed = Run(
+                "local q is land_site_query(lexicon(\"biome\", \"Flats\", \"near\", lexicon(\"lat\", 2.5, \"lng\", -30)), false, 5, 3600).\n"
+                + "print q:near:latitude. print q:near:longitude. print q:daylight. print q:within_hours.");
+            Assert.Equal(new[] { "2.5", "-30", "False", "3" }, printed);
+        }
+
+        [Fact]
+        public void A_max_slope_of_0_asks_the_site_search_for_the_flattest_it_takes()
+        {
+            // land allows max_slope 0; the search wants more than 0.
+            Assert.Equal("0.1", One("land_site_query(lexicon(\"biome\", \"Flats\"), false, 0, 3600):max_slope_deg"));
+        }
+
+        [Fact]
+        public void A_Mission_Script_function_named_like_a_library_function_replaces_it()
+        {
+            // Why the Script Check refuses such a function (ADR 0007): the Mission Script's wins, inside the blocks too.
+            Assert.Equal(new[] { "999" }, Run("function land_wrap_lng { parameter x. return 999. }\nprint land_wrap_lng(10)."));
+        }
+
+        [Theory]
+        [InlineData("Midlands", "midlands", "True")]
+        [InlineData("NorthernBasin", "Northern Basin", "True")]
+        [InlineData("Highlands", "Midlands", "False")]
+        [InlineData("", "Midlands", "False")]
+        public void Biome_names_match_ignoring_case_and_spaces(string landed, string asked, string expected)
+        {
+            Assert.Equal(expected, One("land_same_biome(\"" + landed + "\", \"" + asked + "\")"));
         }
 
         // ---- land: geometry and orbits ----

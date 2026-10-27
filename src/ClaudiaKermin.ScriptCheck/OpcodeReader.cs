@@ -49,14 +49,25 @@ namespace ClaudiaKermin.ScriptCheck
         private bool _recording;
         /// <summary>A block test's script (tests/tools): the test-only bridge to Planning Tools is allowed.</summary>
         private bool _allowPlanningTools;
+        /// <summary>The first line that is the Core Library's (ADR 0007): block-internal calls are allowed from there on.</summary>
+        private int _libraryFromLine = int.MaxValue;
+        /// <summary>The line each labelled opcode is on: a function's code starts at the label its definition pushes.</summary>
+        private readonly Dictionary<string, int> _labelLines = new Dictionary<string, int>(StringComparer.Ordinal);
+        private string _delegateLabel;
+
+        /// <summary>The code is a Mission Script bundled with the Core Library, so it has library functions to replace.</summary>
+        private bool IsBundle
+        {
+            get { return _libraryFromLine != int.MaxValue && _libraryFromLine > 1; }
+        }
 
         /// <summary>
         /// Each finding, e.g. "line 3: COPYPATH (touch files)", in order. The code is read twice: the first pass
         /// learns which variables hold another vessel or the TIMEWARP, wherever they are assigned.
         /// </summary>
-        public static List<string> Read(IEnumerable<List<Opcode>> sections, bool allowPlanningTools = false)
+        public static List<string> Read(IEnumerable<List<Opcode>> sections, bool allowPlanningTools = false, int libraryFromLine = int.MaxValue)
         {
-            var reader = new OpcodeReader { _allowPlanningTools = allowPlanningTools };
+            var reader = new OpcodeReader { _allowPlanningTools = allowPlanningTools, _libraryFromLine = libraryFromLine };
             var list = new List<List<Opcode>>(sections);
             foreach (var section in list) reader.Walk(section);
             reader._recording = true;
@@ -71,6 +82,7 @@ namespace ClaudiaKermin.ScriptCheck
             var arms = new Dictionary<string, List<Value>>(StringComparer.Ordinal);
             foreach (var op in code)
             {
+                if (!string.IsNullOrEmpty(op.Label)) _labelLines[op.Label] = op.SourceLine;
                 List<Value> waiting;
                 if (!string.IsNullOrEmpty(op.Label) && arms.TryGetValue(op.Label, out waiting))
                 {
@@ -124,6 +136,9 @@ namespace ClaudiaKermin.ScriptCheck
         private void Step(Opcode op, Stack<Value> stack)
         {
             int line = op.SourceLine;
+            // A function's code pushed just before: the store after it defines the function.
+            var delegateLabel = _delegateLabel;
+            _delegateLabel = null;
 
             var push = op as OpcodePush;
             if (push != null)
@@ -133,6 +148,7 @@ namespace ClaudiaKermin.ScriptCheck
             }
             if (op is OpcodePushRelocateLater || op is OpcodePushDelegate)
             {
+                _delegateLabel = op is OpcodePushDelegateRelocateLater ? ((OpcodePushRelocateLater)op).DestinationLabel : null;
                 stack.Push(new Value());
                 return;
             }
@@ -164,6 +180,9 @@ namespace ClaudiaKermin.ScriptCheck
             if (op is OpcodeStore || op is OpcodeStoreLocal || op is OpcodeStoreGlobal || op is OpcodeStoreExist)
             {
                 var value = Pop(stack);
+                var stored = Lower(((OpcodeIdentifierBase)op).Identifier).TrimStart('$');
+                if (op is OpcodeStoreGlobal) StoredGlobal(stored, line);
+                else if (op.GetType() == typeof(OpcodeStore) && delegateLabel != null) FunctionStored(stored, delegateLabel, line);
                 Stored(Lower(((OpcodeIdentifierBase)op).Identifier).TrimStart('$'), value, line);
                 return;
             }
@@ -287,7 +306,8 @@ namespace ClaudiaKermin.ScriptCheck
         private void Suffix(Value receiver, string id, int line)
         {
             string item;
-            if (ForbiddenList.Suffixes.TryGetValue(id, out item) && !(_allowPlanningTools && item == ForbiddenList.PlanningTools))
+            if (ForbiddenList.Suffixes.TryGetValue(id, out item) && !(_allowPlanningTools && item == ForbiddenList.PlanningTools)
+                && !(line >= _libraryFromLine && item == ForbiddenList.BlockInternal))
                 Found(line, ":" + id.ToUpperInvariant(), item);
             if (AnyVariable(receiver, "addons") && !ForbiddenList.AllowedAddonSuffixes.Contains(id))
                 Found(line, "ADDONS:" + id.ToUpperInvariant(), ForbiddenList.OtherAddons);
@@ -315,6 +335,34 @@ namespace ClaudiaKermin.ScriptCheck
             var name = id.TrimEnd('*');
             if (value.OtherVessel || (value.Parameter && _otherVesselPassed)) _otherVesselVariables.Add(name);
             if (value.Suffix == "timewarp") _timewarpVariables.Add(name);
+        }
+
+        /// <summary>
+        /// A file-level function defined under <paramref name="id"/> ("name*"). Each is stored as the program starts, on the first
+        /// statement's line, and kOS keeps the first definition of a name, so a Mission Script's function replaces the library's of
+        /// the same name, swapping the script's own code into a block round a block-internal call (ADR 0007): a land_plan that keeps
+        /// land's site and fails. It is refused where its code starts (the line of the label its definition pushes).
+        /// </summary>
+        private void FunctionStored(string id, string label, int line)
+        {
+            if (!IsBundle || !id.EndsWith("*", StringComparison.Ordinal)) return;
+            var name = id.TrimEnd('*');
+            int at;
+            if (!_labelLines.TryGetValue(label, out at)) at = line;
+            if (at < _libraryFromLine && ForbiddenList.LibraryFunctions.Value.Contains(name))
+                Found(at, "FUNCTION " + name.ToUpperInvariant(), ForbiddenList.RedefineLibrary);
+        }
+
+        /// <summary>
+        /// A lock stored under <paramref name="id"/> ("name*") by the Mission Script, when the Core Library has a function of that
+        /// name. A lock is stored globally when its line runs, over the library's function, so it too would swap the script's own
+        /// code into a block (see <see cref="FunctionStored"/>).
+        /// </summary>
+        private void StoredGlobal(string id, int line)
+        {
+            if (!IsBundle || line >= _libraryFromLine || !id.EndsWith("*", StringComparison.Ordinal)) return;
+            var name = id.TrimEnd('*');
+            if (ForbiddenList.LibraryFunctions.Value.Contains(name)) Found(line, name.ToUpperInvariant() + "*", ForbiddenList.RedefineLibrary);
         }
 
         /// <summary>A value used as an argument or operand: CONFIG and ADDONS may only be read through a suffix.</summary>

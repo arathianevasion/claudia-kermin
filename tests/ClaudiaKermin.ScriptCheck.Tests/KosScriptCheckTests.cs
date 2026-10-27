@@ -269,6 +269,115 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             }
         }
 
+        // ---- Block-internal calls (ADR 0006, ADR 0007): the Core Library's, never a Mission Script's ----
+
+        [Theory]
+        [InlineData("local s is addons:claudia:landingsite(lexicon(\"biome\", \"Midlands\")).")]
+        [InlineData("local c is addons:claudia.\nprint c:landingsite(lexicon()).")]
+        [InlineData("local f is addons:claudia:LandingSite@.\nprint f(lexicon()).")]
+        public void ABlockInternalCallInAMissionScriptFails(string script)
+        {
+            AssertForbidden("call block-internal calculations", script);
+            AssertForbidden("call block-internal calculations", CoreLibrary.Bundle(script));
+        }
+
+        [Fact]
+        public void TheCoreLibrarysOwnBlockInternalCallPasses()
+        {
+            // land calls it for a biome target; the bundle's library lines are the Core Library's.
+            Assert.Contains("addons:claudia:landingsite(", CoreLibrary.Bundle("").ToLowerInvariant());
+            AssertAllowed(CoreLibrary.Bundle("local res is land(lexicon(\"target\", lexicon(\"biome\", \"Midlands\"))).\naddons:claudia:report(res)."));
+        }
+
+        [Fact]
+        public void ABlockInternalCallFailsOnTheMissionScriptsOwnLineInABundle()
+        {
+            var result = _check.Check(CoreLibrary.Bundle("print 1.\nprint addons:claudia:landingsite(lexicon())."));
+            Assert.Contains("line 2: :LANDINGSITE (call block-internal calculations)", result.Forbidden);
+        }
+
+        [Fact]
+        public void AMissionScriptCopyingTheLibrarysBannerIsStillAMissionScript()
+        {
+            // Only the bundle's real tail is the Core Library; a copy of its banner line in the script changes nothing.
+            var script = "// ---- The Core Library, bundled by Claudia Kermin ----\nprint addons:claudia:landingsite(lexicon()).";
+            AssertForbidden("call block-internal calculations", CoreLibrary.Bundle(script));
+        }
+
+        [Theory]
+        [InlineData(0x0D)]
+        [InlineData(0x2028)]
+        [InlineData(0x2029)]
+        [InlineData(0x85)]
+        [InlineData(0x0B)]
+        [InlineData(0x0C)]
+        public void OtherLineBreaksCannotMoveAMissionScriptCallOntoTheLibrarysLines(int lineBreak)
+        {
+            // Enough to pass the library's first line, were any of them counted as a line by kOS and not by the check.
+            var padding = new string((char)lineBreak, 50);
+            var result = _check.Check(CoreLibrary.Bundle(padding + "print addons:claudia:landingsite(lexicon())."));
+            Assert.False(result.Passed);
+        }
+
+        [Fact]
+        public void AMissionScriptCannotSwapItsOwnCodeIntoABlockWithALock()
+        {
+            // A lock is stored when its line runs, over the library's function of that name: a lock named land_plan would get land's
+            // site from the block-internal search and could keep it without the block flying it.
+            var result = _check.Check(CoreLibrary.Bundle("print 1.\nlock land_plan to lexicon(\"error\", \"x\").\nprint land(lexicon(\"target\", lexicon(\"biome\", \"Midlands\")))."));
+            Assert.Contains("line 2: LAND_PLAN* (redefine a Core Library function)", result.Forbidden);
+        }
+
+        [Fact]
+        public void AMissionScriptCannotDefineAFunctionTheLibraryDefines()
+        {
+            // The Mission Script's function wins over the library's (LandAscendTests shows it on kOS), so land_plan could keep the site.
+            var result = _check.Check(CoreLibrary.Bundle("print 1.\n\nfunction land_plan {\n  parameter a, b, c.\n  return lexicon(\"error\", \"x\").\n}"));
+            Assert.Contains(result.Forbidden, f => f.EndsWith("FUNCTION LAND_PLAN (redefine a Core Library function)"));
+            Assert.All(result.Forbidden, f => Assert.True(int.Parse(f.Split(' ', ':')[1]) <= 6, f));
+            AssertForbidden("redefine a Core Library function", CoreLibrary.Bundle("global function claudia_finish { parameter a, b, c, d. return a. }"));
+        }
+
+        [Fact]
+        public void ALockInsideAMissionScriptFunctionIsCaughtToo()
+        {
+            AssertForbidden("redefine a Core Library function", CoreLibrary.Bundle("function f {\n  lock land_site_query to lexicon().\n}\nf()."));
+        }
+
+        [Fact]
+        public void AMissionScriptMayLockSteeringAndThrottleAndNameItsOwnFunctions()
+        {
+            AssertAllowed(CoreLibrary.Bundle("function my_helper { return 1. }\nlock steering to prograde.\nlock throttle to 0.\nprint my_helper().\nunlock steering.\nunlock throttle."));
+        }
+
+        [Fact]
+        public void LandsFileAlonePassesOnlyAsCoreLibrary()
+        {
+            // CI checks each kerboscript/library file alone: as the library's, not as a Mission Script.
+            var land = File.ReadAllText(Path.Combine(RepoRoot(), "kerboscript", "library", "land.ks"));
+            Assert.True(new KosScriptCheck(forCoreLibrary: true).Check(land).Passed);
+            Assert.Contains(_check.Check(land).Forbidden, f => f.EndsWith("(call block-internal calculations)"));
+            // The library's check refuses everything else on the list.
+            Assert.Contains(new KosScriptCheck(forCoreLibrary: true).Check("kuniverse:quicksave().").Forbidden, f => f.EndsWith("(quicksave)"));
+        }
+
+        [Theory]
+        [InlineData("land_biome_mun")]
+        [InlineData("land_biome_minmus")]
+        public void TheLandBiomeBlockTestsBundledWithTheLibraryPass(string test)
+        {
+            var script = File.ReadAllText(Path.Combine(RepoRoot(), "tests", "blocks", test, "test.ks"));
+            AssertAllowed(script);
+            AssertAllowed(CoreLibrary.Bundle(script));
+        }
+
+        [Fact]
+        public void TheBlockTestsCheckStillRefusesABlockInternalCallInTheScript()
+        {
+            var result = new KosScriptCheck(forToolTests: true).Check("print addons:claudia:landingsite(lexicon()).");
+            Assert.Contains(result.Forbidden, f => f.EndsWith("(call block-internal calculations)"));
+        }
+
         [Fact]
         public void ReadingKosConfig() { AssertAllowed("print config:ipu."); }
 

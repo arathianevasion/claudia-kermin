@@ -46,10 +46,11 @@ namespace ClaudiaKermin.KsCompile
 
             var check = new KosScriptCheck();
             var toolTestCheck = new KosScriptCheck(forToolTests: true);
+            var libraryCheck = new KosScriptCheck(forCoreLibrary: true);
             var failures = 0;
             foreach (var file in files)
             {
-                var result = (IsToolTest(file) ? toolTestCheck : check).Check(File.ReadAllText(file));
+                var result = (IsToolTest(file) ? toolTestCheck : IsCoreLibrary(file) ? libraryCheck : check).Check(File.ReadAllText(file));
                 if (result.Passed)
                 {
                     Console.WriteLine("ok   " + file);
@@ -73,9 +74,23 @@ namespace ClaudiaKermin.KsCompile
         /// </summary>
         private static bool IsToolTest(string file)
         {
+            return Under(file, "tests", "tools");
+        }
+
+        /// <summary>
+        /// A Core Library file (anything under a kerboscript/library/ folder): it may make block-internal calls (ADR 0007), which
+        /// a Mission Script may not. The mod finds the library's lines in each bundle itself; this is only for checking a file alone.
+        /// </summary>
+        private static bool IsCoreLibrary(string file)
+        {
+            return Under(file, "kerboscript", "library");
+        }
+
+        private static bool Under(string file, string parent, string folder)
+        {
             var segments = Path.GetFullPath(file).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             for (var i = 0; i + 1 < segments.Length; i++)
-                if (segments[i] == "tests" && segments[i + 1] == "tools") return true;
+                if (segments[i] == parent && segments[i + 1] == folder) return true;
             return false;
         }
     }

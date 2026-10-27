@@ -20,9 +20,14 @@
 //| powered descent that brakes onto it, rejects slopes over max_slope (diverting up to max_divert to
 //| flatter ground) and touches down at about touchdown_speed. Aims for about 5 km of the site.
 //| Options:
-//|   target ["any"]: "any", LATLNG(lat, lng) or lexicon("lat", x, "lng", y) on the body orbited.
-//|     "any" lands about half an orbit on. A site must pass within 20 km of the ground track in the
-//|     next 3 orbits; plan a plane change first otherwise.
+//|   target ["any"]: "any", LATLNG(lat, lng), lexicon("lat", x, "lng", y) or
+//|     lexicon("biome", name) on the body orbited. "any" lands about half an orbit on. A site must
+//|     pass within 20 km of the ground track in the next 3 orbits; plan a plane change first
+//|     otherwise. A biome target (e.g. lexicon("biome", "Midlands")), with an optional "near" point
+//|     (LATLNG or lat/lng lexicon), finds its site when it flies, with find_landing_site's search: the
+//|     soonest pass (or the one nearest near) over the biome under the ground track in the next 3
+//|     orbits, in daylight if daylight is set, within max_slope. It then flies that site as a LATLNG.
+//|     Use find_landing_site to see such sites when you plan; pass land the biome, not a site.
 //|   daylight [true]: set it from the Mission Setting Daylight landing. true touches down only with
 //|     the sun at least 5 degrees up at the site. For a site it looks up to a day of the body ahead
 //|     for such a pass (about 47 h at the Mun, 13 h at Minmus) and warps there on rails, with no Due
@@ -42,11 +47,13 @@
 //| Extra results: slope (degrees where it came to rest), touchdown_speed_actual (m/s),
 //| touchdown_h_speed (m/s sideways at touchdown), lean (degrees from upright once settled),
 //| reversals (times the descent turned back after braking began; 0 normally), distance_to_target
-//| (m from the site asked for, or the spot chosen for "any"), best_effort (true if nothing within
+//| (m from the site asked for, or the spot chosen for "any" or a biome), best_effort (true if nothing within
 //| max_divert was flat enough and it landed on the least steep spot found), burn_start_ut (when the braking burn was planned to start; -1 if it never got that far),
 //| impact_ut (when the orbit after the deorbit burn meets the ground at the site's height; -1 if it
-//| clears it or it never got that far); geo (lat, lng, alt) is the common field once landed. Fails with "land flies airless
+//| clears it or it never got that far), biome (the biome it came to rest in; "" if it never landed);
+//| geo (lat, lng, alt) is the common field once landed. Fails with "land flies airless
 //| bodies only", an orbit it can't land from, a site off the ground track, no daylight pass,
+//| "no site in the <biome> biome" (saying how far the search got), landing outside the biome asked for,
 //| not enough delta-v, "deorbit left periapsis" well under the plan, "tipped over", out of fuel, or an abort; a failure in the
 //| descent leaves the craft safe but falling, so give it the delta-v (and TWR over 1.5) it needs.
 //| Example: `local res is land(lexicon("target", latlng(-0.5, 22), "daylight", true)). addons:claudia:report(res).`
@@ -61,10 +68,15 @@ function land_defaults {
 function land_unreadable {
   parameter opt.
   local t is opt:target.
-  local target_rule is "target must be " + char(34) + "any" + char(34) + ", LATLNG(lat, lng) or lexicon(" + char(34) + "lat" + char(34) + ", x, " + char(34) + "lng" + char(34) + ", y), not ".
+  local target_rule is "target must be " + char(34) + "any" + char(34) + ", LATLNG(lat, lng), lexicon(" + char(34) + "lat" + char(34) + ", x, " + char(34) + "lng" + char(34) + ", y) or lexicon(" + char(34) + "biome" + char(34) + ", name), not ".
   if t:istype("String") {
     if t <> "any" {
       return target_rule + "'" + t + "'".
+    }
+  } else if land_is_biome(t) {
+    local biome_problem is land_biome_unreadable(t).
+    if biome_problem <> "" {
+      return biome_problem.
     }
   } else if t:istype("Lexicon") {
     if not (t:haskey("lat") and t:haskey("lng")) {
@@ -98,6 +110,69 @@ function land_unreadable {
     return "burn_margin must be a number, 1 or more".
   }
   return "".
+}
+
+// "" or why a biome target (a lexicon with the key biome) isn't one the block can use: biome a name,
+// and near, if given, a LATLNG or a lat/lng lexicon; no other keys.
+function land_biome_unreadable {
+  parameter t.
+  local name_rule is "target's biome must be a biome's name, e.g. " + char(34) + "Midlands" + char(34).
+  if not t:biome:istype("String") {
+    return name_rule.
+  }
+  if t:biome:trim = "" {
+    return name_rule.
+  }
+  for key in t:keys {
+    if key <> "biome" and key <> "near" {
+      return "a biome target takes only biome and near, not " + key.
+    }
+  }
+  if t:haskey("near") {
+    local near is t:near.
+    local near_rule is "target's near must be LATLNG(lat, lng) or lexicon(" + char(34) + "lat" + char(34) + ", x, " + char(34) + "lng" + char(34) + ", y) with numbers".
+    if near:istype("Lexicon") {
+      if not (near:haskey("lat") and near:haskey("lng")) {
+        return near_rule.
+      }
+      if not (near:lat:istype("Scalar") and near:lng:istype("Scalar")) {
+        return near_rule.
+      }
+    } else if not near:istype("GeoCoordinates") {
+      return "target's near must be LATLNG(lat, lng) or a lat/lng lexicon, not a " + near:typename.
+    }
+  }
+  return "".
+}
+
+// True if the target option is a biome target.
+function land_is_biome {
+  parameter target_opt.
+  if not target_opt:istype("Lexicon") {
+    return false.
+  }
+  return target_opt:haskey("biome").
+}
+
+// What land asks ADDONS:CLAUDIA:LANDINGSITE (find_landing_site's search) for a biome target: a
+// site in the biome, in daylight if wanted, no steeper than max_slope, under the ground track in the
+// next 3 orbits (period s), nearest the near point if there is one. The search wants a slope over 0,
+// so max_slope 0 asks for 0.1 degrees. Pure.
+function land_site_query {
+  parameter target_opt, daylight, max_slope, period.
+  local query is lexicon("biome", target_opt:biome, "daylight", daylight, "max_slope_deg", max(0.1, max_slope),
+    "within_hours", 3 * period / 3600).
+  if target_opt:haskey("near") {
+    query:add("near", lexicon("latitude", target_opt:near:lat, "longitude", target_opt:near:lng)).
+  }
+  return query.
+}
+
+// True if two biome names are the same one, ignoring case and spaces ("northern basin" is stock's
+// NorthernBasin), as the site search matches them. Pure.
+function land_same_biome {
+  parameter a, b.
+  return a:replace(" ", "") = b:replace(" ", "").
 }
 
 // True if x is a number from low to high.
@@ -542,7 +617,7 @@ function land_node_for {
 function land {
   parameter options is lexicon().
   local extra is lexicon("slope", -1, "touchdown_speed_actual", -1, "touchdown_h_speed", -1, "lean", -1, "reversals", 0,
-    "distance_to_target", -1, "best_effort", false, "burn_start_ut", -1, "impact_ut", -1).
+    "distance_to_target", -1, "best_effort", false, "burn_start_ut", -1, "impact_ut", -1, "biome", "").
   local ctx is claudia_begin("land", options, land_defaults(), "auto").
   if ctx:error <> "" {
     return claudia_finish(ctx, false, ctx:error, extra).
@@ -557,6 +632,16 @@ function land {
       return claudia_finish(ctx, false, "target is on " + opt:target:body:name + ", not " + body:name, extra).
     }
   }
+  local by_biome is land_is_biome(opt:target).
+  if by_biome {
+    if opt:target:haskey("near") {
+      if opt:target:near:istype("GeoCoordinates") {
+        if opt:target:near:body:name <> body:name {
+          return claudia_finish(ctx, false, "target's near is on " + opt:target:near:body:name + ", not " + body:name, extra).
+        }
+      }
+    }
+  }
   if body:atm:exists {
     return claudia_finish(ctx, false, "land flies airless bodies only; " + body:name + " has an atmosphere", extra).
   }
@@ -567,6 +652,24 @@ function land {
     return claudia_finish(ctx, false, "land needs a near-circular orbit (eccentricity under 0.1); situation " + status + ", eccentricity " + round(ship:orbit:eccentricity, 3), extra).
   }
 
+  // A biome target becomes a site, then flies as a LATLNG would. The site search is the mod's
+  // (find_landing_site's), through a block-internal call the Script Check allows only here in the
+  // Core Library (ADR 0007), so it stays inline rather than in a helper a Mission Script could call.
+  local site is "".
+  if by_biome {
+    local found is addons:claudia:landingsite(land_site_query(opt:target, opt:daylight, opt:max_slope, ship:orbit:period)).
+    if found:error <> "" {
+      local advice is "raise max_slope, try another biome or near point, or change the orbit's plane".
+      if opt:daylight {
+        set advice to advice + ", or land with daylight false".
+      }
+      return claudia_finish(ctx, false, found:error + "; " + advice, extra).
+    }
+    set site to lexicon("lat", found:lat, "lng", found:lng).
+  } else {
+    set site to land_site_of(opt:target).
+  }
+
   // A craft whose engines aren't lit yet stages into them (within stage_limit).
   local lit is claudia_stage_into_engines(ctx).
   if lit <> "" {
@@ -574,7 +677,7 @@ function land {
   }
 
   local approach is 3000.
-  local plan is land_plan(opt, land_site_of(opt:target), approach).
+  local plan is land_plan(opt, site, approach).
   if plan:error <> "" {
     return claudia_finish(ctx, false, plan:error, extra).
   }
@@ -666,8 +769,14 @@ function land {
   set extra:distance_to_target to round(land_surface_distance(aim:lat, aim:lng, ship:geoposition:lat, ship:geoposition:lng, body:radius)).
   set extra:slope to round(addons:claudia:slope(ship:geoposition), 1).
   set extra:lean to round(vang(ship:facing:forevector, ship:up:vector), 1).
+  set extra:biome to addons:claudia:biome(ship:geoposition).
   if extra:lean > 30 {
     return claudia_finish(ctx, false, "tipped over on landing", extra).
+  }
+  if by_biome {
+    if not land_same_biome(extra:biome, opt:target:biome) {
+      return claudia_finish(ctx, false, "landed in the " + extra:biome + ", outside the " + opt:target:biome + " biome (" + extra:distance_to_target + " m from the site chosen in it)", extra).
+    }
   }
   return claudia_finish(ctx, true, "", extra).
 }

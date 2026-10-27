@@ -24,21 +24,27 @@ namespace ClaudiaKermin.ScriptCheck
     public sealed class KosScriptCheck : IScriptCheck
     {
         private readonly bool _forToolTests;
+        private readonly bool _forCoreLibrary;
 
         /// <param name="forToolTests">
         /// Checks a block test's script under tests/tools, which may call Planning Tools through the test-only bridge (ADR 0006).
         /// Every Mission Script is checked without it, so the call is refused there.
         /// </param>
-        public KosScriptCheck(bool forToolTests = false)
+        /// <param name="forCoreLibrary">
+        /// Checks one Core Library file on its own (CI, over kerboscript/library): all of it is the library's, so it may make
+        /// block-internal calls (ADR 0007). The mod never uses it: it checks the bundle, whose library lines it finds itself.
+        /// </param>
+        public KosScriptCheck(bool forToolTests = false, bool forCoreLibrary = false)
         {
             _forToolTests = forToolTests;
+            _forCoreLibrary = forCoreLibrary;
         }
 
         public ScriptCheckResult Check(string script)
         {
             try
             {
-                return Run(script ?? "", _forToolTests);
+                return Run(script ?? "", _forToolTests, _forCoreLibrary);
             }
             catch (Exception e)
             {
@@ -48,7 +54,7 @@ namespace ClaudiaKermin.ScriptCheck
 
         // Kept apart so a missing kOS.Safe fails inside Check's try, not when Check is compiled.
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static ScriptCheckResult Run(string script, bool forToolTests)
+        private static ScriptCheckResult Run(string script, bool forToolTests, bool forCoreLibrary)
         {
             // Inside KSP kOS has set its logger; outside it (CI, tests) the compiler needs one.
             if (SafeHouse.Logger == null) SafeHouse.Logger = new QuietLogger();
@@ -80,7 +86,7 @@ namespace ClaudiaKermin.ScriptCheck
                 sections.Add(part.InitializationCode);
                 sections.Add(part.MainCode);
             }
-            return new ScriptCheckResult(null, OpcodeReader.Read(sections, forToolTests)) { Warnings = ScriptLints.Warnings(script) };
+            return new ScriptCheckResult(null, OpcodeReader.Read(sections, forToolTests, forCoreLibrary ? 1 : CoreLibrary.LibraryStartLine(script))) { Warnings = ScriptLints.Warnings(script) };
         }
 
         /// <summary>

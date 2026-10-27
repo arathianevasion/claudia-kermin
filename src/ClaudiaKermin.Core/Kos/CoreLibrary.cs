@@ -119,6 +119,26 @@ namespace ClaudiaKermin.Core.Kos
             return text.ToString();
         }
 
+        /// <summary>
+        /// The first line of <paramref name="source"/> that is the Core Library's, when it is a <see cref="Bundle"/>: every line
+        /// before it is the Mission Script's (ADR 0007). The library is known by the bundle's whole tail, the same for every
+        /// Mission Script, never by a marker a script could copy. <see cref="int.MaxValue"/> when the source is not a bundle, so
+        /// all of it is the Mission Script's.
+        /// </summary>
+        public static int LibraryStartLine(string source)
+        {
+            var tail = LibraryTail.Value;
+            source = (source ?? "").Replace("\r\n", "\n");
+            if (!source.EndsWith(tail, StringComparison.Ordinal)) return int.MaxValue;
+            var lines = 1;
+            for (var i = 0; i < source.Length - tail.Length; i++)
+                if (source[i] == '\n') lines++;
+            return lines;
+        }
+
+        /// <summary>What <see cref="Bundle"/> appends after the Mission Script and the blank line that ends it.</summary>
+        private static readonly Lazy<string> LibraryTail = new Lazy<string>(() => Bundle("").Substring(2));
+
         /// <summary>For the base layer: the shared rules and a one-line summary of every block.</summary>
         public static string Summaries()
         {
