@@ -4,6 +4,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
+using ClaudiaKermin.Core.Claude;
 
 namespace ClaudiaKermin.Core.Missions
 {
@@ -123,6 +125,43 @@ namespace ClaudiaKermin.Core.Missions
                 if (entry.Times > MostBlockTimes) { MostBlock = entry.Block; MostBlockTimes = entry.Times; }
             }
             else Close(ut);
+        }
+
+        /// <summary>The tally as JSON for the save file (#404), an RCS-on stretch still open included; "" when nothing was ever switched on.</summary>
+        public string ToJson()
+        {
+            if (_times == 0 && !_onSince.HasValue) return "";
+            var json = new JsonWriter().BeginObject().Field("times", _times).Field("seconds", _seconds).Field("on_since", _onSince).Name("blocks").BeginArray();
+            foreach (var b in _blocks) json.BeginObject().Field("block", b.Block).Field("times", b.Times).EndObject();
+            return json.EndArray().EndObject().ToString();
+        }
+
+        /// <summary>Puts back what <see cref="ToJson"/> wrote; an empty or unreadable text leaves the tally cleared.</summary>
+        public void Restore(string text)
+        {
+            Clear();
+            if (string.IsNullOrEmpty(text)) return;
+            try
+            {
+                var root = JsonReader.Parse(text);
+                _times = (int)(JsonNode.Long(root["times"]) ?? 0);
+                _seconds = JsonNode.Double(root["seconds"]) ?? 0;
+                _onSince = JsonNode.Double(root["on_since"]);
+                var items = root["blocks"];
+                if (items != null)
+                    foreach (var node in items.Items.Where(n => n.Kind == JsonKind.Object))
+                    {
+                        var entry = new Entry { Block = JsonNode.Str(node["block"]) ?? "", Times = (int)(JsonNode.Long(node["times"]) ?? 0) };
+                        if (entry.Times <= 0) continue;
+                        _blocks.Add(entry);
+                        // The first block to reach the highest count, as Switched keeps it.
+                        if (entry.Times > MostBlockTimes) { MostBlock = entry.Block; MostBlockTimes = entry.Times; }
+                    }
+            }
+            catch (JsonException)
+            {
+                Clear();
+            }
         }
 
         /// <summary>The run ended (MissionControl.RunEnded calls this before the Debrief is built): a switch still on counts its seconds up to <paramref name="ut"/>.</summary>

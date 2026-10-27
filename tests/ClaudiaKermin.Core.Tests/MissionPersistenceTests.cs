@@ -1426,6 +1426,94 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void TheRcsUseTallyAndStartReadingsSurviveALoadAndReachTheInterruptedDebrief()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission);
+            var startUt = Saved(mission)[0].RunStartUt;
+            mission.Send(new KosBlockStarted("exec_node", start.RunId));
+            for (var i = 0; i < 3; i++)
+            {
+                mission.Send(new KosRcsSwitched(new Dictionary<string, object> { { "on", true }, { "reason", "turning" } }, startUt + 10 + i * 20, start.RunId));
+                mission.Send(new KosRcsSwitched(new Dictionary<string, object> { { "on", false }, { "reason", "aligned" } }, startUt + 24 + i * 20, start.RunId));
+            }
+            var state = Saved(mission)[0];
+            state.RunStartMonopropellant = 40.5;
+            state.RunStartDeltaVLeft = 1234.5;
+            var loaded = MissionSaveState.FromValues(state.ToValues());
+            Assert.Equal(state.RcsUse, loaded.RcsUse);
+            Assert.Equal(40.5, loaded.RunStartMonopropellant);
+            Assert.Equal(1234.5, loaded.RunStartDeltaVLeft);
+
+            var after = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-debrief.sse"));
+            var resumed = Control(after);
+            resumed.Send(new MissionsRestored(_save.Path, new List<MissionSaveState> { loaded }));
+            resumed.Send(new SceneChanged(GameScene.Flight));
+            resumed.Send(OnPad());
+            DrainUntil(resumed, v => v.Stage == MissionStage.Succeeded);
+            var turn = Messages(after.Requests[0]).Where(m => m.GetProperty("role").GetString() == "user").Select(Text).Last();
+            Assert.Contains("RCS Use this run: switched on 3 times, 42 s in all; most in \"exec_node\" (3).", turn);
+            Assert.Contains("(left at start 1,235 m/s,", turn);
+            Assert.Contains("(41 at start,", turn);
+        }
+
+        [Fact]
+        public void ASaveWithoutTheTallyOrStartReadingsLoadsAsNoneAndUnknownNotZero()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport);
+            ToRunning(mission);
+            var state = Saved(mission)[0];
+            state.RunStartMonopropellant = null;
+            state.RunStartDeltaVLeft = null;
+            var values = state.ToValues();
+            Assert.DoesNotContain("rcsUse", values.Keys);
+            Assert.DoesNotContain("runStartMonopropellant", values.Keys);
+            Assert.DoesNotContain("runStartDeltaVLeft", values.Keys);
+            var old = MissionSaveState.FromValues(values);
+            Assert.Equal("", old.RcsUse);
+            Assert.Null(old.RunStartMonopropellant);
+            Assert.Null(old.RunStartDeltaVLeft);
+
+            var after = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-debrief.sse"));
+            var resumed = Control(after);
+            resumed.Send(new MissionsRestored(_save.Path, new List<MissionSaveState> { old }));
+            resumed.Send(new SceneChanged(GameScene.Flight));
+            resumed.Send(OnPad());
+            DrainUntil(resumed, v => v.Stage == MissionStage.Succeeded);
+            var turn = Messages(after.Requests[0]).Where(m => m.GetProperty("role").GetString() == "user").Select(Text).Last();
+            Assert.Contains("RCS Use this run: none.", turn);
+            Assert.Contains("Delta-v used this run: unknown (no stock delta-v figure at the run's start).", turn);
+            Assert.Null(Saved(resumed)[0].RunStartMonopropellant);
+        }
+
+        [Fact]
+        public void ATallySavedWithRcsStillOnKeepsCountingUntilClose()
+        {
+            var tally = new RcsUseTally();
+            tally.Switched(100, "exec_node", true);
+            tally.Switched(110, "exec_node", false);
+            tally.Switched(200, "exec_node", true);
+
+            var restored = new RcsUseTally();
+            restored.Restore(tally.ToJson());
+            Assert.Equal(2, restored.TimesOn);
+            Assert.Equal(10, restored.SecondsOn);
+            Assert.Equal("exec_node", restored.MostBlock);
+            Assert.Equal(2, restored.MostBlockTimes);
+            restored.Close(230);
+            Assert.Equal(40, restored.SecondsOn);
+            Assert.Equal("", new RcsUseTally().ToJson());
+            restored.Restore("not json");
+            Assert.Equal(0, restored.TimesOn);
+        }
+
+        [Fact]
         public void AQuickloadToARunningSaveInterruptsTheSequenceToo()
         {
             var transport = new StreamingFakeTransport(
