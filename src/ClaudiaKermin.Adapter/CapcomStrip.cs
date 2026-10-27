@@ -336,7 +336,15 @@ namespace ClaudiaKermin.Adapter
             GUILayout.Space(ClaudiaSkin.Gap);
             GUILayout.BeginVertical(GUILayout.ExpandWidth(false));
             GUILayout.FlexibleSpace();
+            var auto = MissionWindowRules.AutoTag(View);
+            GUILayout.BeginHorizontal(GUILayout.ExpandWidth(false));
+            if (auto.Length > 0)
+            {
+                GUILayout.Label(auto, ClaudiaSkin.Secondary, GUILayout.ExpandWidth(false));
+                GUILayout.Space(ClaudiaSkin.Gap / 2);
+            }
             GUILayout.Label(MissionWindowRules.SpendMeter(View), ClaudiaSkin.Secondary, GUILayout.ExpandWidth(false));
+            GUILayout.EndHorizontal();
             ClaudiaSkin.SpendBar(View, MeterWidth);
             GUILayout.FlexibleSpace();
             GUILayout.EndVertical();
