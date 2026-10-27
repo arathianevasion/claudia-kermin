@@ -1630,8 +1630,9 @@ namespace ClaudiaKermin.Core.Missions
                 mission.SequenceCounted = true;
                 mission.PlanStepBefore = mission.PlanStep;
             }
-            // The step it names, not the count, says where the Mission is: a retry names its step again (#413).
-            mission.PlanStep = plan.PlanStep;
+            // The step it names, not the count, says where the Mission is: a retry names its step again (#413). A manual
+            // stretch skips the Script Check, so a step outside the Mission Plan is ignored here and the count stands in.
+            mission.PlanStep = PlanStepProblem(mission, plan) == null ? plan.PlanStep : null;
             mission.PendingSequence = plan;
             mission.PlanBaseline = _snapshot;
             PlanOffered(mission);

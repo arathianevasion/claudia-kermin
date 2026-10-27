@@ -268,6 +268,18 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AManualStretchNamingAStepOutsideTheMissionPlanIsCountedInstead()
+        {
+            // A manual stretch has no script, so no Script Check to refuse its step: the count stands in.
+            var manual = Reply("{\"kind\":\"sequence_plan\",\"say\":\"Over to you.\",\"reply_intent\":\"none\",\"mission_plan\":null,\"alert\":null,"
+                + "\"sequence_plan\":{\"name\":\"Launch by hand\",\"plan_step\":9,\"intent\":\"Fly it.\",\"why\":\"Because.\",\"target\":\"t\",\"tolerances\":\"t\","
+                + "\"expected_delta_v\":100,\"expected_duration_s\":600,\"abort_conditions\":[],\"risks\":[],\"custom_script_reason\":\"\",\"script\":\"\","
+                + "\"due_time_ut\":-1,\"window_closes_ut\":-1,\"late_window_dv\":-1,\"manual\":true},\"debrief\":null}");
+            var mission = Started(new StreamingFakeTransport(ThreeSequenceMissionPlan(), manual));
+            Assert.Equal(0, mission.View.CurrentSequence);
+        }
+
+        [Fact]
         public void TheNamedStepSurvivesASaveAndLoad()
         {
             var transport = new StreamingFakeTransport(

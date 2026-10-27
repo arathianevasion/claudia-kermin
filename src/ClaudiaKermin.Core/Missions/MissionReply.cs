@@ -249,7 +249,7 @@ namespace ClaudiaKermin.Core.Missions
             "{\"type\":\"object\",\"additionalProperties\":false,"
             + "\"required\":[\"name\",\"plan_step\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"telemetry_checks\",\"risks\",\"custom_script_reason\",\"script\",\"due_time_ut\",\"window_closes_ut\",\"late_window_dv\",\"manual\",\"vessel\"],"
             + "\"properties\":{"
-            + "\"plan_step\":{\"type\":\"integer\",\"description\":\"The Mission Plan step this sequence flies, 1 for the first; a retry names the same step again.\"},"
+            + "\"plan_step\":{\"type\":\"integer\",\"description\":\"The number of the Mission Plan's Maneuver Sequence this flies, 1 for the first; a retry gives the same number again.\"},"
             + "\"vessel\":{\"type\":\"string\",\"description\":\"craft, or the name of a Child Vessel from the Mission Plan: the script goes only to that vessel, "
             + "over a CommNet path from you, and every other vessel of the Mission must be stable (in orbit, landed or splashed down) when it starts.\"},"
             + "\"name\":{\"type\":\"string\"},\"intent\":{\"type\":\"string\"},"
