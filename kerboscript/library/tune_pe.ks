@@ -15,7 +15,9 @@
 //|   value [required]: the periapsis altitude wanted, m above the surface.
 //|   patch ["current"]: "current" burns at the apoapsis of the orbit the craft is on (the cheapest point
 //|     for moving the periapsis) and needs a closed orbit whose apoapsis comes before any sphere-of-influence
-//|     change; "next" burns halfway to the sphere-of-influence change and aims the periapsis of the orbit
+//|     change. If the periapsis is inside the atmosphere (or below the surface) and the craft reaches it
+//|     before that apoapsis, it burns instead as soon as a burn can be led (about 2 minutes on), the
+//|     cheapest point before the periapsis, so the craft is not lost to it; "next" burns halfway to the sphere-of-influence change and aims the periapsis of the orbit
 //|     after it (at the Mun before arrival, at Kerbin on the way home).
 //|   tolerance [1000]: m the periapsis may end from value; more fails the block.
 //|   max_dv [50]: m/s the burn may cost; more fails the block before any burn.
@@ -26,6 +28,9 @@
 //| tolerance. Fails with "value is required", an option value it can't read, "a maneuver node is already
 //| planned: remove it first", "no next patch" (patch "next" with no sphere-of-influence change ahead),
 //| "the orbit escapes" or "the apoapsis comes after the sphere-of-influence change" (patch "current"),
+//| "the periapsis is inside the atmosphere or the surface and comes in <s> s, too soon to plan and fly a
+//| burn before it" (patch "current", under 5 minutes to it), "no prograde burn at the burn point reaches
+//| a periapsis of <m> m from the centre",
 //| "value is above the apoapsis", "the sphere-of-influence change is too close", "needs <dv> m/s, over
 //| max_dv <max>", "found no burn that reaches <value> m", the reasons exec_node gives (no thrust, out of
 //| fuel, an abort), or "periapsis <pe> m is over tolerance <t> m from <value> m"; on an exec_node failure
@@ -58,11 +63,13 @@ function tune_pe_unreadable {
   return "".
 }
 
-// Where to burn, from plain values: patch, ecc (eccentricity), eta_ap and period (s, of the current orbit),
-// has_next and soi_eta (s to the sphere-of-influence change). Returns lexicon("error", "" or why not, "in", s from now).
+// Where to burn, from plain values: patch, ecc (eccentricity), eta_ap, eta_pe and period (s, of the current
+// orbit), pe_unsafe (the periapsis is inside the atmosphere or below the surface), has_next and soi_eta (s to
+// the sphere-of-influence change). Returns lexicon("error", "" or why not, "in", s from now, "early", true if
+// the burn is not at the apoapsis).
 function tune_pe_burn_point {
-  parameter patch, ecc, eta_ap, period, has_next, soi_eta.
-  local point is lexicon("error", "", "in", 0).
+  parameter patch, ecc, eta_ap, eta_pe, period, pe_unsafe, has_next, soi_eta.
+  local point is lexicon("error", "", "in", 0, "early", false).
   if patch = "next" {
     if not has_next {
       set point:error to "no next patch: the orbit stays in this sphere of influence".
@@ -82,6 +89,16 @@ function tune_pe_burn_point {
   if eta_ap < 120 {
     set point:in to eta_ap + period.
   }
+  // The craft reaches an unsafe periapsis before that burn: burn before it, as soon as a burn can be led.
+  // Past the apoapsis a burn is cheapest the further it is from the periapsis, so the earliest is cheapest.
+  if pe_unsafe and eta_pe < point:in {
+    if eta_pe < 300 {
+      set point:error to "the periapsis is inside the atmosphere or the surface and comes in " + round(eta_pe) + " s, too soon to plan and fly a burn before it".
+      return point.
+    }
+    set point:in to 120.
+    set point:early to true.
+  }
   if has_next and soi_eta < point:in {
     set point:error to "the apoapsis comes after the sphere-of-influence change (in " + round(soi_eta) + " s): use patch next".
   }
@@ -100,6 +117,26 @@ function tune_pe_apoapsis_burn {
   }
   local sma_new is (rad_ap + rad_pe) / 2.
   set burn:prograde to sqrt(mu * (2 / rad_ap - 1 / sma_new)) - sqrt(mu * (2 / rad_ap - 1 / sma)).
+  return burn.
+}
+
+// The prograde burn (m/s, negative to slow down) at a point rad m from the body's centre, moving at speed m/s
+// with radial (up) speed vrad, that leaves the periapsis rad_pe m from the centre; "error" is "" or why not.
+// At the periapsis the speed is h / rad_pe, which gives the speed after the burn in closed form.
+function tune_pe_burn_at {
+  parameter mu, rad, speed, vrad, rad_pe.
+  local burn is lexicon("error", "", "prograde", 0).
+  if rad_pe >= rad {
+    set burn:error to "value is not below the burn point (" + round(rad) + " m from the centre): a burn there can't set the periapsis".
+    return burn.
+  }
+  local tangential is sqrt(max(speed * speed - vrad * vrad, 0)).
+  local k is 1 - (rad * tangential / speed) ^ 2 / rad_pe ^ 2.
+  if k >= 0 {
+    set burn:error to "no prograde burn at the burn point reaches a periapsis of " + round(rad_pe) + " m from the centre".
+    return burn.
+  }
+  set burn:prograde to sqrt(2 * mu * (1 / rad - 1 / rad_pe) / k) - speed.
   return burn.
 }
 
@@ -169,11 +206,19 @@ function tune_pe {
   }
   local eta_ap is 0.
   local period is 0.
+  local eta_pe is 0.
+  local pe_unsafe is false.
   if o:eccentricity < 1 {
     set eta_ap to eta:apoapsis.
     set period to o:period.
+    set eta_pe to eta:periapsis.
+    local safe_pe is 0.
+    if ship:body:atm:exists {
+      set safe_pe to ship:body:atm:height.
+    }
+    set pe_unsafe to o:periapsis < safe_pe.
   }
-  local point is tune_pe_burn_point(opt:patch, o:eccentricity, eta_ap, period, o:hasnextpatch, soi_eta).
+  local point is tune_pe_burn_point(opt:patch, o:eccentricity, eta_ap, eta_pe, period, pe_unsafe, o:hasnextpatch, soi_eta).
   if point:error <> "" {
     return claudia_finish(ctx, false, point:error, extra).
   }
@@ -181,7 +226,14 @@ function tune_pe {
 
   local nd is node(burn_ut, 0, 0, 0).
   if opt:patch = "current" {
-    local burn is tune_pe_apoapsis_burn(ship:body:mu, ship:body:radius + o:apoapsis, o:semimajoraxis, ship:body:radius + opt:value).
+    local burn is lexicon().
+    if point:early {
+      local pos is positionat(ship, burn_ut) - ship:body:position.
+      local vel is velocityat(ship, burn_ut):orbit.
+      set burn to tune_pe_burn_at(ship:body:mu, pos:mag, vel:mag, vdot(vel, pos:normalized), ship:body:radius + opt:value).
+    } else {
+      set burn to tune_pe_apoapsis_burn(ship:body:mu, ship:body:radius + o:apoapsis, o:semimajoraxis, ship:body:radius + opt:value).
+    }
     if burn:error <> "" {
       return claudia_finish(ctx, false, burn:error, extra).
     }

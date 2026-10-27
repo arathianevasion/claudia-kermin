@@ -4,7 +4,8 @@
 // tune_pe block test (patch current): the Mission Script the debug block test runner starts (bundled
 // with the Core Library, as for a real Mission). The reference craft arrives in a 30 km circular Mun
 // orbit with no stage fired. return puts it on the way home with a Kerbin periapsis near 35 km; tune_pe
-// must then set that periapsis to 45 km, burning at the apoapsis.
+// must then set that periapsis to 45 km. The 35 km periapsis is inside the atmosphere and comes before the
+// apoapsis, so it must burn before the periapsis (not at the apoapsis, which the craft would never reach).
 
 @lazyglobal off.
 
