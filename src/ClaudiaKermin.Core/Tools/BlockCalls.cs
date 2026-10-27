@@ -11,9 +11,10 @@ namespace ClaudiaKermin.Core.Tools
 {
     /// <summary>
     /// The block-internal calls (ADR 0006, ADR 0007): the mod's calculations a Building Block makes while it flies, through
-    /// <c>ADDONS:CLAUDIA</c>: the site search, and the reentry predictor with the deorbit burn search on it. They run the same C#
+    /// <c>ADDONS:CLAUDIA</c>: the site search, the reentry predictor with the deorbit burn search on it, and the turn time. They run the same C#
     /// as the Planning Tools, on a Game Snapshot read at the call (the reentry calls also read the air and the craft's drag cubes
-    /// live, through <see cref="IReentryAir"/> and <see cref="IReentryCraft"/>), and only read. The
+    /// live, through <see cref="IReentryAir"/> and <see cref="IReentryCraft"/>), and only read. The turn time is the exception:
+    /// it needs no Snapshot, only the craft's torque and moment of inertia, read live into a <see cref="TurnCraft"/>. The
     /// Script Check lets the Core Library call them and refuses them in a Mission Script. Inputs and results are plain values, as
     /// <c>KosValues</c> converts a kOS lexicon.
     /// </summary>
@@ -127,6 +128,26 @@ namespace ClaudiaKermin.Core.Tools
             var result = Landing(landing, km);
             result["error"] = "";
             return result;
+        }
+
+        /// <summary>
+        /// <c>ADDONS:CLAUDIA:TURNTIME</c>, for a block that turns to a burn: how long to leave for the turn (<see cref="Tools.TurnTime"/>),
+        /// from the torque and moment of inertia the adapter reads into <paramref name="craft"/>. Takes <c>max_stopping_time</c> (s,
+        /// kOS's <c>steeringmanager:maxstoppingtime</c>; 2 if missing). Gives <c>error</c> "", <c>turn_time</c> (s, at least 30),
+        /// <c>turn_s</c> (the 190° turn alone) and <c>top_rate</c> (deg/s); or only <c>error</c>, "no usable torque".
+        /// </summary>
+        public static IDictionary<string, object> TurnTime(IDictionary<string, object> input, TurnCraft craft)
+        {
+            var ask = new Dictionary<string, object>(input ?? new Dictionary<string, object>(), StringComparer.OrdinalIgnoreCase);
+            var turn = Tools.TurnTime.Predict(craft, Number(ask, "max_stopping_time", Tools.TurnTime.KosMaxStoppingTime));
+            if (turn.Error != null) return Error(turn.Error);
+            return new Dictionary<string, object>
+            {
+                { "error", "" },
+                { "turn_time", turn.Seconds },
+                { "turn_s", turn.TurnSeconds },
+                { "top_rate", turn.TopRateDegS },
+            };
         }
 
         /// <summary>

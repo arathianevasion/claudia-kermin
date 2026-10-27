@@ -15,7 +15,8 @@ namespace ClaudiaKermin.KOS
     /// <summary>
     /// The block-internal calls (ADR 0006, ADR 0007): the mod's calculations a Building Block makes while it flies, on the same C#
     /// as the Planning Tools (<see cref="BlockCalls"/>). The Script Check lets only the Core Library call them; a Mission Script
-    /// passes a block its goal instead. Each reads a fresh Game Snapshot of the processor's vessel and never changes the game.
+    /// passes a block its goal instead. Each reads a fresh Game Snapshot of the processor's vessel (TURNTIME reads only its torque
+    /// and moment of inertia) and never changes the game.
     /// </summary>
     public partial class ClaudiaAddon
     {
@@ -27,6 +28,23 @@ namespace ClaudiaKermin.KOS
                 "Core Library only (deorbit): the deorbit burn that lands on lat, lng by the reentry predictor; lexicon error, burn_ut, prograde, normal, radial, dv, lat, lng, error_km, ...; leave_out (part UIDs) flies the craft without them"));
             AddSuffix("REENTRYIMPACT", new OneArgsSuffix<Lexicon, Lexicon>(ReentryImpact,
                 "Core Library only (deorbit, return): where the orbit as it is now, or the one given as orbit_sma, orbit_ecc, ..., comes down, held retrograde; lexicon error, lat, lng, landing_ut, error_km"));
+            AddSuffix("TURNTIME", new OneArgsSuffix<Lexicon, Lexicon>(TurnTime,
+                "Core Library only (a block that turns to a burn): the time to leave for a 190 degree turn on the wheels and RCS (if on), given max_stopping_time; lexicon error, turn_time, turn_s, top_rate"));
+        }
+
+        private Lexicon TurnTime(Lexicon input)
+        {
+            var watch = Stopwatch.StartNew();
+            var craft = TurnCraftReader.Read(shared.Vessel);
+            var turn = BlockCalls.TurnTime(KosValues.ToDictionary(input), craft);
+            // The prediction, so block tests can read it back from KSP.log against the turn the block flew.
+            Debug.Log(ModInfo.LogTag + " block call TURNTIME took " + Ms(watch) + " ms: " + string.Format(CultureInfo.InvariantCulture,
+                "{0}; wheels {1:0.##}/{2:0.##} kN m, RCS {3:0.##}/{4:0.##} kN m{5}, MOI {6:0.##}/{7:0.##} t m2 (pitch/yaw)",
+                turn["error"] as string == ""
+                    ? string.Format(CultureInfo.InvariantCulture, "turn_time {0:0.0} s, turn {1:0.0} s at up to {2:0.0} deg/s", turn["turn_time"], turn["turn_s"], turn["top_rate"])
+                    : turn["error"],
+                craft.WheelPitch, craft.WheelYaw, craft.RcsPitch, craft.RcsYaw, craft.RcsOn ? " (on)" : " (off)", craft.MoiPitch, craft.MoiYaw));
+            return (Lexicon)KosValues.FromPlain(turn);
         }
 
         private Lexicon DeorbitBurn(Lexicon input)

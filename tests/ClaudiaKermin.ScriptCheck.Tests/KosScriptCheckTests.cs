@@ -286,6 +286,8 @@ namespace ClaudiaKermin.ScriptCheck.Tests
         [InlineData("local b is addons:claudia:deorbitburn(lexicon(\"lat\", 0, \"lng\", -74)).")]
         [InlineData("print addons:claudia:reentryimpact(lexicon()):lat.")]
         [InlineData("local c is addons:claudia.\nprint c:ReentryImpact(lexicon()).")]
+        [InlineData("print addons:claudia:turntime(lexicon()):turn_time.")]
+        [InlineData("local t is addons:claudia:TurnTime@.\nprint t(lexicon(\"max_stopping_time\", 2)).")]
         public void ABlockInternalCallInAMissionScriptFails(string script)
         {
             AssertForbidden("call block-internal calculations", script);
@@ -307,6 +309,13 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             Assert.Contains("addons:claudia:deorbitburn(", bundle);
             Assert.Contains("addons:claudia:reentryimpact(", bundle);
             AssertAllowed(CoreLibrary.Bundle("local res is deorbit(lexicon(\"target\", \"ksc\")).\nif res:burn_ut > 0 { set res to reentry(). }\naddons:claudia:report(res)."));
+        }
+
+        [Fact]
+        public void ExecNodesOwnTurnTimeCallPasses()
+        {
+            Assert.Contains("addons:claudia:turntime(", CoreLibrary.Bundle("").ToLowerInvariant());
+            AssertAllowed(CoreLibrary.Bundle("add node(time:seconds + 600, 0, 0, 120).\nlocal res is exec_node().\naddons:claudia:report(res)."));
         }
 
         [Fact]
