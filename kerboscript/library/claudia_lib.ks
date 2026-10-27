@@ -1264,6 +1264,8 @@ function claudia_rcs_tick {
     addons:claudia:blocktrace(ctx:block, lexicon("phase", "sas", "note", "SAS was on: turned off, it fights kOS steering")).
   }
   if ctx:rcs_translating {
+    // The hold within aligned_deg starts afresh once translating ends.
+    set ctx:rcs_within_ut to -1.
     return.
   }
   local tol is ctx:opt:rcs_tolerance.

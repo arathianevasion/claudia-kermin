@@ -498,7 +498,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
 
         // ---- RCS Use ----
 
-        // One tick's state for claudia_rcs_decide: a craft with RCS off, steering, monoprop, on target and still, the gate
+        // One tick's state for claudia_rcs_decide: a craft with RCS off, steering, monoprop, no steering error and not turning, the gate
         // not due, wheels that turn in 40 s and no deadline; each case overrides what it needs.
         private static string Decide(string overrides, string tolerance = "claudia_rcs_defaults()")
         {
