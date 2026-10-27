@@ -1,0 +1,38 @@
+{
+  "ut": 100,
+  "situation": "ORBITING",
+  "body": "Kerbin",
+  "mode": "SANDBOX",
+  "dv_sim": true,
+  "craft": {
+    "name": "Transfer Test",
+    "mass_t": 5.2,
+    "stage": 0,
+    "seats": 0,
+    "parts": []
+  },
+  "stages": [
+    { "stage": 0, "dv_vac": 2400.0, "dv_asl": 2000.0, "thrust_vac_kn": 60.0, "start_mass_t": 5.2, "end_mass_t": 2.6 }
+  ],
+  "crew": [],
+  "bodies": [
+    { "name": "Sun", "parent": "", "gm": 1.1723328e18, "radius": 261600000, "atmosphere_height": 600000, "sea_level_atm": 0, "sma": 0, "inclination": 0, "soi_radius": 0, "rotation_period": 432000, "eccentricity": 0, "lan": 0, "arg_pe": 0, "mean_anomaly_at_epoch": 0, "epoch": 0 },
+    { "name": "Kerbin", "parent": "Sun", "gm": 3.5316e12, "radius": 600000, "atmosphere_height": 70000, "sea_level_atm": 1, "sma": 13599840256, "inclination": 0, "soi_radius": 84159286.4796305, "rotation_period": 21549.425, "eccentricity": 0, "lan": 0, "arg_pe": 0, "mean_anomaly_at_epoch": 3.14, "epoch": 0 },
+    { "name": "Mun", "parent": "Kerbin", "gm": 6.5138398e10, "radius": 200000, "atmosphere_height": 0, "sea_level_atm": 0, "sma": 12000000, "inclination": 0, "soi_radius": 2429559.11656475, "rotation_period": 138984.376574476, "eccentricity": 0, "lan": 0, "arg_pe": 0, "mean_anomaly_at_epoch": 1.7, "epoch": 0 },
+    { "name": "Minmus", "parent": "Kerbin", "gm": 1.7658e9, "radius": 60000, "atmosphere_height": 0, "sea_level_atm": 0, "sma": 47000000, "inclination": 6, "soi_radius": 2247428.38773632, "rotation_period": 40400, "eccentricity": 0, "lan": 78, "arg_pe": 38, "mean_anomaly_at_epoch": 0.9, "epoch": 0 }
+  ],
+  "orbit": {
+    "apoapsis": 100120,
+    "periapsis": 99880,
+    "inclination": 0.02,
+    "eccentricity": 0.000171,
+    "period": 1958.1,
+    "semi_major_axis": 700000,
+    "lan": 0,
+    "arg_pe": 90,
+    "mean_anomaly_at_epoch": 0.6,
+    "epoch": 100,
+    "orbit_body": "Kerbin"
+  },
+  "resources": []
+}

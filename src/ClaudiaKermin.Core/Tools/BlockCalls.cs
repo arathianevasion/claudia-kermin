@@ -151,6 +151,49 @@ namespace ClaudiaKermin.Core.Tools
         }
 
         /// <summary>
+        /// <c>ADDONS:CLAUDIA:EJECTIONBURN</c>, for <c>transfer_to</c>: the ejection burn to a moon of the body the craft orbits
+        /// (<see cref="Tools.EjectionBurn"/>), in place of RSVP's search. Takes <c>target</c> (the moon's name), <c>target_pe</c>
+        /// (m), <c>earliest_ut</c> (UT; now if missing) and <c>window</c> ("next", the default, or a UT): it searches one synodic
+        /// period from the later of the two, so a window sooner than <c>earliest_ut</c> is skipped for the next. Gives
+        /// <c>error</c> "", <c>ut</c>, <c>prograde</c>, <c>normal</c>, <c>radial</c> (m/s, maneuver node components), <c>dv</c>,
+        /// <c>encounter_ut</c>, <c>arrival_ut</c> (periapsis at the target), <c>target_pe_actual</c> (m), <c>search_from</c> (UT)
+        /// and <c>synodic</c> (s); or only <c>error</c>, "found no transfer: &lt;why&gt;".
+        /// </summary>
+        public static IDictionary<string, object> EjectionBurn(IDictionary<string, object> input, GameSnapshot snapshot)
+        {
+            var ask = new Dictionary<string, object>(input ?? new Dictionary<string, object>(), StringComparer.OrdinalIgnoreCase);
+            object target, window;
+            ask.TryGetValue("target", out target);
+            ask.TryGetValue("window", out window);
+            if (!ask.ContainsKey("target_pe") || !(ask["target_pe"] is double)) return Error(Tools.EjectionBurn.Failure + ": target_pe is required");
+            if (window != null && !(window is double) && !string.Equals(window as string, "next", StringComparison.OrdinalIgnoreCase))
+                return Error(Tools.EjectionBurn.Failure + ": window must be \"next\" or a UT, not " + Convert.ToString(window, CultureInfo.InvariantCulture));
+            if (snapshot == null) return Error(Tools.EjectionBurn.Failure + ": no Game Snapshot");
+            var plan = Tools.EjectionBurn.Find(snapshot, new EjectionAsk
+            {
+                Target = target as string,
+                TargetPe = Number(ask, "target_pe", 0),
+                EarliestUt = Number(ask, "earliest_ut", snapshot.Ut),
+                WindowUt = window as double?,
+            });
+            if (plan.Error != null) return Error(plan.Error);
+            return new Dictionary<string, object>
+            {
+                { "error", "" },
+                { "ut", plan.Ut },
+                { "prograde", plan.Prograde },
+                { "normal", plan.Normal },
+                { "radial", plan.Radial },
+                { "dv", plan.DeltaV },
+                { "encounter_ut", plan.EncounterUt },
+                { "arrival_ut", plan.ArrivalUt },
+                { "target_pe_actual", plan.PeActual },
+                { "search_from", plan.SearchFrom },
+                { "synodic", plan.Synodic },
+            };
+        }
+
+        /// <summary>
         /// The parts a reentry call leaves out of the craft (#326): <c>leave_out</c>, the kOS UIDs of the parts <c>deorbit</c> drops
         /// after its burn, so the predictor flies only what stays. One UID may be given bare. The adapter builds the craft from it.
         /// </summary>
