@@ -80,6 +80,12 @@ namespace ClaudiaKermin.Core.Missions
         public string RunEvents = "";
         /// <summary>Game time the current or last run began, s of UT; 0 in older saves.</summary>
         public double RunStartUt;
+        /// <summary>The run's RCS Use tally (JSON written by RcsUseTally.ToJson); "" for none and in older saves.</summary>
+        public string RcsUse = "";
+        /// <summary>Monopropellant units at the run's start; null when unknown, and in older saves.</summary>
+        public double? RunStartMonopropellant;
+        /// <summary>Stock delta-v left (m/s) at the run's start; null when unknown, and in older saves.</summary>
+        public double? RunStartDeltaVLeft;
         /// <summary>The kOS terminal text of the last run that did not report, until its Debrief card; "" otherwise.</summary>
         public string ScriptError = "";
         /// <summary>The craft docked since the pending plan was offered (what with), so Approve is Re-plan; "" for none.</summary>
@@ -153,6 +159,9 @@ namespace ClaudiaKermin.Core.Missions
             if (Crossings.Length > 0) values["crossings"] = Crossings;
             if (RunEvents.Length > 0) values["runEvents"] = RunEvents;
             if (RunStartUt != 0) values["runStartUt"] = RunStartUt.ToString("R", CultureInfo.InvariantCulture);
+            if (RcsUse.Length > 0) values["rcsUse"] = RcsUse;
+            if (RunStartMonopropellant.HasValue) values["runStartMonopropellant"] = RunStartMonopropellant.Value.ToString("R", CultureInfo.InvariantCulture);
+            if (RunStartDeltaVLeft.HasValue) values["runStartDeltaVLeft"] = RunStartDeltaVLeft.Value.ToString("R", CultureInfo.InvariantCulture);
             if (ScriptError.Length > 0) values["scriptError"] = ScriptError;
             if (Recheck.Length > 0) values["recheck"] = Recheck;
             if (RecheckSince != 0) values["recheckSince"] = RecheckSince.ToString(CultureInfo.InvariantCulture);
@@ -207,6 +216,7 @@ namespace ClaudiaKermin.Core.Missions
                 LeftTheCraft = Get(values, "leftTheCraft"),
                 Crossings = Get(values, "crossings"),
                 RunEvents = Get(values, "runEvents"),
+                RcsUse = Get(values, "rcsUse"),
                 ScriptError = Get(values, "scriptError"),
                 Recheck = Get(values, "recheck"),
                 PendingNotice = Get(values, "pendingNotice"),
@@ -216,6 +226,9 @@ namespace ClaudiaKermin.Core.Missions
             };
             double runStart;
             if (double.TryParse(Get(values, "runStartUt"), NumberStyles.Float, CultureInfo.InvariantCulture, out runStart)) state.RunStartUt = runStart;
+            double reading;
+            if (double.TryParse(Get(values, "runStartMonopropellant"), NumberStyles.Float, CultureInfo.InvariantCulture, out reading)) state.RunStartMonopropellant = reading;
+            if (double.TryParse(Get(values, "runStartDeltaVLeft"), NumberStyles.Float, CultureInfo.InvariantCulture, out reading)) state.RunStartDeltaVLeft = reading;
             decimal cap;
             if (decimal.TryParse(Get(values, "spendingCap"), NumberStyles.Number, CultureInfo.InvariantCulture, out cap)) state.SpendingCap = cap;
             int number;

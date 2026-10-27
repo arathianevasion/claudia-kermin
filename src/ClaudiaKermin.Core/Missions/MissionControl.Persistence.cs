@@ -87,6 +87,9 @@ namespace ClaudiaKermin.Core.Missions
                 Crossings = CrossingsJson(mission),
                 RunEvents = RunEventsJson(mission),
                 RunStartUt = mission.RunStartUt,
+                RcsUse = mission.RcsUse.ToJson(),
+                RunStartMonopropellant = mission.RunStartMonopropellant,
+                RunStartDeltaVLeft = mission.RunStartDeltaVLeft,
                 ScriptError = mission.ScriptError ?? "",
                 Recheck = mission.Recheck,
                 RecheckSince = mission.RecheckSince,
@@ -440,6 +443,9 @@ namespace ClaudiaKermin.Core.Missions
             RestoreCrossings(mission, state.Crossings);
             RestoreRunEvents(mission, state.RunEvents);
             mission.RunStartUt = state.RunStartUt;
+            mission.RcsUse.Restore(state.RcsUse);
+            mission.RunStartMonopropellant = state.RunStartMonopropellant;
+            mission.RunStartDeltaVLeft = state.RunStartDeltaVLeft;
             mission.ScriptError = state.ScriptError ?? "";
 
             // The conversation is the transcript's, whole: turns past the save's marker are kept.
