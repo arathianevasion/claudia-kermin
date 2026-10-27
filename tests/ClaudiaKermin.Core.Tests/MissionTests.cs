@@ -261,6 +261,8 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Contains("Kerbal Space Program", baseLayer);
             Assert.Contains("kOS", baseLayer);
             Assert.Contains("ADDONS:CLAUDIA:REPORT", baseLayer);
+            // How to plan (#285): the rules and the worked example ride in the cached base layer of every request.
+            Assert.Contains(MissionPrompts.HowToPlan, baseLayer);
             // The body constants sit once in the cached Mission layer (#273), never in the per-turn Game Snapshot.
             Assert.Contains("Body constants", bodies[0].GetProperty("system")[1].GetProperty("text").GetString());
             Assert.Contains("\"name\":\"Sun\"", bodies[0].GetProperty("system")[1].GetProperty("text").GetString());

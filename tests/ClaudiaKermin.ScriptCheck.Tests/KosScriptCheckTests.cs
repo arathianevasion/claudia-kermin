@@ -52,6 +52,14 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             Assert.Empty(result.Warnings);
         }
 
+        [Fact]
+        public void TheBaseLayersWorkedExamplePassesWithNoWarnings()
+        {
+            var result = _check.Check(ClaudiaKermin.Core.Missions.MissionPrompts.WorkedExampleScript);
+            Assert.True(result.Passed, string.Join("; ", result.Problems.ToArray()));
+            Assert.Empty(result.Warnings);
+        }
+
         // ---- Forbidden: one theory per item of the spec's list ----
 
         [Theory]
