@@ -32,9 +32,12 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>
         /// The conversation exactly as it is sent: the frozen system layers and every message, assistant
         /// blocks as the API returned them (unknown blocks byte for byte). Replaced atomically, so a crash
-        /// mid-write leaves the previous transcript whole.
+        /// mid-write leaves the previous transcript whole. Every message stays, compacted or not: the on-demand compaction
+        /// block in force is kept beside them, byte for byte, with how many of them it stands in for (#268), and the
+        /// conversation's input size from the last committed reply.
         /// </summary>
-        public static void WriteTranscript(string folder, string missionId, string model, IList<string> system, IEnumerable<Message> messages)
+        public static void WriteTranscript(string folder, string missionId, string model, IList<string> system, IEnumerable<Message> messages,
+            CompactionBlock compaction = null, int compactedMessages = 0, long contextTokens = 0)
         {
             var json = new JsonWriter().BeginObject()
                 .Field("mission_id", missionId)
@@ -44,7 +47,15 @@ namespace ClaudiaKermin.Core.Missions
             json.Name("messages").BeginArray();
             foreach (var message in messages)
                 message.Write(json, message.Content);
-            json.EndArray().EndObject();
+            json.EndArray();
+            if (compaction != null)
+            {
+                json.Name("compaction").BeginObject().Field("covers", compactedMessages).Name("block");
+                compaction.Write(json);
+                json.EndObject();
+            }
+            if (contextTokens > 0) json.Field("context_tokens", contextTokens);
+            json.EndObject();
             ReplaceAtomically(Path.Combine(folder, TranscriptFile), json.ToString());
         }
 

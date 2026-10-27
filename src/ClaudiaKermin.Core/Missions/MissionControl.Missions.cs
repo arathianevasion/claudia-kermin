@@ -121,6 +121,7 @@ namespace ClaudiaKermin.Core.Missions
             }
             Event(mission, "paused", "paused at a sequence boundary to make room for another Mission");
             _historyVersion++;
+            CancelCompaction(mission);
             _mission = null;
             // No craft to follow now: the facts are those of the vessel the player is in.
             if (_scene == GameScene.Flight && _active != null) _snapshot = _active;

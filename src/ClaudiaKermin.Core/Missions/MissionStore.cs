@@ -67,6 +67,12 @@ namespace ClaudiaKermin.Core.Missions
     {
         public readonly List<string> System = new List<string>();
         public readonly List<Message> Messages = new List<Message>();
+        /// <summary>The on-demand compaction block in force, byte for byte as the API sent it; null before the first compaction.</summary>
+        public CompactionBlock Compaction;
+        /// <summary>How many of <see cref="Messages"/>, from the start, the block stands in for.</summary>
+        public int CompactedMessages;
+        /// <summary>The conversation's input size as the last committed reply's usage gave it.</summary>
+        public long ContextTokens;
     }
 
     /// <summary>
@@ -357,6 +363,16 @@ namespace ClaudiaKermin.Core.Missions
                     var message = ReadMessage(node);
                     if (message != null) transcript.Messages.Add(message);
                 }
+            var compaction = root["compaction"];
+            var block = compaction != null ? compaction["block"] : null;
+            var covers = compaction != null ? JsonNode.Double(compaction["covers"]) : null;
+            // A block that claims more messages than the transcript holds can't be placed: the Mission goes on uncompacted.
+            if (block != null && JsonNode.Str(block["type"]) == "compaction" && covers.HasValue && covers.Value >= 0 && covers.Value <= transcript.Messages.Count)
+            {
+                transcript.Compaction = new CompactionBlock { Content = JsonNode.Str(block["content"]), RawJson = block.Raw };
+                transcript.CompactedMessages = (int)covers.Value;
+            }
+            transcript.ContextTokens = (long)(JsonNode.Double(root["context_tokens"]) ?? 0);
             return transcript;
         }
 

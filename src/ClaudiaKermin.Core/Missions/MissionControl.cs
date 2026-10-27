@@ -198,6 +198,8 @@ namespace ClaudiaKermin.Core.Missions
             public bool ToolLimitSent;
             /// <summary>The Game Snapshot taken for the turn when its messages were built: what its tools calculate from.</summary>
             public GameSnapshot ToolSnapshot;
+            /// <summary>The compaction block the turn's last request went out behind (null for none): its usage measures the conversation only if that is still the block in force.</summary>
+            public CompactionBlock SentAfter;
             public List<Message> Messages;
             public CancellationTokenSource Cancel;
         }
@@ -283,9 +285,10 @@ namespace ClaudiaKermin.Core.Missions
             public string Outcome = "";
             public decimal Settled;
 
+            /// <summary>What counts against the Spending Cap: with a compaction in flight, its worst case too (MissionControl.Compaction.cs).</summary>
             public decimal Committed
             {
-                get { return Spent + Held; }
+                get { return Spent + Held + CompactionCharge; }
             }
 
             /// <summary>Claudia answered the Mission Plan with no sequences: the goal can't be flown, and there is nothing to approve.</summary>
@@ -451,6 +454,7 @@ namespace ClaudiaKermin.Core.Missions
             _historyVersion++;
             if (_mission == null) return;
             if (_mission.InFlight) _mission.Pending.Cancel.Cancel();
+            CancelCompaction(_mission);
             _mission = null;
         }
 
@@ -562,6 +566,7 @@ namespace ClaudiaKermin.Core.Missions
             StartLive(mission, plan);
             StartedOn(mission, plan);
             _commands.Add(new StartScript(processor.Value, "claudia:" + mission.Id + ":" + plan.Name, bundle, mission.RunId.Value));
+            CompactAtRunStart(mission, plan);
         }
 
         private void Replied(string text)
@@ -805,6 +810,7 @@ namespace ClaudiaKermin.Core.Missions
             var doing = LostDoing(mission);
             if (mission.InFlight) mission.Pending.Cancel.Cancel();
             else mission.Pending = null;
+            CancelCompaction(mission);
             if (IsRunning(mission) && mission.RunningProcessor.HasValue)
                 _commands.Add(new AbortScript(mission.RunningProcessor.Value, "Claudia was killed aboard"));
             mission.RunId = null;
@@ -865,6 +871,7 @@ namespace ClaudiaKermin.Core.Missions
             var mission = _mission;
             if (MissionOver) return;
             if (mission.InFlight) mission.Pending.Cancel.Cancel();
+            CancelCompaction(mission);
             var running = mission.Stage == MissionStage.Running
                 || (mission.Stage == MissionStage.Paused && mission.StageBeforePause == MissionStage.Running);
             if (running && mission.RunningProcessor.HasValue)
@@ -918,7 +925,8 @@ namespace ClaudiaKermin.Core.Missions
         {
             if (turn.Effort == null) turn.Effort = EffortFor(turn.Purpose);
             var mission = _mission;
-            if (mission.Pending != null)
+            // A compaction is never in a turn's way mid-loop: it waits for a turn boundary, and a turn then waits for it.
+            if (mission.Pending != null || WaitsForCompaction(mission, turn))
             {
                 Enqueue(mission, turn);
                 return;
@@ -952,6 +960,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.InFlight = true;
             mission.Activity = "thinking";
             turn.Cancel = new CancellationTokenSource();
+            turn.SentAfter = mission.CompactionBlock;
             var cancel = turn.Cancel.Token;
             var dump = mission.Dump;
             _background.Run(
@@ -980,13 +989,11 @@ namespace ClaudiaKermin.Core.Missions
                 Model = mission.Model,
                 MaxTokens = MissionPrompts.MaxTokens,
                 OutputSchemaJson = Schema(mission, turn),
-                CompactionTriggerTokens = _config.CompactionTriggerTokens,
-                CompactionInstructions = MissionPrompts.CompactionInstructions,
             };
             // The same tools list on every Mission request, whatever the turn may call, so the cached prefix never changes.
             request.Tools.AddRange(_tools.Definitions(ToolOffer.Mission));
             request.System.AddRange(mission.System);
-            request.Messages.AddRange(mission.Conversation);
+            request.Messages.AddRange(Sent(mission));
             request.Messages.AddRange(turn.Messages);
             return request;
         }
@@ -1175,6 +1182,7 @@ namespace ClaudiaKermin.Core.Missions
             foreach (var m in turn.Messages)
                 if (m.Effort != null) mission.Effort = m.Effort;
             mission.Pending = null;
+            TrackContext(mission, turn, message);
             WriteTranscript(mission);
             ClearUnanswered(mission);
             // A save was loaded while this ran: the reply stays in the conversation, the loop state is the save's.
@@ -1648,7 +1656,8 @@ namespace ClaudiaKermin.Core.Missions
         {
             try
             {
-                MissionFolder.WriteTranscript(mission.Folder, mission.Id, mission.Model, mission.System, mission.Conversation);
+                MissionFolder.WriteTranscript(mission.Folder, mission.Id, mission.Model, mission.System, mission.Conversation,
+                    mission.CompactionBlock, mission.CompactedMessages, mission.ContextTokens);
             }
             catch (Exception e) when (IsFileError(e))
             {

@@ -21,8 +21,9 @@ namespace ClaudiaKermin.Core.Claude
 
     /// <summary>
     /// A streaming Messages request: the typed subset the mod uses. Thinking is always adaptive,
-    /// tool choice stays auto, server-side fallbacks are always on, and compaction runs at
-    /// <see cref="CompactionTriggerTokens"/>.
+    /// tool choice stays auto and server-side fallbacks are always on. Compaction is either on demand
+    /// (<see cref="Compaction"/>: the request is a summary and nothing else) or, for the basic chat only, at a
+    /// threshold (<see cref="CompactionTriggerTokens"/>); the API takes one or the other, never both.
     /// </summary>
     public sealed class MessagesRequest
     {
@@ -36,12 +37,20 @@ namespace ClaudiaKermin.Core.Claude
         public string Effort;
         /// <summary>A JSON Schema (as JSON text) for structured output, or null.</summary>
         public string OutputSchemaJson;
-        public int CompactionTriggerTokens = 150000;
+        /// <summary>Threshold compaction (a <c>compact_20260112</c> edit) at this many input tokens; null sends no edit.</summary>
+        public int? CompactionTriggerTokens;
+        /// <summary>
+        /// On-demand compaction (beta <c>compact-2026-09-04</c>): the request asks for a summary of its messages and gets back one
+        /// signed <c>compaction</c> block, with stop reason <c>compaction</c>. A reply schema is rejected on it.
+        /// </summary>
+        public bool Compaction;
         /// <summary>Replaces the API's default summarization prompt when compaction runs; null keeps the default.</summary>
         public string CompactionInstructions;
 
         internal string ToJson()
         {
+            if (Compaction && (CompactionTriggerTokens.HasValue || OutputSchemaJson != null))
+                throw new System.InvalidOperationException("an on-demand compaction request carries no compaction edit and no reply schema");
             var json = new JsonWriter().BeginObject()
                 .Field("model", Model)
                 .Field("max_tokens", MaxTokens)
@@ -83,12 +92,21 @@ namespace ClaudiaKermin.Core.Claude
                 json.EndObject();
             }
 
-            json.Name("context_management").BeginObject().Name("edits").BeginArray()
-                .BeginObject().Field("type", "compact_20260112")
-                .Name("trigger").BeginObject().Field("type", "input_tokens").Field("value", CompactionTriggerTokens).EndObject();
-            if (CompactionInstructions != null) json.Field("instructions", CompactionInstructions);
-            json.EndObject()
-                .EndArray().EndObject();
+            if (Compaction)
+            {
+                json.Name("compaction").BeginObject().Field("type", "summarize");
+                if (CompactionInstructions != null) json.Field("instructions", CompactionInstructions);
+                json.EndObject();
+            }
+            else if (CompactionTriggerTokens.HasValue)
+            {
+                json.Name("context_management").BeginObject().Name("edits").BeginArray()
+                    .BeginObject().Field("type", "compact_20260112")
+                    .Name("trigger").BeginObject().Field("type", "input_tokens").Field("value", CompactionTriggerTokens.Value).EndObject();
+                if (CompactionInstructions != null) json.Field("instructions", CompactionInstructions);
+                json.EndObject()
+                    .EndArray().EndObject();
+            }
 
             json.Name("messages").BeginArray();
             foreach (var message in Messages)

@@ -36,6 +36,7 @@ namespace ClaudiaKermin.Core.Missions
         private void DropFinished(Mission mission)
         {
             if (mission.InFlight) mission.Pending.Cancel.Cancel();
+            CancelCompaction(mission);
             if (mission.PendingSequence != null && mission.PendingSequence.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
             _mission = null;
         }

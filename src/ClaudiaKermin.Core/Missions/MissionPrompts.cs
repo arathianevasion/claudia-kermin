@@ -75,23 +75,27 @@ namespace ClaudiaKermin.Core.Missions
         public const string CutOffNote = "Your last attempt ran out of room while thinking. Decide with what you have and keep your reasoning short.";
 
         /// <summary>
-        /// The summarization prompt for server-side compaction (it replaces the API's default). It lists what a
-        /// long Mission must not lose; the summary is all Claude has of the compacted turns.
+        /// The summarization prompt for on-demand compaction (#268; it replaces the API's default). It names what a long
+        /// Mission must keep word for word; the summary is all Claude has of the compacted turns. The Game Snapshot is resent
+        /// each turn, so the craft's state here is the latest one the conversation shows.
         /// </summary>
         public const string CompactionInstructions =
             "You are summarizing a long Kerbal Space Program Mission so that Claudia Kermin, the mission controller, can "
-            + "carry on from the summary alone. Write the summary in plain text and keep, exactly and in full:\n"
-            + "- the Mission Goal, word for word;\n"
-            + "- the Mission Plan and every revision of it, with each Maneuver Sequence's name, intent, delta-v budget and "
-            + "timing, and which sequences are done;\n"
-            + "- each Debrief's outcome (Nominal, Off-Nominal or Failed) and its figures (for example apoapsis, periapsis, "
-            + "delta-v used, situation);\n"
-            + "- the delta-v remaining;\n"
-            + "- failed attempts and the lessons from them (what was tried, why it failed, what to do differently), "
-            + "including Script Check refusals and failed runs;\n"
-            + "- the player's preferences and instructions, as they said them.\n"
-            + "Drop pleasantries, repeated Game Snapshots, full scripts that already ran and anything else not listed. Do "
-            + "not call any tool; reply with the summary only.";
+            + "carry on from the summary alone. Write the summary in plain text: not JSON, not a Mission reply. Keep word for "
+            + "word, exactly as the conversation gives them:\n"
+            + "- the Mission Goal;\n"
+            + "- the Mission Settings;\n"
+            + "- the Spending Cap;\n"
+            + "- the approved Mission Plan, with each Maneuver Sequence's name, intent, delta-v budget and timing;\n"
+            + "- the flown Maneuver Sequences with their Debrief outcomes (Nominal, Off-Nominal or Failed) and figures;\n"
+            + "- every player instruction, as the player said it;\n"
+            + "- the craft's state, as the latest Game Snapshot gives it.\n"
+            + "Then, briefly: failed attempts and their lessons, and which sequences are still to fly. Drop pleasantries, "
+            + "repeated Game Snapshots, full scripts that already ran and anything else not listed. Do not call any tool; "
+            + "reply with the summary only.";
+
+        /// <summary>The compaction request's output cap: room for the summary and the thinking before it.</summary>
+        public const int CompactionMaxTokens = 16000;
 
         /// <summary>
         /// Whether Claudia flies aboard or from Mission Control, and the facts that decide the Craft Check's seat and
