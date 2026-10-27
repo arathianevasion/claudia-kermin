@@ -229,7 +229,7 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void WithNoRoomForAMarginRecheckSecondLookTheFirstAnswerIsKeptAndTheSkipNoted()
         {
-            var rig = new Rig(this, Debrief("debrief", ""), null, unsure: "", mediums: "margin_recheck", cap: 0.6m);
+            var rig = new Rig(this, Debrief("debrief", ""), null, unsure: "", mediums: "margin_recheck", cap: 0.61m); // raised for #349 Claudia's warp guidance (human decision 2026-10-27)
             rig.Router.Rechecks.Enqueue(CheckReply("thin but usable", Reason, outputTokens: 15000));
             var start = rig.RunToRunning();
             var checksBefore = rig.Router.CheckRequests.Count;

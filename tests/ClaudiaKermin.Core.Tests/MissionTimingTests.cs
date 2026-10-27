@@ -449,6 +449,7 @@ namespace ClaudiaKermin.Core.Tests
             Assert.DoesNotContain("capped", layers[2]);
             Assert.Contains("inside the Mission Script, however long", layers[2]);
             Assert.Contains("warp on rails", layers[2]);
+            Assert.Contains("warp on rails (physics warp on a Coast where rails can't) to the time", layers[2]);  // #349
             Assert.Contains("A Due Time is only for a wait between sequences that needs the player", layers[2]);
             Assert.Contains("Count every wait in expected_duration_s", layers[2]);
 
