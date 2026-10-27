@@ -97,6 +97,7 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Empty(commands.OfType<HoldScriptWarp>());
             Assert.DoesNotContain(mission.View.Log, e => e.Text.StartsWith("Warp dropped"));
             Assert.Equal(MissionStage.Running, mission.View.Stage);
+            Assert.True(mission.View.Blackout);
 
             // Still no link, and the link back and lost again: still nothing for warp.
             mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 5; }));
