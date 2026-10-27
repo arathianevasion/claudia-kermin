@@ -172,7 +172,8 @@ function ascend {
     }
     // Ease off as apoapsis nears the target.
     set tset to min(1, max(0.05, (goal - ship:apoapsis) / 2000)).
-    local ticked is claudia_tick(ctx, tset).
+    // Burning the whole climb (#379): tset is never under 0.05, so the tick's default (tset > 0) already stages on a flameout.
+    local ticked is claudia_tick(ctx, tset, true).
     if ticked <> "" {
       claudia_make_safe().
       return claudia_finish(ctx, false, ticked, extra).

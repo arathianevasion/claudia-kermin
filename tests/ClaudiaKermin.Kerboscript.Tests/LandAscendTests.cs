@@ -653,6 +653,18 @@ function tsim {
         }
 
         [Fact]
+        public void The_descent_burns_in_every_phase_but_the_fall()
+        {
+            Assert.Equal("False", One("land_burning(\"fall\")"));
+            Assert.Equal("True", One("land_burning(\"braking\")"));
+            Assert.Equal("True", One("land_burning(\"approach\")"));
+            Assert.Equal("True", One("land_burning(\"terminal\")"));
+            // A stage run dry while braking: throttle 0, but still burning.
+            Assert.Equal("True", One("land_burning(land_phase(true, 43, 2231))"));
+            Assert.Equal("False", One("land_burning(land_phase(false, 575, -1))"));
+        }
+
+        [Fact]
         public void The_descent_traces_a_line_every_2_s_and_at_each_phase_change()
         {
             Assert.Equal("fall", One("land_phase(false, 575, -1)"));

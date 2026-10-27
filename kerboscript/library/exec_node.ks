@@ -131,6 +131,9 @@ function exec_node {
     if tset > 0 and burn_start < 0 {
       set burn_start to time:seconds.
     }
+    // Covered by its own guard (#379): claudia_burn_throttle commands full throttle at no thrust, so
+    // the tick's default (tset > 0) stages when the stage runs dry. Throttle 0 here is only a turn
+    // more than 10 degrees off the node, which must not stage either.
     local ticked is claudia_tick(ctx, tset).
     if ticked <> "" {
       claudia_make_safe().

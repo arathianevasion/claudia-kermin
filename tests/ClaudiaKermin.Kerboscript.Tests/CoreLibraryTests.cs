@@ -143,6 +143,20 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         [Theory]
+        // The block says so: burning stages even at throttle 0 (a dry stage); a coast never does.
+        [InlineData("true", 0, "True")]
+        [InlineData("true", 0.5, "True")]
+        [InlineData("false", 0, "False")]
+        [InlineData("false", 1, "False")]
+        // Not said: burning means a throttle above 0, as before.
+        [InlineData("\"unsaid\"", 0, "False")]
+        [InlineData("\"unsaid\"", 0.3, "True")]
+        public void The_tick_stages_while_the_block_is_burning_whatever_the_throttle(string burning, double tset, string expected)
+        {
+            Assert.Equal(expected, One("claudia_is_burning(" + burning + ", " + tset.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")"));
+        }
+
+        [Theory]
         // A decoupler-only stage with no thrust left, engines next: stage on.
         [InlineData(3, 0, false, true, false, false, true)]
         [InlineData(3, 2, false, true, false, false, true)]
