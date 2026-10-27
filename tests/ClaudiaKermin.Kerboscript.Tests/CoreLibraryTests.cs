@@ -373,7 +373,9 @@ namespace ClaudiaKermin.Kerboscript.Tests
         {
             var bundle = CoreLibrary.Bundle("@lazyglobal off.\nprint 1.").Replace("\r\n", "\n");
             Assert.Contains("parameter ctx, ut, lead, stop is 0, cap is 0.", bundle);
-            Assert.Contains("return claudia_warp_to(ctx, ut, 30, ground_near).", bundle);
+            Assert.Contains("return claudia_warp_to(ctx, ut, 30, ground_near, cap).", bundle);
+            // exec_node's wait (ascend's coast to apoapsis below the rails limit): physics warp ends 30 s or more before the burn.
+            Assert.Contains("claudia_warp_to(ctx, leg_ut, max(30, turn_time), off_burn)", bundle);
             // launch's coast: to the top of the atmosphere or the hop, physics warp to the event itself (lead 0).
             Assert.Contains("claudia_warp_to(ctx, time:seconds + max(1, eta:apoapsis), 0, { fly_tick:call(). return done or not coasting. })", bundle);
             Assert.Single(System.Text.RegularExpressions.Regex.Matches(bundle, "timewarp:warpto\\("));

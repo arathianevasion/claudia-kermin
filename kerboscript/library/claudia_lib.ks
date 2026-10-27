@@ -1031,7 +1031,7 @@ function claudia_warp_to_burn {
       return check and kuniverse:timewarp:rate <= 1 and time:seconds < warp_end - 5
         and not addons:claudia:warphold and not addons:claudia:warpcancelled and not claudia_aligned_to(nd).
     }.
-    local waited is claudia_warp_to(ctx, leg_ut, turn_time, off_burn).
+    local waited is claudia_warp_to(ctx, leg_ut, max(30, turn_time), off_burn).
     if waited <> "" {
       set out:error to waited.
       return out.
