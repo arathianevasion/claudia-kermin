@@ -1481,7 +1481,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.ConfirmPrompt = null;
             mission.UnsafeProblems = problems;
             UnsafeScriptCard(mission, plan);
-            HerNews("Claudia couldn't produce a safe script.");
+            PlanNews("Claudia couldn't produce a safe script.");
         }
 
         /// <summary>The card for "Couldn't produce a safe script"; <paramref name="plan"/> is null once the failed plan is gone (after a load).</summary>
@@ -1575,7 +1575,7 @@ namespace ClaudiaKermin.Core.Missions
                 return;
             }
             AddCard(mission, LogKind.MissionPlan, "Mission Plan", MissionCards.MissionPlanBody(plan, mission.VesselName), plan.Why);
-            HerNews("Claudia has a Mission Plan for your Approval.");
+            PlanNews("Claudia has a Mission Plan for your Approval.");
         }
 
         /// <summary>Offers a Sequence Plan for Approval; its script has passed the Script Check (<see cref="Apply"/>).</summary>
@@ -1601,7 +1601,7 @@ namespace ClaudiaKermin.Core.Missions
             card.Script = plan.Script;
             card.CustomScript = plan.CustomScript;
             card.CustomScriptReason = plan.CustomScriptReason;
-            HerNews("Claudia has a Sequence Plan for your Approval.");
+            PlanNews("Claudia has a Sequence Plan for your Approval.");
         }
 
         private void Debriefed(Mission mission, MissionReply reply)
@@ -1947,6 +1947,7 @@ namespace ClaudiaKermin.Core.Missions
                 view.PauseReason = mission.PauseReason;
                 view.Remote = mission.Remote;
                 view.AutoMode = mission.AutoMode;
+                view.AutoModeStop = AutoModeStopLine(mission);
                 view.EvaScience = mission.EvaScience;
                 view.ConfirmPrompt = mission.ConfirmPrompt;
                 view.CapWait = mission.CapWaitText;

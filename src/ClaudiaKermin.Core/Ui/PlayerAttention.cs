@@ -74,11 +74,13 @@ namespace ClaudiaKermin.Core.Ui
             // A Debrief is the headline when it arrives together with what it leads to.
             if (newDebrief) return new Attention(AttentionKind.Debrief, "Claudia's " + (lastDebrief.Title.Length > 0 ? lastDebrief.Title : "Debrief") + " is ready.");
             if (!newWaiting) return null;
+            // An Auto Mode stop says why in its own words.
+            var stop = view.AutoModeStop;
             switch (view.Stage)
             {
-                case MissionStage.Paused: return new Attention(AttentionKind.Pause, "Claudia's Mission is Paused.");
-                case MissionStage.UnsafeScript: return new Attention(AttentionKind.Pause, "Claudia couldn't produce a safe script.");
-                default: return new Attention(AttentionKind.Approval, "Claudia has a plan for your Approval.");
+                case MissionStage.Paused: return new Attention(AttentionKind.Pause, stop.Length > 0 ? stop : "Claudia's Mission is Paused.");
+                case MissionStage.UnsafeScript: return new Attention(AttentionKind.Pause, stop.Length > 0 ? stop : "Claudia couldn't produce a safe script.");
+                default: return new Attention(AttentionKind.Approval, stop.Length > 0 ? stop : "Claudia has a plan for your Approval.");
             }
         }
 
@@ -95,6 +97,9 @@ namespace ClaudiaKermin.Core.Ui
                     return view.QuickReplies.Contains(QuickReply.Approve) || view.QuickReplies.Contains(QuickReply.ConfirmApproval)
                         ? "approval:" + view.Log.Count(e => e.Kind == LogKind.MissionPlan || e.Kind == LogKind.SequencePlan) + ":" + view.Stage
                         : "";
+                case MissionStage.AwaitingReducedGoal:
+                    // Nothing waits for Approval here, but an Auto Mode stop on a reduced goal is a call for the player.
+                    return view.AutoModeStop.Length > 0 ? "reduced:" + view.Log.Count(e => e.Kind == LogKind.Debrief) : "";
                 case MissionStage.Paused:
                 case MissionStage.UnsafeScript:
                     // Leaving the Paused stage (a Retry) clears the key, so a Pause that comes back alerts again.
