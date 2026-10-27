@@ -337,6 +337,47 @@ namespace ClaudiaKermin.Core.Tests
             Assert.False(MissionWindowRules.OffersAutoMode(view));
         }
 
+        private static MissionView Awaiting(MissionStage stage, bool autoMode)
+        {
+            var view = During(stage);
+            view.AutoMode = autoMode;
+            view.QuickReplies = new List<QuickReply> { QuickReply.Approve, QuickReply.ChangeSomething };
+            return view;
+        }
+
+        [Theory]
+        [InlineData(MissionStage.AwaitingPlanApproval)]
+        [InlineData(MissionStage.AwaitingSequenceApproval)]
+        public void ApproveIsEnabledOnlyForAPlanAwaitingApprovalWithAutoModeOff(MissionStage stage)
+        {
+            Assert.True(MissionWindowRules.ApproveEnabled(Awaiting(stage, false)));
+            Assert.False(MissionWindowRules.ApproveEnabled(Awaiting(stage, true)));
+        }
+
+        [Fact]
+        public void ApproveIsDisabledWhileAScriptRuns()
+        {
+            Assert.False(MissionWindowRules.ApproveEnabled(Awaiting(MissionStage.Running, false)));
+        }
+
+        [Theory]
+        [InlineData(MissionStage.Planning)]
+        [InlineData(MissionStage.Paused)]
+        [InlineData(MissionStage.ManualControl)]
+        [InlineData(MissionStage.Succeeded)]
+        public void ApproveIsDisabledWhenNothingAwaitsApproval(MissionStage stage)
+        {
+            Assert.False(MissionWindowRules.ApproveEnabled(Awaiting(stage, false)));
+            Assert.False(MissionWindowRules.ApproveEnabled(During(MissionStage.AwaitingPlanApproval)));
+        }
+
+        [Fact]
+        public void TheActionRowIsAlwaysThereDuringAMissionAndNeverBeforeOne()
+        {
+            Assert.True(MissionWindowRules.ActionRowAlways(During(MissionStage.Running)));
+            Assert.False(MissionWindowRules.ActionRowAlways(new MissionView()));
+        }
+
         // ---- Craft Check card and approval checkbox ----
 
         private static CraftCheckView Checked(CraftVerdict verdict, params CraftFinding[] findings)
