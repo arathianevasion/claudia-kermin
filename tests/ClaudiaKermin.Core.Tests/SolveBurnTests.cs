@@ -226,6 +226,14 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void A_burn_time_after_the_path_ends_is_an_error_not_a_crash()
+        {
+            // A 100 km x 30 km-Pe orbit hits the atmosphere on its first pass, so the path ends in "atmosphere" before a day on.
+            var snapshot = Snapshot(30000, 100000, phase: 3);
+            Assert.Contains("nothing after that is predicted", Error(snapshot, "{\"goal\":\"next_patch_pe\",\"value\":50000,\"at\":\"in 100000000\"}"));
+        }
+
+        [Fact]
         public void Next_patch_pe_says_so_when_no_burn_leaves_the_sphere_of_influence()
         {
             var message = Error(Snapshot(), "{\"goal\":\"next_patch_pe\",\"value\":50000,\"direction\":\"retrograde\"}");

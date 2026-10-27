@@ -103,6 +103,7 @@ namespace ClaudiaKermin.Core.Tools
             var ut = PredictBurn.BurnUt(JsonReader.Parse(PlanningJson.Quote(apsis)), path, setup.Now, setup.Now, "the burn", out problem);
             if (problem != null) return PlanningJson.Error(problem);
             var patch = PredictBurn.Containing(path, ut.Value);
+            if (patch == null) return PlanningJson.Error("the burn is after the craft reaches " + PredictBurn.Ending(path[path.Count - 1]) + "; nothing after that is predicted");
             var mu = patch.Body.Gm;
             Vec3 r, v;
             patch.Orbit.State(ut.Value, out r, out v);
@@ -135,6 +136,7 @@ namespace ClaudiaKermin.Core.Tools
             var ut = PredictBurn.BurnUt(at ?? JsonReader.Parse(PlanningJson.Quote(DefaultAt)), path, setup.Now, setup.Now, "the burn", out problem);
             if (problem != null) return PlanningJson.Error(problem);
             var patch = PredictBurn.Containing(path, ut.Value);
+            if (patch == null) return PlanningJson.Error("the burn is after the craft reaches " + PredictBurn.Ending(path[path.Count - 1]) + "; nothing after that is predicted");
             Vec3 r, v;
             patch.Orbit.State(ut.Value, out r, out v);
             var sign = direction == "retrograde" ? -1.0 : 1.0;
@@ -175,7 +177,7 @@ namespace ClaudiaKermin.Core.Tools
                 {
                     var found = Refine(pe, s - step, s, last.Value, got.Item1, value, got.Item2);
                     if (found == null)
-                        return PlanningJson.Error("found a burn near " + Num(s) + " m/s that reaches " + got.Item2 + ", but the search lost the encounter while narrowing it; try another burn time");
+                        return PlanningJson.Error("found a burn near " + Num(s) + " m/s that reaches " + got.Item2 + ", but the search could not narrow it to the Pe asked for (the encounter drops out or the Pe jumps there); try another burn time");
                     return Answer(setup, "next_patch_pe", ut.Value, sign * found.Value, fixedAt);
                 }
                 last = got.Item1;
@@ -199,7 +201,9 @@ namespace ClaudiaKermin.Core.Tools
                 var got = pe(mid);
                 if (got == null || got.Item2 != body) return null;
                 var error = got.Item1 - value;
-                if (Math.Abs(error) < 1 || hi - lo < 1e-9) return mid;
+                if (Math.Abs(error) < 1) return mid;
+                // The Pe jumps here instead of crossing the goal: no burn gives it.
+                if (hi - lo < 1e-9) return null;
                 if ((error < 0) == (below < 0)) lo = mid;
                 else hi = mid;
             }
@@ -229,7 +233,8 @@ namespace ClaudiaKermin.Core.Tools
             return new ToolOutcome
             {
                 Json = json.ToString(),
-                Summary = goal + ": " + Num(prograde) + " m/s prograde at UT " + Num(ut) + "; " + predicted.Summary,
+                Summary = goal + ": " + Math.Round(Math.Abs(prograde), 1).ToString("0.#", CultureInfo.InvariantCulture) + " m/s "
+                    + (prograde < 0 ? "retrograde" : "prograde") + " at UT " + Num(ut) + "; " + predicted.Summary,
             };
         }
 
