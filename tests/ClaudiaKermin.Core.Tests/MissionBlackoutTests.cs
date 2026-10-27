@@ -91,7 +91,8 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(Snapshot(s => s.HasLink = false));
             Assert.DoesNotContain(QuickReply.Abort, mission.View.QuickReplies);
 
-            // 100 m/s used against a 50 m/s check.
+            // 100 m/s used against a 50 m/s check, on two snapshots in a row.
+            mission.Send(Snapshot(s => { s.HasLink = false; s.Stages[0].DeltaVVac = 3100; }));
             mission.Send(Snapshot(s => { s.HasLink = false; s.Stages[0].DeltaVVac = 3100; }));
             _background.Drain();
             Assert.Equal(2, transport.Requests.Count);
@@ -532,6 +533,7 @@ namespace ClaudiaKermin.Core.Tests
             watch.Observe(mission.View);
 
             mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
             DrainUntil(mission, v => v.AbortRecommended.Length > 0);
             // Replies arrive on the background drain; the next input checks the script's warp.
             mission.Send(new UtAdvanced(OnPad().Ut + 1));
@@ -561,6 +563,7 @@ namespace ClaudiaKermin.Core.Tests
             var watch = new AttentionWatch();
             watch.Observe(mission.View);
 
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
             mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
             mission.Send(Snapshot(s => { s.HasLink = false; s.Stages[0].DeltaVVac = 3100; }));
             alert.Gate.Set();

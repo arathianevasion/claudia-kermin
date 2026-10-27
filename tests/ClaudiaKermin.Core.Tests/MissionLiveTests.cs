@@ -348,7 +348,8 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             var start = ToRunning(mission, 10m);
 
-            // 100 m/s used against a 50 m/s check.
+            // 100 m/s used against a 50 m/s check, on two snapshots in a row (a stock delta-v crossing is confirmed).
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
             mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
             Assert.Contains(mission.View.Log, e => e.Kind == LogKind.Notice && e.Text.StartsWith("Telemetry Check crossed: delta-v used 100 m/s over 50 m/s"));
             // It fires once: more snapshots past it send nothing more.
@@ -506,7 +507,128 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Contains("altitude 500 m over 100 m: not judged: the run ended first", LastUserText(transport.Requests[3]));
         }
 
+        // ---- A stock delta-v crossing is confirmed over two snapshots (#381) ----
+
+        [Fact]
+        public void AOneOffDeltaVReadingPastTheCheckRaisesNoAlertAndTheNextCrossingStartsAgain()
+        {
+            var mission = RunningWith(QuantityCheck("delta_v_used", "above", 50));
+
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3200));
+            Assert.Equal(0, CrossedLines(mission));
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            Assert.Equal(0, CrossedLines(mission));
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            Assert.Equal(1, CrossedLines(mission));
+        }
+
+        [Theory]
+        [InlineData("delta_v_used", "above", 50, 3100, "delta-v used")]
+        [InlineData("delta_v_left", "below", 2950, 2900, "delta-v left")]
+        [InlineData("fuel_margin", "above", 4000, 3150, "needed-fuel margin")]
+        public void TwoDeltaVReadingsInARowPastTheCheckRaiseTheAlertOnTheSecond(string quantity, string direction, double threshold, double deltaV, string name)
+        {
+            // The fixture plans no delta-v, which leaves the needed-fuel margin unmeasured; plan 100 m/s.
+            var mission = RunningWith(QuantityCheck(quantity, direction, threshold), 100);
+
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = deltaV));
+            Assert.Equal(0, CrossedLines(mission, name));
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = deltaV));
+            Assert.Equal(1, CrossedLines(mission, name));
+        }
+
+        [Fact]
+        public void ANullDeltaVReadingBetweenTwoCrossingReadingsStillConfirms()
+        {
+            var mission = RunningWith(QuantityCheck("delta_v_used", "above", 50));
+
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            mission.Send(Snapshot(s => { s.DeltaVSimulator = false; s.Stages[0].DeltaVVac = 3100; }));
+            Assert.Equal(0, CrossedLines(mission));
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            Assert.Equal(1, CrossedLines(mission));
+        }
+
+        [Fact]
+        public void AnAltitudeCheckStillFiresOnItsFirstCrossing()
+        {
+            var mission = RunningWith(QuantityCheck("altitude", "above", 100));
+
+            mission.Send(Snapshot(s => s.Altitude = 500));
+            Assert.Equal(1, CrossedLines(mission));
+        }
+
+        [Fact]
+        public void TheFollowUpThresholdIsConfirmedOverTwoSnapshotsToo()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), DeltaVCheck(50)),
+                ScriptedResponse.Fixture("mission-alert-carry-on.sse"),
+                ScriptedResponse.Fixture("mission-alert-carry-on-plain.sse"));
+            var mission = Control(transport);
+            ToRunning(mission, 10m);
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            DrainUntil(mission, v => !v.Busy);
+            Assert.Equal(1, CrossedLines(mission));
+
+            // Carry on arms a follow-up at 1,000 m/s used (the fixture's): one reading past it is not enough.
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 1900));
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3000));
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 1900));
+            Assert.Equal(1, CrossedLines(mission));
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 1900));
+            Assert.Equal(2, CrossedLines(mission));
+        }
+
+        [Fact]
+        public void BothDeltaVReadingsAreLoggedWithTheStagesAndThrottle()
+        {
+            var mission = RunningWith(QuantityCheck("delta_v_used", "above", 50));
+
+            mission.Send(Snapshot(s => { s.Stages[0].DeltaVVac = 3100; s.Throttle = 0.03; }));
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3200));
+            var events = File.ReadAllText(Path.Combine(MissionFolderOf(mission), MissionStore.EventsFile));
+            Assert.Contains("telemetry_check_pending", events);
+            Assert.Contains("delta-v used 100 m/s over 50 m/s: first crossing", events);
+            Assert.Contains("throttle 0.03", events);
+            Assert.Contains("telemetry_check_cleared", events);
+            Assert.Contains("delta-v used 100 m/s then 0 m/s over 50 m/s", events);
+        }
+
         // ---- Helpers ----
+
+        private static string QuantityCheck(string quantity, string direction, double threshold)
+        {
+            return "\"telemetry_checks\":[{\"quantity\":\"" + quantity + "\",\"resource\":\"\",\"direction\":\"" + direction
+                + "\",\"threshold\":" + threshold + ",\"why\":\"Test.\"}],";
+        }
+
+        private MissionControl RunningWith(string check, double expectedDeltaV = 0)
+        {
+            var sequence = WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), check);
+            var text = Encoding.UTF8.GetString(sequence.Body).Replace("expected_delta_v\\\":0", "expected_delta_v\\\":" + expectedDeltaV);
+            sequence.Body = Encoding.UTF8.GetBytes(text);
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                sequence,
+                ScriptedResponse.Fixture("mission-alert-carry-on-plain.sse"));
+            var mission = Control(transport);
+            ToRunning(mission, 10m);
+            return mission;
+        }
+
+        private static int CrossedLines(MissionControl mission, string name = "")
+        {
+            return mission.View.Log.Count(e => e.Kind == LogKind.Notice && e.Text.StartsWith("Telemetry Check crossed: " + name));
+        }
+
+        private string MissionFolderOf(MissionControl mission)
+        {
+            return Path.Combine(_save.Path, "ClaudiaKermin", "missions", mission.View.MissionId);
+        }
 
         private static string DeltaVCheck(double threshold)
         {

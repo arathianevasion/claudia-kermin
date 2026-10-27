@@ -104,6 +104,16 @@ namespace ClaudiaKermin.Core.Missions
                 && (Quantity != TelemetryQuantity.Resource || string.Equals(Resource, other.Resource, StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>The quantity comes from stock's delta-v, which can misread for a snapshot, so a crossing must repeat on the next reading.</summary>
+        public bool NeedsConfirmation
+        {
+            get
+            {
+                return Quantity == TelemetryQuantity.DeltaVUsed || Quantity == TelemetryQuantity.DeltaVLeft
+                    || Quantity == TelemetryQuantity.FuelMargin;
+            }
+        }
+
         /// <summary>The reading is past <paramref name="threshold"/>; false when the quantity can't be measured now.</summary>
         public bool Crossed(double? reading, double threshold)
         {
