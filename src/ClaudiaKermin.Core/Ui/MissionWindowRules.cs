@@ -275,6 +275,22 @@ namespace ClaudiaKermin.Core.Ui
             return view.CanEndMission;
         }
 
+        /// <summary>
+        /// The action row's Approve button can be pressed: a Mission Plan or a Sequence Plan awaits Approval and Auto Mode is off.
+        /// The button is drawn greyed out otherwise (Auto Mode on, a script running, or nothing awaiting Approval).
+        /// </summary>
+        public static bool ApproveEnabled(MissionView view)
+        {
+            var awaiting = view.Stage == MissionStage.AwaitingPlanApproval || view.Stage == MissionStage.AwaitingSequenceApproval;
+            return awaiting && !view.AutoMode && view.QuickReplies.Contains(QuickReply.Approve);
+        }
+
+        /// <summary>The action row is drawn, with Approve always in it, whenever a Mission is under way; its Auto Mode switch rides along where <see cref="OffersAutoMode"/>.</summary>
+        public static bool ActionRowAlways(MissionView view)
+        {
+            return view.CanEndMission;
+        }
+
         /// <summary>The tag by the Spending Cap figure on the Capcom strip: "AUTO" while Auto Mode is on, else "".</summary>
         public static string AutoTag(MissionView view)
         {

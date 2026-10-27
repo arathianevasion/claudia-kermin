@@ -371,13 +371,21 @@ namespace ClaudiaKermin.Adapter
             }
             // Read before the row: Raise cap clicked in it mustn't add the field to an event that was laid out without it.
             var raising = _raising;
-            var any = false;
+            // Under way, the row and its Approve button are drawn on every event; Approve only changes its enabled look.
+            var always = MissionWindowRules.ActionRowAlways(_view);
+            var any = always;
             foreach (var reply in _view.QuickReplies)
                 if (Shown(reply)) any = true;
             if (any)
             {
                 GUILayout.BeginHorizontal();
                 GUILayout.Space(ClaudiaSkin.Padding);
+                if (always)
+                {
+                    var approve = MissionWindowRules.Label(QuickReply.Approve, _view);
+                    if (!MissionWindowRules.ApproveEnabled(_view)) ClaudiaSkin.DisabledButton(approve, GUILayout.ExpandWidth(false));
+                    else if (ClaudiaSkin.PrimaryButton(approve, GUILayout.ExpandWidth(false))) QuickReplied(QuickReply.Approve);
+                }
                 foreach (var reply in _view.QuickReplies)
                 {
                     if (!Shown(reply)) continue;
@@ -397,6 +405,8 @@ namespace ClaudiaKermin.Adapter
                     else clicked = ClaudiaSkin.SecondaryButton(label, GUILayout.ExpandWidth(false));
                     if (clicked) QuickReplied(reply);
                 }
+                GUILayout.FlexibleSpace();
+                if (MissionWindowRules.OffersAutoMode(_view)) DrawAutoMode();
                 GUILayout.Space(ClaudiaSkin.Padding);
                 GUILayout.EndHorizontal();
             }
@@ -405,8 +415,10 @@ namespace ClaudiaKermin.Adapter
         }
 
         // End Mission is always in the control bar during a Mission, so the row doesn't repeat it; confirming an Approval is a checkbox in the transcript.
+        // During a Mission Approve leads the row, drawn by DrawActions (greyed out when it can't be pressed), so the loop skips it.
         private bool Shown(QuickReply reply)
         {
+            if (reply == QuickReply.Approve && MissionWindowRules.ActionRowAlways(_view)) return false;
             return MissionWindowRules.InActionRow(reply) && !(reply == QuickReply.EndMission && _view.CanEndMission);
         }
 
@@ -512,8 +524,6 @@ namespace ClaudiaKermin.Adapter
                 if (OfferDock && SetDocked != null && ClaudiaSkin.IconButton(ClaudiaSkin.IconShape.Dock, "Dock", GUILayout.ExpandWidth(false))) SetDocked(true);
             }
 
-            if (MissionWindowRules.OffersAutoMode(_view)) DrawAutoMode();
-
             if (_debugTools)
             {
                 GUI.enabled = _view.CanCaptureSnapshot;
@@ -565,7 +575,7 @@ namespace ClaudiaKermin.Adapter
             GUILayout.FlexibleSpace();
         }
 
-        // The Auto Mode switch, beside the spend meter; flipping it sends SetAutoMode.
+        // The Auto Mode switch, at the right end of the action row; flipping it sends SetAutoMode.
         private void DrawAutoMode()
         {
             GUILayout.BeginVertical(GUILayout.Width(ClaudiaSkin.Scaled(150)));
