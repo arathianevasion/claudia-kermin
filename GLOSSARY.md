@@ -64,6 +64,10 @@ _Avoid_: RCS mode, RCS assist
 The craft points at its steering target (a maneuver node's burn, prograde, retrograde, a launch heading) within a set tolerance and has stopped turning, or has stayed within it for a few seconds while the target itself turns. Being Aligned both lets a burn start and ends RCS Use for a turn; Claudia can tighten or loosen the tolerance per block.
 _Avoid_: on target, settled, pointed
 
+**Burn Start**:
+The moment a maneuver node's burn lights its engines: ahead of the node by about the time it takes to burn half the node's delta-v, worked out from every stage the burn will use. Leads before a burn (when warp ends, when the craft must be Aligned) count back from the Burn Start, not from the node.
+_Avoid_: node time, burn time (the burn's length)
+
 **Boost stage**:
 A stage that lights while the craft is on a suborbital trajectory (periapsis below the atmosphere top, or below the surface where there is no air), in or out of the atmosphere; a stage that lights suborbital stays a Boost stage even if its burn reaches orbit. It may have a thrust-to-weight ratio below 1 when the climb before it was steep enough.
 _Avoid_: booster, lower stage, first stage
