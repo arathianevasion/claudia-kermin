@@ -178,8 +178,8 @@ namespace ClaudiaKermin.Core.Tools
                 TargetPe = Number(ask, "target_pe", 0),
                 EarliestUt = Number(ask, "earliest_ut", snapshot.Ut),
                 WindowUt = window as double?,
-                LatestUt = Optional(ask, "latest_ut"),
-                MaxDv = Optional(ask, "max_dv"),
+                LatestUt = NumberOrNull(ask, "latest_ut"),
+                MaxDv = NumberOrNull(ask, "max_dv"),
             });
             if (plan.Error != null) return Error(plan.Error);
             return new Dictionary<string, object>
@@ -266,7 +266,7 @@ namespace ClaudiaKermin.Core.Tools
             return (double)value;
         }
 
-        private static double? Optional(IDictionary<string, object> ask, string key)
+        private static double? NumberOrNull(IDictionary<string, object> ask, string key)
         {
             object value;
             return ask.TryGetValue(key, out value) && value is double ? (double)value : (double?)null;

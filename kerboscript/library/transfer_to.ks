@@ -26,19 +26,19 @@
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block; each burn gets them too.
 //| Extra results: encounter_ut (UT the craft enters the target's sphere of influence),
 //| target_pe_actual (m, the periapsis predicted at the target), correction_dv (m/s the corrections
-//| burned, with one making the encounter if the ejection missed; 0 when within 1 km of target_pe,
-//| the fix was under 0.1 m/s, or correction is false).
+//| burned: one making the encounter if the ejection missed, then the mid-course one, none within
+//| 1 km of target_pe, under 0.1 m/s or with correction false).
 //| ejection_node_dv (m/s the ejection node asked for), ejection_dv_used (m/s the
 //| ejection burn used) and ejection_burn_time (s the engines burned): a dv_used well above the node
-//| means the burn wasted thrust. All -1 when the block failed before the ejection burn was flown.
+//| means the burn wasted thrust. All -1 if it failed before the ejection burn.
 //| ejection_wait (s from the block's start to the ejection node; for window "next" at most a
-//| synodic period plus the turn time): -1 when the block failed before the node was planned.
+//| synodic period plus the turn time): -1 if it failed before the node was planned.
 //| Fails with "target is required", "target_pe is required", an option value it can't read, "no body
 //| named <x>", a target that doesn't orbit the craft's body, "not in orbit", "a maneuver node is
 //| already planned: remove it first", "found no transfer: <why>", "no encounter with
-//| <target> after the ejection burn, and no correction fits: <why>" (or "after the correction"),
-//| an exec_node failure (its node stays), or an abort. The craft must be the active vessel.
-//| Capture is not part of transfer_to: once inside the target's sphere of influence, fly
+//| <target> after the ejection burn, and no correction fits: <why>" (or "the correction failed:
+//| <why>"; or "after the correction"), an exec_node failure (its node stays), or an abort. The craft must be the active vessel.
+//| Capture isn't part of transfer_to: inside the target's sphere of influence, fly
 //| `circularize(lexicon("at", "pe"))`: in the same sequence or the next, after
 //| `coast(lexicon("until", res:encounter_ut + 60))` (no Due Time needed).
 //| Example: `local res is transfer_to(lexicon("target", "Mun", "target_pe", 30000)). addons:claudia:report(res).`

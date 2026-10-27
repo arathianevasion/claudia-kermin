@@ -266,6 +266,10 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("", soon["error"]);
             Assert.InRange(D(soon, "ut"), snapshot.Ut + 120, latest);
             Assert.InRange(PredictedPe(snapshot, soon, "Mun"), TargetPe - 100, TargetPe + 100);
+            // synodic stays the synodic period, not the span searched (1 / |1/36,550 - 1/138,984| s for the missed orbit).
+            Assert.InRange(D(soon, "synodic"), 49000, 51000);
+            // Thirty seconds holds no dip in the cost (it rises from the first departure): the cheapest in it is taken.
+            Assert.Equal("", Correction(snapshot, snapshot.Ut + 150)["error"]);
             Assert.Equal("found no transfer: the burn must come by UT " + Math.Round(snapshot.Ut + 100) + ", before the earliest it can be, UT "
                 + Math.Round(snapshot.Ut + 120), Correction(snapshot, snapshot.Ut + 100)["error"]);
         }

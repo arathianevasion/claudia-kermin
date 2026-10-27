@@ -18,7 +18,7 @@
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block.
 //| Extra results: node_dv (m/s the node asked for before the burn), residual (m/s the node still
 //| needed when the block ended), burn_time (s the engines burned), late_start_s (s the burn began
-//| late, moving the node with it), turn_s and turn_time (s the turn took, and its prediction), not_aligned (turns
+//| late; its node moves too), turn_s and turn_time (s the turn took, and its prediction), not_aligned (turns
 //| given up after 120 s). It turns to the node before warping. Fails with "no maneuver node",
 //| "no thrust", "no usable torque" (no reaction wheel running and no RCS on to turn with), a node
 //| or lead it can't read, "residual <x> m/s is over max_residual", out of fuel, or an abort; on
@@ -111,6 +111,7 @@ function exec_node {
   until false {
     // Until the engines light, a late burn takes its node with it (#363).
     if burn_start < 0 {
+      set extra:late_start_s to claudia_late_start(time:seconds, burn:start_ut).
       local due is exec_node_due_ut(time:seconds, burn:start_ut, lead).
       if abs(due - nd:time) > 0.5 {
         set nd:time to due.
@@ -129,7 +130,6 @@ function exec_node {
     set tset to claudia_burn_throttle(left:mag, ship:availablethrust / ship:mass, vang(ship:facing:forevector, steer)).
     if tset > 0 and burn_start < 0 {
       set burn_start to time:seconds.
-      set extra:late_start_s to claudia_late_start(burn_start, burn:start_ut).
     }
     local ticked is claudia_tick(ctx, tset).
     if ticked <> "" {

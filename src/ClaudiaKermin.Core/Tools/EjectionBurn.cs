@@ -96,13 +96,13 @@ namespace ClaudiaKermin.Core.Tools
             var craft = setup.Start;
             var moon = setup.System.OrbitOf(target);
             var peR = target.Radius + ask.TargetPe;
-            var span = Synodic(craft.Period, moon.Period);
+            var synodic = Synodic(craft.Period, moon.Period);
             var from = Math.Max(setup.Now, Math.Max(ask.EarliestUt, ask.WindowUt ?? double.NegativeInfinity));
             // A latest UT shortens the span, and no window past it may be taken.
             var until = ask.LatestUt ?? double.PositiveInfinity;
             if (until <= from)
                 return Fail("the burn must come by UT " + Num(until) + ", before the earliest it can be, UT " + Num(from));
-            span = Math.Min(span, until - from);
+            var span = Math.Min(synodic, until - from);
             Func<double, double, double> cost = (t, tof) =>
             {
                 Vec3 burn;
@@ -143,6 +143,10 @@ namespace ClaudiaKermin.Core.Tools
                 else if (late < 0 || cheapest[i] < cheapest[late]) late = i;
             }
             if (pick < 0 && !ask.LatestUt.HasValue) pick = late;
+            // With a latest UT the span may hold no dip (the cost still falling at its end): its cheapest departure, then.
+            if (pick < 0 && ask.LatestUt.HasValue)
+                for (var i = 1; i < count - 1 && (i - 1) * step <= span; i++)
+                    if (!double.IsInfinity(cheapest[i]) && (pick < 0 || cheapest[i] < cheapest[pick])) pick = i;
             if (pick < 0)
                 return Fail("no departure in the " + Num(span) + " s from UT " + Num(from) + " has a path to " + target.Name);
 
@@ -183,7 +187,7 @@ namespace ClaudiaKermin.Core.Tools
             if (plan.DeltaV > ask.MaxDv)
                 return Fail("the cheapest burn, at UT " + Num(bestT) + ", needs " + Num(plan.DeltaV) + " m/s, more than the craft's " + Num(ask.MaxDv.Value) + " m/s");
             plan.SearchFrom = from;
-            plan.Synodic = span;
+            plan.Synodic = synodic;
             return plan;
         }
 
