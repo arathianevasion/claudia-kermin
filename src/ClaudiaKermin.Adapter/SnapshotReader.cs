@@ -38,6 +38,9 @@ namespace ClaudiaKermin.Adapter
             snapshot.Throttle = vessel.ctrlState.mainThrottle;
             ReadParts(snapshot, vessel.parts, vessel.VesselDeltaV);
             MarkTrickleStages(snapshot, vessel.parts);
+            // plan_ascent's drag, for a launch: only a craft on the ground of a body with air needs it.
+            if (vessel.mainBody != null && vessel.mainBody.atmosphere && OnTheGround(vessel.situation))
+                snapshot.Craft.NoseDrag = NoseDrag.Read(vessel.parts, vessel.ReferenceTransform.up, false);
             snapshot.Crew.AddRange(vessel.GetVesselCrew().Select(Crew));
             ReadAboard(snapshot);
             // A save with CommNet off counts as linked, whatever the connection says.
@@ -88,10 +91,17 @@ namespace ClaudiaKermin.Adapter
             snapshot.Craft.MassTonnes = ship.parts.Sum(p => (double)(p.mass + p.GetResourceMass()));
             snapshot.Craft.Stage = StageManager.LastStage;
             ReadParts(snapshot, ship.parts, ship.vesselDeltaV);
+            // The root part's up is the craft's nose, as the control point's is in Flight.
+            snapshot.Craft.NoseDrag = NoseDrag.Read(ship.parts, ship.parts[0].transform.up, true);
             var manifest = ShipConstruction.ShipManifest;
             if (manifest != null) snapshot.Crew.AddRange(manifest.GetAllCrew(false).Where(c => c != null).Select(Crew));
             ReadAboard(snapshot);
             return snapshot;
+        }
+
+        private static bool OnTheGround(Vessel.Situations situation)
+        {
+            return situation == Vessel.Situations.PRELAUNCH || situation == Vessel.Situations.LANDED || situation == Vessel.Situations.SPLASHED;
         }
 
         /// <summary>Claudia's roster standing and whether the save has CommNet: the facts the aboard and remote rules judge.</summary>
