@@ -99,7 +99,12 @@ namespace ClaudiaKermin.ScriptCheck.Tests
         [InlineData("set kuniverse:timewarp:mode to \"PHYSICS\".")]
         [InlineData("set kuniverse:timewarp:mode to claudia_mode.")]
         [InlineData("local tw is kuniverse:timewarp.\nset tw:mode to \"PHYSICS\".")]
-        public void UsePhysicsWarp(string script) { AssertForbidden("use physics warp", script); }
+        [InlineData("set warpmode to choose \"PHYSICS\" if ship:altitude < 70000 else \"RAILS\".")]
+        public void PhysicsWarpIsNoLongerRefusedByTheScriptCheck(string script)
+        {
+            // Whether the craft is on a Coast is known only at run time (ADR 0008); the runtime gate decides.
+            AssertAllowed(script);
+        }
 
         [Theory]
         [InlineData("copypath(\"0:/a.ks\", \"1:/a.ks\").")]
@@ -482,10 +487,7 @@ namespace ClaudiaKermin.ScriptCheck.Tests
         }
 
         [Theory]
-        [InlineData("use physics warp", "set warpmode to choose \"PHYSICS\" if ship:altitude < 70000 else \"RAILS\".")]
-        [InlineData("use physics warp", "set warpmode to choose \"RAILS\" if ship:altitude < 70000 else \"PHYSICS\".")]
         [InlineData("change kOS config", "set config:ipu to choose 2000 if ship:altitude > 1 else 500.")]
-        [InlineData("use physics warp", "set warpmode to ship:altitude > 1 and \"PHYSICS\".")]
         public void ChoosingBetweenValuesStillChecksEachOne(string item, string script) { AssertForbidden(item, script); }
 
         [Fact]

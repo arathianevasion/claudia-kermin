@@ -95,6 +95,12 @@ namespace ClaudiaKermin.Core.Config
         /// <summary>The delta-v left under what the Mission Plan still needs, less this percent, crosses the default check.</summary>
         public int CheckFuelMarginPercent = 10;
 
+        /// <summary>
+        /// Physics warp from a Mission Script is allowed, on Coasts (ADR 0008). The gate's "physics warp allowed" input; a later
+        /// Mission Setting defaults from this and is greyed out when it is false.
+        /// </summary>
+        public bool PhysicsWarp = true;
+
         public string DefaultModel
         {
             get { return Models[0]; }
@@ -150,6 +156,8 @@ namespace ClaudiaKermin.Core.Config
             + "check_duration = 150%\n"
             + "check_ec = 10%\n"
             + "check_fuel_margin = 10%\n"
+            + "# Let a Mission Script use physics warp (up to 4x) while the craft is on a Coast, with no engine or RCS thrust.\n"
+            + "physics_warp = true\n"
             + "# Effort (low, medium or high) per reply kind; uncomment a line to change one kind. Kinds: mission_plan, sequence_plan, debrief,\n"
             + "# reply, change, settings, craft_check, margin_recheck (all high), question, alert (low). A bad entry keeps the default.\n"
             + "# effort.debrief = high\n";
@@ -257,6 +265,9 @@ namespace ClaudiaKermin.Core.Config
                         break;
                     case "check_fuel_margin":
                         config.CheckFuelMarginPercent = Percent(value, 0, 100, config.CheckFuelMarginPercent);
+                        break;
+                    case "physics_warp":
+                        config.PhysicsWarp = !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
                         break;
                     case "runaway_multiplier":
                         // "300%" or "3". Below 100% would stop a script before its own plan says it ends.

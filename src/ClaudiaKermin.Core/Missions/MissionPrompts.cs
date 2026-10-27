@@ -62,7 +62,7 @@ namespace ClaudiaKermin.Core.Missions
             + "before reporting, and stage only as the plan says. The mod turns SAS off when a script starts, because SAS "
             + "fights kOS steering: do not turn it back on while the script locks steering.\n\n"
             + "Forbidden in every script: saving, loading, reverting or quickloading the game; switching or launching "
-            + "vessels; pausing the game; physics warp (on-rails warp only); reading, writing, copying or deleting files "
+            + "vessels; pausing the game; physics warp off a Coast (under engine or RCS thrust) or with the Physics warp Mission Setting off; reading, writing, copying or deleting files "
             + "or volumes; changing kOS CONFIG; rebooting or shutting down processors; setting boot files; using any "
             + "addon other than ADDONS:CLAUDIA; changing or messaging other vessels; opening GUI windows; freezing the "
             + "game. A script that uses any of these will be refused.\n\n"
