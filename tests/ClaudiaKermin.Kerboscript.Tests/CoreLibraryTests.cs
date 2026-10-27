@@ -410,10 +410,10 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Contains("parameter ctx, ut, lead, stop is 0, cap is 0.", bundle);
             Assert.Contains("return claudia_warp_to(ctx, ut, 30, ground_near, cap).", bundle);
             // exec_node's wait (ascend's coast to apoapsis below the rails limit): physics warp ends 30 s or more before the burn
-            // (claudia_burn_warp_lead, #405); a Burn Start over a day away is warped to a day out first, with no stop.
+            // (claudia_burn_warp_lead, #405); a Burn Start over an hour away is warped to an hour out first, ending once warp is done (#414).
             Assert.Contains("claudia_warp_to(ctx, leg_ut, lead, off_burn)", bundle);
             Assert.Contains("local lead is claudia_burn_warp_lead(turned:aligned, turn_time).", bundle);
-            Assert.Contains("claudia_warp_to(ctx, day_out, 30)", bundle);
+            Assert.Contains("claudia_warp_to(ctx, far_ut, 30, { return time:seconds >= warp_done. })", bundle);
             // launch's coast: to the top of the atmosphere or the hop, physics warp to the event itself (lead 0).
             Assert.Contains("claudia_warp_to(ctx, time:seconds + max(1, eta:apoapsis), 0, { fly_tick:call(). return done or not coasting. })", bundle);
             Assert.Single(System.Text.RegularExpressions.Regex.Matches(bundle, "timewarp:warpto\\("));
@@ -675,15 +675,29 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         [Theory]
-        // #405: a Burn Start over a day away is warped to a day before it first, with no turn (-1: none).
-        [InlineData(0, 2 * 6 * 3600, 6, "21600")]
-        [InlineData(0, 2 * 3600, 6, "-1")]
-        [InlineData(0, 30 * 3600, 24, "21600")]
-        [InlineData(1000, 1000 + 6 * 3600, 6, "-1")]
-        [InlineData(1000, 1001 + 6 * 3600, 6, "1001")]
-        public void A_burn_start_over_a_day_away_is_warped_to_a_day_out_first(double now, double start, double hoursPerDay, string expected)
+        // #414: a Burn Start over an hour (3600 s) away is warped to an hour before it first, with no turn (-1: none).
+        [InlineData(0, 2 * 3600, "3600")]
+        [InlineData(0, 50 * 60, "-1")]
+        [InlineData(0, 3600, "-1")]
+        [InlineData(1000, 1000 + 3600, "-1")]
+        [InlineData(1000, 1001 + 3600, "1001")]
+        [InlineData(0, 30 * 3600, "104400")]
+        public void A_burn_start_over_an_hour_away_is_warped_to_an_hour_out_first(double now, double start, string expected)
         {
-            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_day_out_ut({0}, {1}, {2})", now, start, hoursPerDay)));
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_far_warp_ut({0}, {1})", now, start)));
+        }
+
+        [Fact]
+        public void The_far_warp_hands_over_to_the_turn_when_warp_ends_with_no_wait_at_1x_and_reads_no_day_length()
+        {
+            var bundle = CoreLibrary.Bundle("@lazyglobal off.\nprint 1.").Replace("\r\n", "\n");
+            var start = bundle.IndexOf("function claudia_warp_to_burn", StringComparison.Ordinal);
+            var far = bundle.Substring(start, bundle.IndexOf("lock steering to nd:deltav", start, StringComparison.Ordinal) - start);
+            // The wait stops once warp has run to its end (30 s before the hour point), so the turn starts then, not 30 s on.
+            Assert.Contains("claudia_warp_to(ctx, far_ut, 30, { return time:seconds >= warp_done. })", far);
+            Assert.Contains("local warp_done is claudia_warp_end(far_ut, 30).", far);
+            Assert.DoesNotContain("hoursperday", far, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("day_out", bundle);
         }
 
         [Theory]

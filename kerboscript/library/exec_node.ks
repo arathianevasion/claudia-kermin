@@ -20,8 +20,8 @@
 //| needed when the block ended), burn_time (s the engines burned), late_start_s (s the burn began
 //| late; its node moves too), turn_s and turn_time (s the turn took, and its prediction), not_aligned (turns
 //| given up after 120 s). It turns to the node before warping, and once Aligned is back at 1x 30 s
-//| before the Burn Start (its turn time when the turn was given up); a Burn Start over a day away is
-//| warped to a day out first, without turning. Fails with "no maneuver node",
+//| before the Burn Start (its turn time when the turn was given up); a Burn Start over an hour away is
+//| warped to an hour out first, without turning. Fails with "no maneuver node",
 //| "no thrust", "no usable torque" (no reaction wheel running and no RCS on to turn with), a node
 //| or lead it can't read, "residual <x> m/s is over max_residual", out of fuel, or an abort; on
 //| failure the node is left in place.
