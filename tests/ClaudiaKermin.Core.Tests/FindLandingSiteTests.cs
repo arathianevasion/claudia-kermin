@@ -388,6 +388,8 @@ namespace ClaudiaKermin.Core.Tests
             var error = (string)site["error"];
             Assert.StartsWith("no site in the Poles biome", error);
             Assert.Contains("0 were in the biome", error);
+            // The tool's advice names its inputs; the block gives its own.
+            Assert.DoesNotContain("within_hours", error);
         }
 
         [Fact]

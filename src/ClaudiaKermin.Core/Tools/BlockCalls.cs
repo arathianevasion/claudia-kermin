@@ -39,8 +39,12 @@ namespace ClaudiaKermin.Core.Tools
                 object biome;
                 ask.TryGetValue("biome", out biome);
                 var hours = (JsonNode.Double(result["window_hours"]) ?? 0).ToString("0.#", CultureInfo.InvariantCulture);
-                return Error("no site in the " + Convert.ToString(biome, CultureInfo.InvariantCulture) + " biome on " + orbited + " in " + hours
-                    + " h: " + JsonNode.Str(result["note"]));
+                // The tool's advice is for Claudia's inputs; the block gives its own.
+                var note = JsonNode.Str(result["note"]);
+                var advice = note.IndexOf("; widen", StringComparison.Ordinal);
+                if (advice >= 0) note = note.Substring(0, advice);
+                return Error("no site in the " + Convert.ToString(biome, CultureInfo.InvariantCulture) + " biome on " + orbited + " under the next "
+                    + hours + " h of ground track: " + note);
             }
             var site = sites.Items[0];
             return new Dictionary<string, object>
