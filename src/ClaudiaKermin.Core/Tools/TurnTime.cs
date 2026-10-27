@@ -12,16 +12,18 @@ namespace ClaudiaKermin.Core.Tools
     /// </summary>
     public sealed class TurnCraft
     {
+        /// <summary>The running reaction wheels' torque (kN·m) about pitch and yaw.</summary>
         public double WheelPitch;
         public double WheelYaw;
+
+        /// <summary>The enabled RCS thrusters' torque (kN·m) about pitch and yaw; counted only when <see cref="RcsOn"/>.</summary>
         public double RcsPitch;
         public double RcsYaw;
         public bool RcsOn;
+
+        /// <summary>The moment of inertia (t·m²) about pitch and yaw.</summary>
         public double MoiPitch;
         public double MoiYaw;
-
-        /// <summary>kOS steering's <c>maxstoppingtime</c> (s): it caps the turn rate at this many seconds of angular acceleration.</summary>
-        public double MaxStoppingTime = TurnTime.KosMaxStoppingTime;
     }
 
     /// <summary>A predicted turn: <see cref="Seconds"/> to leave before a burn, or <see cref="Error"/> saying why there's none.</summary>
@@ -48,16 +50,26 @@ namespace ClaudiaKermin.Core.Tools
     /// </summary>
     public static class TurnTime
     {
+        /// <summary>The turn timed: past a half turn, so a burn straight behind the craft is covered whichever way it goes.</summary>
         public const double TurnDegrees = 190;
+
+        /// <summary>Added for the alignment check to settle (s); a starting value.</summary>
         public const double SettleSeconds = 10;
+
+        /// <summary>The least time left for a turn (s), however quick the craft.</summary>
         public const double FloorSeconds = 30;
 
         /// <summary>kOS's default <c>steeringmanager:maxstoppingtime</c> (s).</summary>
         public const double KosMaxStoppingTime = 2;
 
+        /// <summary>The reason given for a craft with nothing to turn with on a Coast.</summary>
         public const string NoTorque = "no usable torque";
 
-        public static TurnPrediction Predict(TurnCraft craft)
+        /// <summary>
+        /// The turn <paramref name="craft"/> makes under kOS steering with <paramref name="maxStoppingTime"/> (s, its
+        /// <c>maxstoppingtime</c>), which caps the turn rate at that many seconds of the craft's angular acceleration.
+        /// </summary>
+        public static TurnPrediction Predict(TurnCraft craft, double maxStoppingTime = KosMaxStoppingTime)
         {
             var alpha = Math.Min(Acceleration(craft.WheelPitch, craft.RcsPitch, craft.RcsOn, craft.MoiPitch),
                 Acceleration(craft.WheelYaw, craft.RcsYaw, craft.RcsOn, craft.MoiYaw));
@@ -65,7 +77,7 @@ namespace ClaudiaKermin.Core.Tools
 
             var angle = TurnDegrees * Math.PI / 180;
             // kOS's steering asks for no more than it could stop from in maxstoppingtime at full torque.
-            var cap = alpha * (craft.MaxStoppingTime > 0 ? craft.MaxStoppingTime : KosMaxStoppingTime);
+            var cap = alpha * (maxStoppingTime > 0 ? maxStoppingTime : KosMaxStoppingTime);
             var peak = Math.Sqrt(alpha * angle);
             double turn;
             if (peak <= cap)

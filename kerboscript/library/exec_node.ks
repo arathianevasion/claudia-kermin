@@ -85,6 +85,13 @@ function exec_node {
   set extra:node_dv to round(nd:deltav:mag, 3).
   set extra:residual to extra:node_dv.
 
+  // The craft turns to the burn on a Coast, on its wheels and RCS: one that can't fails here, before
+  // staging changes it. The call is block-internal (ADR 0006, ADR 0007), so it sits in the block.
+  local turn is addons:claudia:turntime(lexicon("max_stopping_time", steeringmanager:maxstoppingtime)).
+  if turn:error <> "" {
+    return claudia_finish(ctx, false, turn:error, extra).
+  }
+
   // A craft whose engines aren't lit yet stages into them (within stage_limit).
   local lit is claudia_stage_into_engines(ctx).
   if lit <> "" {
@@ -94,12 +101,6 @@ function exec_node {
   local timing is exec_node_timing(nd:deltav:mag, ship:mass, ship:availablethrust, claudia_engine_isp(), nd:eta, opt:lead).
   if timing:burn_time < 0 {
     return claudia_finish(ctx, false, "no thrust", extra).
-  }
-  // The craft turns to the burn on a Coast, on its wheels and RCS: one that can't, fails here. The
-  // call is block-internal (ADR 0006, ADR 0007), so it sits in the block, not a helper.
-  local turn is addons:claudia:turntime(lexicon("max_stopping_time", steeringmanager:maxstoppingtime)).
-  if turn:error <> "" {
-    return claudia_finish(ctx, false, turn:error, extra).
   }
   local start_ut is time:seconds + timing:start_in.
   if opt:max_duration:istype("String") {

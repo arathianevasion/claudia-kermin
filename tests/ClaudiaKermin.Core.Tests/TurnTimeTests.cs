@@ -18,7 +18,8 @@ namespace ClaudiaKermin.Core.Tests
         /// The exec_node reference craft (tests/blocks/exec_node): OKTO2, kOS, two Z-1k batteries, a Small Inline Reaction Wheel
         /// (5 kN·m on each axis), a chute, a decoupler, a full FL-T800 and an LV-T45, about 6.5 t. Its moment of inertia about
         /// pitch and yaw, worked from the parts' masses and the craft file's positions (the tank as a 1.25 m by 3.75 m cylinder,
-        /// the rest as points), is about 13.8 t·m².
+        /// the rest, but for its three small winglets, as points), is about 13.8 t·m². An estimate: stock's own figure, read
+        /// in-game, may differ, though not by the factor of four that would lift the craft off the floor.
         /// </summary>
         private static TurnCraft Reference()
         {
@@ -51,7 +52,7 @@ namespace ClaudiaKermin.Core.Tests
         {
             // With a 100 s stopping time the cap (1 rad/s) is out of reach: half the turn peaks at sqrt(0.01 * 3.3161) = 0.1821
             // rad/s, and the whole takes 2 * sqrt(3.3161 / 0.01) = 36.42 s.
-            var turn = TurnTime.Predict(new TurnCraft { WheelPitch = 5, WheelYaw = 5, MoiPitch = 500, MoiYaw = 500, MaxStoppingTime = 100 });
+            var turn = TurnTime.Predict(new TurnCraft { WheelPitch = 5, WheelYaw = 5, MoiPitch = 500, MoiYaw = 500 }, 100);
             Assert.Equal(36.42, turn.TurnSeconds, 2);
             Assert.Equal(46.42, turn.Seconds, 2);
             Assert.Equal(10.43, turn.TopRateDegS, 2);

@@ -9,7 +9,7 @@ namespace ClaudiaKermin.Adapter
 {
     /// <summary>
     /// The numbers the turn-time model (<see cref="TurnTime"/>) needs, read from a vessel: the torque its running reaction wheels
-    /// and its RCS thrusters can give (stock's <c>ITorqueProvider.GetPotentialTorque</c>, the weaker direction on each axis), whether
+    /// (none with no electric charge aboard) and its RCS thrusters can give (RCS propellant isn't checked) (stock's <c>ITorqueProvider.GetPotentialTorque</c>, the weaker direction on each axis), whether
     /// RCS is on, and stock's moment of inertia (<c>Vessel.MOI</c>). Both are in the vessel's control frame: x is pitch, z is yaw.
     /// Gimbals and control surfaces are left out, as there's no thrust or air on a Coast. Main thread; reads only.
     /// </summary>
@@ -23,13 +23,20 @@ namespace ClaudiaKermin.Adapter
                 MoiPitch = vessel.MOI.x,
                 MoiYaw = vessel.MOI.z,
             };
+            // Wheels turn on electric charge: a craft with none left can't use them.
+            var charge = 0.0;
+            foreach (var part in vessel.parts)
+            {
+                var ec = part.Resources.Get("ElectricCharge");
+                if (ec != null) charge += ec.amount;
+            }
             foreach (var part in vessel.parts)
             {
                 foreach (var module in part.Modules)
                 {
                     var wheel = module as ModuleReactionWheel;
                     var rcs = module as ModuleRCS;
-                    if (wheel != null && wheel.isEnabled && wheel.State == ModuleReactionWheel.WheelState.Active)
+                    if (wheel != null && charge > 0 && wheel.isEnabled && wheel.State == ModuleReactionWheel.WheelState.Active)
                     {
                         craft.WheelPitch += Weaker(wheel, 0);
                         craft.WheelYaw += Weaker(wheel, 2);

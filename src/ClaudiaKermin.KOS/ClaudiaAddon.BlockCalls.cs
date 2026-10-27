@@ -15,7 +15,8 @@ namespace ClaudiaKermin.KOS
     /// <summary>
     /// The block-internal calls (ADR 0006, ADR 0007): the mod's calculations a Building Block makes while it flies, on the same C#
     /// as the Planning Tools (<see cref="BlockCalls"/>). The Script Check lets only the Core Library call them; a Mission Script
-    /// passes a block its goal instead. Each reads a fresh Game Snapshot of the processor's vessel and never changes the game.
+    /// passes a block its goal instead. Each reads a fresh Game Snapshot of the processor's vessel (TURNTIME reads only its torque
+    /// and moment of inertia) and never changes the game.
     /// </summary>
     public partial class ClaudiaAddon
     {
@@ -33,11 +34,12 @@ namespace ClaudiaKermin.KOS
 
         private Lexicon TurnTime(Lexicon input)
         {
+            var watch = Stopwatch.StartNew();
             var craft = TurnCraftReader.Read(shared.Vessel);
             var turn = BlockCalls.TurnTime(KosValues.ToDictionary(input), craft);
             // The prediction, so block tests can read it back from KSP.log against the turn the block flew.
-            Debug.Log(ModInfo.LogTag + string.Format(CultureInfo.InvariantCulture,
-                " block call TURNTIME: {0}; wheels {1:0.##}/{2:0.##} kN m, RCS {3:0.##}/{4:0.##} kN m{5}, MOI {6:0.##}/{7:0.##} t m2 (pitch/yaw)",
+            Debug.Log(ModInfo.LogTag + " block call TURNTIME took " + Ms(watch) + " ms: " + string.Format(CultureInfo.InvariantCulture,
+                "{0}; wheels {1:0.##}/{2:0.##} kN m, RCS {3:0.##}/{4:0.##} kN m{5}, MOI {6:0.##}/{7:0.##} t m2 (pitch/yaw)",
                 turn["error"] as string == ""
                     ? string.Format(CultureInfo.InvariantCulture, "turn_time {0:0.0} s, turn {1:0.0} s at up to {2:0.0} deg/s", turn["turn_time"], turn["turn_s"], turn["top_rate"])
                     : turn["error"],
