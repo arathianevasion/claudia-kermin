@@ -251,6 +251,27 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "land_brake_now({0}, {1}, 4, 1.1)", eta, down)));
         }
 
+        [Theory]
+        // Braking is due at a time to impact of 100 / 4 * 1.1 + 30 = 57.5 s (v_down 100, accel 4, margin 1.1):
+        // 4x until 60 s before that, 2x from there, 1x from 30 s before.
+        [InlineData(300, 4)]
+        [InlineData(120, 4)]
+        [InlineData(117, 2)]
+        [InlineData(90, 2)]
+        [InlineData(87, 1)]
+        [InlineData(57, 1)]
+        public void Land_warps_at_4x_then_2x_from_60_s_and_1x_from_30_s_before_braking(double eta, int expected)
+        {
+            Assert.Equal(expected.ToString(CultureInfo.InvariantCulture), One(string.Format(CultureInfo.InvariantCulture, "land_warp_cap({0}, 100, 4, 1.1)", eta)));
+        }
+
+        [Fact]
+        public void Land_is_at_1x_when_braking_is_due_or_the_craft_is_climbing_toward_it()
+        {
+            Assert.Equal("1", One("land_warp_cap(10, 100, 4, 1.1)"));
+            Assert.Equal("1", One("land_warp_cap(5, -10, 4, 1.1)"));
+        }
+
         [Fact]
         public void Land_fails_after_the_deorbit_burn_when_periapsis_ends_well_under_the_plan()
         {

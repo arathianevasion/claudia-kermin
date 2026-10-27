@@ -247,7 +247,26 @@ function land_fall_eta {
 // inside the time to stop the downward speed at accel (m/s^2), times margin, plus 30 s.
 function land_brake_now {
   parameter t_impact, v_down, accel, margin.
-  return t_impact < max(0, v_down) / accel * margin + 30.
+  return land_brake_in(t_impact, v_down, accel, margin) < 0.
+}
+
+// Seconds until land_brake_now turns true: negative once it is.
+function land_brake_in {
+  parameter t_impact, v_down, accel, margin.
+  return t_impact - (max(0, v_down) / accel * margin + 30).
+}
+
+// The physics warp rate (1 to 4) the fall may use: 4x, 2x from 60 s before braking is due, 1x from 30 s.
+function land_warp_cap {
+  parameter t_impact, v_down, accel, margin.
+  local until_brake is land_brake_in(t_impact, v_down, accel, margin).
+  if until_brake <= 30 {
+    return 1.
+  }
+  if until_brake <= 60 {
+    return 2.
+  }
+  return 4.
 }
 
 // Whether periapsis after the deorbit burn (m above sea level) is within 1500 m under the planned one.
@@ -788,12 +807,17 @@ function land {
 // ground; the descent follows either way) or an abort reason.
 function land_coast {
   parameter ctx, ut, a_brake.
-  local ground_near is {
+  local impact_in is {
     local g is body:mu / (body:radius + altitude) ^ 2.
-    local t_impact is land_fall_eta(alt:radar, -ship:verticalspeed, g).
-    return land_brake_now(t_impact, -ship:verticalspeed, a_brake, ctx:opt:burn_margin).
+    return land_fall_eta(alt:radar, -ship:verticalspeed, g).
   }.
-  return claudia_warp_to(ctx, ut, 30, ground_near).
+  local ground_near is {
+    return land_brake_now(impact_in:call(), -ship:verticalspeed, a_brake, ctx:opt:burn_margin).
+  }.
+  local cap is {
+    return land_warp_cap(impact_in:call(), -ship:verticalspeed, a_brake, ctx:opt:burn_margin).
+  }.
+  return claudia_warp_to(ctx, ut, 30, ground_near, cap).
 }
 
 // The powered descent onto aim, to touchdown and a settled craft. Sets best_effort, reversals,
