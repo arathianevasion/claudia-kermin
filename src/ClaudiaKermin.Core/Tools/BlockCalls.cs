@@ -11,7 +11,9 @@ namespace ClaudiaKermin.Core.Tools
 {
     /// <summary>
     /// The block-internal calls (ADR 0006, ADR 0007): the mod's calculations a Building Block makes while it flies, through
-    /// <c>ADDONS:CLAUDIA</c>. They run the same C# as the Planning Tools, on a Game Snapshot read at the call, and only read. The
+    /// <c>ADDONS:CLAUDIA</c>: the site search, and the reentry predictor with the deorbit burn search on it. They run the same C#
+    /// as the Planning Tools, on a Game Snapshot read at the call (the reentry calls also read the air and the craft's drag cubes
+    /// live, through <see cref="IReentryAir"/> and <see cref="IReentryCraft"/>), and only read. The
     /// Script Check lets the Core Library call them and refuses them in a Mission Script. Inputs and results are plain values, as
     /// <c>KosValues</c> converts a kOS lexicon.
     /// </summary>
@@ -58,6 +60,106 @@ namespace ClaudiaKermin.Core.Tools
                 { "pass_ut", JsonNode.Double(site["pass_ut"]) ?? 0 },
                 { "sun_elevation_deg", JsonNode.Double(site["sun_elevation_deg"]) ?? 0 },
             };
+        }
+
+        /// <summary>
+        /// <c>ADDONS:CLAUDIA:DEORBITBURN</c>, for <c>deorbit</c>: the deorbit burn search (<see cref="DeorbitBurn"/>) from the craft's
+        /// orbit, by the reentry predictor with <paramref name="air"/> and <paramref name="craft"/>. Takes <c>lat</c>, <c>lng</c>
+        /// (the target), <c>earliest_ut</c>, <c>max_wait</c> (s), <c>ground_alt</c> (m), <c>accuracy_km</c> and <c>isp</c> (s; 0 or
+        /// missing for none). Gives <c>error</c> "", <c>burn_ut</c>, <c>prograde</c>, <c>normal</c>, <c>radial</c> (m/s, maneuver
+        /// node components), <c>dv</c>, and the landing: <c>lat</c>, <c>lng</c>, <c>error_km</c>, <c>landing_ut</c>. A best burn
+        /// outside the accuracy gives its <c>error</c> with the landing; a search that could not run, only <c>error</c>.
+        /// </summary>
+        public static IDictionary<string, object> DeorbitBurn(IDictionary<string, object> input, GameSnapshot snapshot, IPlanningBody body,
+            IReentryAir air, IReentryCraft craft)
+        {
+            var ask = new Dictionary<string, object>(input ?? new Dictionary<string, object>(), StringComparer.OrdinalIgnoreCase);
+            SnapshotBody at;
+            Conic orbit;
+            BodyFrame frame;
+            var problem = Reentry(snapshot, body, out at, out orbit, out frame);
+            if (problem != null) return Error(problem);
+            var plan = Tools.DeorbitBurn.Find(at, orbit, new DeorbitAsk
+            {
+                TargetLatitude = Number(ask, "lat", 0),
+                TargetLongitude = Number(ask, "lng", 0),
+                EarliestUt = Number(ask, "earliest_ut", snapshot.Ut),
+                MaxWait = Number(ask, "max_wait", at.RotationPeriod),
+                GroundAltitude = Number(ask, "ground_alt", 0),
+                AccuracyKm = Number(ask, "accuracy_km", 10),
+                Isp = Number(ask, "isp", 0),
+            }, air, craft, frame);
+            if (plan.Landing == null || plan.Landing.Error != null) return Error(plan.Error ?? plan.Landing.Error);
+            var result = Landing(plan.Landing, plan.ErrorKm);
+            result["error"] = plan.Error ?? "";
+            result["burn_ut"] = plan.BurnUt;
+            result["prograde"] = plan.Prograde;
+            result["normal"] = plan.Normal;
+            result["radial"] = 0.0;
+            result["dv"] = plan.DeltaV;
+            return result;
+        }
+
+        /// <summary>
+        /// <c>ADDONS:CLAUDIA:REENTRYIMPACT</c>, for <c>deorbit</c> once it has burned: where the craft's orbit as it is now comes
+        /// down, by the reentry predictor. Takes <c>ground_alt</c> (m) and, for the distance, <c>lat</c> and <c>lng</c>. Gives
+        /// <c>error</c> "", <c>lat</c>, <c>lng</c>, <c>landing_ut</c> and <c>error_km</c> (-1 without a target); or only
+        /// <c>error</c>, saying why there is no landing point.
+        /// </summary>
+        public static IDictionary<string, object> ReentryImpact(IDictionary<string, object> input, GameSnapshot snapshot, IPlanningBody body,
+            IReentryAir air, IReentryCraft craft)
+        {
+            var ask = new Dictionary<string, object>(input ?? new Dictionary<string, object>(), StringComparer.OrdinalIgnoreCase);
+            SnapshotBody at;
+            Conic orbit;
+            BodyFrame frame;
+            var problem = Reentry(snapshot, body, out at, out orbit, out frame);
+            if (problem != null) return Error(problem);
+            var landing = ReentryPredictor.Predict(at, orbit, snapshot.Ut, Number(ask, "ground_alt", 0), craft.MassKg, air, craft, frame);
+            if (landing.Error != null) return Error(landing.Error);
+            var km = ask.ContainsKey("lat") && ask.ContainsKey("lng")
+                ? LandingSiteSearch.ArcDegrees(landing.Latitude, landing.Longitude, Number(ask, "lat", 0), Number(ask, "lng", 0)) * Math.PI / 180 * at.Radius / 1000
+                : -1;
+            var result = Landing(landing, km);
+            result["error"] = "";
+            return result;
+        }
+
+        /// <summary>The body, the craft's orbit and how the frame sits on the body, for a reentry call; or why there are none.</summary>
+        private static string Reentry(GameSnapshot snapshot, IPlanningBody body, out SnapshotBody at, out Conic orbit, out BodyFrame frame)
+        {
+            at = null;
+            orbit = null;
+            frame = null;
+            var elements = snapshot == null ? null : snapshot.Orbit;
+            if (elements == null || elements.SemiMajorAxis == 0) return "the Game Snapshot has no orbit for the craft";
+            var name = string.IsNullOrEmpty(elements.Body) ? snapshot.Body : elements.Body;
+            at = new BodySystem(snapshot.Bodies).Find(name);
+            if (at == null || at.Gm <= 0) return "the body table has no " + name;
+            if (at.AtmosphereHeight <= 0) return "body has no atmosphere";
+            orbit = Conic.FromElements(at.Gm, elements.SemiMajorAxis, elements.Eccentricity, elements.Inclination, elements.Lan,
+                elements.ArgumentOfPeriapsis, elements.MeanAnomalyAtEpoch, elements.Epoch);
+            string error;
+            frame = BodyFrame.Read(at, body, snapshot.Ut, out error);
+            return error;
+        }
+
+        private static Dictionary<string, object> Landing(ReentryPrediction landing, double km)
+        {
+            return new Dictionary<string, object>
+            {
+                { "lat", landing.Latitude },
+                { "lng", landing.Longitude },
+                { "landing_ut", landing.LandingUt },
+                { "error_km", km },
+            };
+        }
+
+        private static double Number(IDictionary<string, object> ask, string key, double fallback)
+        {
+            object value;
+            if (!ask.TryGetValue(key, out value) || !(value is double)) return fallback;
+            return (double)value;
         }
 
         private static IDictionary<string, object> Error(string reason)

@@ -182,7 +182,7 @@ namespace ClaudiaKermin.Core.Tools
         }
 
         /// <summary>How the orbit's frame sits on the body: the longitude of its x axis and whether longitude grows with its angle (1) or against it (-1); an error text when the three reads don't fit a frame this code knows.</summary>
-        private static string Frame(string body, IPlanningBody api, out double lonOffset, out double handed)
+        internal static string Frame(string body, IPlanningBody api, out double lonOffset, out double handed)
         {
             lonOffset = 0;
             handed = 1;

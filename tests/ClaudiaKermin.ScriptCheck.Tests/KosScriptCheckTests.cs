@@ -275,6 +275,9 @@ namespace ClaudiaKermin.ScriptCheck.Tests
         [InlineData("local s is addons:claudia:landingsite(lexicon(\"biome\", \"Midlands\")).")]
         [InlineData("local c is addons:claudia.\nprint c:landingsite(lexicon()).")]
         [InlineData("local f is addons:claudia:LandingSite@.\nprint f(lexicon()).")]
+        [InlineData("local b is addons:claudia:deorbitburn(lexicon(\"lat\", 0, \"lng\", -74)).")]
+        [InlineData("print addons:claudia:reentryimpact(lexicon()):lat.")]
+        [InlineData("local c is addons:claudia.\nprint c:ReentryImpact(lexicon()).")]
         public void ABlockInternalCallInAMissionScriptFails(string script)
         {
             AssertForbidden("call block-internal calculations", script);
@@ -287,6 +290,15 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             // land calls it for a biome target; the bundle's library lines are the Core Library's.
             Assert.Contains("addons:claudia:landingsite(", CoreLibrary.Bundle("").ToLowerInvariant());
             AssertAllowed(CoreLibrary.Bundle("local res is land(lexicon(\"target\", lexicon(\"biome\", \"Midlands\"))).\naddons:claudia:report(res)."));
+        }
+
+        [Fact]
+        public void DeorbitsOwnReentryPredictorCallsPass()
+        {
+            var bundle = CoreLibrary.Bundle("").ToLowerInvariant();
+            Assert.Contains("addons:claudia:deorbitburn(", bundle);
+            Assert.Contains("addons:claudia:reentryimpact(", bundle);
+            AssertAllowed(CoreLibrary.Bundle("local res is deorbit(lexicon(\"target\", \"ksc\")).\nif res:burn_ut > 0 { set res to reentry(). }\naddons:claudia:report(res)."));
         }
 
         [Fact]
