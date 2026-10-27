@@ -36,6 +36,7 @@
 //| over accuracy_km", not enough delta-v, or the reasons exec_node gives (no thrust, out of fuel, an
 //| abort; the node is removed). The prediction leaves out parachutes and lift, so expect a few km more.
 //| Once the burn has started (burn_ut over 0), call reentry whatever the result: the craft is coming down.
+//| Tool: stage_performance for the delta-v; it chooses its own burn, so don't plan one with predict_burn or solve_burn.
 //| Example: `local res is deorbit(lexicon("target", "ksc")). if res:burn_ut > 0 { set res to reentry(). } addons:claudia:report(res).`
 
 // The block's own options and defaults ("required" means the Mission Script must give it).

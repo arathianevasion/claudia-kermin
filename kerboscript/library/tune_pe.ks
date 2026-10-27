@@ -35,6 +35,7 @@
 //| max_dv <max>", "found no burn that reaches <value> m", the reasons exec_node gives (no thrust, out of
 //| fuel, an abort), or "periapsis <pe> m is over tolerance <t> m from <value> m"; on an exec_node failure
 //| the node is left in place.
+//| Tool: solve_burn (set_pe or next_patch_pe) for the delta-v to budget; pass tune_pe the value, not that burn.
 //| Example: `local res is tune_pe(lexicon("value", 50000, "patch", "next")). addons:claudia:report(res).`
 
 // The block's own options and defaults ("required" means the Mission Script must give it).

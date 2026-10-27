@@ -50,11 +50,11 @@ namespace ClaudiaKermin.Core.Missions
             + "fill only that part; any other part the schema has is null. say is your line to the player in a concise mission-control "
             + "voice, key numbers first, one or two sentences. Each why is one short sentence; never write out your "
             + "reasoning anywhere in the reply. Use m/s for delta-v, metres for distances and seconds for durations.\n\n"
+            + HowToPlan + "\n\n"
             + "Mission Scripts. A script is complete kerboscript that runs from the top with no files: do not use RUN, "
             + "RUNPATH, COPYPATH, LOG, file or volume commands, and do not rely on a boot file. The mod bundles the Core "
             + "Library's Building Blocks (below) with every script, so call them by name; never define functions with "
-            + "their names or with the claudia_ prefix. Prefer Building Blocks; write your own kerboscript only where no "
-            + "block fits. Before it ends, every script "
+            + "their names or with the claudia_ prefix. Before it ends, every script "
             + "must call ADDONS:CLAUDIA:REPORT(LEXICON(...)) exactly once with its result, using at least the keys "
             + "\"success\" (boolean) and \"reason\" (string), plus any figures the Debrief needs (for example \"apoapsis\", "
             + "\"periapsis\", \"dv_used\", \"situation\"). A script that ends without reporting counts as failed. Keep "
@@ -67,6 +67,33 @@ namespace ClaudiaKermin.Core.Missions
             + "addon other than ADDONS:CLAUDIA; changing or messaging other vessels; opening GUI windows; freezing the "
             + "game. A script that uses any of these will be refused.\n\n"
             + "The Core Library.\n" + CoreLibrary.Summaries();
+
+        /// <summary>
+        /// The base layer's planning rules and its one worked example (#285): what each layer is for. Planning Tools
+        /// calculate, Building Blocks fly, and the Mission Script passes the blocks goals (ADR 0006).
+        /// </summary>
+        public const string HowToPlan =
+            "How to plan. Three rules:\n"
+            + "1. Don't work out in your head what a Planning Tool can calculate; call it.\n"
+            + "2. Don't write in a script what a Building Block does; call the block.\n"
+            + "3. Pass blocks goals, not timings: give land a biome and tune_pe a periapsis, and let the block choose when "
+            + "and how to burn.\n"
+            + "Call a Planning Tool only when its answer changes your reply, and never to test that tools work: a Debrief "
+            + "whose Script Result has the figures, or a Mission Plan revised from figures you already have, needs no tool. "
+            + "No tool is offered on an Alert, so never call a tool during an Alert.\n"
+            + "Example: a Sequence Plan to land in the Mun's Midlands from low Mun orbit, with Daylight landing on. "
+            + "find_landing_site {\"body\": \"Mun\", \"biome\": \"Midlands\"} shows a daylight site under the ground track "
+            + "in about 2 h. stage_performance {\"situation\": \"vacuum\"} shows 820 m/s in the descent stage against the "
+            + "landing's 640 m/s, at TWR 2.4 on the Mun. That stage's radial tanks are tagged \"side tanks\", so drop_empty "
+            + "sheds them once empty. The script passes land those goals, not a site or a burn time:\n"
+            + WorkedExampleScript + "\n"
+            + "expected_duration_s counts the wait to the pass. The Debrief after it rates the Script Result against the "
+            + "target and calls no tool.";
+
+        /// <summary>The worked example's Mission Script: block use only, so it is no Custom Script.</summary>
+        public const string WorkedExampleScript =
+            "local res is land(lexicon(\"target\", lexicon(\"biome\", \"Midlands\"), \"daylight\", true, "
+            + "\"drop_empty\", list(\"side tanks\"))).\naddons:claudia:report(res).";
 
         public const int MaxTokens = 32000;
 

@@ -11,10 +11,12 @@
     <ShipsInGameData>true</ShipsInGameData>
   </PropertyGroup>
 
-  <!-- The structured-output schemas and their union budget (#199), for the tests and the schema probe tool. -->
+  <!-- The structured-output schemas and their union budget (#199), for the tests and the schema probe tool; the base
+       layer's worked example (#285), for the real Script Check's tests. -->
   <ItemGroup>
     <InternalsVisibleTo Include="ClaudiaKermin.Core.Tests" />
     <InternalsVisibleTo Include="ClaudiaKermin.SchemaProbe" />
+    <InternalsVisibleTo Include="ClaudiaKermin.ScriptCheck.Tests" />
   </ItemGroup>
 
   <!-- The Core Library ships inside the core, so bundling a Mission Script reads no files. -->

@@ -44,6 +44,7 @@
 //| Follow it with reentry, in the same sequence or the next (no Due Time needed): once the craft is
 //| in Kerbin's sphere of influence (after the correction it usually is; if ship:body is still the
 //| moon, coast until ship:orbit:nextpatcheta has passed), reentry warps to the atmosphere itself.
+//| Tool: stage_performance for the delta-v; it plans its own burns, so don't plan them with predict_burn or solve_burn.
 //| Example: `local res is return(). addons:claudia:report(res).`
 
 // The block's own options and defaults.

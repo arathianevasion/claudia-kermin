@@ -22,6 +22,7 @@
 //| Fails with "parts is required", "parts must be a list of part names or tags", "no part matches
 //| <name>", "<name> has no decoupler", "<name> would drop the part running the script", or
 //| "nothing separated: the decouplers did not fire".
+//| Tool: stage_performance for the delta-v left once the parts are gone.
 //| Example: `local res is drop_parts(lexicon("parts", list("boosters"))). addons:claudia:report(res).`
 
 // The block's own options and defaults ("required" means the Mission Script must give it).

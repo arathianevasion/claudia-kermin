@@ -38,9 +38,10 @@ namespace ClaudiaKermin.Core.Tools
                     + "components (prograde, normal, radial m/s), its magnitude, its burn time, and the predict_burn result for that burn. "
                     + "Goals: circularize (at \"ap\" or \"pe\"); set_ap or set_pe (value, m above sea level; set_ap burns at the next Pe, "
                     + "set_pe at the next Ap); next_patch_pe (value, m above the next patch's body, from a prograde or retrograde burn at "
-                    + "\"at\", default in 60 s; the smaller burn when two reach it). Plane changes are not included. Call it to get the "
-                    + "numbers for a plan instead of working them out yourself. Don't call it to check a burn you already have (use "
-                    + "predict_burn), or for the craft's delta-v.";
+                    + "\"at\", default in 60 s; the smaller burn when two reach it). Plane changes are not included. Its blocks are "
+                    + "circularize, exec_node and tune_pe: call it for the delta-v to budget their burn instead of working it out "
+                    + "yourself, then pass the block the goal (tune_pe's value, circularize's at), not the burn. Don't call it to check "
+                    + "a burn you already have (use predict_burn), or for the craft's delta-v (stage_performance).";
             }
         }
 

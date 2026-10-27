@@ -29,8 +29,9 @@ namespace ClaudiaKermin.Core.Tools
                     + "sea level), slope (degrees), the UT the ground track passes over it and the sun's elevation then. Filters: an "
                     + "optional biome, daylight (defaults to the Mission Settings), a slope limit (default 5 degrees), a window in hours "
                     + "(defaults to the Mission Settings time cap) and an optional point to be near. The craft must be in orbit round the "
-                    + "body. Call it to pick the target for the land block's biome or a landing the Mission Goal names, instead of "
-                    + "searching by hand. Airless bodies only for now: a body with an atmosphere is an error.";
+                    + "body. Its block is land: call it to see that a biome target or a landing the Mission Goal names can be flown, "
+                    + "instead of searching by hand, then pass land the biome, not a site. Don't call it for land's target \"any\", or "
+                    + "for a body with an atmosphere (an error; deorbit aims those landings).";
             }
         }
 

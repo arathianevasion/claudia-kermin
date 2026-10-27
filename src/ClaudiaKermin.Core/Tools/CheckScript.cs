@@ -43,9 +43,10 @@ namespace ClaudiaKermin.Core.Tools
             {
                 return "Runs the Script Check on a draft Mission Script, the same check your Sequence Plan's script goes through: does it "
                     + "compile, and does it call anything on the forbidden list. Returns ok, and when not ok the problems, each with its "
-                    + "line (when the compiler gives one), its kind (compile or forbidden) and its text. Call it on a script you have "
-                    + "written before you reply, and fix what it finds, so the reply isn't refused. Passing it does not skip the check "
-                    + "on your reply, and it says nothing about whether the script does what the plan needs.";
+                    + "line (when the compiler gives one), its kind (compile or forbidden) and its text. Call it on the Mission Script you "
+                    + "have written, the one that runs the Building Blocks, before you reply, and fix what it finds, so the reply isn't "
+                    + "refused. Passing it does not skip the check on your reply, and it says nothing about whether the script does what "
+                    + "the plan needs. Don't call it on a reply with no script, and never to test that tools work.";
             }
         }
 

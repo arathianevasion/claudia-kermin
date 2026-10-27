@@ -42,9 +42,10 @@ namespace ClaudiaKermin.Core.Tools
                     + "to 4 patches, each with its body, Ap and Pe (m above sea level), inclination, eccentricity, start and end UT, and "
                     + "how it ends (escape, encounter <body>, impact, atmosphere or stable), plus the closest approach to a target body "
                     + "and each burn's estimated burn time. Burns are impulsive, in maneuver-node components (prograde, normal, radial "
-                    + "m/s), at ap, pe, a UT or \"in <s>\". Call it to check what a burn for exec_node, transfer_to or tune_pe does "
-                    + "before you put it in a plan, instead of working the orbit out yourself. Don't call it for what to burn to reach "
-                    + "an orbit, or for the craft's delta-v.";
+                    + "m/s), at ap, pe, a UT or \"in <s>\". Its block is exec_node: call it to check what a node's burn does before you "
+                    + "put it in a plan, instead of working the orbit out yourself. Don't call it for transfer_to, return, tune_pe, "
+                    + "deorbit, circularize or land, which plan their own burns, for what to burn to reach an orbit (solve_burn), or for the craft's delta-v "
+                    + "(stage_performance).";
             }
         }
 
