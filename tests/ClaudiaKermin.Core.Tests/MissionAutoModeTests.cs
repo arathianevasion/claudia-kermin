@@ -182,6 +182,32 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AnUnsafeScriptWaitsWhenTheCapHasNoRoomForTheReplanAndRaisingTheCapReplansIt()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport, null, new QuicksaveCheck());
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 0.90m, Sonnet));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.UnsafeScript && !v.Busy);
+
+            mission.Send(new SetAutoMode(true));
+            Assert.Equal(MissionStage.UnsafeScript, mission.View.Stage);
+            Assert.Equal(3, transport.Requests.Count);
+            Assert.DoesNotContain(mission.View.Log, e => e.Text == ReplannedText);
+            var blocked = CostLines(mission).Single(l => l.GetProperty("event").GetString() == "blocked");
+            Assert.Equal("auto_mode_room", blocked.GetProperty("outcome").GetString());
+
+            mission.Send(new RaiseCap(mission.View.Spent + mission.View.HeldCharges + blocked.GetProperty("amount").GetDecimal()));
+            Assert.Single(mission.View.Log, e => e.Text == ReplannedText);
+            DrainUntil(mission, v => v.Stage == MissionStage.Running && transport.Requests.Count == 4);
+        }
+
+        [Fact]
         public void TheNextPlanAfterAReplanThatFlewGetsItsOwnReplan()
         {
             var transport = new StreamingFakeTransport(

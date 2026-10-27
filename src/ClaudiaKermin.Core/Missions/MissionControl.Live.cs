@@ -257,7 +257,7 @@ namespace ClaudiaKermin.Core.Missions
             if (mission == null || !IsRunning(mission) || !mission.RunId.HasValue || !mission.RunningProcessor.HasValue) return;
             if (mission.StopReason != null || (mission.Blackout && !byAutoMode)) return;
             var why = byAutoMode ? "Auto Mode took Claudia's Abort recommendation" : "the player pressed Abort";
-            mission.StopReason = byAutoMode ? AbortedByAutoMode : "aborted by the player";
+            mission.StopReason = byAutoMode ? AbortedByAutoMode : AbortedByThePlayer;
             if (byAutoMode)
             {
                 Note(LogKind.Notice, mission.AbortRecommendation);
@@ -270,6 +270,8 @@ namespace ClaudiaKermin.Core.Missions
             _commands.Add(new AbortScript(mission.RunningProcessor.Value, why, mission.RunId.Value));
         }
 
+        /// <summary>The stop reason of a run the player aborted, on the Debrief's title and in its run report.</summary>
+        internal const string AbortedByThePlayer = "aborted by the player";
         /// <summary>The stop reason of a run Auto Mode aborted, on the Debrief's title and in its run report.</summary>
         internal const string AbortedByAutoMode = "aborted by Auto Mode";
 

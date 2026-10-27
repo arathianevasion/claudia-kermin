@@ -497,7 +497,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.Goal = mission.ReducedGoal;
             mission.ReducedGoal = "";
             Note(inAdvance ? LogKind.Notice : LogKind.Player, "Reduced Mission Goal approved: " + mission.Goal);
-            if (inAdvance) Note(LogKind.Notice, AutoModeApproved);
+            if (inAdvance) Note(LogKind.Notice, AutoModeApprovedNote);
             Event(mission, "goal_reduced", mission.Goal);
             mission.Stage = MissionStage.Planning;
             mission.SequenceCounted = false;

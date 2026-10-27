@@ -75,7 +75,7 @@ namespace ClaudiaKermin.Core.Missions
             if (MissionOver) return;
             if (mission.AutoMode && AutoModeAnswers(mission)) return;
             if (!CanAnswerPlan || mission.Declined) return;
-            // A plan reached Approval, so it passed the Script Check: the next unsafe script gets its own re-plan.
+            // A plan waits for Approval, so it passed the Script Check on arrival: the next unsafe script gets its own re-plan.
             mission.AutoModeReplanned = false;
             // ADR 0002: typed words never start anything, so a pending "approve?" is moot once Approval stands.
             if (mission.Blackout) mission.ConfirmPrompt = null;
@@ -124,7 +124,7 @@ namespace ClaudiaKermin.Core.Missions
             else
             {
                 mission.AutoModeApprovedFor = inHand;
-                Note(LogKind.Notice, AutoModeApproved);
+                Note(LogKind.Notice, AutoModeApprovedNote);
             }
             Approval();
         }
@@ -138,7 +138,13 @@ namespace ClaudiaKermin.Core.Missions
         /// </summary>
         private bool AutoModeAnswers(Mission mission)
         {
-            if (mission.AbortRecommendation.Length > 0) AbortTaken(byAutoMode: true);
+            if (mission.AbortRecommendation.Length > 0)
+            {
+                AbortTaken(byAutoMode: true);
+                // Not taken: the run is already being stopped, or there is nothing to abort it on. Either way it is moot, and
+                // left standing it would hold the script's warp and show itself if Auto Mode were unticked.
+                mission.AbortRecommendation = "";
+            }
             if (mission.InFlight) return false;
             if (mission.Stage == MissionStage.AwaitingReducedGoal && mission.ReducedGoal.Length > 0)
             {
@@ -162,7 +168,7 @@ namespace ClaudiaKermin.Core.Missions
                 return true;
             }
             mission.AutoModeReplanned = true;
-            Note(LogKind.Notice, AutoModeReplannedText);
+            Note(LogKind.Notice, AutoModeReplannedNote);
             ScriptRetried(null, replan: true);
             return true;
         }
@@ -218,9 +224,9 @@ namespace ClaudiaKermin.Core.Missions
         }
 
         /// <summary>Logged after a plan's card when Auto Mode approves it.</summary>
-        private const string AutoModeApproved = "Approved by Auto Mode.";
+        private const string AutoModeApprovedNote = "Approved by Auto Mode.";
         /// <summary>Logged after the "Couldn't produce a safe script" card when Auto Mode re-plans it.</summary>
-        private const string AutoModeReplannedText = "Re-planned by Auto Mode.";
+        private const string AutoModeReplannedNote = "Re-planned by Auto Mode.";
     }
 
     /// <summary>The Auto Mode checkbox: the player's Approval given in advance for this Mission, or taken back. Accepted in any stage of a Mission in play.</summary>
