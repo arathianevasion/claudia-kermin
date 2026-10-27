@@ -41,6 +41,7 @@ namespace ClaudiaKermin.Adapter
         private const string AttentionIconUrl = "ClaudiaKermin/Icons/ClaudiaIconAttention";
 
         private readonly Background _background = new Background(Debug.LogException);
+        private readonly PlanningBody _planningBody = new PlanningBody();
         private SettingsWindow _window;
         private ChatWindow _chatWindow;
         private MissionDriver _missions;
@@ -76,6 +77,8 @@ namespace ClaudiaKermin.Adapter
             // Missions dump raw streams into their own Mission folder when debug_tools is on.
             // The real Script Check (ADR 0003) reads kOS.Safe, which kOS loads; without kOS it fails every script.
             var missions = new MissionControl(client, _background, config, () => store.Load() != null, new KosScriptCheck());
+            // Terrain, biome and the sun for the Planning Tools, served on the main thread within a per-frame budget (Update pumps it).
+            missions.PlanningBody = _planningBody;
             _missions = new MissionDriver(missions, config.DebugTools);
             _window = new SettingsWindow(new KeySettings(store, client, _background), _missions, config, directory, _chatWindow);
             _missions.Panel.OpenSettings = () => _window.Visible = true;
@@ -137,6 +140,7 @@ namespace ClaudiaKermin.Adapter
         private void Update()
         {
             _background.Drain();
+            _planningBody.Pump();
             _missions.Update();
 
             // The Missions list button follows the window, which Close and a scene change can shut from elsewhere.

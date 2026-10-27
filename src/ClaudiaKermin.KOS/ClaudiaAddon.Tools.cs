@@ -39,7 +39,7 @@ namespace ClaudiaKermin.KOS
             var snapshotMs = watch.Elapsed.TotalMilliseconds;
             watch.Reset();
             watch.Start();
-            var outcome = PlanningTools.Default().Run(tool, inputJson, snapshot, new NoPlanningBody());
+            var outcome = PlanningTools.Default().Run(tool, inputJson, snapshot, new PlanningBody());
             var callMs = watch.Elapsed.TotalMilliseconds;
 
             Debug.Log(ModInfo.LogTag + " Planning Tool test: " + tool + " " + inputJson + " -> " + outcome.Json);
