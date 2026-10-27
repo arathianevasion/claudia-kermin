@@ -134,8 +134,12 @@ namespace ClaudiaKermin.Adapter
                 var celestial = Find(body);
                 if (celestial != null)
                 {
-                    // Orbit elements work in the reference plane with z north; stock's vectors are the same with y and z swapped.
-                    var at = celestial.GetLatitudeAndLongitude(new Vector3d(x, z, y), true);
+                    // Orbit elements give inertial vectors (the reference plane, z north). Stock takes them into the game through
+                    // Planetarium.Zup, as Orbit does, which its rotating reference frame turns with the body near it while the
+                    // body's own frame stands still (#326: skipping it put a landing off by the turn since that frame began).
+                    // The game's vectors are then the same with y and z swapped.
+                    var game = Planetarium.Zup.WorldToLocal(new Vector3d(x, y, z));
+                    var at = celestial.GetLatitudeAndLongitude(game.xzy, true);
                     lat = at.x;
                     lon = at.y;
                 }

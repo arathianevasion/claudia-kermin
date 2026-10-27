@@ -23,25 +23,110 @@
 //|   max_wait ["auto"]: s the burn may wait; "auto" is one turn of the body (about 6 h at Kerbin). The
 //|     burn is at least 4 minutes ahead. Give expected_duration_s that wait.
 //|   accuracy_km [10]: km the predicted landing may be from the target; a worse best burn fails the
-//|     block before any burn.
+//|     block before any burn, and a flown burn predicted worse reports success false.
+//|   separate ["none"]: what to drop once the burn is flown, so only the capsule re-enters: a stage
+//|     number (the decouplers that fire at that stage, as reentry's jettison_stage), or a list of part
+//|     names or tags (or one), as drop_parts. The burn is chosen for the craft that stays (its mass
+//|     and drag; the burn's propellant is taken to go with the parts dropped), and the landing is
+//|     predicted again once they have gone. Give it for a transfer stage that would otherwise ride
+//|     down with the capsule: its drag and mass move the landing.
 //|   max_duration ["auto"]: the wait to the burn plus 900 s.
 //|   plus min_ec_pct, abort_on_part_loss, stage_limit and drop_empty as for every block.
 //| Extra results: burn_ut (UT of the burn; -1 if it never burned), predicted_geo (lexicon lat, lng:
-//| where the craft comes down, predicted from the orbit after the burn, or for the best burn found
-//| when it fails over accuracy; empty without a prediction), predicted_error_km (km from the target to
-//| predicted_geo; -1 without one); dv_used is the burn's. Fails with "target is required", an option
-//| value it can't read, "body has no atmosphere", "ksc is on Kerbin", a craft on the ground, "a
-//| maneuver node is already planned: remove it first", an orbit it can't deorbit from (escaping, or a
-//| periapsis already in the atmosphere: fly reentry), "the best burn ... lands <x> km from the target,
-//| over accuracy_km", not enough delta-v, or the reasons exec_node gives (no thrust, out of fuel, an
-//| abort; the node is removed). The prediction leaves out parachutes and lift, so expect a few km more.
+//| where the craft comes down, predicted from the orbit after the burn (and the separation), or for
+//| the best burn found when it fails over accuracy; empty without a prediction), predicted_error_km
+//| (km from the target to predicted_geo; -1 without one); dropped (names of the parts separate
+//| dropped); dv_used is the burn's. Succeeds only with a landing predicted within accuracy_km after
+//| the burn. Fails with "target is required", an option value it can't read, "body has no
+//| atmosphere", "ksc is on Kerbin", a craft on the ground, "a maneuver node is already planned:
+//| remove it first", a separate it can't drop ("separate: no part matches <name>", "...has no
+//| decoupler", "...would drop the part running the script", "no decoupler fires at stage <n>"), an
+//| orbit it can't deorbit from (escaping, or a periapsis already in the atmosphere: fly reentry), "the
+//| best burn ... lands <x> km from the target, over accuracy_km", not enough delta-v, or the reasons
+//| exec_node gives (no thrust, out of fuel, an abort; the node is removed); after the burn, with "the
+//| burn is flown, but separate failed: ...", "...the craft is predicted to land <x> km from the
+//| target, over accuracy_km" or "...its landing can't be predicted". The prediction leaves out
+//| parachutes and lift, so expect a few km more.
 //| Once the burn has started (burn_ut over 0), call reentry whatever the result: the craft is coming down.
 //| Tool: stage_performance for the delta-v; it chooses its own burn, so don't plan one with predict_burn or solve_burn.
-//| Example: `local res is deorbit(lexicon("target", "ksc")). if res:burn_ut > 0 { set res to reentry(). } addons:claudia:report(res).`
+//| Example: `local res is deorbit(lexicon("target", "ksc", "separate", 1)). if res:burn_ut > 0 { set res to reentry(). } addons:claudia:report(res).`
 
 // The block's own options and defaults ("required" means the Mission Script must give it).
 function deorbit_defaults {
-  return lexicon("target", "required", "max_wait", "auto", "accuracy_km", 10).
+  return lexicon("target", "required", "max_wait", "auto", "accuracy_km", 10, "separate", "none").
+}
+
+// "" or why a separate option value isn't one the block can use: "none", a whole stage number from
+// 0, or part names or tags (a list, or one).
+function deorbit_separate_unreadable {
+  parameter sep.
+  local rule is "separate must be 'none', a stage number or part names or tags, not ".
+  if sep:istype("String") {
+    if sep = "" {
+      return rule + "''".
+    }
+  } else if sep:istype("Scalar") {
+    if sep < 0 or sep <> round(sep) {
+      return rule + sep.
+    }
+  } else if sep:istype("List") {
+    if sep:length = 0 {
+      return rule + "an empty list".
+    }
+  } else {
+    return rule + "a " + sep:typename.
+  }
+  return "".
+}
+
+// claudia_drop_plan's lexicon for the decouplers that fire at stage number stage_num (kOS's
+// PART:STAGE, as reentry's jettison_stage) and the parts leaving with them.
+function deorbit_stage_drop_plan {
+  parameter stage_num.
+  local plan is claudia_drop_plan(list()).
+  for p in ship:parts {
+    if claudia_is_decoupler(p) and p:stage = stage_num {
+      local with is claudia_dropped_with(p).
+      if claudia_drop_holds_core(with) {
+        set plan:error to "stage " + stage_num + "'s " + p:name + " would drop the part running the script".
+        return plan.
+      }
+      claudia_drop_add(plan, p, with).
+    }
+  }
+  if plan:decouplers:length = 0 {
+    set plan:error to "no decoupler fires at stage " + stage_num.
+  }
+  return plan.
+}
+
+// What separate drops (claudia_drop_plan's lexicon): nothing for "none", a stage's decouplers for a
+// number, else the named parts. Fires nothing.
+function deorbit_separation {
+  parameter sep.
+  if sep:istype("Scalar") {
+    return deorbit_stage_drop_plan(sep).
+  }
+  if sep:istype("String") {
+    if sep = "none" {
+      return claudia_drop_plan(list()).
+    }
+    return claudia_drop_plan(list(sep)).
+  }
+  return claudia_drop_plan(sep).
+}
+
+// "" if the landing predicted after the burn (a REENTRYIMPACT result, error_km against the target)
+// is within accuracy_km, else why the block reports success false. The craft is coming down either way.
+function deorbit_after_burn {
+  parameter after, accuracy_km.
+  if after:error <> "" {
+    return "the burn is flown, but its landing can't be predicted (" + after:error + ")".
+  }
+  if after:error_km > accuracy_km {
+    return "the burn is flown, but the craft is predicted to land " + round(after:error_km) + " km from the target, over accuracy_km " + accuracy_km + ": it is coming down, so call reentry".
+  }
+  return "".
 }
 
 // The launch pad at KSC, on Kerbin.
@@ -71,7 +156,7 @@ function deorbit_unreadable {
   if not opt:accuracy_km:istype("Scalar") or opt:accuracy_km <= 0 {
     return "accuracy_km must be km above 0, not " + opt:accuracy_km.
   }
-  return "".
+  return deorbit_separate_unreadable(opt:separate).
 }
 
 // "" or why the craft can't deorbit where it is: has_atm (its body has an atmosphere) and situation
@@ -103,12 +188,16 @@ function deorbit_max_wait {
 }
 
 // What deorbit asks ADDONS:CLAUDIA:DEORBITBURN: the site, the window (earliest_ut, then max_wait s),
-// the ground's height at the site (m, sea level for water), accuracy_km and the engines' isp (s, for
-// the mass after the burn; 0 if unknown). Pure.
+// the ground's height at the site (m, sea level for water), accuracy_km, the engines' isp (s, for
+// the mass after the burn; 0 if unknown) and leave_out, the UIDs of the parts separate drops: the
+// search flies the craft without them, and their propellant is the burn's, so isp goes as 0. Pure.
 function deorbit_query {
-  parameter site, earliest_ut, max_wait, ground_alt, accuracy_km, isp.
+  parameter site, earliest_ut, max_wait, ground_alt, accuracy_km, isp, leave_out.
+  if leave_out:length > 0 {
+    set isp to 0.
+  }
   return lexicon("lat", site:lat, "lng", site:lng, "earliest_ut", earliest_ut, "max_wait", max_wait,
-    "ground_alt", max(0, ground_alt), "accuracy_km", accuracy_km, "isp", isp).
+    "ground_alt", max(0, ground_alt), "accuracy_km", accuracy_km, "isp", isp, "leave_out", leave_out).
 }
 
 // A predicted landing (a block call's result with lat and lng) as the block reports it.
@@ -155,10 +244,17 @@ function deorbit {
     return claudia_finish(ctx, false, lit, extra).
   }
 
+  // What separate drops after the burn, worked out now so a separate that can't be dropped fails
+  // before any burn, and so the search flies only the craft that re-enters.
+  local separation is deorbit_separation(opt:separate).
+  if separation:error <> "" {
+    return claudia_finish(ctx, false, "separate: " + separation:error, extra).
+  }
+
   local ground_alt is body:geopositionlatlng(site:lat, site:lng):terrainheight.
   local max_wait is deorbit_max_wait(opt:max_wait, body:rotationperiod).
   // The burn search is the mod's reentry predictor, a block-internal call (ADR 0007): inline here.
-  local found is addons:claudia:deorbitburn(deorbit_query(site, time:seconds + deorbit_lead_s(), max_wait, ground_alt, opt:accuracy_km, claudia_engine_isp())).
+  local found is addons:claudia:deorbitburn(deorbit_query(site, time:seconds + deorbit_lead_s(), max_wait, ground_alt, opt:accuracy_km, claudia_engine_isp(), claudia_drop_uids(separation))).
   if found:haskey("lat") {
     set extra:predicted_geo to deorbit_geo(found).
     set extra:predicted_error_km to round(found:error_km, 2).
@@ -186,11 +282,21 @@ function deorbit {
     return claudia_finish(ctx, false, flown:reason, extra).
   }
 
-  // Where the orbit actually flown comes down: the burn's own error moves it.
+  // The craft that re-enters: drop what separate names, now the burn no longer needs it.
+  local separate_failed is "".
+  if separation:decouplers:length > 0 {
+    set separate_failed to claudia_fire_drop(ctx, separation).
+  }
+
+  // Where the orbit actually flown comes down, with the craft as it is now: the burn's own error moves it.
   local after is addons:claudia:reentryimpact(lexicon("lat", site:lat, "lng", site:lng, "ground_alt", max(0, ground_alt))).
   if after:error = "" {
     set extra:predicted_geo to deorbit_geo(after).
     set extra:predicted_error_km to round(after:error_km, 2).
   }
-  return claudia_finish(ctx, true, "", extra).
+  if separate_failed <> "" {
+    return claudia_finish(ctx, false, "the burn is flown, but separate failed: " + separate_failed, extra).
+  }
+  local landing is deorbit_after_burn(after, opt:accuracy_km).
+  return claudia_finish(ctx, landing = "", landing, extra).
 }
