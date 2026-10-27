@@ -664,6 +664,155 @@ function tsim {
             Assert.Equal("False", One("land_burning(land_phase(false, 575, -1))"));
         }
 
+        // ---- land: braking for a craft that turns slowly (#380) ----
+
+        [Fact]
+        public void Land_times_a_turn_by_turntimes_model_and_counts_the_last_5_degrees_as_pointed()
+        {
+            // Mun Shot v2's TURNTIME: 190 degrees in 102.5 s at up to 1.9 deg/s, so 2.5 s to reach it.
+            Assert.Equal("102.5", One("round(land_turn_seconds(195, 1.9, 102.5), 3)"));
+            Assert.Equal("5.132", One("round(land_turn_seconds(10, 1.9, 102.5), 3)"));
+            // 2 degrees to go never reaches the top rate: 2 sqrt(2 / 0.76).
+            Assert.Equal("3.244", One("round(land_turn_seconds(7, 1.9, 102.5), 3)"));
+            // A turn that peaks under kOS's cap (1 deg/s^2: 190 degrees in 27.568 s, peaking at 13.784 deg/s).
+            Assert.Equal("27.568", One("round(land_turn_seconds(195, 13.784, 27.568), 3)"));
+            Assert.Equal("0", One("land_turn_seconds(5, 1.9, 102.5)"));
+            Assert.Equal("0", One("land_turn_seconds(0, 1.9, 102.5)"));
+            // No TURNTIME (no torque): no allowance.
+            Assert.Equal("0", One("land_turn_seconds(90, 0, 0)"));
+        }
+
+        [Fact]
+        public void The_braking_start_distance_grows_with_the_turn_left_and_is_todays_when_pointed()
+        {
+            // With no turn left it is where land_vh_target falls to the speed, as before #380.
+            Assert.Equal("568", One("round(land_vh_target(land_brake_distance(568, 10, 1.1, 0), 10, 1.1), 3)"));
+            Assert.Equal("True", One("land_brake_distance(568, 10, 1.1, land_turn_seconds(0, 1.9, 102.5)) = land_brake_distance(568, 10, 1.1, 0)"));
+            // 20 s still to turn at 568 m/s: 11.36 km farther out; more turn, farther still.
+            Assert.Equal("11360", One("round(land_brake_distance(568, 10, 1.1, 20) - land_brake_distance(568, 10, 1.1, 0), 3)"));
+            Assert.Equal("True", One("land_brake_distance(568, 10, 1.1, land_turn_seconds(90, 1.9, 102.5)) > land_brake_distance(568, 10, 1.1, land_turn_seconds(30, 1.9, 102.5))"));
+            // The rule: just outside the distance it waits, just inside it brakes; a turn left brakes it sooner.
+            var d = "land_brake_distance(568, 10, 1.1, 0)";
+            Assert.Equal("False", One("land_brake_due(" + d + " + 1, 1e5, 568, 10, 3000, 10, 1.1, 0)"));
+            Assert.Equal("True", One("land_brake_due(" + d + " - 1, 1e5, 568, 10, 3000, 10, 1.1, 0)"));
+            Assert.Equal("True", One("land_brake_due(" + d + " + 1, 1e5, 568, 10, 3000, 10, 1.1, 1)"));
+            // The ground coming up, or the site behind, brakes it whatever the distance.
+            Assert.Equal("True", One("land_brake_due(1e6, 1e6, 568, 10, 1400, 10, 1.1, 0)"));
+            Assert.Equal("True", One("land_brake_due(1e6, 1e6, 568, 80, 3000, 10, 1.1, 0)"));
+            Assert.Equal("True", One("land_brake_due(1e6, -1, 568, 10, 3000, 10, 1.1, 0)"));
+        }
+
+        // For the reference lander (60 kN, 5.4 t) at the Mun, 575 m/s along, v_up m/s up, 3000 m up, the
+        // site s m along and 100 m across: land_fall_guide, and land_guide's first command from the same
+        // state where land_brake_distance starts braking, with v_top (the speed braking began at) v_top.
+        // Prints the fall's al and up, the degrees between the two, and land_guide's al.
+        private static double[] FallAndFirst(string s, double vUp, string vTop = "575")
+        {
+            var state = "\"c\", 100, \"v_al\", 575, \"v_cr\", 0, \"v_up\", " + vUp.ToString(CultureInfo.InvariantCulture)
+                + ", \"h\", 3000, \"a_max\", 60000 / 5400, \"g\", 1.63, \"radius\", 200000";
+            return Run("local start is land_brake_distance(575, land_brake_accel(60000 / 5400, 1.63), 1.1, 0).\n"
+                + "local f is land_fall_guide(lexicon(\"s\", " + s + ", " + state + "), 2, 1.1).\n"
+                + "local w is land_guide(lexicon(\"s\", start, \"h_start\", 3000, \"v_top\", " + vTop + ", " + state + "), 2, 1.1).\n"
+                + "local dot is (f:al * w:al + f:cr * w:cr + f:up * w:up) / sqrt((f:al ^ 2 + f:cr ^ 2 + f:up ^ 2) * (w:al ^ 2 + w:cr ^ 2 + w:up ^ 2)).\n"
+                + "print f:al. print f:up. print arccos(min(1, dot)). print w:al.")
+                .Select(x => double.Parse(x, CultureInfo.InvariantCulture)).ToArray();
+        }
+
+        [Fact]
+        public void The_fall_steers_along_the_first_braking_command()
+        {
+            // Falling 30 m/s at the braking start: what land_guide first asks for from the same state.
+            var at = FallAndFirst("start", -30);
+            Assert.InRange(at[2], 0, 0.01);
+            // Braking: back along the path and held up, not surface retrograde.
+            Assert.True(at[0] < -5);
+            Assert.True(at[1] > 1);
+            // Farther out, the same: the command braking will begin with, not one for a site it isn't
+            // braking for yet.
+            var far = FallAndFirst("start * 3", -30);
+            Assert.InRange(far[2], 0, 0.01);
+            Assert.Equal(at[0], far[0], 6);
+            // Falling 5 m/s, land_guide's first command holds the speed braking began at (v_top) until its
+            // stopping curve falls under it, a moment on (0 along): the fall points along the braking that
+            // comes then, land_guide's from the same state on its curve.
+            Assert.Equal(0, FallAndFirst("start", -5)[3], 3);
+            var slow = FallAndFirst("start", -5, "1e9");
+            Assert.InRange(slow[2], 0, 0.01);
+            Assert.True(slow[0] < -5);
+        }
+
+        [Fact]
+        public void Braking_that_starts_early_for_the_turn_flies_by_the_site_that_much_nearer()
+        {
+            Assert.Equal("8000", One("land_turning_s(10000, 500, 4)"));
+            Assert.Equal("10000", One("land_turning_s(10000, 500, 0)"));
+            Assert.Equal("1", One("land_turning_s(100, 500, 4)"));
+            Assert.Equal("0.5", One("land_turning_s(0.5, 500, 4)"));
+            Assert.Equal("-50", One("land_turning_s(-50, 500, 4)"));
+        }
+
+        [Fact]
+        public void The_coast_ends_the_turn_and_30_s_before_braking_and_never_under_90_s()
+        {
+            // Mun Shot v2: a 112.5 s turn.
+            Assert.Equal("857.5", One("land_coast_end(1000, 112.5)"));
+            Assert.Equal("True", One("land_coast_end(1000, 112.5) <= 1000 - 112.5 - 30"));
+            // A quick turn: the 90 s as before #380.
+            Assert.Equal("910", One("land_coast_end(1000, 30)"));
+        }
+
+        // A fall at 575 m/s over a terrain profile (as for tsim) to a site at 60 km, periapsis 3000 m up
+        // over it at 104 s: y = 3000 + 0.2 (104 - t)^2. Prints the braking start land_brake_estimate gives
+        // from samples every 5 s, the UT land_brake_due fires checking every 0.1 s by land_descend's
+        // own clearance (land_lookahead, land_clearance), and the start the coast used before #380
+        // (periapsis less the stopping time at periapsis).
+        private const string FallEstimate = @"
+function fall_at {
+  parameter prof, t.
+  local x is 575 * t.
+  return lexicon(""ut"", t, ""x"", x, ""dist"", abs(60000 - x), ""ahead"", 60000 - x, ""v_h"", 575, ""v_down"", 0.4 * (104 - t),
+    ""alt"", 3000 + 0.2 * (104 - t) ^ 2, ""ground"", terr(prof, x)).
+}
+function estimate {
+  parameter prof.
+  local a_brake is land_brake_accel(60000 / 5400, 1.63).
+  local samples is list().
+  local t is 0.
+  until t > 180 { samples:add(fall_at(prof, t)). set t to t + 5. }
+  print round(land_brake_estimate(samples, a_brake, 1.1), 1).
+  set t to 0.
+  until t > 180 {
+    local p is fall_at(prof, t).
+    local heights is list().
+    for d in land_lookahead(p:v_h, p:dist) { heights:add(terr(prof, p:x + d)). }
+    local h is land_clearance(p:alt - p:ground, p:alt, heights).
+    if land_brake_due(p:dist, p:ahead, p:v_h, p:v_down, h, a_brake, 1.1, 0) { break. }
+    set t to t + 0.1.
+  }
+  print round(t, 1).
+  print round(104 - 575 * 1.1 / (2 * a_brake), 1).
+}
+";
+
+        private static double[] Estimate(string profile)
+        {
+            return Run(TerrainSimulation + FallEstimate + "estimate(" + profile + ").")
+                .Select(x => double.Parse(x, CultureInfo.InvariantCulture)).ToArray();
+        }
+
+        [Fact]
+        public void The_coast_plans_on_braking_no_later_than_it_starts_over_high_ground()
+        {
+            // A 2500 m plateau from 30 km on, under the craft's 3000 m periapsis: the ground comes inside
+            // 1500 m some 40 s before the periapsis estimate, which was too late.
+            var high = Estimate("list(list(0, 0), list(20000, 0), list(30000, 2500), list(90000, 2500))");
+            Assert.InRange(high[0], high[1] - 5.1, high[1]);
+            Assert.True(high[2] > high[1] + 30);
+            // Flat ground: it brakes for the site, and the estimate is still no later.
+            var flat = Estimate("list(list(0, 0), list(90000, 0))");
+            Assert.InRange(flat[0], flat[1] - 5.1, flat[1]);
+        }
+
         [Fact]
         public void The_descent_traces_a_line_every_2_s_and_at_each_phase_change()
         {
