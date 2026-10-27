@@ -37,6 +37,7 @@ namespace ClaudiaKermin.KOS
             AddSuffix("WARPHOLD", new Suffix<BooleanValue>(() => ScriptWarpHold.Held, "In-script warp is held at 1x while the Mission needs the player"));
             AddTerrainSuffixes();
             AddHeatSuffixes();
+            AddToolSuffixes();
             if (shared.KSPPart != null) ByPart[shared.KSPPart.persistentId] = this;
         }
 

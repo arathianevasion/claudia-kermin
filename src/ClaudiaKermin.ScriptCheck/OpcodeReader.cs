@@ -47,14 +47,16 @@ namespace ClaudiaKermin.ScriptCheck
         /// <summary>Another vessel is passed to a user function somewhere, so any parameter may hold one.</summary>
         private bool _otherVesselPassed;
         private bool _recording;
+        /// <summary>A block test's script (tests/tools): the test-only bridge to Planning Tools is allowed.</summary>
+        private bool _allowPlanningTools;
 
         /// <summary>
         /// Each finding, e.g. "line 3: COPYPATH (touch files)", in order. The code is read twice: the first pass
         /// learns which variables hold another vessel or the TIMEWARP, wherever they are assigned.
         /// </summary>
-        public static List<string> Read(IEnumerable<List<Opcode>> sections)
+        public static List<string> Read(IEnumerable<List<Opcode>> sections, bool allowPlanningTools = false)
         {
-            var reader = new OpcodeReader();
+            var reader = new OpcodeReader { _allowPlanningTools = allowPlanningTools };
             var list = new List<List<Opcode>>(sections);
             foreach (var section in list) reader.Walk(section);
             reader._recording = true;
@@ -285,7 +287,8 @@ namespace ClaudiaKermin.ScriptCheck
         private void Suffix(Value receiver, string id, int line)
         {
             string item;
-            if (ForbiddenList.Suffixes.TryGetValue(id, out item)) Found(line, ":" + id.ToUpperInvariant(), item);
+            if (ForbiddenList.Suffixes.TryGetValue(id, out item) && !(_allowPlanningTools && item == ForbiddenList.PlanningTools))
+                Found(line, ":" + id.ToUpperInvariant(), item);
             if (AnyVariable(receiver, "addons") && !ForbiddenList.AllowedAddonSuffixes.Contains(id))
                 Found(line, "ADDONS:" + id.ToUpperInvariant(), ForbiddenList.OtherAddons);
             if (receiver.OtherVessel && ForbiddenList.OtherVesselMutators.Contains(id))

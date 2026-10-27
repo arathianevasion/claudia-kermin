@@ -36,6 +36,9 @@
   <ItemGroup>
     <BlockTestFile Include="$(RepoRoot)tests/blocks/*/*" />
     <EmbeddedResource Include="@(BlockTestFile)" LogicalName="ClaudiaKermin.KOS.blocktests.$([System.IO.Path]::GetFileName($([System.IO.Path]::GetDirectoryName('%(FullPath)')))).%(Filename)%(Extension)" />
+    <!-- The Planning Tool scenarios, laid out the same way under tests/tools/. -->
+    <ToolTestFile Include="$(RepoRoot)tests/tools/*/*" />
+    <EmbeddedResource Include="@(ToolTestFile)" LogicalName="ClaudiaKermin.KOS.tooltests.$([System.IO.Path]::GetFileName($([System.IO.Path]::GetDirectoryName('%(FullPath)')))).%(Filename)%(Extension)" />
   </ItemGroup>
 
   <!--

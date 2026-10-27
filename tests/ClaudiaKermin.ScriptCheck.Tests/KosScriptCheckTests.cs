@@ -238,6 +238,37 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             AssertAllowed("if addons:available(\"claudia\") { addons:claudia:report(lexicon(\"success\", true, \"reason\", \"done\")). }");
         }
 
+        [Theory]
+        [InlineData("local p is addons:claudia:planningtool(\"predict_burn\", lexicon(\"burns\", list())).")]
+        [InlineData("local c is addons:claudia.\nprint c:planningtool(\"predict_burn\", lexicon()).")]
+        [InlineData("print addons:claudia:PlanningTool(\"stage_performance\", lexicon(\"situation\", \"vacuum\")):stages.")]
+        public void CallPlanningToolsFromAMissionScript(string script) { AssertForbidden("call Planning Tools", script); }
+
+        [Fact]
+        public void APlanningToolCallPassesOnlyTheBlockTestsCheck()
+        {
+            var script = "local p is addons:claudia:planningtool(\"predict_burn\", lexicon(\"burns\", list())).\nprint p.";
+            Assert.True(new KosScriptCheck(forToolTests: true).Check(script).Passed);
+            Assert.False(new KosScriptCheck().Check(script).Passed);
+            // The block tests' check still refuses everything else on the list.
+            var quicksave = new KosScriptCheck(forToolTests: true).Check("kuniverse:quicksave().");
+            Assert.Contains(quicksave.Forbidden, f => f.EndsWith("(quicksave)"));
+        }
+
+        [Fact]
+        public void EveryToolScenarioScriptBundledWithTheLibraryPassesTheBlockTestsCheckAndNoMissionCheck()
+        {
+            var tools = Directory.GetDirectories(Path.Combine(RepoRoot(), "tests", "tools"));
+            Assert.NotEmpty(tools);
+            foreach (var dir in tools)
+            {
+                var script = CoreLibrary.Bundle(File.ReadAllText(Path.Combine(dir, "test.ks")));
+                var asTest = new KosScriptCheck(forToolTests: true).Check(script);
+                Assert.True(asTest.Passed, dir + ": " + string.Join("; ", asTest.Problems.ToArray()));
+                Assert.Contains(_check.Check(script).Forbidden, f => f.EndsWith("(call Planning Tools)"));
+            }
+        }
+
         [Fact]
         public void ReadingKosConfig() { AssertAllowed("print config:ipu."); }
 

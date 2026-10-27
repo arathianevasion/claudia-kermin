@@ -23,11 +23,22 @@ namespace ClaudiaKermin.ScriptCheck
     /// </summary>
     public sealed class KosScriptCheck : IScriptCheck
     {
+        private readonly bool _forToolTests;
+
+        /// <param name="forToolTests">
+        /// Checks a block test's script under tests/tools, which may call Planning Tools through the test-only bridge (ADR 0006).
+        /// Every Mission Script is checked without it, so the call is refused there.
+        /// </param>
+        public KosScriptCheck(bool forToolTests = false)
+        {
+            _forToolTests = forToolTests;
+        }
+
         public ScriptCheckResult Check(string script)
         {
             try
             {
-                return Run(script ?? "");
+                return Run(script ?? "", _forToolTests);
             }
             catch (Exception e)
             {
@@ -37,7 +48,7 @@ namespace ClaudiaKermin.ScriptCheck
 
         // Kept apart so a missing kOS.Safe fails inside Check's try, not when Check is compiled.
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static ScriptCheckResult Run(string script)
+        private static ScriptCheckResult Run(string script, bool forToolTests)
         {
             // Inside KSP kOS has set its logger; outside it (CI, tests) the compiler needs one.
             if (SafeHouse.Logger == null) SafeHouse.Logger = new QuietLogger();
@@ -69,7 +80,7 @@ namespace ClaudiaKermin.ScriptCheck
                 sections.Add(part.InitializationCode);
                 sections.Add(part.MainCode);
             }
-            return new ScriptCheckResult(null, OpcodeReader.Read(sections)) { Warnings = ScriptLints.Warnings(script) };
+            return new ScriptCheckResult(null, OpcodeReader.Read(sections, forToolTests)) { Warnings = ScriptLints.Warnings(script) };
         }
 
         /// <summary>

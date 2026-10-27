@@ -29,6 +29,26 @@ namespace ClaudiaKermin.Core.Tests
             }
         }
 
+        [Fact]
+        public void EveryShippedToolScenarioHasTheBlockTestLayoutAndCallsAPlanningTool()
+        {
+            var scenarios = Directory.GetDirectories(Path.Combine(RepoRoot(), "tests", "tools"));
+            Assert.NotEmpty(scenarios);
+            var tools = Tools.PlanningTools.Default().Definitions(Tools.ToolOffer.Mission).Select(t => t.Name).ToList();
+            foreach (var scenario in scenarios)
+            {
+                var name = Path.GetFileName(scenario);
+                var spec = BlockTestSpec.Parse(name, File.ReadAllText(Path.Combine(scenario, "test.cfg")));
+                Assert.True(CoreLibrary.Blocks.Any(b => b.Name == spec.Block), name + ": no block " + spec.Block);
+                Assert.True(File.Exists(Path.Combine(scenario, spec.Craft)), name + ": no " + spec.Craft);
+                Assert.True(File.Exists(Path.Combine(scenario, "scenario.sfs")), name + ": no scenario.sfs");
+                Assert.NotEmpty(spec.Checks);
+                var script = File.ReadAllText(Path.Combine(scenario, "test.ks"));
+                Assert.Contains("addons:claudia:planningtool(", script);
+                Assert.Contains(tools, t => script.Contains("planningtool(\"" + t + "\""));
+            }
+        }
+
         [Theory]
         [InlineData("transfer_to", "Kerbin")]
         [InlineData("return", "Mun")]

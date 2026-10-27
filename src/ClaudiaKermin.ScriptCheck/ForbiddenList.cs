@@ -28,6 +28,11 @@ namespace ClaudiaKermin.ScriptCheck
         public const string OtherVessels = "change or message other vessels";
         public const string GuiWindows = "open GUI windows";
         public const string FreezeGame = "freeze the game";
+        /// <summary>
+        /// Planning Tools are for Claudia while she plans, and reach kOS only through the bridge a block test opens (ADR 0006); a
+        /// Mission Script calls Building Blocks instead.
+        /// </summary>
+        public const string PlanningTools = "call Planning Tools";
         /// <summary>From the allowed list: <c>makebuiltindelegate</c> is allowed only with a constant argument.</summary>
         public const string ComputedDelegate = "makebuiltindelegate without a constant argument";
 
@@ -49,7 +54,8 @@ namespace ClaudiaKermin.ScriptCheck
             Pause, "pause",
             TouchFiles, "volume",
             RebootOrShutDown, "deactivate",
-            OtherVessels, "sendmessage");
+            OtherVessels, "sendmessage",
+            PlanningTools, "planningtool");
 
         /// <summary>Suffixes forbidden on another vessel or its parts: they change it. Reading stays allowed.</summary>
         public static readonly HashSet<string> OtherVesselMutators = Set(

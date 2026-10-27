@@ -110,7 +110,7 @@ namespace ClaudiaKermin.Core.Tests
         public void It_is_offered_on_Mission_turns_but_not_the_Craft_Check()
         {
             var tools = PlanningTools.Default(_check);
-            Assert.Equal(new[] { "stage_performance", "check_script" }, tools.Definitions(ToolOffer.Mission).Select(t => t.Name).ToArray());
+            Assert.Equal(new[] { "predict_burn", "stage_performance", "check_script" }, tools.Definitions(ToolOffer.Mission).Select(t => t.Name).ToArray());
             Assert.Equal(new[] { "stage_performance" }, tools.Definitions(ToolOffer.CraftCheck).Select(t => t.Name).ToArray());
         }
 
