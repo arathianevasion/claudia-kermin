@@ -29,7 +29,7 @@
 //| planned: remove it first", "no next patch" (patch "next" with no sphere-of-influence change ahead),
 //| "the orbit escapes" or "the apoapsis comes after the sphere-of-influence change" (patch "current"),
 //| "the periapsis is inside the atmosphere or the surface and comes in <s> s, too soon to plan and fly a
-//| burn before it" (patch "current", under 3 minutes to it), "no prograde burn at the burn point reaches
+//| burn before it" (patch "current", under 5 minutes to it), "no prograde burn at the burn point reaches
 //| a periapsis of <m> m from the centre",
 //| "value is above the apoapsis", "the sphere-of-influence change is too close", "needs <dv> m/s, over
 //| max_dv <max>", "found no burn that reaches <value> m", the reasons exec_node gives (no thrust, out of
@@ -92,7 +92,7 @@ function tune_pe_burn_point {
   // The craft reaches an unsafe periapsis before that burn: burn before it, as soon as a burn can be led.
   // Past the apoapsis a burn is cheapest the further it is from the periapsis, so the earliest is cheapest.
   if pe_unsafe and eta_pe < point:in {
-    if eta_pe < 180 {
+    if eta_pe < 300 {
       set point:error to "the periapsis is inside the atmosphere or the surface and comes in " + round(eta_pe) + " s, too soon to plan and fly a burn before it".
       return point.
     }
@@ -206,13 +206,11 @@ function tune_pe {
   }
   local eta_ap is 0.
   local period is 0.
-  if o:eccentricity < 1 {
-    set eta_ap to eta:apoapsis.
-    set period to o:period.
-  }
   local eta_pe is 0.
   local pe_unsafe is false.
   if o:eccentricity < 1 {
+    set eta_ap to eta:apoapsis.
+    set period to o:period.
     set eta_pe to eta:periapsis.
     local safe_pe is 0.
     if ship:body:atm:exists {

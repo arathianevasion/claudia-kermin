@@ -117,8 +117,8 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [Fact]
         public void An_unsafe_periapsis_too_soon_to_burn_before_fails_with_the_reason()
         {
-            Assert.Equal("the periapsis is inside the atmosphere or the surface and comes in 150 s, too soon to plan and fly a burn before it",
-                One("tune_pe_burn_point(\"current\", 0.9, 9000, 150, 20000, true, false, 0):error"));
+            Assert.Equal("the periapsis is inside the atmosphere or the surface and comes in 250 s, too soon to plan and fly a burn before it",
+                One("tune_pe_burn_point(\"current\", 0.9, 9000, 250, 20000, true, false, 0):error"));
         }
 
         [Fact]
