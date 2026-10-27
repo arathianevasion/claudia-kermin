@@ -698,9 +698,9 @@ function land {
   sas off.
 
   // Deorbit: retrograde, half an orbit before the site.
-  local deorbit is node(plan:burn_ut, 0, 0, deorbit_dv).
-  add deorbit.
-  local flown is claudia_fly_node(ctx, deorbit).
+  local descent_node is node(plan:burn_ut, 0, 0, deorbit_dv).
+  add descent_node.
+  local flown is claudia_fly_node(ctx, descent_node).
   if flown <> "" {
     claudia_make_safe().
     return claudia_finish(ctx, false, flown, extra).

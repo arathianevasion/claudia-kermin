@@ -40,6 +40,39 @@ namespace ClaudiaKermin.Core.Tests
             return bad;
         }
 
+        /// <summary>
+        /// Every function declared in <paramref name="source"/>, lowercased. A local, parameter or <c>set</c> target of the
+        /// same name in another file hides the function in the bundle (kOS resolves the name to the function delegate).
+        /// </summary>
+        public static IEnumerable<string> FunctionNames(string source)
+        {
+            foreach (var line in source.Replace("\r\n", "\n").Split('\n'))
+                foreach (Match m in Regex.Matches(StripCommentAndStrings(line), @"\bfunction\s+([A-Za-z_]\w*)", RegexOptions.IgnoreCase))
+                    yield return m.Groups[1].Value.ToLowerInvariant();
+        }
+
+        /// <summary>Every variable (not function) a line declares or sets that is in <paramref name="functions"/>, as "where line N: text".</summary>
+        public static List<string> ClashesWithFunctions(string where, string source, ISet<string> functions)
+        {
+            var bad = new List<string>();
+            var lines = source.Replace("\r\n", "\n").Split('\n');
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var code = StripCommentAndStrings(lines[i]);
+                var declaredFunctions = new HashSet<string>(
+                    Regex.Matches(code, @"\bfunction\s+([A-Za-z_]\w*)", RegexOptions.IgnoreCase).Cast<Match>().Select(m => m.Groups[1].Value.ToLowerInvariant()));
+                var names = DeclaredNames(code).Concat(
+                    Regex.Matches(code, @"(?:^|[.{}]|\s)(?:set|lock)\s+([A-Za-z_]\w*)\s+to\b", RegexOptions.IgnoreCase).Cast<Match>().Select(m => m.Groups[1].Value));
+                foreach (var name in names)
+                {
+                    var lower = name.ToLowerInvariant();
+                    if (functions.Contains(lower) && !declaredFunctions.Contains(lower))
+                        bad.Add(where + " line " + (i + 1) + ": '" + name + "' hides the Core Library function of that name: " + lines[i].Trim());
+                }
+            }
+            return bad;
+        }
+
         /// <summary>Clashes in the backtick-quoted examples of the docs.</summary>
         public static List<string> ClashesInExamples(string docs)
         {
