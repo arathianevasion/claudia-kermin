@@ -156,6 +156,7 @@ namespace ClaudiaKermin.Adapter
             // Building Block progress, for the strip and the log, with no Claude call behind it.
             ScriptRunner.BlockReported = (runId, block, result) =>
                 Send(result == null ? (MissionInput)new KosBlockStarted(block, runId) : new KosBlockEnded(block, result, runId));
+            ScriptRunner.RcsSwitched = (runId, values, ut) => Send(new KosRcsSwitched(values, ut, runId));
         }
 
         public void Send(MissionInput input)

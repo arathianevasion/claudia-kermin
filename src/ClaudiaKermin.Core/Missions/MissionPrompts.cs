@@ -458,6 +458,18 @@ namespace ClaudiaKermin.Core.Missions
                 + Rounded(startAmount.Value) + " at start, " + Rounded(nowAmount.Value) + " now).";
         }
 
+        /// <summary>The Debrief's line on how often RCS switched on in the run (RCS Use), where, and for how long.</summary>
+        public static string RcsUseLine(RcsUseTally tally)
+        {
+            if (tally == null || tally.TimesOn == 0) return "RCS Use this run: none.";
+            var times = tally.TimesOn.ToString(CultureInfo.InvariantCulture);
+            var most = tally.MostBlock.Length > 0
+                ? "; most in " + Quoted(tally.MostBlock) + " (" + tally.MostBlockTimes.ToString(CultureInfo.InvariantCulture) + ")"
+                : "";
+            return "RCS Use this run: switched on " + times + (tally.TimesOn == 1 ? " time, " : " times, ")
+                + Rounded(tally.SecondsOn) + " s in all" + most + ".";
+        }
+
         private static string Rounded(double value)
         {
             return value.ToString("#,0", CultureInfo.InvariantCulture);

@@ -8,6 +8,7 @@ using System.Linq;
 using ClaudiaKermin.Adapter;
 using ClaudiaKermin.Core;
 using ClaudiaKermin.Core.Kos;
+using ClaudiaKermin.Core.Missions;
 using kOS.Module;
 using kOS.Safe.Compilation;
 using kOS.Safe.Execution;
@@ -179,6 +180,28 @@ namespace ClaudiaKermin.KOS
             var ut = WarpTracing.Ut;
             Debug.Log(ModInfo.LogTag + " " + BlockTrace.Line(block, ut, state) + " ('" + run.Label + "')");
             run.Run.BlockTraced(block, ut, state);
+        }
+
+        /// <summary>
+        /// From <c>ADDONS:CLAUDIA:RCSSWITCH</c> (RCS Use): the line goes to KSP.log for every mod-started run, and a Mission's run
+        /// (a core run id) reports it through <see cref="ScriptRunner.RcsSwitched"/> for the mission log and the tally.
+        /// </summary>
+        public void OnRcsSwitch(uint partId, IDictionary<string, object> values)
+        {
+            ActiveRun run;
+            if (!_runs.TryGetValue(partId, out run) || run.Run.HasEnded) return;
+            string problem;
+            var change = RcsSwitch.Parse(values, out problem);
+            if (change == null) { Debug.Log(ModInfo.LogTag + " RCSSWITCH ignored: " + problem + " ('" + run.Label + "')"); return; }
+            var ut = WarpTracing.Ut;
+            Debug.Log(ModInfo.LogTag + " " + change.Line() + " at UT " + ut.ToString("0.0", CultureInfo.InvariantCulture) + " ('" + run.Label + "')");
+            if (run.RunId <= 0) return;
+            var runId = run.RunId;
+            _events.Enqueue(() =>
+            {
+                var switched = ScriptRunner.RcsSwitched;
+                if (switched != null) switched(runId, values, ut);
+            });
         }
 
         /// <summary>From <c>ADDONS:CLAUDIA:WAITSTART</c> (the UT the wait's warp must be over by) and <c>WAITEND</c> (null).</summary>

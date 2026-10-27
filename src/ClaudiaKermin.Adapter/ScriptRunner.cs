@@ -46,5 +46,11 @@ namespace ClaudiaKermin.Adapter
         /// driver sets it.
         /// </summary>
         public static Action<int, string, IDictionary<string, object>> BlockReported;
+
+        /// <summary>
+        /// A block in a Mission's run switched RCS (<c>ADDONS:CLAUDIA:RCSSWITCH</c>): the run id, the switch's lexicon and the UT.
+        /// Called on the main thread, in order with the run's other events; the Mission driver sets it.
+        /// </summary>
+        public static Action<int, IDictionary<string, object>, double> RcsSwitched;
     }
 }

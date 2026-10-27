@@ -42,6 +42,8 @@ namespace ClaudiaKermin.Core.Missions
         {
             /// <summary>What the mod noticed during the current run (RunEvents.cs); cleared when the next run starts.</summary>
             public readonly RunEventLog RunEvents = new RunEventLog();
+            /// <summary>The current run's RCS switches (RCS Use); cleared when the next run starts.</summary>
+            public readonly RcsUseTally RcsUse = new RcsUseTally();
             /// <summary>The kOS terminal text of the last run that did not report, for the Debrief card; "" otherwise.</summary>
             public string ScriptError = "";
             /// <summary>The Debrief in hand: the recheck result and the rest, for its card.</summary>
@@ -55,6 +57,7 @@ namespace ClaudiaKermin.Core.Missions
         private void RunStarting(Mission mission)
         {
             mission.RunEvents.Clear();
+            mission.RcsUse.Clear();
             mission.ScriptError = "";
         }
 
@@ -131,6 +134,7 @@ namespace ClaudiaKermin.Core.Missions
             // A hand-back Debrief is of a manual stretch, with no scripted run to total.
             if (!mission.HandBack) text += "\n" + MissionPrompts.RunDeltaVLine(mission.RunStartDeltaVLeft, MissionVesselSnapshot(mission));
             if (!mission.HandBack) text += RunMonopropellantFact(mission);
+            if (!mission.HandBack) text += "\n" + MissionPrompts.RcsUseLine(mission.RcsUse);
             return text + "\nManeuver Sequences still to fly in the Mission Plan (quoted): " + MissionPrompts.Quoted(rest) + ".";
         }
 

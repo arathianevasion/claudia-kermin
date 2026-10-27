@@ -339,6 +339,18 @@ namespace ClaudiaKermin.Core.Missions
             mission.CurrentBlock = started.Block ?? "";
         }
 
+        /// <summary>A block switched RCS: one log row with its reason and figures, and the run's tally (the Debrief reads it).</summary>
+        private void RcsSwitched(KosRcsSwitched switched)
+        {
+            var mission = _mission;
+            if (mission == null || !IsRunning(mission) || mission.RunId != switched.RunId) return;
+            string problem;
+            var change = RcsSwitch.Parse(switched.Switch, out problem);
+            if (change == null) { Note(LogKind.Notice, "RCS switch not logged: " + problem + "."); return; }
+            mission.RcsUse.Switched(switched.Ut > 0 ? switched.Ut : _ut, mission.CurrentBlock, change.On);
+            Note(LogKind.Notice, change.Line());
+        }
+
         /// <summary>A Building Block's result: one log row, with no Claude call.</summary>
         private void BlockEnded(KosBlockEnded ended)
         {
