@@ -1007,7 +1007,7 @@ namespace ClaudiaKermin.Core.Missions
                 turn.Messages = new List<Message>();
                 if (turn.Effort != mission.Effort) turn.Messages.Add(Message.SystemEffort(turn.Effort));
                 turn.Messages.Add(Message.UserText(turn.UserText));
-                var notice = turn.Notice + BlackoutNotice(mission);
+                var notice = turn.Notice + BlackoutNotice(mission) + (mission.AutoMode ? "\n\n" + MissionPrompts.AutoModeNotice : "");
                 if (turn.CutOffRetry) notice += "\n\n" + MissionPrompts.CutOffNote;
                 if (turn.SecondLookReason.Length > 0) notice += "\n\n" + SecondLook.Note(turn.SecondLookReason);
                 turn.Messages.Add(Message.SystemText(notice));

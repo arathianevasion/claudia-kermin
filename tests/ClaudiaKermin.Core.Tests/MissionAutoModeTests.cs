@@ -249,6 +249,43 @@ namespace ClaudiaKermin.Core.Tests
             }
         }
 
+        // ---- Telling Claudia ----
+
+        [Fact]
+        public void TheAutoModeNoticeIsInTheRequestWhileOnAndAbsentWhenOffAndFlippingItLeavesTheSystemLayersAlone()
+        {
+            var transport = new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse"), ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport, AutoModeOn());
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval && !v.Busy);
+            var withNotice = transport.Requests.Last().Body;
+            Assert.Contains(MissionPrompts.AutoModeNotice, ThisTurnsNotice(withNotice));
+
+            mission.Send(new SetAutoMode(false));
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval || v.Stage == MissionStage.Running);
+            var without = transport.Requests.Last().Body;
+            Assert.DoesNotContain("Auto Mode is on", ThisTurnsNotice(without));
+            Assert.Equal(SystemLayers(withNotice), SystemLayers(without));
+            Assert.DoesNotContain("Auto Mode is on", SystemLayers(without));
+        }
+
+        /// <summary>The turn's notice is the last message of its request; earlier turns' notices stay in the history unchanged.</summary>
+        private static string ThisTurnsNotice(string body)
+        {
+            using (var doc = JsonDocument.Parse(body))
+            {
+                var last = doc.RootElement.GetProperty("messages").EnumerateArray().Last().GetProperty("content");
+                return last.ValueKind == JsonValueKind.String ? last.GetString() : string.Concat(last.EnumerateArray().Select(b => b.GetProperty("text").GetString()));
+            }
+        }
+
+        private static string SystemLayers(string body)
+        {
+            using (var doc = JsonDocument.Parse(body))
+                return doc.RootElement.GetProperty("system").GetRawText();
+        }
+
         // ---- Helpers ----
 
         private static PlayerConfig AutoModeOn()
