@@ -87,7 +87,7 @@ namespace ClaudiaKermin.Core.Tools
             };
             query.EdgeMarginM = JsonNode.Double(input["edge_margin_m"]) ?? LandingSiteSearch.DefaultEdgeMarginM;
             if (query.MaxSlopeDeg <= 0 || query.WithinHours <= 0) return PlanningJson.Error("max_slope_deg and within_hours must be more than 0");
-            if (query.EdgeMarginM < 0) return PlanningJson.Error("edge_margin_m must be 0 or more");
+            if (!(query.EdgeMarginM >= 0 && query.EdgeMarginM <= 50000)) return PlanningJson.Error("edge_margin_m must be from 0 to 50000");
             var near = input["near"];
             if (near != null)
             {
@@ -122,7 +122,7 @@ namespace ClaudiaKermin.Core.Tools
             json.Field("window_hours", PlanningJson.Round(found.WindowHours, 2));
             if (found.Sites.Count > 0 && found.Sites[0].AtEdge)
                 json.Field("note", "no site more than " + query.EdgeMarginM.ToString("0.##", CultureInfo.InvariantCulture) + " m inside the " + found.Sites[0].Biome
-                    + " biome was reachable in " + found.WindowHours.ToString("0.##", CultureInfo.InvariantCulture) + " h; these are within that of its edge, so a landing may come down outside it");
+                    + " biome was reachable in " + found.WindowHours.ToString("0.##", CultureInfo.InvariantCulture) + " h; the sites returned are closer than that to the edge, so a landing may come down outside the biome");
             if (found.Sites.Count == 0)
                 json.Field("note", "no site met the limits; of " + LandingSiteSearch.Count(found.Candidates) + " ground-track points, "
                     + LandingSiteSearch.Count(found.AfterBiome) + " were in the biome, " + LandingSiteSearch.Count(found.AfterDaylight)
