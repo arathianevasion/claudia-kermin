@@ -1105,6 +1105,8 @@ function claudia_warp_to_burn {
       set out:error to waited.
       return out.
     }
+    // start_in was from before the far warp; the turn's deadline (turn_by) needs it from now.
+    set timing to claudia_burn_timing(nd:deltav:mag, claudia_burn_stages(ctx:opt:stage_limit), nd:eta, lead_opt).
   }
   // Points at the burn as it is now (raw-frame vectors drift during warp).
   lock steering to nd:deltav.

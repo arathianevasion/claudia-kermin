@@ -659,9 +659,9 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [InlineData(0, 400, 1000, 20, "401")]
         [InlineData(0, 400, 1000, 75, "401")]
         [InlineData(0, 925, 1000, 75, "1000")]
-        public void A_warp_to_a_burn_goes_one_SOI_at_a_time(double now, double patch, double start, double turn, string expected)
+        public void A_warp_to_a_burn_goes_one_SOI_at_a_time(double now, double patch, double start, double lead, string expected)
         {
-            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_soi_leg_ut({0}, {1}, {2}, {3})", now, patch, start, turn)));
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_soi_leg_ut({0}, {1}, {2}, {3})", now, patch, start, lead)));
         }
 
         [Theory]
