@@ -126,6 +126,105 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("the periapsis (30000 m) is already inside Kerbin's atmosphere: fly reentry", Find(KscLat, KscLng, ReentrySim.AfterBurn()).Error);
         }
 
+        // ---- the block-internal calls: ADDONS:CLAUDIA:DEORBITBURN and REENTRYIMPACT ----
+
+        /// <summary>A sphere whose surface frame is the orbit frame at the call (x under longitude 0, z north).</summary>
+        private sealed class Sphere : PlanningBodyBase
+        {
+            public override double TerrainAltitude(string body, double latitude, double longitude) { return 0; }
+            public override string Biome(string body, double latitude, double longitude) { return ""; }
+            public override double SunElevation(string body, double latitude, double longitude, double ut) { return 0; }
+
+            public override bool SurfaceUnder(string body, double x, double y, double z, out double latitude, out double longitude)
+            {
+                var r = Math.Sqrt(x * x + y * y + z * z);
+                latitude = Math.Asin(z / r) * 180 / Math.PI;
+                longitude = Math.Atan2(y, x) * 180 / Math.PI;
+                return true;
+            }
+        }
+
+        /// <summary>The 80 km circular equatorial orbit as a Game Snapshot at UT 0, round Kerbin (or the airless Mun).</summary>
+        private static Missions.GameSnapshot Snapshot(string body = "Kerbin", double pe = 80000)
+        {
+            var kerbin = ReentrySim.Kerbin();
+            var radius = body == "Kerbin" ? ReentrySim.R : 200000;
+            var snapshot = new Missions.GameSnapshot { Ut = 0, Situation = "ORBITING", Body = body };
+            var sma = (2 * radius + 80000 + pe) / 2;
+            snapshot.Orbit = new Missions.SnapshotOrbit
+            {
+                SemiMajorAxis = sma, Eccentricity = (radius + 80000 - (radius + pe)) / (2 * sma), Inclination = 0, Lan = 0, ArgumentOfPeriapsis = 180,
+                MeanAnomalyAtEpoch = Math.PI, Epoch = 0, Body = body, Periapsis = pe, Apoapsis = 80000,
+            };
+            snapshot.Bodies.Add(new Missions.SnapshotBody { Name = "Sun", Gm = 1.1723328e18, Radius = 261600000, RotationPeriod = 432000 });
+            snapshot.Bodies.Add(kerbin);
+            snapshot.Bodies.Add(new Missions.SnapshotBody { Name = "Mun", Parent = "Kerbin", Gm = 6.5138398e10, Radius = 200000, SoiRadius = 2429559.1, RotationPeriod = 138984.38, Sma = 12000000 });
+            return snapshot;
+        }
+
+        private static System.Collections.Generic.Dictionary<string, object> Ask(params object[] pairs)
+        {
+            var ask = new System.Collections.Generic.Dictionary<string, object>();
+            for (var i = 0; i < pairs.Length; i += 2) ask[(string)pairs[i]] = pairs[i + 1];
+            return ask;
+        }
+
+        [Fact]
+        public void The_block_call_gives_the_burn_as_node_components_and_its_landing()
+        {
+            var found = BlockCalls.DeorbitBurn(Ask("lat", KscLat, "lng", KscLng, "earliest_ut", 120.0, "max_wait", 21549.425, "ground_alt", 0.0, "accuracy_km", 10.0),
+                Snapshot(), new Sphere(), new ReentrySim.Atmosphere(), new ReentrySim.Capsule());
+            Assert.Equal("", found["error"]);
+            Assert.True((double)found["prograde"] < 0);
+            Assert.Equal(0.0, found["radial"]);
+            Assert.InRange((double)found["burn_ut"], 120, 120 + 21549.425);
+            Assert.InRange((double)found["error_km"], 0, 0.5);
+            Assert.InRange((double)found["lat"], KscLat - 0.01, KscLat + 0.01);
+            Assert.InRange((double)found["lng"], KscLng - 0.01, KscLng + 0.01);
+            Assert.True((double)found["landing_ut"] > (double)found["burn_ut"]);
+            Assert.InRange((double)found["dv"], 30, 150);
+            // Every value is a double or a string, as KosValues turns into kOS values.
+            foreach (var value in found.Values) Assert.True(value is double || value is string, value.GetType().Name);
+        }
+
+        [Fact]
+        public void The_block_call_over_accuracy_gives_the_reason_and_the_best_landing()
+        {
+            var found = BlockCalls.DeorbitBurn(Ask("lat", 20.0, "lng", KscLng, "earliest_ut", 120.0), Snapshot(), new Sphere(), new ReentrySim.Atmosphere(), new ReentrySim.Capsule());
+            Assert.Contains("over accuracy_km 10", (string)found["error"]);
+            Assert.True((double)found["error_km"] > 100);
+            Assert.True(found.ContainsKey("lat"));
+        }
+
+        [Fact]
+        public void The_block_calls_on_an_airless_body_say_body_has_no_atmosphere()
+        {
+            var deorbit = BlockCalls.DeorbitBurn(Ask("lat", 0.0, "lng", 0.0), Snapshot("Mun"), new Sphere(), new ReentrySim.Atmosphere(), new ReentrySim.Capsule());
+            Assert.Equal("body has no atmosphere", deorbit["error"]);
+            Assert.Single(deorbit);
+            var impact = BlockCalls.ReentryImpact(Ask(), Snapshot("Mun"), new Sphere(), new ReentrySim.Atmosphere(), new ReentrySim.Capsule());
+            Assert.Equal("body has no atmosphere", impact["error"]);
+        }
+
+        [Fact]
+        public void The_impact_call_predicts_the_orbit_as_it_is_and_the_distance_to_a_target()
+        {
+            // The research's burn, already flown: 80 km by 30 km, from the apoapsis on the x axis.
+            var flown = BlockCalls.ReentryImpact(Ask("lat", 0.0, "lng", 0.0, "ground_alt", 0.0), Snapshot(pe: 30000), new Sphere(), new ReentrySim.Atmosphere(), new ReentrySim.Capsule());
+            Assert.Equal("", flown["error"]);
+            Assert.InRange(ReentrySim.Km((double)flown["lng"]), 1095, 1099);
+            Assert.InRange((double)flown["error_km"], 1090, 1100);
+            var noTarget = BlockCalls.ReentryImpact(Ask(), Snapshot(pe: 30000), new Sphere(), new ReentrySim.Atmosphere(), new ReentrySim.Capsule());
+            Assert.Equal(-1.0, noTarget["error_km"]);
+        }
+
+        [Fact]
+        public void The_impact_call_on_an_orbit_above_the_air_says_so()
+        {
+            var high = BlockCalls.ReentryImpact(Ask(), Snapshot(), new Sphere(), new ReentrySim.Atmosphere(), new ReentrySim.Capsule());
+            Assert.Equal("the orbit never reaches Kerbin's atmosphere (periapsis 80000 m)", high["error"]);
+        }
+
         [Fact]
         public void The_engines_isp_lightens_the_craft_after_the_burn_and_the_search_allows_for_it()
         {
