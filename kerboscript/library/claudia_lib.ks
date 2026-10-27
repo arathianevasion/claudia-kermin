@@ -50,8 +50,8 @@
 //| block's extra results. An abort leaves the craft safe (throttle 0, SAS holding attitude) and
 //| sets reason "abort <option>: <detail>". Waits use on-rails warp, or physics warp on a Coast (up to 4x, less in
 //| thick air), back at 1x at least 30 s before a burn, and have no cap: a block waits for its window or daylight however long, coast holds
-//| until a UT. Warp drops to 1x while the Mission needs the player. Waits re-ask if KSP cuts warp, not once
-//| the player cancels it (ADDONS:CLAUDIA:WARPCANCELLED, until the next wait). Own wait: claudia_warp_to(ctx, ut, lead[, stop, cap]); never warp yourself. Report the Script Result yourself, once, at the end, e.g.
+//| until a UT, and 10 s before parachutes or a heat-shield drop. Before a burn they plan the node, turn to it, and then warp, one SOI at a time. Warp drops to 1x while the Mission needs the player. Waits re-ask if KSP cuts warp, not once
+//| the player cancels it (ADDONS:CLAUDIA:WARPCANCELLED, until the next wait). To hold until a UT or an event on a Coast in your own script, use claudia_warp_to(ctx, ut, lead[, stop, cap]); fly every burn through exec_node. Never set WARP or WARPMODE yourself. Report the Script Result yourself, once, at the end, e.g.
 //| `addons:claudia:report(res).`, or a lexicon of your own with at least success and reason.
 
 // ---- Options ----

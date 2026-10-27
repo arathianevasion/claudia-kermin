@@ -200,7 +200,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             return "Timing. Wait for a time-based event (a transfer window, daylight at the landing site, a surface alignment, "
                 + "a phase angle, a hold of a few orbits) inside the Mission Script, however long: the Building Blocks warp on rails "
-                + "to the time and drop to 1x at least 30 s before any burn, and coast(lexicon(\"until\", ut)) holds a script until "
+                + "(physics warp on a Coast where rails can't) to the time and drop to 1x at least 30 s before any burn, and coast(lexicon(\"until\", ut)) holds a script until "
                 + "a UT the same way. The player's Approval of the sequence approves its wait. Count every wait in "
                 + "expected_duration_s, since the mod stops a script still running at 300% of it. A Due Time is only for a wait "
                 + "between sequences that needs the player, e.g. \"come back when you've docked\" or an EVA they must make; it is "

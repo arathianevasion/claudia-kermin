@@ -154,6 +154,17 @@ namespace ClaudiaKermin.Core.Tests
                 Assert.Contains(text, CoreLibrary.FullDocs(new[] { "coast" }));
         }
 
+        // #349: Claudia's warp guidance in the shared docs.
+        [Fact]
+        public void TheSharedDocsTellClaudiaToWaitThroughCoastsWithTheWarpHelpersAndNeverSetWarpHerself()
+        {
+            var shared = CoreLibrary.Summaries();
+            Assert.Contains("Before a burn they plan the node, turn to it, and then warp, one SOI at a time.", shared);
+            Assert.Contains("10 s before parachutes or a heat-shield drop", shared);
+            Assert.Contains("use claudia_warp_to(ctx, ut, lead[, stop, cap]); fly every burn through exec_node.", shared);
+            Assert.Contains("Never set WARP or WARPMODE yourself.", shared);
+        }
+
         [Fact]
         public void TheSharedHelpersComeFirstAndEveryBlockHasDocsLedByItsSummary()
         {
