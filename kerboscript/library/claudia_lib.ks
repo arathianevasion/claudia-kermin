@@ -1001,13 +1001,37 @@ function claudia_late_start {
   return round(now - start_ut, 1).
 }
 
+// The lead (s at 1x before the Burn Start) of a warp to a burn (#405): 30 s when the turn before it
+// ended Aligned, so the craft only settles at 1x; else max(30 s, turn_time), TURNTIME's, so a craft
+// whose turn timed out keeps turning at 1x before the burn. Pure.
+function claudia_burn_warp_lead {
+  parameter aligned, turn_time.
+  if aligned {
+    return 30.
+  }
+  return max(30, turn_time).
+}
+
+// Where a warp to a burn first goes when its Burn Start (start_ut) is over a day away (#405): the UT a
+// day before it, warped to without turning; -1 when it's within a day. hours_per_day: the save's
+// day (KUNIVERSE:HOURSPERDAY, 6 on Kerbin time, 24 on Earth time). Pure.
+function claudia_day_out_ut {
+  parameter now, start_ut, hours_per_day.
+  local day is hours_per_day * 3600.
+  if start_ut - now > day {
+    return start_ut - day.
+  }
+  return -1.
+}
+
 // The UT the next leg of a warp to a burn runs to (spec #314: one SOI at a time). patch_ut: when the
-// orbit next changes SOI (-1 for none); start_ut: the burn start. If the change comes well before the
-// burn (1 s past it is before the warp end, claudia_warp_end) and over 30 s away, the leg ends 1 s past
-// the change, so the craft turns in the new SOI before warping on; else it ends at start_ut. Pure.
+// orbit next changes SOI (-1 for none); start_ut: the Burn Start; lead: the warp's
+// (claudia_burn_warp_lead). If the change comes well before the burn (1 s past it is before the warp
+// end, claudia_warp_end) and over 30 s away, the leg ends 1 s past the change, so the craft turns in
+// the new SOI before warping on; else it ends at start_ut. Pure.
 function claudia_soi_leg_ut {
-  parameter now, patch_ut, start_ut, turn_time.
-  if patch_ut > now + 30 and patch_ut + 1 < claudia_warp_end(start_ut, turn_time) {
+  parameter now, patch_ut, start_ut, lead.
+  if patch_ut > now + 30 and patch_ut + 1 < claudia_warp_end(start_ut, lead) {
     return patch_ut + 1.
   }
   return start_ut.
@@ -1024,9 +1048,10 @@ function claudia_aligned_to {
 }
 
 // Turns to nd's burn vector (steering must be locked to it) until aligned, for at most 120 s and
-// never past start_ut. Returns lexicon error ("" or an abort reason), timed_out (120 s passed
-// unaligned: it prints "not aligned" and goes on), seconds (taken). At the start the burn itself
-// waits for the craft to point within 10 degrees, so running into it isn't a time-out.
+// never past start_ut. Returns lexicon error ("" or an abort reason), aligned (it ended Aligned,
+// claudia_aligned_to), timed_out (120 s passed unaligned: it prints "not aligned" and goes on), seconds
+// (taken). At the start the burn itself waits for the craft to point within 10 degrees, so running
+// into it isn't a time-out.
 function claudia_turn_to_burn {
   parameter ctx, nd, start_ut.
   local began is time:seconds.
@@ -1034,29 +1059,35 @@ function claudia_turn_to_burn {
   // RCS Use: the turn has until start_ut, so RCS helps only if the wheels alone can't make it by then.
   set ctx:turn_by to start_ut.
   set ctx:burn_within_ut to -1.
-  until claudia_aligned_to(ctx, nd) or time:seconds >= min(began + 120, start_ut) {
+  local aligned is claudia_aligned_to(ctx, nd).
+  until aligned or time:seconds >= min(began + 120, start_ut) {
     set reason to claudia_tick(ctx, 0).
     if reason <> "" {
       break.
     }
     wait 0.
+    set aligned to claudia_aligned_to(ctx, nd).
   }
   set ctx:turn_by to 0.
-  local timed_out is reason = "" and time:seconds >= began + 120 and not claudia_aligned_to(ctx, nd).
+  local timed_out is reason = "" and time:seconds >= began + 120 and not aligned.
   if timed_out {
     print ctx:block + ": not aligned after 120 s, " + round(vang(ship:facing:forevector, nd:deltav), 1) + " deg off".
   }
-  return lexicon("error", reason, "timed_out", timed_out, "seconds", round(time:seconds - began, 1)).
+  return lexicon("error", reason, "aligned", aligned, "timed_out", timed_out, "seconds", round(time:seconds - began, 1)).
 }
 
-// Before a burn (spec #314): works out the burn from every stage it will use (to stage_limit), turns
-// to nd, works it out again, then warps, back at 1x max(30 s, turn_time) before the burn start and
-// never past it. turn_time: TURNTIME's for the craft; lead_opt as for claudia_burn_timing. A turn
-// that isn't aligned after 120 s goes on anyway and counts in not_aligned (a start that comes first
-// isn't counted: the burn waits to point within 10 degrees). While warp is asked for, a drop to 1x
-// with the craft off the burn ends the warp, and it turns again before warping on; the planned drop
-// leaves max(30 s, turn_time) at 1x, steering, before the start. Leaves steering locked to nd. Returns lexicon error ("", "no thrust" or an
-// abort reason), start_ut, burn_time (s), turn_s (s the first turn took), not_aligned.
+// Before a burn (spec #314, #405): works out the burn from every stage it will use (to stage_limit),
+// turns to nd, works it out again, then warps, back at 1x before the Burn Start and never past it:
+// 30 s before it when the turn ended Aligned, else max(30 s, turn_time) (claudia_burn_warp_lead).
+// turn_time: TURNTIME's for the craft; lead_opt as for claudia_burn_timing. A Burn Start over a day
+// (the save's, KUNIVERSE:HOURSPERDAY) away is first warped to a day before it, through any SOI changes,
+// with steering not locked to nd and no turn (a KSP cut there only means warp is asked for again);
+// the turn comes a day out. A turn that isn't aligned after 120 s goes on anyway and counts in
+// not_aligned (a start that comes first isn't counted: the burn waits to point within 10 degrees).
+// While warp is asked for, a drop to 1x with the craft off the burn ends the warp, and it turns again
+// before warping on; each SOI leg's lead follows its own re-turn. Leaves steering locked to nd.
+// Returns lexicon error ("", "no thrust" or an abort reason), start_ut, burn_time (s), turn_s (s the
+// first turn took), not_aligned.
 function claudia_warp_to_burn {
   parameter ctx, nd, lead_opt, turn_time.
   local out is lexicon("error", "", "start_ut", 0, "burn_time", -1, "turn_s", 0, "not_aligned", 0).
@@ -1064,6 +1095,16 @@ function claudia_warp_to_burn {
   if timing:burn_time < 0 {
     set out:error to "no thrust".
     return out.
+  }
+  local day_out is claudia_day_out_ut(time:seconds, time:seconds + timing:start_in, kuniverse:hoursperday).
+  if day_out > 0 {
+    // Far: no turn yet; steering left unlocked (RCS Use keeps RCS off) and no off-burn check.
+    unlock steering.
+    local waited is claudia_warp_to(ctx, day_out, 30).
+    if waited <> "" {
+      set out:error to waited.
+      return out.
+    }
   }
   // Points at the burn as it is now (raw-frame vectors drift during warp).
   lock steering to nd:deltav.
@@ -1086,15 +1127,16 @@ function claudia_warp_to_burn {
     if ship:orbit:hasnextpatch {
       set patch_ut to time:seconds + ship:orbit:nextpatcheta.
     }
-    local leg_ut is claudia_soi_leg_ut(time:seconds, patch_ut, start_ut, turn_time).
-    local warp_end is claudia_warp_end(leg_ut, turn_time).
+    local lead is claudia_burn_warp_lead(turned:aligned, turn_time).
+    local leg_ut is claudia_soi_leg_ut(time:seconds, patch_ut, start_ut, lead).
+    local warp_end is claudia_warp_end(leg_ut, lead).
     local check is recheck.
     // A drop KSP made (not a hold, not the player) while there's warp left to ask for, off the burn.
     local off_burn is {
       return check and kuniverse:timewarp:rate <= 1 and time:seconds < warp_end - 5
         and not addons:claudia:warphold and not addons:claudia:warpcancelled and not claudia_aligned_to(ctx, nd).
     }.
-    local waited is claudia_warp_to(ctx, leg_ut, max(30, turn_time), off_burn).
+    local waited is claudia_warp_to(ctx, leg_ut, lead, off_burn).
     if waited <> "" {
       set out:error to waited.
       return out.
