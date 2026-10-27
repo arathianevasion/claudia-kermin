@@ -89,6 +89,12 @@ namespace ClaudiaKermin.Core.Missions
             var tools = _tools;
             var body = _body;
             var snapshot = turn.ToolSnapshot;
+            if (snapshot != null)
+            {
+                var settings = MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config));
+                snapshot.DaylightLandingDefault = settings.DaylightLanding;
+                snapshot.TimeCapHours = settings.TimeCapHours;
+            }
             var purpose = turn.Purpose;
             var timeout = _toolCallTimeout;
             _background.Run(

@@ -110,7 +110,7 @@ namespace ClaudiaKermin.Core.Tests
         public void The_shipped_tools_are_predict_burn_on_mission_turns_and_stage_performance_on_every_request_kind()
         {
             var tools = PlanningTools.Default();
-            Assert.Equal(new[] { "predict_burn", "stage_performance" }, tools.Definitions(ToolOffer.Mission).Select(t => t.Name).ToArray());
+            Assert.Equal(new[] { "predict_burn", "stage_performance", "find_landing_site" }, tools.Definitions(ToolOffer.Mission).Select(t => t.Name).ToArray());
             Assert.Equal(new[] { "stage_performance" }, tools.Definitions(ToolOffer.CraftCheck).Select(t => t.Name).ToArray());
         }
 
