@@ -9,9 +9,10 @@
 // a correction burn on the way down swings the orbit plane over the site; then, from the stopping
 // distance (times burn_margin), a powered descent checks the slope at the site (diverting to
 // flatter ground through ADDONS:CLAUDIA:FLATSPOT), then brakes once along the way it was moving
-// (land_guide: never turning back unless it stopped over max_overshoot past the site) while gliding
-// down above the local terrain, comes straight down once stopped and touches down at
-// touchdown_speed. No Trajectories: an airless body's fall is plain orbit maths.
+// (land_guide: never turning back unless it stopped over max_overshoot past the site, never faster
+// than when braking began) while gliding down above the highest terrain ahead (land_clearance),
+// comes straight down once stopped and touches down at touchdown_speed. It traces its descent to the
+// log (ADDONS:CLAUDIA:BLOCKTRACE) as it goes. No Trajectories: an airless body's fall is plain orbit maths.
 
 @lazyglobal off.
 
@@ -879,8 +880,8 @@ function land_coast {
 }
 
 // The powered descent onto aim, to touchdown and a settled craft. Sets best_effort, reversals,
-// touchdown_speed_actual and touchdown_h_speed in extra (and lean, if settling fails). Returns "" or
-// why it failed.
+// touchdown_speed_actual and touchdown_h_speed in extra (and lean, if settling fails), and traces each
+// phase and every 2 s to the log (#365). Returns "" or why it failed.
 function land_descend {
   parameter ctx, aim, extra.
   local opt is ctx:opt.

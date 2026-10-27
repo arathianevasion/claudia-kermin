@@ -643,6 +643,18 @@ function tsim {
         }
 
         [Fact]
+        public void The_descent_traces_a_line_every_2_s_and_at_each_phase_change()
+        {
+            Assert.Equal("fall", One("land_phase(false, 575, -1)"));
+            Assert.Equal("braking", One("land_phase(true, 200, 450)"));
+            Assert.Equal("approach", One("land_phase(true, 20, 100)"));
+            Assert.Equal("terminal", One("land_phase(true, 0.5, 0)"));
+            Assert.Equal("False", One("land_trace_due(\"braking\", \"braking\", 101.9, 100)"));
+            Assert.Equal("True", One("land_trace_due(\"braking\", \"braking\", 102, 100)"));
+            Assert.Equal("True", One("land_trace_due(\"approach\", \"braking\", 100.1, 100)"));
+        }
+
+        [Fact]
         public void Braking_far_out_holds_its_speed_rather_than_speeding_up_to_the_stopping_curve()
         {
             // 60 km out the curve allows about 1070 m/s; at 575 it would push ahead, held to 575 it doesn't.
