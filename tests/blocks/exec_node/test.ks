@@ -11,5 +11,7 @@
 wait until ship:unpacked.
 add node(time:seconds + 600, 0, 0, 120).
 local result is exec_node(lexicon("stage_limit", 2)).
-print "exec_node test: success " + result:success + ", residual " + result:residual + " m/s, " + result:reason.
+// The turn flown against TURNTIME's prediction (spec #314: the actual must not exceed it).
+set result["test_turn_within"] to result:turn_s <= result:turn_time.
+print "exec_node test: success " + result:success + ", residual " + result:residual + " m/s, turn " + result:turn_s + " s of " + result:turn_time + " s predicted, " + result:reason.
 addons:claudia:report(result).

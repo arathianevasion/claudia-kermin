@@ -12,17 +12,19 @@
 //|   node ["next"]: the node to fly, "next" or a node from ALLNODES.
 //|   max_residual [0.5]: m/s the node may still need when the burn ends; more fails the block.
 //|   lead ["half_burn"]: when to start, in seconds before the node; "half_burn" starts early by the
-//|     time it takes to burn half the node's delta-v.
+//|     time it takes to burn half the node's delta-v, over every stage the burn uses.
 //|   rcs_trim [false]: true trims a residual above max_residual with RCS translation (up to 60 s).
 //|   max_duration ["auto"]: the wait to the burn plus twice the burn time plus 300 s.
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block.
 //| Extra results: node_dv (m/s the node asked for before the burn), residual (m/s the node still
-//| needed when the block ended), burn_time (s the engines burned). Fails with "no maneuver node",
+//| needed when the block ended), burn_time (s the engines burned), late_start_s (s the burn began
+//| after its start; 0 on time), not_aligned (turns given up after 120 s). It turns to the node before
+//| warping. Fails with "no maneuver node",
 //| "no thrust", "no usable torque" (no reaction wheel running and no RCS on to turn with), a node
 //| or lead it can't read, "residual <x> m/s is over max_residual", out of fuel, or an abort; on
 //| failure the node is left in place.
 //| Plan the node yourself first (ADD NODE(time, radial, normal, prograde)); the node must be far
-//| enough ahead to turn and start the burn (lead plus about 30 s).
+//| enough ahead to turn and start the burn (lead plus about a minute).
 //| Example: `add node(time:seconds + 600, 0, 0, 120). local res is exec_node(). addons:claudia:report(res).`
 
 // The block's own options and defaults (max_duration "auto" is resolved once the burn is known).
