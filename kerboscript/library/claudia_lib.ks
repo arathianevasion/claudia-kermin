@@ -628,27 +628,154 @@ function claudia_warp_step {
   return "none".
 }
 
-// Asks KSP for warp to warp_end. The one place a wait chooses its warp rate: rails only for now
-// (the mode is set first, and the runtime gates refuse physics warp anyway). Physics warp (#339)
-// goes here, and cap, the block's rate-cap function (0 for none), limits what it may choose.
-function claudia_warp_request {
-  parameter warp_end, cap.
-  set kuniverse:timewarp:mode to "RAILS".
-  kuniverse:timewarp:warpto(warp_end).
+// The physics warp rate (1 to 4) the default rule allows at dynamic pressure q_pa (Pa): 4x under
+// 1 kPa, 3x under 5 kPa, 2x under 15 kPa, else 1x; at most 2x while kOS steering is more than 5
+// degrees off (steer_err, degrees). Pure; starting values (spec #314), tuned by block tests.
+function claudia_q_rate {
+  parameter q_pa, steer_err.
+  local rate is 1.
+  if q_pa < 1000 {
+    set rate to 4.
+  } else if q_pa < 5000 {
+    set rate to 3.
+  } else if q_pa < 15000 {
+    set rate to 2.
+  }
+  if steer_err > 5 {
+    return min(rate, 2).
+  }
+  return rate.
 }
 
-// Waits until ut, warping on rails and back at 1x lead seconds before it (at least 30). This is the
-// one wait loop: claudia_wait_until, coast and land go through it. Warp is asked for at the start
-// and again whenever the rate is back at 1x (claudia_warp_step), except while the mod holds warp at
-// 1x (a Pause, link loss, the Spending Cap, a stock alarm) and after the player lowered or stopped
-// warp during this wait (ADDONS:CLAUDIA:WARPCANCELLED, reset by waitstart), so the player is never
-// overridden. stop: a delegate returning true to end the wait early (warp is cancelled and the wait
-// returns ""), or 0 for none. cap: the block's rate-cap function, or 0 for none. Keeps ticking, so
+// Which warp a wait asks for (ADR 0008): "rails" wherever KSP allows it (rails_ok:
+// ADDONS:CLAUDIA:RAILSWARP), else "physics" where the runtime gate allows it (physics_ok:
+// ADDONS:CLAUDIA:PHYSICSWARP, switched on and on a Coast), else "none". Never physics off a Coast.
+function claudia_warp_mode {
+  parameter rails_ok, physics_ok.
+  if rails_ok {
+    return "rails".
+  }
+  if physics_ok {
+    return "physics".
+  }
+  return "none".
+}
+
+// The UT physics warp must be over by for a wait ending at ut: lead seconds before it, so 30 before
+// a burn, or 0 to drop at the event at the end of a coast where nothing acts (the top of the
+// atmosphere, the top of a hop). Physics warp needs no 30 s floor: it is at most 4x.
+function claudia_physics_end {
+  parameter ut, lead.
+  return ut - max(0, lead).
+}
+
+// What a physics warp does this tick; pure, like claudia_warp_step. rate: the physics rate now (1
+// to 4); want: the rate allowed now (claudia_warp_rate, or 1 off a Coast or where rails can take
+// over). Returns the rate to set, or 0 for no change. It is lowered whenever want is lower (a
+// cancel included), back to 1x while held and from physics_end, and raised (the retry included)
+// only with no hold, no cancel and more than 5 s to go.
+function claudia_physics_step {
+  parameter now, physics_end, rate, want, held, cancelled.
+  if held or now >= physics_end {
+    set want to 1.
+  }
+  if want < rate {
+    return want.
+  }
+  if want > rate and not cancelled and physics_end > now + 5 {
+    return want.
+  }
+  return 0.
+}
+
+// The physics warp rate a wait may use now: the q rule (claudia_q_rate) on the craft's dynamic
+// pressure and steering error, under the block's cap: a delegate returning a rate, a rate, or 0 for
+// none. The one place a wait chooses its physics rate.
+function claudia_warp_rate {
+  parameter cap.
+  local steer_err is 0.
+  if steeringmanager:enabled {
+    set steer_err to abs(steeringmanager:angleerror).
+  }
+  local rate is claudia_q_rate(ship:q * constant:atmtokpa * 1000, steer_err).
+  if not cap:istype("Scalar") {
+    return min(rate, cap:call()).
+  }
+  if cap > 0 {
+    return min(rate, cap).
+  }
+  return rate.
+}
+
+// Asks KSP for warp: on rails to warp_end, or physics warp at rate (2 to 4; the mode is switched
+// only at 1x, as the runtime gate requires).
+function claudia_warp_request {
+  parameter mode, warp_end, rate.
+  if mode = "rails" {
+    set kuniverse:timewarp:mode to "RAILS".
+    kuniverse:timewarp:warpto(warp_end).
+    return.
+  }
+  if kuniverse:timewarp:mode <> "PHYSICS" {
+    set kuniverse:timewarp:mode to "PHYSICS".
+  }
+  set kuniverse:timewarp:warp to rate - 1.
+}
+
+// One tick of a wait's warp. A physics warp running follows claudia_physics_step (back to 1x off a
+// Coast, or where rails can take over); otherwise rails warp follows claudia_warp_step, and at 1x
+// warp is asked for in the mode claudia_warp_mode chooses. Returns true if it asked for warp.
+function claudia_warp_tick {
+  parameter warp_end, physics_end, cap.
+  local tw is kuniverse:timewarp.
+  local held is addons:claudia:warphold.
+  local cancelled is addons:claudia:warpcancelled.
+  local mode is claudia_warp_mode(addons:claudia:railswarp, addons:claudia:physicswarp).
+  if tw:mode = "PHYSICS" and tw:warp > 0 {
+    local want is 1.
+    if mode = "physics" {
+      set want to claudia_warp_rate(cap).
+    }
+    local r is claudia_physics_step(time:seconds, physics_end, tw:warp + 1, want, held, cancelled).
+    if r = 1 {
+      tw:cancelwarp().
+    } else if r > 1 {
+      set tw:warp to r - 1.
+    }
+    return r > 1.
+  }
+  if mode = "physics" and tw:warp = 0 and tw:rate <= 1 {
+    local r is claudia_physics_step(time:seconds, physics_end, 1, claudia_warp_rate(cap), held, cancelled).
+    if r > 1 {
+      claudia_warp_request(mode, warp_end, r).
+    }
+    return r > 1.
+  }
+  local action is claudia_warp_step(time:seconds, warp_end, tw:rate, held, cancelled).
+  if action = "drop" {
+    tw:cancelwarp().
+  } else if action = "warp" and mode = "rails" {
+    claudia_warp_request(mode, warp_end, 0).
+    return true.
+  }
+  return false.
+}
+
+// Waits until ut. This is the one wait loop: claudia_wait_until, coast, land and launch go through
+// it. It warps on rails where KSP allows it, back at 1x lead seconds before ut (at least 30), and
+// where KSP refuses rails and the craft is on a Coast it physics-warps (claudia_warp_rate), back at
+// 1x lead seconds before ut (0: at ut). Warp is asked for at the start and again whenever the rate
+// is back at 1x (claudia_warp_step), except while the mod holds warp at 1x (a Pause, link loss, the
+// Spending Cap, a stock alarm) and after the player lowered or stopped warp during this wait
+// (ADDONS:CLAUDIA:WARPCANCELLED, reset by waitstart), so the player is never overridden. stop: a
+// delegate returning true to end the wait early (warp is cancelled and the wait returns ""), or 0
+// for none. cap: the block's physics rate cap (claudia_warp_rate), or 0 for none. Keeps ticking, so
 // the common aborts still apply. Returns "" or an abort reason. The wait is marked for the mod's
 // warp trace (WAITSTART, WAITEND), which times it at 1x.
 function claudia_warp_to {
   parameter ctx, ut, lead, stop is 0, cap is 0.
   local warp_end is claudia_warp_end(ut, lead).
+  local physics_end is claudia_physics_end(ut, lead).
   local settle is 0.
   addons:claudia:waitstart(warp_end).
   until time:seconds >= ut {
@@ -658,17 +785,10 @@ function claudia_warp_to {
         break.
       }
     }
-    local action is "none".
     if settle > 0 {
       // A request was just made; give KSP a few ticks to raise the rate before judging it cut.
       set settle to settle - 1.
-    } else {
-      set action to claudia_warp_step(time:seconds, warp_end, kuniverse:timewarp:rate, addons:claudia:warphold, addons:claudia:warpcancelled).
-    }
-    if action = "drop" {
-      kuniverse:timewarp:cancelwarp().
-    } else if action = "warp" {
-      claudia_warp_request(warp_end, cap).
+    } else if claudia_warp_tick(warp_end, physics_end, cap) {
       set settle to 10.
     }
     local reason is claudia_tick(ctx, 0).
@@ -678,6 +798,10 @@ function claudia_warp_to {
       return reason.
     }
     wait 0.
+  }
+  // Physics warp with no lead runs to ut itself.
+  if kuniverse:timewarp:rate > 1 {
+    kuniverse:timewarp:cancelwarp().
   }
   wait until kuniverse:timewarp:issettled and ship:unpacked.
   addons:claudia:waitend().

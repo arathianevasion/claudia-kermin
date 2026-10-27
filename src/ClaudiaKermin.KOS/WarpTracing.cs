@@ -86,6 +86,27 @@ namespace ClaudiaKermin.KOS
             }
         }
 
+        /// <summary>
+        /// KSP's rails limits would allow rails warp above 1x now (<c>ADDONS:CLAUDIA:RAILSWARP</c>, #339), so the Core Library's
+        /// wait asks for rails warp, not physics warp. True if KSP's check can't be read, as a wait asked for rails before.
+        /// </summary>
+        public static bool RailsAllowed()
+        {
+            try
+            {
+                var warp = TimeWarp.fetch;
+                var check = Check();
+                if (warp == null || check == null) return true;
+                ClearToSaveStatus reason;
+                return check(warp, 1, true, out reason) >= 1;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning(ModInfo.LogTag + " couldn't read KSP's rails warp limits: " + e.Message);
+                return true;
+            }
+        }
+
         private static MaxOnRails Check()
         {
             if (looked) return maxOnRails;

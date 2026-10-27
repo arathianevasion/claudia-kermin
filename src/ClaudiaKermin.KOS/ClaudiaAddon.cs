@@ -42,6 +42,10 @@ namespace ClaudiaKermin.KOS
             // The player lowered or stopped warp during this wait (#336, ADR 0008); the next WAITSTART resets it. Waits, and a
             // Custom Script's own loop, stop asking for warp once it is true, so the player is never overridden.
             AddSuffix("WARPCANCELLED", new Suffix<BooleanValue>(WarpCancelled, "The player lowered or stopped warp during the current wait"));
+            // Which warp a wait may ask for now (#339): rails where KSP's own limits allow it, else physics warp where the
+            // runtime gate would let it through (both switches on, the craft on a Coast), so a wait never trips the gate.
+            AddSuffix("RAILSWARP", new Suffix<BooleanValue>(() => WarpTracing.RailsAllowed(), "KSP would allow rails warp above 1x now"));
+            AddSuffix("PHYSICSWARP", new Suffix<BooleanValue>(PhysicsWarp, "Physics warp above 1x is allowed now: switched on and the craft on a Coast"));
             AddTerrainSuffixes();
             AddHeatSuffixes();
             AddToolSuffixes();
@@ -133,6 +137,13 @@ namespace ClaudiaKermin.KOS
         {
             var bridge = KosBridge.Instance;
             return shared.KSPPart != null && bridge != null && bridge.WarpCancelled(shared.KSPPart.persistentId);
+        }
+
+        /// <summary>The runtime gate's own inputs for a physics <c>WARP</c> above 1x (ADR 0008), read the same way.</summary>
+        private BooleanValue PhysicsWarp()
+        {
+            var vessel = shared.KSPPart == null ? null : shared.KSPPart.vessel;
+            return KosGates.PhysicsWarpAllowed && vessel != null && CoastGuard.OnCoast(vessel);
         }
 
         private void WaitEnd()
