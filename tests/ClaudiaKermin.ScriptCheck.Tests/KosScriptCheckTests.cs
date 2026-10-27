@@ -269,6 +269,48 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             }
         }
 
+        // ---- Block-internal calls (ADR 0006, ADR 0007): the Core Library's, never a Mission Script's ----
+
+        [Theory]
+        [InlineData("local s is addons:claudia:landingsite(lexicon(\"biome\", \"Midlands\")).")]
+        [InlineData("local c is addons:claudia.\nprint c:landingsite(lexicon()).")]
+        [InlineData("local f is addons:claudia:LandingSite@.\nprint f(lexicon()).")]
+        public void ABlockInternalCallInAMissionScriptFails(string script)
+        {
+            AssertForbidden("call block-internal calculations", script);
+            AssertForbidden("call block-internal calculations", CoreLibrary.Bundle(script));
+        }
+
+        [Fact]
+        public void TheCoreLibrarysOwnBlockInternalCallPasses()
+        {
+            // land calls it for a biome target; the bundle's library lines are the Core Library's.
+            Assert.Contains("addons:claudia:landingsite(", CoreLibrary.Bundle("").ToLowerInvariant());
+            AssertAllowed(CoreLibrary.Bundle("local res is land(lexicon(\"target\", lexicon(\"biome\", \"Midlands\"))).\naddons:claudia:report(res)."));
+        }
+
+        [Fact]
+        public void ABlockInternalCallFailsOnTheMissionScriptsOwnLineInABundle()
+        {
+            var result = _check.Check(CoreLibrary.Bundle("print 1.\nprint addons:claudia:landingsite(lexicon())."));
+            Assert.Contains("line 2: :LANDINGSITE (call block-internal calculations)", result.Forbidden);
+        }
+
+        [Fact]
+        public void AMissionScriptCopyingTheLibrarysBannerIsStillAMissionScript()
+        {
+            // Only the bundle's real tail is the Core Library; a copy of its banner line in the script changes nothing.
+            var script = "// ---- The Core Library, bundled by Claudia Kermin ----\nprint addons:claudia:landingsite(lexicon()).";
+            AssertForbidden("call block-internal calculations", CoreLibrary.Bundle(script));
+        }
+
+        [Fact]
+        public void TheBlockTestsCheckStillRefusesABlockInternalCallInTheScript()
+        {
+            var result = new KosScriptCheck(forToolTests: true).Check("print addons:claudia:landingsite(lexicon()).");
+            Assert.Contains(result.Forbidden, f => f.EndsWith("(call block-internal calculations)"));
+        }
+
         [Fact]
         public void ReadingKosConfig() { AssertAllowed("print config:ipu."); }
 

@@ -49,14 +49,16 @@ namespace ClaudiaKermin.ScriptCheck
         private bool _recording;
         /// <summary>A block test's script (tests/tools): the test-only bridge to Planning Tools is allowed.</summary>
         private bool _allowPlanningTools;
+        /// <summary>The first line that is the Core Library's (ADR 0007): block-internal calls are allowed from there on.</summary>
+        private int _libraryFromLine = int.MaxValue;
 
         /// <summary>
         /// Each finding, e.g. "line 3: COPYPATH (touch files)", in order. The code is read twice: the first pass
         /// learns which variables hold another vessel or the TIMEWARP, wherever they are assigned.
         /// </summary>
-        public static List<string> Read(IEnumerable<List<Opcode>> sections, bool allowPlanningTools = false)
+        public static List<string> Read(IEnumerable<List<Opcode>> sections, bool allowPlanningTools = false, int libraryFromLine = int.MaxValue)
         {
-            var reader = new OpcodeReader { _allowPlanningTools = allowPlanningTools };
+            var reader = new OpcodeReader { _allowPlanningTools = allowPlanningTools, _libraryFromLine = libraryFromLine };
             var list = new List<List<Opcode>>(sections);
             foreach (var section in list) reader.Walk(section);
             reader._recording = true;
@@ -287,7 +289,8 @@ namespace ClaudiaKermin.ScriptCheck
         private void Suffix(Value receiver, string id, int line)
         {
             string item;
-            if (ForbiddenList.Suffixes.TryGetValue(id, out item) && !(_allowPlanningTools && item == ForbiddenList.PlanningTools))
+            if (ForbiddenList.Suffixes.TryGetValue(id, out item) && !(_allowPlanningTools && item == ForbiddenList.PlanningTools)
+                && !(line >= _libraryFromLine && item == ForbiddenList.BlockInternal))
                 Found(line, ":" + id.ToUpperInvariant(), item);
             if (AnyVariable(receiver, "addons") && !ForbiddenList.AllowedAddonSuffixes.Contains(id))
                 Found(line, "ADDONS:" + id.ToUpperInvariant(), ForbiddenList.OtherAddons);

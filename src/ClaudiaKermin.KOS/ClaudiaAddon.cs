@@ -38,6 +38,7 @@ namespace ClaudiaKermin.KOS
             AddTerrainSuffixes();
             AddHeatSuffixes();
             AddToolSuffixes();
+            AddBlockCallSuffixes();
             if (shared.KSPPart != null) ByPart[shared.KSPPart.persistentId] = this;
         }
 

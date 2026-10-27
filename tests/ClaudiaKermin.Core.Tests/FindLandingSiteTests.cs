@@ -338,5 +338,73 @@ namespace ClaudiaKermin.Core.Tests
             Assert.All(Sites(result), s => Assert.Equal(Math.Round(Lon(s), 3), Lon(s)));
             Assert.Equal("Mun", result.GetProperty("body").GetString());
         }
+
+        // ---- The block-internal call land makes for a biome target (ADR 0007): the same search, on the body orbited ----
+
+        private static Dictionary<string, object> Ask(params object[] keysAndValues)
+        {
+            var input = new Dictionary<string, object>();
+            for (var i = 0; i < keysAndValues.Length; i += 2) input[(string)keysAndValues[i]] = keysAndValues[i + 1];
+            return input;
+        }
+
+        [Fact]
+        public void The_block_call_gives_the_first_site_in_the_biome_on_the_body_orbited()
+        {
+            var fake = new FakeBody { BiomeAt = (lat, lon) => lon >= 45 ? "Midlands" : "Highlands" };
+            var site = BlockCalls.LandingSite(Ask("biome", "midlands", "daylight", false, "max_slope_deg", 8.0, "within_hours", 1.0), Snapshot(), fake);
+            Assert.Equal("", site["error"]);
+            Assert.Equal("Midlands", site["biome"]);
+            // The soonest pass in the biome: the first track point (2 degrees apart) past longitude 45, an eighth of an orbit on.
+            Assert.InRange((double)site["lng"], 45, 47);
+            Assert.Equal(0, (double)site["lat"], 1);
+            Assert.True((double)site["pass_ut"] > 1000);
+            Assert.Equal(45.0, site["sun_elevation_deg"]);
+        }
+
+        [Fact]
+        public void The_block_call_with_a_near_point_gives_the_site_nearest_it()
+        {
+            var site = BlockCalls.LandingSite(Ask("biome", "Midlands", "daylight", false, "within_hours", 1.0,
+                "near", Ask("latitude", 0.0, "longitude", -100.0)), Snapshot(), new FakeBody());
+            Assert.Equal("", site["error"]);
+            Assert.Equal(-100, (double)site["lng"], 0);
+        }
+
+        [Fact]
+        public void The_block_call_keeps_to_daylight_when_asked()
+        {
+            // Sun up only east of longitude 90: the first daylight site is there, not where the craft is now.
+            var fake = new FakeBody { Sun = (lat, lon, ut) => lon >= 90 && lon < 170 ? 30 : -30 };
+            var site = BlockCalls.LandingSite(Ask("biome", "Midlands", "daylight", true, "within_hours", 1.0), Snapshot(), fake);
+            Assert.Equal("", site["error"]);
+            Assert.InRange((double)site["lng"], 89.5, 170);
+        }
+
+        [Fact]
+        public void The_block_call_with_no_site_says_why_naming_the_biome()
+        {
+            var site = BlockCalls.LandingSite(Ask("biome", "Poles", "daylight", false, "within_hours", 1.0), Snapshot(), new FakeBody());
+            var error = (string)site["error"];
+            Assert.StartsWith("no site in the Poles biome", error);
+            Assert.Contains("0 were in the biome", error);
+        }
+
+        [Fact]
+        public void The_block_call_passes_on_the_searchs_errors()
+        {
+            Assert.Contains("airless-only", (string)BlockCalls.LandingSite(Ask("biome", "Midlands"), Snapshot(atmosphere: true), new FakeBody())["error"]);
+            Assert.Contains("max_slope_deg", (string)BlockCalls.LandingSite(Ask("biome", "Midlands", "max_slope_deg", 0.0), Snapshot(), new FakeBody())["error"]);
+            var landed = Snapshot();
+            landed.Orbit = null;
+            Assert.Contains("not in orbit", (string)BlockCalls.LandingSite(Ask("biome", "Midlands"), landed, new FakeBody())["error"]);
+        }
+
+        [Fact]
+        public void The_block_call_ignores_a_body_it_is_given_and_searches_the_one_orbited()
+        {
+            var site = BlockCalls.LandingSite(Ask("body", "Kerbin", "biome", "Midlands", "daylight", false, "within_hours", 1.0), Snapshot(), new FakeBody());
+            Assert.Equal("", site["error"]);
+        }
     }
 }

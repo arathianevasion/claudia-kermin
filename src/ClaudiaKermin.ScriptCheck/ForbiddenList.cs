@@ -33,6 +33,11 @@ namespace ClaudiaKermin.ScriptCheck
         /// Mission Script calls Building Blocks instead.
         /// </summary>
         public const string PlanningTools = "call Planning Tools";
+        /// <summary>
+        /// The mod's calculations that Building Blocks call while they fly (ADR 0006): only the Core Library may call them, so a
+        /// Mission Script passes a block its goal instead (ADR 0007).
+        /// </summary>
+        public const string BlockInternal = "call block-internal calculations";
         /// <summary>From the allowed list: <c>makebuiltindelegate</c> is allowed only with a constant argument.</summary>
         public const string ComputedDelegate = "makebuiltindelegate without a constant argument";
 
@@ -55,7 +60,8 @@ namespace ClaudiaKermin.ScriptCheck
             TouchFiles, "volume",
             RebootOrShutDown, "deactivate",
             OtherVessels, "sendmessage",
-            PlanningTools, "planningtool");
+            PlanningTools, "planningtool",
+            BlockInternal, "landingsite");
 
         /// <summary>Suffixes forbidden on another vessel or its parts: they change it. Reading stays allowed.</summary>
         public static readonly HashSet<string> OtherVesselMutators = Set(
