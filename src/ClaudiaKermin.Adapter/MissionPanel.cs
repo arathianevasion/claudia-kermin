@@ -378,6 +378,10 @@ namespace ClaudiaKermin.Adapter
                 if (Shown(reply)) any = true;
             if (any)
             {
+                // The switch rides the row's right end unless the row is too narrow for it, then it takes a line of its own. Both
+                // inputs (the panel width and the label widths) are the same on Layout and Repaint, so the two lay out alike.
+                var wrapSwitch = MissionWindowRules.OffersAutoMode(_view) && MissionWindowRules.AutoModeWraps(
+                    _width, ActionRowButtonsWidth(always), ClaudiaSkin.SwitchWidth(MissionWindowRules.AutoModeLabel), ClaudiaSkin.Padding, ClaudiaSkin.Gap);
                 GUILayout.BeginHorizontal();
                 GUILayout.Space(ClaudiaSkin.Padding);
                 if (always)
@@ -406,12 +410,31 @@ namespace ClaudiaKermin.Adapter
                     if (clicked) QuickReplied(reply);
                 }
                 GUILayout.FlexibleSpace();
-                if (MissionWindowRules.OffersAutoMode(_view)) DrawAutoMode();
+                if (!wrapSwitch && MissionWindowRules.OffersAutoMode(_view)) DrawAutoMode();
                 GUILayout.Space(ClaudiaSkin.Padding);
                 GUILayout.EndHorizontal();
+                if (wrapSwitch)
+                {
+                    GUILayout.BeginHorizontal();
+                    GUILayout.FlexibleSpace();
+                    DrawAutoMode();
+                    GUILayout.Space(ClaudiaSkin.Padding);
+                    GUILayout.EndHorizontal();
+                }
             }
             DrawRaiseCap(raising);
             DrawChooseModel();
+        }
+
+        // The width of the action row's buttons with the 4 px between them, for deciding whether the Auto Mode switch fits beside them.
+        private float ActionRowButtonsWidth(bool always)
+        {
+            const float margin = 4;
+            var width = 0f;
+            if (always) width += ClaudiaSkin.ButtonWidth(MissionWindowRules.Label(QuickReply.Approve, _view)) + margin;
+            foreach (var reply in _view.QuickReplies)
+                if (Shown(reply)) width += ClaudiaSkin.ButtonWidth(MissionWindowRules.Label(reply, _view)) + margin;
+            return width;
         }
 
         // End Mission is always in the control bar during a Mission, so the row doesn't repeat it; confirming an Approval is a checkbox in the transcript.
@@ -578,11 +601,7 @@ namespace ClaudiaKermin.Adapter
         // The Auto Mode switch, at the right end of the action row; flipping it sends SetAutoMode.
         private void DrawAutoMode()
         {
-            GUILayout.BeginVertical(GUILayout.Width(ClaudiaSkin.Scaled(150)));
-            GUILayout.FlexibleSpace();
-            var on = ClaudiaSkin.Switch(_view.AutoMode, MissionWindowRules.AutoModeLabel, MissionWindowRules.AutoModeTooltip);
-            GUILayout.FlexibleSpace();
-            GUILayout.EndVertical();
+            var on = ClaudiaSkin.Switch(_view.AutoMode, MissionWindowRules.AutoModeLabel, MissionWindowRules.AutoModeTooltip, true);
             if (on != _view.AutoMode) _send(new SetAutoMode(on));
         }
 

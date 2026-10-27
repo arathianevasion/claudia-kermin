@@ -285,6 +285,16 @@ namespace ClaudiaKermin.Core.Ui
             return awaiting && !view.AutoMode && view.QuickReplies.Contains(QuickReply.Approve);
         }
 
+        /// <summary>
+        /// Whether the action row's Auto Mode switch drops to a line of its own because it would not fit beside the buttons.
+        /// <paramref name="leftWidth"/> is the buttons' width with their spacing; the row also has <paramref name="padding"/> at each end
+        /// and <paramref name="gap"/> before the switch. The row gives way like this rather than widening the window.
+        /// </summary>
+        public static bool AutoModeWraps(float panelWidth, float leftWidth, float switchWidth, float padding, float gap)
+        {
+            return leftWidth + gap + switchWidth + 2 * padding > panelWidth;
+        }
+
         /// <summary>The action row is drawn, with Approve always in it, whenever a Mission is under way; its Auto Mode switch rides along where <see cref="OffersAutoMode"/>.</summary>
         public static bool ActionRowAlways(MissionView view)
         {
