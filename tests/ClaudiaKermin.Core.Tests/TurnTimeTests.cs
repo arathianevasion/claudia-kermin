@@ -67,10 +67,10 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
-        public void RCS_adds_its_torque_only_while_it_is_on()
+        public void RCS_adds_its_torque_only_while_it_is_usable()
         {
             var off = new TurnCraft { WheelPitch = 5, WheelYaw = 5, RcsPitch = 5, RcsYaw = 5, MoiPitch = 500, MoiYaw = 500 };
-            var on = new TurnCraft { WheelPitch = 5, WheelYaw = 5, RcsPitch = 5, RcsYaw = 5, RcsOn = true, MoiPitch = 500, MoiYaw = 500 };
+            var on = new TurnCraft { WheelPitch = 5, WheelYaw = 5, RcsPitch = 5, RcsYaw = 5, RcsUsable = true, MoiPitch = 500, MoiYaw = 500 };
             Assert.Equal(167.81, TurnTime.Predict(off).TurnSeconds, 2);
             // Twice the torque: alpha 0.02 rad/s², cap 0.04 rad/s, 82.90 s cruising plus 2 s.
             Assert.Equal(84.90, TurnTime.Predict(on).TurnSeconds, 2);
@@ -88,24 +88,76 @@ namespace ClaudiaKermin.Core.Tests
         [InlineData(0, 0, 5, false)]
         [InlineData(5, 0, 0, false)]
         [InlineData(0, 0, 0, true)]
-        public void A_craft_with_no_usable_torque_on_either_axis_cannot_turn(double wheelPitch, double wheelYaw, double rcs, bool rcsOn)
+        public void A_craft_with_no_usable_torque_on_either_axis_cannot_turn(double wheelPitch, double wheelYaw, double rcs, bool rcsUsable)
         {
             var turn = TurnTime.Predict(new TurnCraft
             {
-                WheelPitch = wheelPitch, WheelYaw = wheelYaw, RcsPitch = rcs, RcsYaw = rcs, RcsOn = rcsOn, MoiPitch = 13.8, MoiYaw = 13.8,
+                WheelPitch = wheelPitch, WheelYaw = wheelYaw, RcsPitch = rcs, RcsYaw = rcs, RcsUsable = rcsUsable, MoiPitch = 13.8, MoiYaw = 13.8,
             });
             Assert.Equal("no usable torque", turn.Error);
         }
 
         [Fact]
-        public void A_craft_with_RCS_alone_turns_while_RCS_is_on()
+        public void A_craft_with_RCS_alone_turns_while_RCS_is_usable()
         {
-            var turn = TurnTime.Predict(new TurnCraft { RcsPitch = 5, RcsYaw = 5, RcsOn = true, MoiPitch = 500, MoiYaw = 500 });
+            var turn = TurnTime.Predict(new TurnCraft { RcsPitch = 5, RcsYaw = 5, RcsUsable = true, MoiPitch = 500, MoiYaw = 500 });
             Assert.Null(turn.Error);
             Assert.Equal(167.81, turn.TurnSeconds, 2);
         }
 
+        [Fact]
+        public void The_wheels_only_turn_leaves_RCS_out_however_usable()
+        {
+            var craft = new TurnCraft { WheelPitch = 5, WheelYaw = 5, RcsPitch = 5, RcsYaw = 5, RcsUsable = true, MoiPitch = 500, MoiYaw = 500 };
+            Assert.Equal(167.81, TurnTime.PredictWheels(craft).TurnSeconds, 2);
+            Assert.Equal(84.90, TurnTime.Predict(craft).TurnSeconds, 2);
+        }
+
+        [Fact]
+        public void A_craft_with_RCS_alone_has_no_wheels_only_turn()
+        {
+            var turn = TurnTime.PredictWheels(new TurnCraft { RcsPitch = 5, RcsYaw = 5, RcsUsable = true, MoiPitch = 500, MoiYaw = 500 });
+            Assert.Equal("no usable torque", turn.Error);
+        }
+
         // ---- the block-internal call: ADDONS:CLAUDIA:TURNTIME ----
+
+        [Fact]
+        public void The_block_call_gives_the_wheels_only_turn_beside_the_one_with_RCS()
+        {
+            var craft = new TurnCraft { WheelPitch = 5, WheelYaw = 5, RcsPitch = 5, RcsYaw = 5, RcsUsable = true, MoiPitch = 500, MoiYaw = 500 };
+            var result = BlockCalls.TurnTime(new Dictionary<string, object>(), craft);
+            Assert.Equal("", result["error"]);
+            // Wheels and RCS: 84.90 s turning, 10 s settling. Wheels alone: 167.81 s and 10 s.
+            Assert.Equal(94.90, (double)result["turn_time"], 2);
+            Assert.Equal(84.90, (double)result["turn_s"], 2);
+            Assert.Equal(177.81, (double)result["wheels_turn_time"], 2);
+            Assert.Equal(167.81, (double)result["wheels_turn_s"], 2);
+        }
+
+        [Theory]
+        [InlineData(5, false)] // thrusters, but no MonoPropellant
+        [InlineData(0, true)]  // MonoPropellant, but no enabled thrusters
+        public void Without_MonoPropellant_or_enabled_thrusters_both_figures_are_the_same(double rcs, bool usable)
+        {
+            var craft = new TurnCraft { WheelPitch = 5, WheelYaw = 5, RcsPitch = rcs, RcsYaw = rcs, RcsUsable = usable, MoiPitch = 500, MoiYaw = 500 };
+            var result = BlockCalls.TurnTime(new Dictionary<string, object>(), craft);
+            Assert.Equal(177.81, (double)result["turn_time"], 2);
+            Assert.Equal(result["turn_time"], result["wheels_turn_time"]);
+            Assert.Equal(result["turn_s"], result["wheels_turn_s"]);
+        }
+
+        [Fact]
+        public void The_block_call_gives_minus_one_for_the_wheels_only_turn_of_a_craft_with_no_wheel_torque()
+        {
+            // Wheel torque about pitch only: the wheels alone can't turn it, RCS can.
+            var craft = new TurnCraft { WheelPitch = 5, RcsPitch = 5, RcsYaw = 5, RcsUsable = true, MoiPitch = 500, MoiYaw = 500 };
+            var result = BlockCalls.TurnTime(new Dictionary<string, object>(), craft);
+            Assert.Equal("", result["error"]);
+            Assert.True((double)result["turn_time"] > 0);
+            Assert.Equal(-1.0, result["wheels_turn_time"]);
+            Assert.Equal(-1.0, result["wheels_turn_s"]);
+        }
 
         [Fact]
         public void The_block_call_gives_the_time_to_leave_and_the_turn_alone()
