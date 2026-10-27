@@ -63,6 +63,9 @@ namespace ClaudiaKermin.Core.Config
         /// <summary>Prefilled in the Mission start form: a remote Mission (Claudia at Mission Control); false is crewed (she flies aboard).</summary>
         public bool DefaultRemote;
 
+        /// <summary>A new Mission starts in Auto Mode (the player's Approval given in advance); off by default.</summary>
+        public bool DefaultAutoMode;
+
         /// <summary>How much more delta-v a late Approval may cost (the next window against the planned one) before Claudia re-plans, in percent.</summary>
         public int LateApprovalToleranceDvPercent = 10;
 
@@ -100,6 +103,9 @@ namespace ClaudiaKermin.Core.Config
         private const string RemoteComment =
             "# Mission type prefilled in the start form: false is crewed (Claudia flies aboard), true is remote (Claudia at Mission Control).";
 
+        private const string AutoModeComment =
+            "# Start new Missions in Auto Mode: Claudia's plans after the first Mission Plan are approved for you while the Spending Cap has room.";
+
         private const string DefaultFile =
             "# Claudia Kermin player config\n"
             + "debug_tools = false\n"
@@ -124,6 +130,8 @@ namespace ClaudiaKermin.Core.Config
             + "time_vs_dv = Balanced\n"
             + RemoteComment + "\n"
             + "default_remote = false\n"
+            + AutoModeComment + "\n"
+            + "default_auto_mode = false\n"
             + "# How much more delta-v, in percent, a late Approval may cost before Claudia re-plans instead of taking the next window.\n"
             + "late_approval_dv_tolerance = 10\n"
             + "# Seconds attitude, translation or throttle input must be held to start Manual Control.\n"
@@ -230,6 +238,9 @@ namespace ClaudiaKermin.Core.Config
                     case "default_remote":
                         config.DefaultRemote = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
                         break;
+                    case "default_auto_mode":
+                        config.DefaultAutoMode = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+                        break;
                     case "late_approval_dv_tolerance":
                         int lateTolerance;
                         if (int.TryParse(value.TrimEnd('%'), NumberStyles.Integer, CultureInfo.InvariantCulture, out lateTolerance) && lateTolerance >= 0 && lateTolerance <= 200)
@@ -301,6 +312,7 @@ namespace ClaudiaKermin.Core.Config
                 new KeyValuePair<string, string>("daylight_landing", DefaultDaylightLanding ? "true" : "false"),
                 new KeyValuePair<string, string>("time_vs_dv", DefaultTimeVersusDeltaV.ToString()),
                 new KeyValuePair<string, string>("default_remote", DefaultRemote ? "true" : "false"),
+                new KeyValuePair<string, string>("default_auto_mode", DefaultAutoMode ? "true" : "false"),
             };
             var newline = text.Contains("\r\n") ? "\r\n" : "\n";
             var endsWithNewline = text.EndsWith("\n", StringComparison.Ordinal);
@@ -329,6 +341,7 @@ namespace ClaudiaKermin.Core.Config
             {
                 if (written.Contains(pair.Key)) continue;
                 if (pair.Key == "default_remote") lines.Add(RemoteComment);
+                if (pair.Key == "default_auto_mode") lines.Add(AutoModeComment);
                 lines.Add(pair.Key + " = " + pair.Value);
                 added = true;
             }
