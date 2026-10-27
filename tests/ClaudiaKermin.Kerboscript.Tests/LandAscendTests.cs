@@ -306,6 +306,8 @@ namespace ClaudiaKermin.Kerboscript.Tests
             // Below the approach height (terrain rising): climbs, at most 20 m/s.
             Assert.Equal("20", One("land_vv_target(500, 1000, 2, 2)"));
             Assert.Equal("5", One("land_vv_target(950, 1000, 2, 2)"));
+            // However high and however hard it can stop: never over 100 m/s down (#365's ran to 240).
+            Assert.Equal("-100", One("land_vv_target(20000, 0, 5, 2)"));
         }
 
         [Fact]
@@ -425,7 +427,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
         {
             var p = state.Split(',');
             return "local w is land_guide(lexicon(\"s\", " + p[0] + ", \"c\", " + p[1] + ", \"v_al\", " + p[2] + ", \"v_cr\", " + p[3]
-                + ", \"v_up\", " + p[4] + ", \"h\", " + p[5] + ", \"h_start\", 3000, \"a_max\", 60000 / 5400, \"g\", 1.63, \"radius\", 200000), 2, 1.1).\n"
+                + ", \"v_up\", " + p[4] + ", \"h\", " + p[5] + ", \"h_start\", 3000, \"v_top\", 575, \"a_max\", 60000 / 5400, \"g\", 1.63, \"radius\", 200000), 2, 1.1).\n"
                 + "print round(w:al, 3). print round(w:cr, 3). print round(w:up, 3).";
         }
 
@@ -468,7 +470,7 @@ function sim {
       set reversals to reversals + 1.
     }
     local w is land_guide(lexicon(""s"", (site_x - x) * sign, ""c"", (site_z - z) * sign, ""v_al"", vx * sign, ""v_cr"", vz * sign,
-      ""v_up"", vy, ""h"", y, ""h_start"", h_start, ""a_max"", a_max, ""g"", g, ""radius"", rad + y), 2, margin).
+      ""v_up"", vy, ""h"", y, ""h_start"", h_start, ""v_top"", 575, ""a_max"", a_max, ""g"", g, ""radius"", rad + y), 2, margin).
     local k is min(1, dt / lag).
     set ax to ax + (w:al * sign - ax) * k.
     set az to az + (w:cr * sign - az) * k.
@@ -567,6 +569,119 @@ function sim {
                 Assert.InRange(f.Long, -50, 50);
                 Assert.InRange(f.SidewaysAtTouchdown, 0, 0.5);
             }
+        }
+
+        // ---- land: the powered descent over terrain (#365) ----
+
+        // land_descend's loop on a point mass along one line over a terrain profile (a list of
+        // list(x, height) corners, flat beyond the ends), braking from x = 0 at y m above sea level,
+        // 575 m/s along and 5 m/s down, with the reference lander (60 kN, 5.4 t, lag 1 s), the site at
+        // site_x. It steers by land_clearance over the terrain at land_lookahead's distances, as
+        // land_descend does, and holds to the speed braking began at (v_top). Prints whether it hit the
+        // ground hard (over 5 m/s), the fastest descent, the m past the site and the seconds flown.
+        private const string TerrainSimulation = @"
+function terr {
+  parameter prof, x.
+  if x <= prof[0][0] { return prof[0][1]. }
+  for i in range(1, prof:length) {
+    if x <= prof[i][0] {
+      return prof[i - 1][1] + (x - prof[i - 1][0]) / (prof[i][0] - prof[i - 1][0]) * (prof[i][1] - prof[i - 1][1]).
+    }
+  }
+  return prof[prof:length - 1][1].
+}
+function tsim {
+  parameter prof, site_x, y.
+  local mu is 6.5138398e10. local rad is 200000. local margin is 1.1. local m is 5400. local thrust is 60000.
+  local x is 0. local vx is 575. local vy is -5. local ax is 0. local ay is 0.
+  local h_start is -1. local v_top is vx.
+  local dt is 0.05. local t is 0. local fastest_down is 0. local h is y - terr(prof, x).
+  until h <= 0 or t > 900 {
+    local g is mu / (rad + y) ^ 2.
+    local heights is list().
+    for d in land_lookahead(abs(vx), max(0, site_x - x)) {
+      heights:add(terr(prof, x + d)).
+    }
+    set h to land_clearance(y - terr(prof, x), y, heights).
+    if h_start < 0 { set h_start to max(500, h). }
+    local w is land_guide(lexicon(""s"", site_x - x, ""c"", 0, ""v_al"", vx, ""v_cr"", 0, ""v_up"", vy, ""h"", h, ""h_start"", h_start,
+      ""v_top"", v_top, ""a_max"", thrust / m, ""g"", g, ""radius"", rad + y), 2, margin).
+    local k is min(1, dt / 1).
+    set ax to ax + (w:al - ax) * k.
+    set ay to ay + (w:up - ay) * k.
+    local a_mag is sqrt(ax ^ 2 + ay ^ 2).
+    if a_mag > thrust / m {
+      set ax to ax * thrust / m / a_mag. set ay to ay * thrust / m / a_mag. set a_mag to thrust / m.
+    }
+    set vx to vx + ax * dt.
+    set vy to vy + (ay - g + vx ^ 2 / (rad + y)) * dt.
+    set x to x + vx * dt. set y to y + vy * dt.
+    set m to m - m * a_mag / (345 * 9.80665) * dt.
+    set fastest_down to max(fastest_down, -vy).
+    set t to t + dt.
+    set h to y - terr(prof, x).
+  }
+  print sqrt(vx ^ 2 + vy ^ 2) > 5. print round(fastest_down). print round(x - site_x). print round(t).
+}
+";
+
+        private static string[] FlyOver(string profile, double siteX, double startY)
+        {
+            return Run(TerrainSimulation + string.Format(CultureInfo.InvariantCulture, "tsim({0}, {1}, {2}).", profile, siteX, startY));
+        }
+
+        [Fact]
+        public void Land_steers_by_its_height_above_the_highest_ground_ahead()
+        {
+            // 1000 m up over ground at 0, a 600 m hill ahead: 400 m clear.
+            Assert.Equal("400", One("land_clearance(1000, 1000, list(0, 200, 600, 100))"));
+            // Ground ahead lower than under it: the radar height.
+            Assert.Equal("1000", One("land_clearance(1000, 1500, list(-500, 100))"));
+            // A minute ahead at 100 m/s, but no farther than where it stops.
+            Assert.Equal(new[] { "23", "50", "6000", "700" }, Run(
+                "local d is land_lookahead(100, 1e9). print d:length. print d[0]. print d[d:length - 1]. print land_lookahead(100, 700)[22]."));
+        }
+
+        [Fact]
+        public void The_descent_traces_a_line_every_2_s_and_at_each_phase_change()
+        {
+            Assert.Equal("fall", One("land_phase(false, 575, -1)"));
+            Assert.Equal("braking", One("land_phase(true, 200, 450)"));
+            Assert.Equal("approach", One("land_phase(true, 20, 100)"));
+            Assert.Equal("terminal", One("land_phase(true, 0.5, 0)"));
+            Assert.Equal("False", One("land_trace_due(\"braking\", \"braking\", 101.9, 100)"));
+            Assert.Equal("True", One("land_trace_due(\"braking\", \"braking\", 102, 100)"));
+            Assert.Equal("True", One("land_trace_due(\"approach\", \"braking\", 100.1, 100)"));
+        }
+
+        [Fact]
+        public void Braking_far_out_holds_its_speed_rather_than_speeding_up_to_the_stopping_curve()
+        {
+            // 60 km out the curve allows about 1070 m/s; at 575 it would push ahead, held to 575 it doesn't.
+            Assert.Equal("True", One("land_axis_accel(60000, 575, 10, 1.1) > 1"));
+            Assert.Equal("0", One("round(land_axis_accel(60000, 575, 10, 1.1, 575), 3)"));
+            // Slower than v_top it still closes on the site.
+            Assert.Equal("True", One("land_axis_accel(60000, 0, 10, 1.1, 50) > 1"));
+        }
+
+        [Fact]
+        public void A_descent_braking_far_out_climbs_over_a_rim_ahead_rather_than_flying_into_it()
+        {
+            // Braking began 60 km short, 1400 m up (land_descend's h < 1500), with a 3 km rim rising over
+            // 8 km between it and the site: it cruises no faster than it was going and clears the rim.
+            var f = FlyOver("list(list(0, 0), list(40000, 0), list(48000, 3000), list(50000, 0))", 60000, 1400);
+            Assert.Equal("False", f[0]);
+            Assert.InRange(double.Parse(f[2], CultureInfo.InvariantCulture), -20, 500);
+        }
+
+        [Fact]
+        public void A_descent_into_a_crater_holds_its_height_above_the_far_rim_and_never_falls_fast()
+        {
+            // Over the near rim, the floor 3 km down, the site on the floor just short of a 2 km far rim.
+            var f = FlyOver("list(list(0, 1500), list(3000, -1500), list(18500, -1500), list(21000, 500))", 18000, 4500);
+            Assert.Equal("False", f[0]);
+            Assert.InRange(double.Parse(f[1], CultureInfo.InvariantCulture), 0, 100);
+            Assert.InRange(double.Parse(f[2], CultureInfo.InvariantCulture), -20, 500);
         }
 
         // ---- ascend ----

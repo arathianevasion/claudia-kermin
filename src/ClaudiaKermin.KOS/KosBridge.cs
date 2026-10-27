@@ -154,7 +154,11 @@ namespace ClaudiaKermin.KOS
             if (!_runs.TryGetValue(partId, out run) || run.Run.HasEnded) return;
             // Every mod-started run's blocks go in its warp trace, the block tests' included.
             if (result == null) run.Run.Trace.BlockStarted(block, WarpTracing.Real);
-            else run.Run.Trace.BlockEnded(block, WarpTracing.Real);
+            else
+            {
+                run.Run.Trace.BlockEnded(block, WarpTracing.Real);
+                run.Run.BlockEnded(block);
+            }
             if (run.RunId <= 0) return;
             var runId = run.RunId;
             _events.Enqueue(() =>
@@ -162,6 +166,19 @@ namespace ClaudiaKermin.KOS
                 var reported = ScriptRunner.BlockReported;
                 if (reported != null) reported(runId, block, result);
             });
+        }
+
+        /// <summary>
+        /// From <c>ADDONS:CLAUDIA:BLOCKTRACE</c> (#365): written to KSP.log at once, so it is there even if the craft is lost the
+        /// next frame, and kept as the run's last word should it end without a Script Result. Every mod-started run's.
+        /// </summary>
+        public void OnBlockTrace(uint partId, string block, IDictionary<string, object> state)
+        {
+            ActiveRun run;
+            if (!_runs.TryGetValue(partId, out run) || run.Run.HasEnded) return;
+            var ut = WarpTracing.Ut;
+            Debug.Log(ModInfo.LogTag + " " + BlockTrace.Line(block, ut, state) + " ('" + run.Label + "')");
+            run.Run.BlockTraced(block, ut, state);
         }
 
         /// <summary>From <c>ADDONS:CLAUDIA:WAITSTART</c> (the UT the wait's warp must be over by) and <c>WAITEND</c> (null).</summary>
@@ -386,7 +403,8 @@ namespace ClaudiaKermin.KOS
             // kOS hands controls back as the program ends, so make safe again once it has.
             if (outcome.WasAborted) CraftSafety.MakeSafe(run.Vessel);
             Debug.Log(ModInfo.LogTag + " '" + run.Label + "' ended: " + outcome.Summary +
-                      (outcome.ErrorText.Length > 0 ? "\n" + outcome.ErrorText : ""));
+                      (outcome.ErrorText.Length > 0 ? "\n" + outcome.ErrorText : "") +
+                      (outcome.Kind != RunOutcomeKind.Finished && outcome.Report != null ? "\nin place of a Script Result: " + KosValues.Format(outcome.Report) : ""));
             var trace = run.Run.Trace.Lines();
             if (trace.Count > 0) Debug.Log(ModInfo.LogTag + " warp trace of '" + run.Label + "':\n  " + string.Join("\n  ", trace.ToArray()));
             run.OnOutcome(outcome);

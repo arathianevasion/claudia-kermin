@@ -9,9 +9,10 @@
 // a correction burn on the way down swings the orbit plane over the site; then, from the stopping
 // distance (times burn_margin), a powered descent checks the slope at the site (diverting to
 // flatter ground through ADDONS:CLAUDIA:FLATSPOT), then brakes once along the way it was moving
-// (land_guide: never turning back unless it stopped over max_overshoot past the site) while gliding
-// down above the local terrain, comes straight down once stopped and touches down at
-// touchdown_speed. No Trajectories: an airless body's fall is plain orbit maths.
+// (land_guide: never turning back unless it stopped over max_overshoot past the site, never faster
+// than when braking began) while gliding down above the highest terrain ahead (land_clearance),
+// comes straight down once stopped and touches down at touchdown_speed. It traces its descent to the
+// log (ADDONS:CLAUDIA:BLOCKTRACE) as it goes. No Trajectories: an airless body's fall is plain orbit maths.
 
 @lazyglobal off.
 
@@ -304,15 +305,43 @@ function land_approach_height {
   return min(h_start, max(100, 0.15 * dist)).
 }
 
+// Distances (m) along the ground track at which the descent reads the terrain ahead: where the craft
+// will be in 0.5 s to a minute at v_h m/s, every 3 s past the first few, and never past to_go (m to
+// where it stops), since the ground beyond doesn't matter (#365). Pure.
+function land_lookahead {
+  parameter v_h, to_go.
+  local out is list().
+  for t in list(0.5, 1, 2) {
+    out:add(min(max(0, to_go), v_h * t)).
+  }
+  for i in range(1, 21) {
+    out:add(min(max(0, to_go), v_h * 3 * i)).
+  }
+  return out.
+}
+
+// The height (m) the descent steers by: the least of radar (m above the terrain under the craft)
+// and its height above each of heights (m above sea level, from land_lookahead's points) at alt_now
+// (m above sea level), so it holds its height above the highest ground ahead, not only below (#365). Pure.
+function land_clearance {
+  parameter radar, alt_now, heights.
+  local h is radar.
+  for each in heights {
+    set h to min(h, alt_now - each).
+  }
+  return h.
+}
+
 // Vertical speed (m/s, up positive) at h m above the terrain, aiming for h_ref: climbs back (up to
 // 20 m/s) when below it, and descends at a tenth of the height to lose per second when above,
-// never slower than touchdown speed and never faster than it can stop from at a_stop (m/s^2).
+// never slower than touchdown speed and never faster than it can stop from at a_stop (m/s^2), nor
+// than 100 m/s, about a free fall from the descent's planned 3 km (#365).
 function land_vv_target {
   parameter h, h_ref, a_stop, touchdown.
   if h < h_ref {
     return min(20, 0.1 * (h_ref - h)).
   }
-  local fastest is max(touchdown, sqrt(2 * a_stop * max(0, h))).
+  local fastest is max(touchdown, min(100, sqrt(2 * a_stop * max(0, h)))).
   return -min(fastest, max(touchdown, 0.1 * (h - h_ref))).
 }
 
@@ -336,17 +365,22 @@ function land_split_accel {
 // v_ahead m/s (positive ahead) with a_max m/s^2 to spend. It holds land_vh_target's speed: the
 // deceleration that speed needs as the distance closes (its slope times the speed), plus a pull onto
 // it over 2 s; faster than that, at least the deceleration that stops it on the site. On or past the
-// site it only stops, so it lands long rather than turning back. All capped at a_max.
+// site it only stops, so it lands long rather than turning back. Never over v_top m/s: braking far
+// out, it holds its speed rather than speeding up to the curve's (#365). All capped at a_max.
 function land_axis_accel {
-  parameter s, v_ahead, a_max, margin.
+  parameter s, v_ahead, a_max, margin, v_top is 1e9.
   // Stopping past the site: over 4 s, slow enough that a turn lagging a second or two behind
   // doesn't carry it on through zero.
   local a is -v_ahead / 4.
   if s > 0 {
     local v_want is land_vh_target(s, a_max, margin).
     local a_ok is a_max / margin.
-    // d(v_want)/ds.
+    // d(v_want)/ds, 0 where v_top holds it.
     local slope is a_ok / max(0.001, v_want + 2 * a_ok).
+    if v_want > v_top {
+      set v_want to v_top.
+      set slope to 0.
+    }
     set a to (v_want - v_ahead) / 2 - slope * max(0, v_ahead).
     if v_ahead > v_want {
       set a to min(a, -v_ahead ^ 2 / (2 * s)).
@@ -368,11 +402,12 @@ function land_cross_accel {
 // One tick of the powered descent's guidance in the braking frame: the axis along the horizontal
 // velocity when braking began, and across it. st holds s (m to the site along the axis, negative once
 // past it), c (m to it across), v_al and v_cr (m/s along and across), v_up (m/s), h (m above the
-// terrain), h_start (h when braking began), a_max (m/s^2 the engines give), g (m/s^2) and radius (m
+// terrain), h_start (h when braking began), v_top (the most m/s along the axis), a_max (m/s^2 the engines give), g (m/s^2) and radius (m
 // from the body's centre). It glides down (land_approach_height) to where it will stop, the site or
 // its stopping distance on, so it comes straight down once it has stopped; gives the vertical
 // acceleration first, brakes along the axis with what is left (land_axis_accel) and closes across it
-// with the rest, upright near the ground. Returns lexicon("al", "cr", "up"): m/s^2 wanted.
+// with the rest, upright near the ground. Returns lexicon("al", "cr", "up"): m/s^2 wanted, with, for
+// the trace, "h_ref" (m), "vh" and "vv" (m/s) it aims for and "to_go" (m to where it stops).
 function land_guide {
   parameter st, touchdown, margin.
   local v_h is sqrt(st:v_al ^ 2 + st:v_cr ^ 2).
@@ -385,9 +420,10 @@ function land_guide {
   local a_ok is a_h_most / margin.
   local braking_needs is a_ok * v_h / (v_h + 2 * a_ok).
   local a_stop is max(0.2, 0.5 * (sqrt(max(0, a_most ^ 2 - braking_needs ^ 2)) - st:g)).
-  local vv_want is land_vv_target(st:h, land_approach_height(to_go, st:h_start), a_stop, touchdown).
+  local h_ref is land_approach_height(to_go, st:h_start).
+  local vv_want is land_vv_target(st:h, h_ref, a_stop, touchdown).
   local split is land_split_accel(a_most, g_eff + 0.5 * (vv_want - st:v_up), a_most).
-  local al is land_axis_accel(st:s, st:v_al, split:h, margin).
+  local al is land_axis_accel(st:s, st:v_al, split:h, margin, st:v_top).
   local cr is land_cross_accel(st:c, st:v_cr, sqrt(max(0, split:h ^ 2 - al ^ 2)), margin).
   local tilt is land_max_tilt(st:h).
   if tilt < 90 {
@@ -398,7 +434,30 @@ function land_guide {
       set cr to cr * most / sideways.
     }
   }
-  return lexicon("al", al, "cr", cr, "up", split:v).
+  return lexicon("al", al, "cr", cr, "up", split:v, "h_ref", h_ref, "vv", vv_want,
+    "vh", min(st:v_top, land_vh_target(st:s, split:h, margin)), "to_go", to_go).
+}
+
+// The descent's phase, for its trace: "fall" before braking, "braking" while over 50 m/s across the
+// ground, "approach" closing in, "terminal" once coming straight down (h_ref, its height to hold, 0). Pure.
+function land_phase {
+  parameter braking, v_h, h_ref.
+  if not braking {
+    return "fall".
+  }
+  if h_ref <= 0 {
+    return "terminal".
+  }
+  if v_h > 50 {
+    return "braking".
+  }
+  return "approach".
+}
+
+// Whether the descent traces a line now: at a phase change, or 2 s (ut) after the last line. Pure.
+function land_trace_due {
+  parameter phase, last_phase, ut, last_ut.
+  return phase <> last_phase or ut >= last_ut + 2.
 }
 
 // Whether a craft moving v_ahead m/s along the braking axis has turned back: under -1 m/s (jitter
@@ -821,8 +880,8 @@ function land_coast {
 }
 
 // The powered descent onto aim, to touchdown and a settled craft. Sets best_effort, reversals,
-// touchdown_speed_actual and touchdown_h_speed in extra (and lean, if settling fails). Returns "" or
-// why it failed.
+// touchdown_speed_actual and touchdown_h_speed in extra (and lean, if settling fails), and traces each
+// phase and every 2 s to the log (#365). Returns "" or why it failed.
 function land_descend {
   parameter ctx, aim, extra.
   local opt is ctx:opt.
@@ -840,6 +899,15 @@ function land_descend {
   lock throttle to tset.
   local last_speed is ship:velocity:surface:mag.
   local last_h_speed is 0.
+  // The fastest it may move along the braking axis: its speed when braking began (#365).
+  local v_top is 0.
+  // The terrain heights at land_lookahead's points along the ground track, a few read each tick.
+  local ahead_h is list().
+  local next_read is 0.
+  local to_go is 1e9.
+  // The trace (ADDONS:CLAUDIA:BLOCKTRACE): the last line's phase and UT.
+  local last_phase is "".
+  local last_trace_ut is -1e9.
 
   until status = "LANDED" or status = "SPLASHED" {
     local up_v is ship:up:vector.
@@ -848,12 +916,37 @@ function land_descend {
     local vel is ship:velocity:surface.
     local v_v is vdot(vel, up_v).
     local v_h is vxcl(up_v, vel).
-    local h is alt:radar.
+    local radar is alt:radar.
     local a_max is ship:availablethrust / max(0.001, ship:mass).
     local radius_now is body:radius + altitude.
     local g is body:mu / radius_now ^ 2.
     set last_speed to vel:mag.
     set last_h_speed to v_h:mag.
+    if not braking {
+      set to_go to dist.
+    }
+    // The ground ahead: all of it on the first tick, then four points a tick, oldest first.
+    local points is land_lookahead(v_h:mag, to_go).
+    local track is v(0, 0, 0).
+    if v_h:mag > 0.01 {
+      set track to v_h:normalized.
+    }
+    local reads is 4.
+    if ahead_h:length = 0 {
+      set reads to points:length.
+    }
+    for k in range(reads) {
+      local i is mod(next_read, points:length).
+      local height is body:geopositionof(ship:position + track * points[i]):terrainheight.
+      if i < ahead_h:length {
+        set ahead_h[i] to height.
+      } else {
+        ahead_h:add(height).
+      }
+      set next_read to next_read + 1.
+    }
+    local h is land_clearance(radar, altitude, ahead_h).
+    local want is lexicon("h_ref", -1, "vh", -1, "vv", -1).
 
     if not braking {
       // Brake once land_vh_target's speed is down to this one, if the site falls behind, or if the
@@ -863,6 +956,8 @@ function land_descend {
       if land_vh_target(dist, a_brake, opt:burn_margin) <= v_h:mag or vdot(v_h, to_site) < 0 or falling_for < 40 or h < 1500 {
         set braking to true.
         set h_start to max(500, h).
+        // At least enough to close on a site moved up to max_divert.
+        set v_top to max(50, v_h:mag).
         set axis to v_h.
         if v_h:mag < 1 {
           set axis to to_site.
@@ -875,9 +970,13 @@ function land_descend {
         // descent has the whole braking distance to take the new site in (a later move could put
         // the site behind it).
         local spot is addons:claudia:flatspot(body:geopositionlatlng(site:lat, site:lng), opt:max_divert, opt:max_slope).
+        local moved is land_surface_distance(site:lat, site:lng, spot:lat, spot:lng, body:radius).
         set site to lexicon("lat", spot:lat, "lng", spot:lng).
         set extra:best_effort to not spot:flat.
         set to_site to vxcl(up_v, body:geopositionlatlng(site:lat, site:lng):position).
+        if moved > 1 {
+          addons:claudia:blocktrace("land", lexicon("phase", "divert", "moved", round(moved), "flat", spot:flat, "dist", round(to_site:mag))).
+        }
       }
       set steer to -vel.
       set tset to 0.
@@ -900,8 +999,9 @@ function land_descend {
       if reversed and not was {
         set extra:reversals to extra:reversals + 1.
       }
-      local want is land_guide(lexicon("s", s, "c", vdot(to_site, across), "v_al", v_ahead, "v_cr", vdot(v_h, across),
-        "v_up", v_v, "h", h, "h_start", h_start, "a_max", a_max, "g", g, "radius", radius_now), opt:touchdown_speed, opt:burn_margin).
+      set want to land_guide(lexicon("s", s, "c", vdot(to_site, across), "v_al", v_ahead, "v_cr", vdot(v_h, across),
+        "v_up", v_v, "h", h, "h_start", h_start, "v_top", v_top, "a_max", a_max, "g", g, "radius", radius_now), opt:touchdown_speed, opt:burn_margin).
+      set to_go to want:to_go.
       local accel is ahead * want:al + across * want:cr + up_v * want:up.
       if accel:mag > 0.001 {
         set steer to accel.
@@ -909,9 +1009,18 @@ function land_descend {
         set steer to up_v.
       }
       set tset to min(1, accel:mag / max(0.001, a_max)) * max(0, cos(vang(ship:facing:forevector, steer))).
-      if h < opt:gear_alt and not gear {
+      if radar < opt:gear_alt and not gear {
         gear on.
       }
+    }
+    // The descent trace, for the log: a craft destroyed mid-descent leaves its last line as the block's state.
+    local phase is land_phase(braking, v_h:mag, want:h_ref).
+    if land_trace_due(phase, last_phase, time:seconds, last_trace_ut) {
+      addons:claudia:blocktrace("land", lexicon("phase", phase, "h", round(h), "radar", round(radar), "v_h", round(v_h:mag, 1),
+        "v_down", round(-v_v, 1), "dist", round(dist), "throttle", round(tset, 2), "h_ref", round(want:h_ref),
+        "vh_want", round(want:vh, 1), "vv_want", round(want:vv, 1), "pe", round(ship:orbit:periapsis))).
+      set last_phase to phase.
+      set last_trace_ut to time:seconds.
     }
     local ticked is claudia_tick(ctx, tset).
     if ticked <> "" {
@@ -923,6 +1032,7 @@ function land_descend {
   set ship:control:pilotmainthrottle to 0.
   set extra:touchdown_speed_actual to round(last_speed, 2).
   set extra:touchdown_h_speed to round(last_h_speed, 2).
+  addons:claudia:blocktrace("land", lexicon("phase", "touchdown", "speed", extra:touchdown_speed_actual, "v_h", extra:touchdown_h_speed)).
   unlock throttle.
   // Hold upright while it settles on its legs, then leave it safe.
   set steer to ship:up:vector.

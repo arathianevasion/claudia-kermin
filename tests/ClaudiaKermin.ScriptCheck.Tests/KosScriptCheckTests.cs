@@ -310,6 +310,14 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             AssertAllowed(CoreLibrary.Bundle("addons:claudia:waitstart(time:seconds + 600).\naddons:claudia:waitend()."));
         }
 
+        // #365: a block's trace line is a report to the mod's log too, so land, or a Custom Script, may write one.
+        [Fact]
+        public void AMissionScriptMayTraceABlocksStateForTheLog()
+        {
+            AssertAllowed("addons:claudia:blocktrace(\"land\", lexicon(\"phase\", \"fall\", \"h\", 3000)).");
+            Assert.Contains("addons:claudia:blocktrace(", CoreLibrary.Bundle("").ToLowerInvariant());
+        }
+
         [Fact]
         public void TheCoreLibrarysOwnBlockInternalCallPasses()
         {
