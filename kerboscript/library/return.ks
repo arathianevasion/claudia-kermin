@@ -58,10 +58,11 @@ function return_aims {
 }
 
 // What return asks ADDONS:CLAUDIA:REENTRYIMPACT: where the path orb round Kerbin comes down, and how
-// far that is from site (lat, lng) whose ground is ground_alt m (sea level for water). Pure.
+// far that is from site (lat, lng) whose ground is ground_alt m (sea level for water). The path begins
+// at from_ut (the craft may not be on it yet), so the fall is taken from there. Pure.
 function return_impact_query {
-  parameter orb, site, ground_alt.
-  return lexicon("lat", site:lat, "lng", site:lng, "ground_alt", max(0, ground_alt),
+  parameter orb, from_ut, site, ground_alt.
+  return lexicon("lat", site:lat, "lng", site:lng, "ground_alt", max(0, ground_alt), "from_ut", from_ut,
     "orbit_sma", orb:semimajoraxis, "orbit_ecc", orb:eccentricity, "orbit_inc", orb:inclination,
     "orbit_lan", orb:lan, "orbit_argpe", orb:argumentofperiapsis, "orbit_mna", orb:meananomalyatepoch,
     "orbit_epoch", orb:epoch, "orbit_body", orb:body:name).
@@ -191,14 +192,17 @@ function return {
   local predict is 0.
   if return_aims(opt) {
     local site is claudia_target_site(opt:target, planet:name).
+    if site:error <> "" {
+      return claudia_finish(ctx, false, site:error, extra).
+    }
     local ground_alt is planet:geopositionlatlng(site:lat, site:lng):terrainheight.
     set predict to {
-      parameter orb.
-      return addons:claudia:reentryimpact(return_impact_query(orb, site, ground_alt)).
+      parameter orb, from_ut.
+      return addons:claudia:reentryimpact(return_impact_query(orb, from_ut, site, ground_alt)).
     }.
     set aim to {
-      parameter orb.
-      local landing is predict(orb).
+      parameter orb, from_ut.
+      local landing is predict(orb, from_ut).
       if landing:error <> "" {
         return -1.
       }
@@ -263,7 +267,7 @@ function return {
   set extra:reentry_ut to round(return_reentry_ut(home:orbit)).
   if return_aims(opt) {
     // Where the path flown comes down, after the correction's own error.
-    local landing is predict(home:orbit).
+    local landing is predict(home:orbit, home:soi_ut).
     if landing:error = "" {
       set extra:predicted_geo to claudia_geo(landing).
       set extra:predicted_error_km to round(landing:error_km, 2).

@@ -105,7 +105,8 @@ namespace ClaudiaKermin.Core.Tools
         /// down, by the reentry predictor. Takes <c>ground_alt</c> (m) and, for the distance, <c>lat</c> and <c>lng</c>. Given
         /// <c>orbit_sma</c>, <c>orbit_ecc</c>, <c>orbit_inc</c>, <c>orbit_lan</c>, <c>orbit_argpe</c>, <c>orbit_mna</c> (degrees, as kOS
         /// gives them), <c>orbit_epoch</c> (UT) and <c>orbit_body</c> (name), it predicts that orbit instead of the craft's: <c>return</c>
-        /// asks it of its planned path round Kerbin before the craft is there. Gives
+        /// asks it of its planned path round Kerbin before the craft is there, with <c>from_ut</c> (UT, default now) the UT that
+        /// path begins, so the fall is not taken from an earlier pass of the same conic. Gives
         /// <c>error</c> "", <c>lat</c>, <c>lng</c>, <c>landing_ut</c> and <c>error_km</c> (-1 without a target); or only
         /// <c>error</c>, saying why there is no landing point.
         /// </summary>
@@ -118,7 +119,7 @@ namespace ClaudiaKermin.Core.Tools
             BodyFrame frame;
             var problem = Reentry(snapshot, body, ask, out at, out orbit, out frame);
             if (problem != null) return Error(problem);
-            var landing = ReentryPredictor.Predict(at, orbit, snapshot.Ut, Number(ask, "ground_alt", 0), craft.MassKg, air, craft, frame);
+            var landing = ReentryPredictor.Predict(at, orbit, Number(ask, "from_ut", snapshot.Ut), Number(ask, "ground_alt", 0), craft.MassKg, air, craft, frame);
             if (landing.Error != null) return Error(landing.Error);
             var km = ask.ContainsKey("lat") && ask.ContainsKey("lng")
                 ? LandingSiteSearch.ArcDegrees(landing.Latitude, landing.Longitude, Number(ask, "lat", 0), Number(ask, "lng", 0)) * Math.PI / 180 * at.Radius / 1000

@@ -1018,7 +1018,7 @@ function claudia_aim_cost {
   if p:istype("String") {
     return 1e5.
   }
-  local km is aim(p:orbit).
+  local km is aim(p:orbit, p:soi_ut).
   if km < 0 {
     return 1e4 + abs(p:orbit:periapsis - target_pe) / 1000.
   }
@@ -1029,8 +1029,8 @@ function claudia_aim_cost {
 // flown with exec_node. A sphere-of-influence change before halfway (leaving a moon on the way home)
 // is waited out first (on rails, however long), so the node is placed on the orbit it will be on. Nothing is burned
 // when the prediction is already within 1 km of target_pe or the fix is under 0.1 m/s.
-// aim, when given (a delegate of an orbit patch round dest that returns the km its predicted landing
-// is from the target, or -1 if it doesn't come down), makes the correction aim the landing at the
+// aim, when given (a delegate of an orbit patch round dest and the UT it begins, that returns the km
+// its predicted landing is from the target, or -1 if it doesn't come down), makes the correction aim the landing at the
 // target instead: target_pe then only draws a path that misses the atmosphere towards it, and
 // nothing is burned when the landing is already within claudia_aim_good_km() of the target.
 // Returns lexicon("reason", "" or why the block fails, "dv", m/s burned).

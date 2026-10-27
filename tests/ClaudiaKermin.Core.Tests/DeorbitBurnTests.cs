@@ -251,6 +251,17 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void The_impact_call_falls_from_from_ut_not_from_an_earlier_pass_of_the_same_orbit()
+        {
+            // The 80 km by 30 km orbit is at apoapsis at UT 0 and 1800ish: a path that begins then falls on its next pass.
+            var now = BlockCalls.ReentryImpact(Ask("ground_alt", 0.0), Snapshot(pe: 30000), new Sphere(), new ReentrySim.Atmosphere(), new ReentrySim.Capsule());
+            var later = BlockCalls.ReentryImpact(Ask("ground_alt", 0.0, "from_ut", 2500.0), Snapshot(pe: 30000), new Sphere(), new ReentrySim.Atmosphere(), new ReentrySim.Capsule());
+            Assert.Equal("", later["error"]);
+            Assert.True((double)later["landing_ut"] > 2500);
+            Assert.True((double)now["landing_ut"] < 2500);
+        }
+
+        [Fact]
         public void The_impact_call_given_an_orbit_round_a_body_with_no_air_says_so()
         {
             var mun = BlockCalls.ReentryImpact(Ask("orbit_sma", 230000.0, "orbit_ecc", 0.0, "orbit_body", "Mun"), Snapshot(), new Sphere(), new ReentrySim.Atmosphere(), new ReentrySim.Capsule());

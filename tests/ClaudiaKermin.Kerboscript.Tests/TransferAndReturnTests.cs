@@ -205,19 +205,19 @@ namespace ClaudiaKermin.Kerboscript.Tests
         public void Return_asks_the_predictor_for_the_path_it_means_with_its_elements_and_the_target()
         {
             var stub = "local kerbin is lexicon(\"name\", \"Kerbin\"). local orb is lexicon(\"semimajoraxis\", 9e6, \"eccentricity\", 0.9, \"inclination\", 2, \"lan\", 3, \"argumentofperiapsis\", 4, \"meananomalyatepoch\", 5, \"epoch\", 6, \"body\", kerbin). ";
-            var asked = Run(stub + "local q is return_impact_query(orb, lexicon(\"lat\", -0.1, \"lng\", -74.5), -20). print q:keys:length. print q:lat. print q:lng. print q:ground_alt. print q:orbit_sma. print q:orbit_ecc. print q:orbit_inc. print q:orbit_lan. print q:orbit_argpe. print q:orbit_mna. print q:orbit_epoch. print q:orbit_body.");
-            Assert.Equal(new[] { "11", "-0.1", "-74.5", "0", "9000000", "0.9", "2", "3", "4", "5", "6", "Kerbin" }, asked);
+            var asked = Run(stub + "local q is return_impact_query(orb, 777, lexicon(\"lat\", -0.1, \"lng\", -74.5), -20). print q:keys:length. print q:from_ut. print q:lat. print q:lng. print q:ground_alt. print q:orbit_sma. print q:orbit_ecc. print q:orbit_inc. print q:orbit_lan. print q:orbit_argpe. print q:orbit_mna. print q:orbit_epoch. print q:orbit_body.");
+            Assert.Equal(new[] { "12", "777", "-0.1", "-74.5", "0", "9000000", "0.9", "2", "3", "4", "5", "6", "Kerbin" }, asked);
         }
 
         [Fact]
         public void An_aimed_correction_lowers_the_km_to_the_target_and_otherwise_draws_the_path_into_the_air()
         {
             var patch = "local p is lexicon(\"orbit\", lexicon(\"periapsis\", 80000), \"soi_ut\", 0). ";
-            Assert.Equal("12.5", Run(patch + "print claudia_aim_cost({ parameter o. return 12.5. }, p, 35000).").Single());
+            Assert.Equal("12.5", Run(patch + "print claudia_aim_cost({ parameter o, u. return 12.5. }, p, 35000).").Single());
             // No landing: worse than any real one, and nearer to the target periapsis is better.
-            Assert.Equal("10045", Run(patch + "print claudia_aim_cost({ parameter o. return -1. }, p, 35000).").Single());
+            Assert.Equal("10045", Run(patch + "print claudia_aim_cost({ parameter o, u. return -1. }, p, 35000).").Single());
             // No path to Kerbin at all.
-            Assert.Equal("100000", One("claudia_aim_cost({ parameter o. return 1. }, \"none\", 35000)"));
+            Assert.Equal("100000", One("claudia_aim_cost({ parameter o, u. return 1. }, \"none\", 35000)"));
         }
 
         // A worked example: from a 30 km Mun orbit to a 35 km Kerbin periapsis (stock body values).
