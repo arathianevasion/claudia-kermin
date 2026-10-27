@@ -428,6 +428,25 @@ namespace ClaudiaKermin.Core.Missions
             return string.Join("\n", lines.ToArray());
         }
 
+        /// <summary>The Debrief's line on the delta-v the whole run used, from stock's figures at its start and now; says why when either is unreadable.</summary>
+        public static string RunDeltaVLine(double? startLeft, GameSnapshot now)
+        {
+            var nowLeft = LiveReadings.DeltaVLeftOf(now);
+            string why = null;
+            if (!startLeft.HasValue) why = "no stock delta-v figure at the run's start";
+            else if (now == null) why = "the craft's readings aren't available now";
+            else if (!now.DeltaVSimulator) why = "the stock delta-v simulator is off now";
+            else if (!nowLeft.HasValue) why = "a stage's delta-v reading is unreliable now";
+            if (why != null) return "Delta-v used this run: unknown (" + why + ").";
+            return "Delta-v used this run, from stock: " + Rounded(System.Math.Max(0, startLeft.Value - nowLeft.Value)) + " m/s (left at start "
+                + Rounded(startLeft.Value) + " m/s, now " + Rounded(nowLeft.Value) + " m/s).";
+        }
+
+        private static string Rounded(double value)
+        {
+            return value.ToString("#,0", CultureInfo.InvariantCulture);
+        }
+
         /// <summary>Text as a quoted JSON string: the way player words and names reach Claude.</summary>
         public static string Quoted(string text)
         {
