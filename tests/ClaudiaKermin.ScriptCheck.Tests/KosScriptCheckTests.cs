@@ -304,6 +304,52 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             AssertForbidden("call block-internal calculations", CoreLibrary.Bundle(script));
         }
 
+        [Theory]
+        [InlineData(0x0D)]
+        [InlineData(0x2028)]
+        [InlineData(0x2029)]
+        [InlineData(0x85)]
+        [InlineData(0x0B)]
+        [InlineData(0x0C)]
+        public void OtherLineBreaksCannotMoveAMissionScriptCallOntoTheLibrarysLines(int lineBreak)
+        {
+            // Enough to pass the library's first line, were any of them counted as a line by kOS and not by the check.
+            var padding = new string((char)lineBreak, 50);
+            var result = _check.Check(CoreLibrary.Bundle(padding + "print addons:claudia:landingsite(lexicon())."));
+            Assert.False(result.Passed);
+        }
+
+        [Fact]
+        public void AMissionScriptCannotSwapItsOwnCodeIntoABlockWithALock()
+        {
+            // A lock is stored when its line runs, over the library's function of that name: a lock named land_plan would get land's
+            // site from the block-internal search and could keep it without the block flying it.
+            var result = _check.Check(CoreLibrary.Bundle("print 1.\nlock land_plan to lexicon(\"error\", \"x\").\nprint land(lexicon(\"target\", lexicon(\"biome\", \"Midlands\")))."));
+            Assert.Contains("line 2: LAND_PLAN* (redefine a Core Library function)", result.Forbidden);
+        }
+
+        [Fact]
+        public void AMissionScriptCannotDefineAFunctionTheLibraryDefines()
+        {
+            // The Mission Script's function wins over the library's (LandAscendTests shows it on kOS), so land_plan could keep the site.
+            var result = _check.Check(CoreLibrary.Bundle("print 1.\n\nfunction land_plan {\n  parameter a, b, c.\n  return lexicon(\"error\", \"x\").\n}"));
+            Assert.Contains(result.Forbidden, f => f.EndsWith("FUNCTION LAND_PLAN (redefine a Core Library function)"));
+            Assert.All(result.Forbidden, f => Assert.True(int.Parse(f.Split(' ', ':')[1]) <= 6, f));
+            AssertForbidden("redefine a Core Library function", CoreLibrary.Bundle("global function claudia_finish { parameter a, b, c, d. return a. }"));
+        }
+
+        [Fact]
+        public void ALockInsideAMissionScriptFunctionIsCaughtToo()
+        {
+            AssertForbidden("redefine a Core Library function", CoreLibrary.Bundle("function f {\n  lock land_site_query to lexicon().\n}\nf()."));
+        }
+
+        [Fact]
+        public void AMissionScriptMayLockSteeringAndThrottleAndNameItsOwnFunctions()
+        {
+            AssertAllowed(CoreLibrary.Bundle("function my_helper { return 1. }\nlock steering to prograde.\nlock throttle to 0.\nprint my_helper().\nunlock steering.\nunlock throttle."));
+        }
+
         [Fact]
         public void LandsFileAlonePassesOnlyAsCoreLibrary()
         {

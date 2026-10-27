@@ -12,6 +12,7 @@ We rejected:
 The cost:
 - **The check depends on the bundle's layout.** If `Bundle` changes, `LibraryStartLine` changes with it (it is computed from `Bundle("")`); a test pins that a Mission Script line in a bundle is still refused.
 - **A Core Library helper is reachable.** A Mission Script can call any library function, so a block-internal call sits inline in the block that uses it (`land`), not in a helper a script could call to get the search without the block. Pure helpers (building the query) are fine to share.
+- **A Mission Script must not replace library functions.** kOS keeps the first file-level function of a name, which is the Mission Script's, and a `lock` of a function's name replaces it when its line runs. Either would put the script's own code inside a block, round the call (a `land_plan` that keeps the site and fails), so the check refuses, in a bundle, any function or lock the Mission Script defines with a Core Library function's name ("redefine a Core Library function"). Function definitions are all stored on the script's first line, so the check finds where one's code starts from the label its definition pushes.
 - **CI checks library files alone** (`KsCompile` over `kerboscript/library`): those are checked as all-library (`KosScriptCheck(forCoreLibrary: true)`). The mod never uses that mode.
 
 The calls only read the game, like the Planning Tools beneath them, so there is no runtime gate on them: the player's terminal may call them too.

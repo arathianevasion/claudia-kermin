@@ -3,6 +3,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
+using ClaudiaKermin.Core.Kos;
 
 namespace ClaudiaKermin.ScriptCheck
 {
@@ -38,6 +40,8 @@ namespace ClaudiaKermin.ScriptCheck
         /// Mission Script passes a block its goal instead (ADR 0007).
         /// </summary>
         public const string BlockInternal = "call block-internal calculations";
+        /// <summary>A Mission Script defining a function (or lock) the Core Library defines, which would change a block's code (ADR 0007).</summary>
+        public const string RedefineLibrary = "redefine a Core Library function";
         /// <summary>From the allowed list: <c>makebuiltindelegate</c> is allowed only with a constant argument.</summary>
         public const string ComputedDelegate = "makebuiltindelegate without a constant argument";
 
@@ -69,6 +73,15 @@ namespace ClaudiaKermin.ScriptCheck
 
         /// <summary>The ADDONS suffixes a script may use: Claudia's own addon, and asking whether an addon is there.</summary>
         public static readonly HashSet<string> AllowedAddonSuffixes = Set("claudia available hasaddon");
+
+        /// <summary>The names of the functions the Core Library (with RSVP and the vendored scripts) defines, as the mod bundles it.</summary>
+        public static readonly Lazy<HashSet<string>> LibraryFunctions = new Lazy<HashSet<string>>(() =>
+        {
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (Match match in Regex.Matches(CoreLibrary.Bundle(""), @"^\s*(?:(?:global|local)\s+)?function\s+(\w+)", RegexOptions.Multiline | RegexOptions.IgnoreCase))
+                names.Add(match.Groups[1].Value);
+            return names;
+        });
 
         /// <summary>LIST kinds that read volumes or files (<c>list files</c>, <c>list volumes in v</c>).</summary>
         public static readonly HashSet<string> FileListKinds = Set("files volumes");

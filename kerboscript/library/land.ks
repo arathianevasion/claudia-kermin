@@ -156,10 +156,11 @@ function land_is_biome {
 
 // What land asks ADDONS:CLAUDIA:LANDINGSITE (find_landing_site's search) for a biome target: a
 // site in the biome, in daylight if wanted, no steeper than max_slope, under the ground track in the
-// next 3 orbits (period s), nearest the near point if there is one. Pure.
+// next 3 orbits (period s), nearest the near point if there is one. The search wants a slope over 0,
+// so max_slope 0 asks for 0.1 degrees. Pure.
 function land_site_query {
   parameter target_opt, daylight, max_slope, period.
-  local query is lexicon("biome", target_opt:biome, "daylight", daylight, "max_slope_deg", max_slope,
+  local query is lexicon("biome", target_opt:biome, "daylight", daylight, "max_slope_deg", max(0.1, max_slope),
     "within_hours", 3 * period / 3600).
   if target_opt:haskey("near") {
     query:add("near", lexicon("latitude", target_opt:near:lat, "longitude", target_opt:near:lng)).

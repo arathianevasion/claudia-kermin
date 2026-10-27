@@ -144,6 +144,20 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(new[] { "2.5", "-30", "False", "3" }, printed);
         }
 
+        [Fact]
+        public void A_max_slope_of_0_asks_the_site_search_for_the_flattest_it_takes()
+        {
+            // land allows max_slope 0; the search wants more than 0.
+            Assert.Equal("0.1", One("land_site_query(lexicon(\"biome\", \"Flats\"), false, 0, 3600):max_slope_deg"));
+        }
+
+        [Fact]
+        public void A_Mission_Script_function_named_like_a_library_function_replaces_it()
+        {
+            // Why the Script Check refuses such a function (ADR 0007): the Mission Script's wins, inside the blocks too.
+            Assert.Equal(new[] { "999" }, Run("function land_wrap_lng { parameter x. return 999. }\nprint land_wrap_lng(10)."));
+        }
+
         [Theory]
         [InlineData("Midlands", "midlands", "True")]
         [InlineData("NorthernBasin", "Northern Basin", "True")]
