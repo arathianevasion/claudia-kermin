@@ -62,7 +62,7 @@ namespace ClaudiaKermin.Core.Tests
                 var declaredFunctions = new HashSet<string>(
                     Regex.Matches(code, @"\bfunction\s+([A-Za-z_]\w*)", RegexOptions.IgnoreCase).Cast<Match>().Select(m => m.Groups[1].Value.ToLowerInvariant()));
                 var names = DeclaredNames(code).Concat(
-                    Regex.Matches(code, @"(?:^|[.{}]|\s)set\s+([A-Za-z_]\w*)\s+to\b", RegexOptions.IgnoreCase).Cast<Match>().Select(m => m.Groups[1].Value));
+                    Regex.Matches(code, @"(?:^|[.{}]|\s)(?:set|lock)\s+([A-Za-z_]\w*)\s+to\b", RegexOptions.IgnoreCase).Cast<Match>().Select(m => m.Groups[1].Value));
                 foreach (var name in names)
                 {
                     var lower = name.ToLowerInvariant();
