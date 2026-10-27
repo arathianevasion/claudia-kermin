@@ -82,6 +82,14 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void TheMissionPromptTellsClaudiaToLeaveRcsToTheBlocksAndNeverSwitchSasOn()
+        {
+            Assert.Contains("Blocks manage RCS themselves (RCS Use): leave it to them, or use claudia_rcs_translate for translation. "
+                + "Never switch SAS on: the Script Check rejects it, because SAS fights kOS steering and fires RCS through holds.", MissionPrompts.BaseLayer);
+            Assert.DoesNotContain("do not turn it back on", MissionPrompts.BaseLayer);
+        }
+
+        [Fact]
         public void EveryToolDescriptionNamesItsBuildingBlockAndWhenNotToCallIt()
         {
             var blocks = CoreLibrary.Blocks.Select(b => b.Name).ToList();
