@@ -135,6 +135,72 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Contains("3,200 m/s left against 1,000 m/s to fly: plenty.", request);
         }
 
+        // ---- The whole run's delta-v (#384) ----
+
+        [Fact]
+        public void TheDebriefRequestCarriesTheDeltaVTheWholeRunUsedFromStock()
+        {
+            var rig = new Rig(this, DebriefJson("Nominal", ""));
+            var start = rig.RunToRunning(s => s.Stages[0].DeltaVVac = 3913.3);
+
+            rig.Mission.Send(Craft(s => s.Stages[0].DeltaVVac = 2875.3));
+            rig.Mission.Send(new KosRunEnded(Finished(), start.RunId));
+            rig.DrainUntil(v => v.Stage == MissionStage.Sequencing || v.Stage == MissionStage.Succeeded || v.Stage == MissionStage.AwaitingSequenceApproval);
+
+            Assert.Contains("Delta-v used this run, from stock: 1,038 m/s (left at start 3,913 m/s, now 2,875 m/s).", LastUserText(rig.Transport.Requests[2]));
+        }
+
+        [Fact]
+        public void ADeltaVUsedBelowZeroIsShownAsZero()
+        {
+            var rig = new Rig(this, DebriefJson("Nominal", ""));
+            var start = rig.RunToRunning(s => s.Stages[0].DeltaVVac = 2000);
+
+            rig.Mission.Send(Craft(s => s.Stages[0].DeltaVVac = 2100));
+            rig.Mission.Send(new KosRunEnded(Finished(), start.RunId));
+            rig.DrainUntil(v => v.Stage == MissionStage.Sequencing || v.Stage == MissionStage.Succeeded || v.Stage == MissionStage.AwaitingSequenceApproval);
+
+            Assert.Contains("Delta-v used this run, from stock: 0 m/s (left at start 2,000 m/s, now 2,100 m/s).", LastUserText(rig.Transport.Requests[2]));
+        }
+
+        [Theory]
+        [InlineData(true, false, true, "the stock delta-v simulator is off now")]
+        [InlineData(false, true, true, "a stage's delta-v reading is unreliable now")]
+        [InlineData(false, false, false, "no stock delta-v figure at the run's start")]
+        public void WhenStocksDeltaVCantBeReadTheDebriefSaysWhyInsteadOfANumber(bool simulatorOffAtEnd, bool unreliableAtEnd, bool startReadable, string why)
+        {
+            var rig = new Rig(this, DebriefJson("Nominal", ""));
+            var start = rig.RunToRunning(startReadable ? (Action<GameSnapshot>)(s => s.Stages[0].DeltaVVac = 3913.3) : (s => s.Stages[0].DeltaVUnreliable = true));
+
+            rig.Mission.Send(Craft(s =>
+            {
+                s.DeltaVSimulator = !simulatorOffAtEnd;
+                s.Stages[0].DeltaVUnreliable = unreliableAtEnd;
+            }));
+            rig.Mission.Send(new KosRunEnded(Finished(), start.RunId));
+            rig.DrainUntil(v => v.Stage == MissionStage.Sequencing || v.Stage == MissionStage.Succeeded || v.Stage == MissionStage.AwaitingSequenceApproval);
+
+            var request = LastUserText(rig.Transport.Requests[2]);
+            Assert.Contains("Delta-v used this run: unknown (" + why + ").", request);
+            Assert.DoesNotContain("Delta-v used this run, from stock", request);
+        }
+
+        [Fact]
+        public void AHandBackDebriefLeavesTheRunsDeltaVOut()
+        {
+            var rig = new Rig(this, DebriefJson("Nominal", ""));
+            rig.RunToRunning(s => s.Stages[0].DeltaVVac = 3913.3);
+            rig.Mission.Send(new TakeManualControl());
+            rig.Mission.Send(Craft(s => s.Stages[0].DeltaVVac = 2875.3));
+
+            rig.Mission.Send(new HandBack("Done by hand."));
+            rig.DrainUntil(v => v.Stage != MissionStage.Debriefing);
+
+            var request = LastUserText(rig.Transport.Requests[2]);
+            Assert.Contains("took Manual Control", request);
+            Assert.DoesNotContain("Delta-v used this run", request);
+        }
+
         [Fact]
         public void EveryDebriefRunsTheMarginRecheckThroughTheCraftCheckAndChargesItToTheMission()
         {
@@ -550,6 +616,13 @@ namespace ClaudiaKermin.Core.Tests
             return GameSnapshot.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "snapshots", "on-pad.json")));
         }
 
+        private static GameSnapshot Craft(Action<GameSnapshot> shape)
+        {
+            var snapshot = OnPad();
+            shape(snapshot);
+            return snapshot;
+        }
+
         private static string LastUserText(HttpRequestSpec request)
         {
             using (var doc = JsonDocument.Parse(request.Body))
@@ -599,9 +672,12 @@ namespace ClaudiaKermin.Core.Tests
                 return ScriptedResponse.Fixture("mission-sequence-plan.sse");
             }
 
-            public StartScript RunToRunning()
+            /// <param name="craft">Shapes the Game Snapshot the Mission starts from, so the run's start figure is what the test wants.</param>
+            public StartScript RunToRunning(Action<GameSnapshot> craft = null)
             {
-                CraftCheckRouter.StartChecked(Mission, _tests._background, OnPad(), new StartMission(Goal, _cap, Sonnet));
+                var snapshot = Craft(craft ?? (s => { }));
+                Mission.Send(snapshot);
+                CraftCheckRouter.StartChecked(Mission, _tests._background, snapshot, new StartMission(Goal, _cap, Sonnet));
                 DrainUntil(v => v.Stage == MissionStage.AwaitingPlanApproval);
                 Mission.Send(new Approve());
                 DrainUntil(v => v.Stage == MissionStage.AwaitingSequenceApproval);

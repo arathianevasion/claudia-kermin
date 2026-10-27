@@ -128,6 +128,8 @@ namespace ClaudiaKermin.Core.Missions
         {
             var text = mission.RunEvents.DebriefText(mission.RunStartUt);
             var rest = RestOfPlanText(mission);
+            // A hand-back Debrief is of a manual stretch, with no scripted run to total.
+            if (!mission.HandBack) text += "\n" + MissionPrompts.RunDeltaVLine(mission.RunStartDeltaVLeft, MissionVesselSnapshot(mission));
             return text + "\nManeuver Sequences still to fly in the Mission Plan (quoted): " + MissionPrompts.Quoted(rest) + ".";
         }
 
