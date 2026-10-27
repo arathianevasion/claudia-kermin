@@ -305,6 +305,27 @@ namespace ClaudiaKermin.ScriptCheck.Tests
         }
 
         [Fact]
+        public void LandsFileAlonePassesOnlyAsCoreLibrary()
+        {
+            // CI checks each kerboscript/library file alone: as the library's, not as a Mission Script.
+            var land = File.ReadAllText(Path.Combine(RepoRoot(), "kerboscript", "library", "land.ks"));
+            Assert.True(new KosScriptCheck(forCoreLibrary: true).Check(land).Passed);
+            Assert.Contains(_check.Check(land).Forbidden, f => f.EndsWith("(call block-internal calculations)"));
+            // The library's check refuses everything else on the list.
+            Assert.Contains(new KosScriptCheck(forCoreLibrary: true).Check("kuniverse:quicksave().").Forbidden, f => f.EndsWith("(quicksave)"));
+        }
+
+        [Theory]
+        [InlineData("land_biome_mun")]
+        [InlineData("land_biome_minmus")]
+        public void TheLandBiomeBlockTestsBundledWithTheLibraryPass(string test)
+        {
+            var script = File.ReadAllText(Path.Combine(RepoRoot(), "tests", "blocks", test, "test.ks"));
+            AssertAllowed(script);
+            AssertAllowed(CoreLibrary.Bundle(script));
+        }
+
+        [Fact]
         public void TheBlockTestsCheckStillRefusesABlockInternalCallInTheScript()
         {
             var result = new KosScriptCheck(forToolTests: true).Check("print addons:claudia:landingsite(lexicon()).");
