@@ -146,7 +146,7 @@ namespace ClaudiaKermin.Core.Tools
                         unreadable++;
                         continue;
                     }
-                    var slope = Slope(five, body);
+                    var slope = Slope(five);
                     if (slope > query.MaxSlopeDeg) continue;
                     passedSlope++;
                     var c = batch[i];
@@ -249,7 +249,7 @@ namespace ClaudiaKermin.Core.Tools
         }
 
         /// <summary>The ground's steepness from the centre and the four points round it, degrees.</summary>
-        private static double Slope(List<SiteSample> five, SnapshotBody body)
+        private static double Slope(List<SiteSample> five)
         {
             var east = (five[1].Altitude - five[2].Altitude) / (2 * SlopeSpacing);
             var north = (five[3].Altitude - five[4].Altitude) / (2 * SlopeSpacing);
