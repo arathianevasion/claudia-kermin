@@ -65,7 +65,7 @@ namespace ClaudiaKermin.ScriptCheck
             RebootOrShutDown, "deactivate",
             OtherVessels, "sendmessage",
             PlanningTools, "planningtool",
-            BlockInternal, "landingsite deorbitburn reentryimpact turntime");
+            BlockInternal, "landingsite deorbitburn reentryimpact turntime ejectionburn");
 
         /// <summary>Suffixes forbidden on another vessel or its parts: they change it. Reading stays allowed.</summary>
         public static readonly HashSet<string> OtherVesselMutators = Set(
