@@ -21,6 +21,11 @@ namespace ClaudiaKermin.Core.Missions
             public bool AutoMode;
             /// <summary>The plan the Auto Mode room check last held for the player, so its blocked charge is logged once (not saved).</summary>
             public object AutoModeHeldFor;
+            /// <summary>
+            /// The plan Auto Mode last approved: if <see cref="Approval"/> refused it (no processor to run it on, an unsafe
+            /// script), it waits for the player rather than being approved again on every input (not saved).
+            /// </summary>
+            public object AutoModeApprovedFor;
         }
 
         /// <summary>What a plan in hand waits for, though the player's Approval was given in advance.</summary>
@@ -28,6 +33,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             /// <summary>The very first Mission Plan: the player never approved one, so there is nothing to stand for it.</summary>
             FirstMissionPlan,
+            /// <summary>Only the player flies a manual stretch.</summary>
             ManualStretch,
             /// <summary>A Due Time is a wait that needs the player (ADR 0004), even once it is reached.</summary>
             DueTime,
@@ -42,6 +48,7 @@ namespace ClaudiaKermin.Core.Missions
             if (MissionOver || mission.AutoMode == on) return;
             mission.AutoMode = on;
             mission.AutoModeHeldFor = null;
+            mission.AutoModeApprovedFor = null;
             Event(mission, "auto_mode", on ? "on" : "off");
         }
 
@@ -82,8 +89,10 @@ namespace ClaudiaKermin.Core.Missions
                     return;
                 }
             }
+            object inHand = missionPlan ? (object)mission.Plan : plan;
+            if (!mission.Blackout && mission.AutoModeApprovedFor == inHand) return;
             var stale = StaleBecause(mission);
-            if (!mission.Blackout && !AutoModeRoom(mission, stale, missionPlan))
+            if (!mission.Blackout && !AutoModeRoom(mission, inHand, stale, missionPlan))
             {
                 WaitsForPlayer(mission, AdvanceWait.NoRoom, missionPlan ? "" : plan.Name);
                 return;
@@ -98,7 +107,11 @@ namespace ClaudiaKermin.Core.Missions
                 mission.BlackoutRevisions.Add(missionPlan
                     ? "Mission Plan revised: " + mission.Plan.Why
                     : "Sequence Plan " + MissionPrompts.Quoted(plan.Name) + " flown without Approval: " + plan.Why);
-            else Note(LogKind.Notice, AutoModeApproved);
+            else
+            {
+                mission.AutoModeApprovedFor = inHand;
+                Note(LogKind.Notice, AutoModeApproved);
+            }
             Approval();
         }
 
@@ -117,15 +130,14 @@ namespace ClaudiaKermin.Core.Missions
         /// <see cref="MaySend"/> uses, never past costs, so Auto Mode can't approve a plan whose Debrief would be refused
         /// (ADR 0009). A tool loop charges per step, so <see cref="MaySend"/> stays the backstop.
         /// </summary>
-        private bool AutoModeRoom(Mission mission, string stale, bool missionPlan)
+        private bool AutoModeRoom(Mission mission, object inHand, string stale, bool missionPlan)
         {
             var worst = AutoModeReserve(mission);
             if (stale.Length > 0) worst += RequestCharge.WorstCase(_config.Prices, mission.Model, BuildRequest(mission, ReplanTurn(stale, missionPlan)));
             if (mission.Committed + worst <= mission.SpendingCap) return true;
-            object held = missionPlan ? (object)mission.Plan : mission.PendingSequence;
-            if (mission.AutoModeHeldFor != held)
+            if (mission.AutoModeHeldFor != inHand)
             {
-                mission.AutoModeHeldFor = held;
+                mission.AutoModeHeldFor = inHand;
                 LogCost(mission, "blocked", worst, "auto_mode_room");
             }
             return false;
@@ -145,7 +157,7 @@ namespace ClaudiaKermin.Core.Missions
                 UserText = MissionPrompts.RunReport(ran, new RunOutcome(RunOutcomeKind.Finished, null, "", "", false), "") + "\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = MissionPrompts.DebriefNotice,
             };
-            var next = BuildRequest(mission, NextSequenceTurn(true));
+            var next = BuildRequest(mission, NextSequenceTurn(offNominal: true));
             next.Messages.Insert(next.Messages.Count - 1, Message.UserText(debrief.UserText));
             next.Messages.Insert(next.Messages.Count - 1, Message.SystemText(debrief.Notice));
             var nextInput = (next.ToJson().Length + ProbeSlack + 2) / 3 + MissionPrompts.MaxTokens;
