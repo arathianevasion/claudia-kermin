@@ -29,6 +29,10 @@ namespace ClaudiaKermin.Core.Missions
             /// <summary>A carry on's follow-up threshold, armed once the first Alert is judged.</summary>
             public double? FollowUp;
             public bool FollowUpFired;
+            /// <summary>The first reading past the threshold, awaiting confirmation (a stock delta-v check); null when none.</summary>
+            public double? Pending;
+            /// <summary>The same for the follow-up threshold.</summary>
+            public double? FollowUpPending;
         }
 
         /// <summary>A crossed Telemetry Check, for its Alert and the run's Debrief.</summary>
@@ -61,6 +65,8 @@ namespace ClaudiaKermin.Core.Missions
             /// <summary>Crossings since the last Debrief, which lists them.</summary>
             public readonly List<Crossing> Crossings = new List<Crossing>();
             public LiveReadings Readings;
+            /// <summary>The snapshot the stock delta-v checks last judged; another input on the same snapshot is not a second reading.</summary>
+            public GameSnapshot JudgedSnapshot;
             /// <summary>The Building Block running now, from the kOS bridge; "" between blocks.</summary>
             public string CurrentBlock = "";
             public int BlocksDone;
@@ -102,6 +108,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.Checks.Clear();
             foreach (var check in TelemetryDefaults.Fill(plan, _config)) mission.Checks.Add(new LiveCheck { Check = check });
             mission.Crossings.Clear();
+            mission.JudgedSnapshot = null;
             mission.CurrentBlock = "";
             mission.BlocksDone = 0;
             mission.AbortRecommendation = "";
@@ -163,20 +170,66 @@ namespace ClaudiaKermin.Core.Missions
             var mission = _mission;
             if (mission == null || mission.Stage != MissionStage.Running || !mission.RunId.HasValue) return;
             mission.Readings = Readings(mission);
+            var snapshot = MissionVesselSnapshot(mission);
+            var fresh = !ReferenceEquals(snapshot, mission.JudgedSnapshot);
+            mission.JudgedSnapshot = snapshot;
             foreach (var live in mission.Checks)
             {
+                if (!fresh && live.Check.NeedsConfirmation) continue;
                 var reading = mission.Readings.Of(live.Check);
-                if (!live.Fired && live.Check.Crossed(reading, live.Check.Threshold))
+                if (!live.Fired)
                 {
-                    live.Fired = true;
-                    Crossed(mission, live, live.Check.Threshold, reading.Value, false);
+                    if (Confirmed(mission, live, reading, live.Check.Threshold, ref live.Pending))
+                    {
+                        live.Fired = true;
+                        Crossed(mission, live, live.Check.Threshold, reading.Value, false);
+                    }
                 }
-                else if (live.Fired && live.FollowUp.HasValue && !live.FollowUpFired && live.Check.Crossed(reading, live.FollowUp.Value))
+                else if (live.FollowUp.HasValue && !live.FollowUpFired)
                 {
-                    live.FollowUpFired = true;
-                    Crossed(mission, live, live.FollowUp.Value, reading.Value, true);
+                    if (Confirmed(mission, live, reading, live.FollowUp.Value, ref live.FollowUpPending))
+                    {
+                        live.FollowUpFired = true;
+                        Crossed(mission, live, live.FollowUp.Value, reading.Value, true);
+                    }
                 }
             }
+        }
+
+        /// <summary>
+        /// The reading crosses <paramref name="threshold"/> and may raise an Alert. A stock delta-v check needs two crossing
+        /// readings in a row, since stock misreads for a snapshot now and then (#381): a null reading neither confirms nor
+        /// clears a pending crossing, and a reading that doesn't cross clears it. Both readings go to the Mission's events.
+        /// </summary>
+        private bool Confirmed(Mission mission, LiveCheck live, double? reading, double threshold, ref double? pending)
+        {
+            var check = live.Check;
+            if (!check.NeedsConfirmation) return check.Crossed(reading, threshold);
+            if (!reading.HasValue) return false;
+            var crossed = check.Crossed(reading, threshold);
+            var first = pending;
+            if (crossed && !first.HasValue)
+            {
+                pending = reading;
+                Event(mission, "telemetry_check_pending", check.Name() + " " + check.Format(reading.Value) + (check.Below ? " under " : " over ")
+                    + check.Format(threshold) + ": first crossing, awaiting a second. " + StockDeltaVFacts());
+                return false;
+            }
+            pending = null;
+            if (first.HasValue)
+                Event(mission, crossed ? "telemetry_check_confirmed" : "telemetry_check_cleared",
+                    check.Name() + " " + check.Format(first.Value) + " then " + check.Format(reading.Value) + (check.Below ? " under " : " over ")
+                    + check.Format(threshold) + (crossed ? ": confirmed. " : ": not confirmed, no Alert. ") + StockDeltaVFacts());
+            return crossed;
+        }
+
+        /// <summary>The latest snapshot's per-stage delta-v (vacuum, m/s) and throttle, for telling a stock misreading from a real one.</summary>
+        private string StockDeltaVFacts()
+        {
+            var snapshot = _snapshot;
+            if (snapshot == null) return "no snapshot.";
+            return "Stage delta-v (vac): [" + string.Join(", ", snapshot.Stages.Select(s => s.DeltaVVac.ToString("0.#", CultureInfo.InvariantCulture)))
+                + "] m/s; throttle " + snapshot.Throttle.ToString("0.##", CultureInfo.InvariantCulture) + ".";
         }
 
         private void Crossed(Mission mission, LiveCheck live, double threshold, double value, bool followUp)

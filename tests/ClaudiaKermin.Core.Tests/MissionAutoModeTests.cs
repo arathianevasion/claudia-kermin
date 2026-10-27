@@ -244,6 +244,7 @@ namespace ClaudiaKermin.Core.Tests
             watch.Observe(mission.View);
 
             mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
             DrainUntil(mission, v => v.Log.Any(e => e.Text == AbortTakenText));
             mission.Send(new UtAdvanced(OnPad().Ut + 1));
 
@@ -263,6 +264,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport, AutoModeOn());
             var start = ToRunning(mission);
 
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
             mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
             mission.Send(Snapshot(s => { s.HasLink = false; s.Stages[0].DeltaVVac = 3100; }));
             Assert.True(mission.View.Blackout);
@@ -286,6 +288,7 @@ namespace ClaudiaKermin.Core.Tests
             var mission = Control(transport);
             var start = ToRunning(mission);
             mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
             DrainUntil(mission, v => v.AbortRecommended.Length > 0);
             mission.TakeCommands();
 
@@ -307,6 +310,7 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(new Approve());
             var start = mission.TakeCommands().OfType<StartScript>().Single();
 
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
             mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
             DrainUntil(mission, v => v.Log.Any(e => e.Text == AbortTakenText));
             AssertAbortTaken(mission, start);

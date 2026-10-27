@@ -232,6 +232,7 @@ namespace ClaudiaKermin.Core.Tests
             mission.Send(new Approve());
             var start = mission.TakeCommands().OfType<StartScript>().Single();
             mission.Send(Burned());
+            mission.Send(Burned());
             DrainUntil(mission, v => !v.Busy && transport.Requests.Count == 4);
             mission.Send(new KosRunEnded(Finished(), start.RunId));
             DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
@@ -270,6 +271,7 @@ namespace ClaudiaKermin.Core.Tests
                 Fixture("mission-alert-carry-on-plain.sse"));
             var mission = Control(transport);
             ToRunning(mission);
+            mission.Send(Burned());
             mission.Send(Burned());
             DrainUntil(mission, v => !v.Busy && transport.Requests.Count == 4);
 
