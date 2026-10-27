@@ -78,6 +78,23 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void In_a_mirrored_frame_the_normal_part_keeps_its_real_sign()
+        {
+            // The same orbit and target seen in a frame with y flipped: the node's normal is the real angular momentum, so its sign holds.
+            var plain = Find(1, KscLng);
+            Vec3 r, v;
+            Circular().State(0, out r, out v);
+            var flipped = Conic.FromState(ReentrySim.Mu, new Vec3(r.X, -r.Y, r.Z), new Vec3(v.X, -v.Y, v.Z), 0);
+            var mirrored = new BodyFrame { LonOffset = 0, Handed = -1, Ut = 0, RotationPeriod = ReentrySim.RotationPeriod };
+            var ask = new DeorbitAsk { TargetLatitude = 1, TargetLongitude = KscLng, EarliestUt = 120, MaxWait = ReentrySim.RotationPeriod };
+            var plan = DeorbitBurn.Find(ReentrySim.Kerbin(), flipped, ask, new ReentrySim.Atmosphere(), new ReentrySim.Capsule(), mirrored);
+            Assert.Null(plan.Error);
+            Assert.InRange(plan.ErrorKm, 0, 0.5);
+            Assert.InRange(plan.Normal, plain.Normal - 0.5, plain.Normal + 0.5);
+            Assert.InRange(plan.BurnUt, plain.BurnUt - 1, plain.BurnUt + 1);
+        }
+
+        [Fact]
         public void An_inclined_orbit_lands_on_its_target_too()
         {
             var plan = Find(KscLat, KscLng, Circular(inclinationDeg: 6));

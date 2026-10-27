@@ -213,7 +213,8 @@ namespace ClaudiaKermin.Core.Tools
                 Vec3 r, v;
                 _orbit.State(ut, out r, out v);
                 var along = v.Normalized;
-                var up = Vec3.Cross(r, v).Normalized;
+                // The node's normal is the orbit's real angular momentum: in a mirrored frame (Handed -1) the cross product points the other way.
+                var up = Vec3.Cross(r, v).Normalized * _frame.Handed;
                 // The periapsis falls as the retrograde part grows: bisect for the one aimed at.
                 double lo = 0, hi = v.Length;
                 for (var i = 0; i < 60; i++)

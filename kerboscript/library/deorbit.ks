@@ -206,8 +206,11 @@ function deorbit {
 
   local nd is node(found:burn_ut, found:radial, found:normal, found:prograde).
   add nd.
-  set extra:burn_ut to round(found:burn_ut, 1).
   local flown is claudia_burn(ctx, nd).
+  // burn_ut says the engines fired: a failure before ignition (no thrust, an abort in the wait) leaves it -1.
+  if flown:burn_time > 0 or flown:dv_used > 0 {
+    set extra:burn_ut to round(found:burn_ut, 1).
+  }
   if not flown:success {
     remove nd.
     return claudia_finish(ctx, false, flown:reason, extra).
