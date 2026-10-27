@@ -54,11 +54,13 @@ namespace ClaudiaKermin.KOS
         {
             var text = result["error"] as string ?? "";
             if (!result.ContainsKey("lat")) return text;
-            return string.Format(CultureInfo.InvariantCulture, "{0}landing {1:0.0000}, {2:0.0000} at UT {3:0}, {4:0.00} km from the target{5}",
+            // The frame the ground was read in (#326): stock's inverse-rotation angle and whether the frame turns with the body.
+            return string.Format(CultureInfo.InvariantCulture, "{0}landing {1:0.0000}, {2:0.0000} at UT {3:0}, {4:0.00} km from the target{5}; inverse rotation {6:0.00} deg{7}",
                 text == "" ? "" : text + "; ", result["lat"], result["lng"], result["landing_ut"], result["error_km"],
                 result.ContainsKey("burn_ut")
                     ? string.Format(CultureInfo.InvariantCulture, "; burn at UT {0:0.0}, prograde {1:0.00}, normal {2:0.00} m/s", result["burn_ut"], result["prograde"], result["normal"])
-                    : "");
+                    : "",
+                Planetarium.InverseRotAngle, FlightGlobals.RefFrameIsRotating ? " (rotating frame)" : "");
         }
 
         private static string Ms(Stopwatch watch)
