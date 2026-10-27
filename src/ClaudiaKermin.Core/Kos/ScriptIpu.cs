@@ -92,6 +92,14 @@ namespace ClaudiaKermin.Core.Kos
             };
         }
 
+        /// <summary>Which end a finished run was, for the log: the core aborts a run with "the player took Manual Control" when the player takes over.</summary>
+        public static IpuEnd EndOf(RunOutcome outcome)
+        {
+            if (outcome.Kind == RunOutcomeKind.Interrupted) return IpuEnd.Interrupted;
+            if (outcome.Kind == RunOutcomeKind.Aborted && (outcome.Reason ?? "").Contains("Manual Control")) return IpuEnd.ManualControl;
+            return IpuEnd.Ended;
+        }
+
         private static string Describe(IpuEnd how)
         {
             switch (how)

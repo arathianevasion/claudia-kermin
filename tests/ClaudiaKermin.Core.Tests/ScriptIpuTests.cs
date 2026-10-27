@@ -66,6 +66,15 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AnOutcomeSaysHowTheRunEnded()
+        {
+            Assert.Equal(IpuEnd.Interrupted, ScriptIpu.EndOf(new RunOutcome(RunOutcomeKind.Interrupted, null, "", "left Flight", false, null)));
+            Assert.Equal(IpuEnd.ManualControl, ScriptIpu.EndOf(new RunOutcome(RunOutcomeKind.Aborted, null, "", "the player took Manual Control", true, null)));
+            Assert.Equal(IpuEnd.Ended, ScriptIpu.EndOf(new RunOutcome(RunOutcomeKind.Aborted, null, "", "player pressed Abort", true, null)));
+            Assert.Equal(IpuEnd.Ended, ScriptIpu.EndOf(new RunOutcome(RunOutcomeKind.Finished, null, "", null, false, null)));
+        }
+
+        [Fact]
         public void LoadingAfterACrashPutsThePersistedValueBack()
         {
             var action = new ScriptIpu(1000).Loaded(200);

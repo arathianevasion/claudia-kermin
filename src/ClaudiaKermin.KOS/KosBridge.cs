@@ -239,6 +239,7 @@ namespace ClaudiaKermin.KOS
             Instance = this;
             // The adapter's Mission driver starts approved scripts through this.
             ScriptRunner.Current = this;
+            IpuGuard.Loaded();
             GameEvents.onGameSceneLoadRequested.Add(OnSceneLoadRequested);
             PlayerWarpWatch.RateChanged += OnRateChanged;
         }
@@ -364,6 +365,7 @@ namespace ClaudiaKermin.KOS
             catch (Exception e) { Debug.LogWarning(ModInfo.LogTag + " couldn't turn SAS off at run start: " + e.Message); }
             _runs[pending.PartId] = run;
             KosGates.Runs.Open(pending.PartId, pending.RunId);
+            if (pending.RunId >= 0) IpuGuard.RunStarted();
             shared.Cpu.AddPopContextNotifyee(run);
             shared.ScriptHandler.ClearContext(ProgramContext);
             var context = shared.Cpu.SwitchToProgramContext();
@@ -380,6 +382,7 @@ namespace ClaudiaKermin.KOS
             KosGates.Runs.Close(run.PartId, run.RunId);
             if (!run.Addon.IsStale) run.Addon.Shared.Cpu.RemovePopContextNotifyee(run);
             var outcome = run.Run.Finish(ReadTerminal(run.Addon));
+            if (run.RunId >= 0) IpuGuard.RunEnded(outcome);
             // kOS hands controls back as the program ends, so make safe again once it has.
             if (outcome.WasAborted) CraftSafety.MakeSafe(run.Vessel);
             Debug.Log(ModInfo.LogTag + " '" + run.Label + "' ended: " + outcome.Summary +
