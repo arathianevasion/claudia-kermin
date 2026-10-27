@@ -150,13 +150,52 @@ namespace ClaudiaKermin.KOS
         public void OnBlock(uint partId, string block, IDictionary<string, object> result)
         {
             ActiveRun run;
-            if (!_runs.TryGetValue(partId, out run) || run.Run.HasEnded || run.RunId <= 0) return;
+            if (!_runs.TryGetValue(partId, out run) || run.Run.HasEnded) return;
+            // Every mod-started run's blocks go in its warp trace, the block tests' included.
+            if (result == null) run.Run.Trace.BlockStarted(block, WarpTracing.Real);
+            else run.Run.Trace.BlockEnded(block, WarpTracing.Real);
+            if (run.RunId <= 0) return;
             var runId = run.RunId;
             _events.Enqueue(() =>
             {
                 var reported = ScriptRunner.BlockReported;
                 if (reported != null) reported(runId, block, result);
             });
+        }
+
+        /// <summary>From <c>ADDONS:CLAUDIA:WAITSTART</c> (the UT the wait's warp must be over by) and <c>WAITEND</c> (null).</summary>
+        public void OnWait(uint partId, double? warpEnd)
+        {
+            ActiveRun run;
+            if (!_runs.TryGetValue(partId, out run) || run.Run.HasEnded) return;
+            if (warpEnd.HasValue) run.Run.Trace.WaitStarted(WarpTracing.Real, WarpTracing.Ut, warpEnd.Value);
+            else run.Run.Trace.WaitEnded(WarpTracing.Real, WarpTracing.Ut);
+        }
+
+        /// <summary>
+        /// From the runtime gate patches, once the gates let a warp request from a mod-started program through: a
+        /// <c>WARPTO</c> (targetUt, rateAsked null) or a <c>WARP</c> or <c>RATE</c> above 1x (rateAsked).
+        /// </summary>
+        public void OnWarpRequest(uint partId, double? targetUt, double? rateAsked, string refusal)
+        {
+            ActiveRun run;
+            if (!_runs.TryGetValue(partId, out run) || run.Run.HasEnded) return;
+            run.Run.Trace.Requested(WarpTracing.Real, WarpTracing.Ut, targetUt, WarpTracing.Mode, rateAsked, refusal);
+        }
+
+        /// <summary>The warp rate this frame, into every running program's trace; a fall to 1x mid-wait is named a drop.</summary>
+        private void SampleWarp()
+        {
+            if (_runs.Count == 0) return;
+            var real = WarpTracing.Real;
+            var ut = WarpTracing.Ut;
+            var rate = TimeWarp.CurrentRate;
+            foreach (var run in _runs.Values)
+            {
+                if (run.Run.HasEnded || !run.Run.Trace.Sample(real, ut, rate)) continue;
+                // Until #336 marks the player's own changes, a player's cancel reads as a cut (with no KSP message).
+                run.Run.Trace.Dropped(real, ut, ScriptWarpHold.Held ? "held" : "cut", WarpTracing.Refusal(1));
+            }
         }
 
         private void Awake()
@@ -198,6 +237,7 @@ namespace ClaudiaKermin.KOS
         {
             // A trip is reported before its run's outcome, which comes at least a frame after the program ends.
             while (_events.Count > 0) Guard(_events.Dequeue());
+            Guard(SampleWarp);
             foreach (var run in _runs.Values.ToList())
             {
                 if (!run.Run.HasEnded && run.Addon.IsStale)
@@ -306,6 +346,8 @@ namespace ClaudiaKermin.KOS
             if (outcome.WasAborted) CraftSafety.MakeSafe(run.Vessel);
             Debug.Log(ModInfo.LogTag + " '" + run.Label + "' ended: " + outcome.Summary +
                       (outcome.ErrorText.Length > 0 ? "\n" + outcome.ErrorText : ""));
+            var trace = run.Run.Trace.Lines();
+            if (trace.Count > 0) Debug.Log(ModInfo.LogTag + " warp trace of '" + run.Label + "':\n  " + string.Join("\n  ", trace.ToArray()));
             run.OnOutcome(outcome);
         }
 
@@ -374,7 +416,7 @@ namespace ClaudiaKermin.KOS
                 OnOutcome = start.OnOutcome;
                 OnBlocked = start.OnBlocked;
                 Addon = addon;
-                Run = new KosRun(terminal);
+                Run = new KosRun(terminal) { Trace = new WarpTrace(WarpTracing.Real) };
             }
 
             /// <summary>The processor's vessel now: after an undock or staging it follows the part.</summary>

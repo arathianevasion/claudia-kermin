@@ -35,6 +35,10 @@ namespace ClaudiaKermin.KOS
             AddSuffix("BLOCKRESULT", new TwoArgsSuffix<StringValue, Lexicon>(BlockResult, "A Building Block returned its result"));
             // The Core Library's waits read this: true holds in-script warp at 1x while the Mission needs the player (ADR 0004).
             AddSuffix("WARPHOLD", new Suffix<BooleanValue>(() => ScriptWarpHold.Held, "In-script warp is held at 1x while the Mission needs the player"));
+            // The Core Library's waits mark themselves for the warp trace (#335), which times the 1x inside them. Common calls,
+            // like BLOCKSTART: a report to the mod, not a calculation (ADR 0006), so the Script Check allows them anywhere.
+            AddSuffix("WAITSTART", new OneArgsSuffix<ScalarValue>(WaitStart, "A wait began; its warp must be over by this UT"));
+            AddSuffix("WAITEND", new NoArgsVoidSuffix(WaitEnd, "The wait ended"));
             AddTerrainSuffixes();
             AddHeatSuffixes();
             AddToolSuffixes();
@@ -114,6 +118,18 @@ namespace ClaudiaKermin.KOS
         {
             var bridge = KosBridge.Instance;
             if (shared.KSPPart != null && bridge != null) bridge.OnBlock(shared.KSPPart.persistentId, block.ToString(), KosValues.ToDictionary(result));
+        }
+
+        private void WaitStart(ScalarValue warpEnd)
+        {
+            var bridge = KosBridge.Instance;
+            if (shared.KSPPart != null && bridge != null && warpEnd != null) bridge.OnWait(shared.KSPPart.persistentId, warpEnd.GetDoubleValue());
+        }
+
+        private void WaitEnd()
+        {
+            var bridge = KosBridge.Instance;
+            if (shared.KSPPart != null && bridge != null) bridge.OnWait(shared.KSPPart.persistentId, null);
         }
     }
 }

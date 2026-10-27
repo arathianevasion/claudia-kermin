@@ -628,10 +628,12 @@ function claudia_warp_step {
 // 1x (a Pause, link loss, the Spending Cap, a stock alarm) it is asked for again when the hold ends.
 // Physics warp is never used: the mode is set to rails first (and the runtime gates refuse physics
 // warp anyway). Keeps ticking, so the common aborts still apply. Returns "" or an abort reason.
+// The wait is marked for the mod's warp trace (WAITSTART, WAITEND), which times it at 1x.
 function claudia_warp_to {
   parameter ctx, ut, lead.
   local warp_end is claudia_warp_end(ut, lead).
   local want is true.
+  addons:claudia:waitstart(warp_end).
   until time:seconds >= ut {
     local held is addons:claudia:warphold.
     local action is claudia_warp_step(time:seconds, warp_end, kuniverse:timewarp:rate, held, want).
@@ -648,11 +650,13 @@ function claudia_warp_to {
     local reason is claudia_tick(ctx, 0).
     if reason <> "" {
       kuniverse:timewarp:cancelwarp().
+      addons:claudia:waitend().
       return reason.
     }
     wait 0.
   }
   wait until kuniverse:timewarp:issettled and ship:unpacked.
+  addons:claudia:waitend().
   return "".
 }
 

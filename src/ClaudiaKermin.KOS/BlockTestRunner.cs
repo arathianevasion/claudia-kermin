@@ -259,7 +259,11 @@ namespace ClaudiaKermin.KOS
         private void Judge(RunOutcome outcome)
         {
             if (_stage != Stage.Running) return;
-            Finish(_spec.Judge(outcome));
+            var result = _spec.Judge(outcome);
+            // The warp trace under the checks, so block-tests.log shows what the warp.* checks read.
+            if (outcome.Trace != null)
+                foreach (var line in outcome.Trace.Lines()) result.Lines.Add("warp trace: " + line);
+            Finish(result);
         }
 
         private void TimedOut()

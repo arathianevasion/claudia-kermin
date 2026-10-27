@@ -58,6 +58,29 @@ namespace ClaudiaKermin.Core.Kos
         public bool Retry { get { return Attempt > 1; } }
     }
 
+    /// <summary>KSP's own message for a rails-warp limit, for the trace (research #300: <c>TimeWarp.getMaxOnRailsRateIdx</c>).</summary>
+    public static class WarpRefusal
+    {
+        /// <param name="reason">The <c>ClearToSaveStatus</c> name KSP gave.</param>
+        /// <param name="rate">The rate KSP allows.</param>
+        /// <param name="limitM">For an altitude limit, the height in m the next rate needs.</param>
+        public static string Message(string reason, double rate, double? limitM)
+        {
+            var at = rate.ToString("0.##", CultureInfo.InvariantCulture) + "x";
+            switch (reason)
+            {
+                case "NOT_IN_ATMOSPHERE": return "Cannot warp faster than " + at + " while in atmosphere.";
+                case "NOT_UNDER_ACCELERATION": return "Cannot warp faster than " + at + " while the ship is under acceleration.";
+                case "NOT_WHILE_ON_A_LADDER": return "Cannot warp faster than " + at + " while Kerbals are on a ladder.";
+                case "NOT_WHILE_MOVING_OVER_SURFACE": return "Cannot warp faster than " + at + " while moving over terrain.";
+                case "NOT_WHILE_ABOUT_TO_CRASH":
+                    return "Cannot warp faster than " + at + (limitM.HasValue ? " while below " + limitM.Value.ToString("0", CultureInfo.InvariantCulture) + "m." : " this low.");
+                case "ORBIT_EVENT_IMMINENT": return "Orbit event imminent. Dropping TimeWarp to max limit: " + at;
+                default: return "KSP limited warp to " + at + " (" + reason + ")";
+            }
+        }
+    }
+
     /// <summary>One Building Block's run, as the warp trace sums it up.</summary>
     public sealed class WarpTraceBlock
     {

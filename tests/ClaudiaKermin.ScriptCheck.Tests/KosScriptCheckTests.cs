@@ -292,6 +292,15 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             AssertForbidden("call block-internal calculations", CoreLibrary.Bundle(script));
         }
 
+        // #335: the warp trace's wait marks are common calls, like BLOCKSTART: a report to the mod's trace, not a calculation
+        // (ADR 0006), so a Custom Script's own claudia_warp_to, or the script itself, may make them.
+        [Fact]
+        public void AMissionScriptMayMarkAWaitForTheWarpTrace()
+        {
+            AssertAllowed("addons:claudia:waitstart(time:seconds + 600).\naddons:claudia:waitend().");
+            AssertAllowed(CoreLibrary.Bundle("addons:claudia:waitstart(time:seconds + 600).\naddons:claudia:waitend()."));
+        }
+
         [Fact]
         public void TheCoreLibrarysOwnBlockInternalCallPasses()
         {

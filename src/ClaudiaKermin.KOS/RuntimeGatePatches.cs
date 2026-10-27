@@ -157,7 +157,10 @@ namespace ClaudiaKermin.KOS
         private static void WarpIndexPrefix(ScalarIntValue newIndex)
         {
             var shared = Gated();
-            if (shared != null) GateWarp(shared, newIndex == null ? 0 : (int)newIndex);
+            if (shared == null) return;
+            var index = newIndex == null ? 0 : (int)newIndex;
+            GateWarp(shared, index);
+            if (index > 0) TraceRequest(shared, null, WarpTracing.RateAt(index), WarpTracing.Refusal(index));
         }
 
         private static void WarpRatePrefix(ScalarValue desiredRate)
@@ -165,14 +168,26 @@ namespace ClaudiaKermin.KOS
             var shared = Gated();
             if (shared == null || desiredRate == null) return;
             // Any rate above 1x is a warp; kOS rounds it to a rate index (ties go up), so don't second-guess which.
-            GateWarp(shared, desiredRate.GetDoubleValue() > 1 ? 1 : 0);
+            var rate = desiredRate.GetDoubleValue();
+            GateWarp(shared, rate > 1 ? 1 : 0);
+            if (rate > 1) TraceRequest(shared, null, rate, WarpTracing.Refusal(WarpTracing.IndexNear(rate)));
         }
 
-        private static void WarpToPrefix()
+        // __0: KSP's WarpTo target UT, whatever kOS names the parameter.
+        private static void WarpToPrefix(ScalarValue __0)
         {
             var shared = Gated();
-            if (shared != null)
-                Gate(shared, new GateCall { Target = GateTarget.TimeWarp, Suffix = "WARPTO", PhysicsWarpMode = TimeWarp.WarpMode == TimeWarp.Modes.LOW });
+            if (shared == null) return;
+            Gate(shared, new GateCall { Target = GateTarget.TimeWarp, Suffix = "WARPTO", PhysicsWarpMode = TimeWarp.WarpMode == TimeWarp.Modes.LOW });
+            // KSP picks the rate, up to its fastest, so a refusal is checked against the top of the table.
+            TraceRequest(shared, __0 == null ? (double?)null : __0.GetDoubleValue(), null, WarpTracing.Refusal(TimeWarp.fetch == null ? 1 : TimeWarp.fetch.warpRates.Length - 1));
+        }
+
+        /// <summary>A warp request the gates let through, into the run's warp trace (#335).</summary>
+        private static void TraceRequest(SharedObjects shared, double? targetUt, double? rateAsked, string refusal)
+        {
+            var bridge = KosBridge.Instance;
+            if (bridge != null) bridge.OnWarpRequest(shared.KSPPart.persistentId, targetUt, rateAsked, refusal);
         }
 
         private static void GateWarp(SharedObjects shared, int index)

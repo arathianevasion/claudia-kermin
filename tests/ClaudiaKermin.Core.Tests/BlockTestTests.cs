@@ -353,6 +353,21 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Contains("first_reqest_real_s", e.Message);
         }
 
+        // KSP's own screen texts for its getMaxOnRailsRateIdx reasons (research #300, from the en-us dictionary).
+        [Theory]
+        [InlineData("NOT_IN_ATMOSPHERE", 1, null, "Cannot warp faster than 1x while in atmosphere.")]
+        [InlineData("NOT_IN_ATMOSPHERE", 50, null, "Cannot warp faster than 50x while in atmosphere.")]
+        [InlineData("NOT_UNDER_ACCELERATION", 1, null, "Cannot warp faster than 1x while the ship is under acceleration.")]
+        [InlineData("NOT_WHILE_ON_A_LADDER", 1, null, "Cannot warp faster than 1x while Kerbals are on a ladder.")]
+        [InlineData("NOT_WHILE_MOVING_OVER_SURFACE", 1, null, "Cannot warp faster than 1x while moving over terrain.")]
+        [InlineData("NOT_WHILE_ABOUT_TO_CRASH", 10, 60000.0, "Cannot warp faster than 10x while below 60000m.")]
+        [InlineData("ORBIT_EVENT_IMMINENT", 50, null, "Orbit event imminent. Dropping TimeWarp to max limit: 50x")]
+        [InlineData("SOMETHING_NEW", 5, null, "KSP limited warp to 5x (SOMETHING_NEW)")]
+        public void AKspRefusalReadsAsKspsOwnMessage(string reason, double rate, double? limit, string expected)
+        {
+            Assert.Equal(expected, WarpRefusal.Message(reason, rate, limit));
+        }
+
         [Fact]
         public void TheTraceReadsAsOneLinePerEntryAndOnePerBlock()
         {
