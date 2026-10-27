@@ -54,6 +54,7 @@
 //| until a UT, and 10 s before parachutes or a heat-shield drop. Before a burn they plan the node, turn to it, and then warp, one SOI at a time. Warp drops to 1x while the Mission needs the player. Waits re-ask if KSP cuts warp, not once
 //| the player cancels it (ADDONS:CLAUDIA:WARPCANCELLED, until the next wait). To hold until a UT or an event on a Coast in your own script, use claudia_warp_to(ctx, ut, lead[, stop, cap]); fly every burn through exec_node. Never set WARP or WARPMODE yourself. Report the Script Result yourself, once, at the end, e.g.
 //| `addons:claudia:report(res).`, or a lexicon of your own with at least success and reason.
+//| `claudia_rcs_translate(ctx, on)`: hold RCS on while your code translates; set it false after and the RCS Use rule takes over again. Loops of your own that call claudia_tick get RCS Use for free.
 
 // ---- Options ----
 
@@ -1213,7 +1214,7 @@ function claudia_burn_throttle {
 
 // What RCS should do this tick. Pure. s: lexicon rcs (on now), steering (kOS steering enabled), monoprop
 // (units ship-wide), error (|steering error|, degrees), rate (deg/s), held_s (s the error has stayed
-// under aligned_deg), gate (the on-gate is due: claudia_rcs_gate_due), wheels_s (the wheels-only turn
+// under aligned_deg), translating (ctx:rcs_translating), gate (the on-gate is due: claudia_rcs_gate_due), wheels_s (the wheels-only turn
 // time, -1 with no wheel torque on pitch or yaw), left_s (s to the deadline ctx:turn_by, -1 for none).
 // tol: rcs_tolerance. Returns lexicon on (what RCS should be) and reason (why it switched; "" for no switch).
 function claudia_rcs_decide {
@@ -1224,6 +1225,12 @@ function claudia_rcs_decide {
     // The RCS group still reads on with empty tanks, so this is checked first, and it never goes back on.
     set want to false.
     set reason to "no monoprop".
+  } else if s:translating {
+    // claudia_rcs_translate: RCS stays on, reported once, and nothing else decides.
+    set want to true.
+    if not s:rcs {
+      set reason to "translating".
+    }
   } else if not s:steering {
     set want to false.
     set reason to "steering released".
@@ -1342,7 +1349,7 @@ function claudia_rcs_tick {
   if ctx:rcs_dry {
     set monoprop to 0.
   }
-  local decided is claudia_rcs_decide(lexicon("rcs", rcs, "steering", steer_on, "monoprop", monoprop, "error", error, "rate", rate,
+  local decided is claudia_rcs_decide(lexicon("rcs", rcs, "steering", steer_on, "monoprop", monoprop, "translating", false, "error", error, "rate", rate,
     "held_s", claudia_held_s(ctx:rcs_within_ut, now), "gate", gate, "wheels_s", ctx:rcs_wheels_s, "left_s", left_s), tol).
   if decided:reason <> "" {
     local figures is lexicon("rate_dps", round(rate, 2)).
@@ -1365,6 +1372,24 @@ function claudia_rcs_tick {
     local act is steeringmanager:actuation.
     addons:claudia:blocktrace(ctx:block, lexicon("phase", "rcs", "error", round(error, 1), "rate", round(rate, 2), "rcs", rcs,
       "actuation", round(act:x, 3) + "/" + round(act:y, 3) + "/" + round(act:z, 3))).
+  }
+}
+
+// Holds RCS on while code translates (on true) and hands back to the RCS Use rule (on false). While
+// ctx:rcs_translating is set claudia_rcs_tick decides nothing; switching on is reported once, as "translating".
+function claudia_rcs_translate {
+  parameter ctx, on.
+  set ctx:rcs_translating to on.
+  if on {
+    local monoprop is claudia_monoprop():amount.
+    if ctx:rcs_dry {
+      set monoprop to 0.
+    }
+    local decided is claudia_rcs_decide(lexicon("rcs", rcs, "steering", steeringmanager:enabled, "monoprop", monoprop,
+      "translating", true), ctx:opt:rcs_tolerance).
+    if decided:reason <> "" {
+      claudia_rcs_switch(decided["on"], decided:reason, lexicon("rate_dps", round(ship:angularvel:mag * constant:radtodeg, 2))).
+    }
   }
 }
 

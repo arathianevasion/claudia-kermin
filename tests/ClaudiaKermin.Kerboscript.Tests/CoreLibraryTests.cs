@@ -505,7 +505,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
         // not due, wheels that turn in 40 s and no deadline; each case overrides what it needs.
         private static string Decide(string overrides, string tolerance = "claudia_rcs_defaults()")
         {
-            return Run("local s is claudia_merge_options(lexicon(" + overrides + "), lexicon(\"rcs\", false, \"steering\", true, \"monoprop\", 30, \"error\", 0, "
+            return Run("local s is claudia_merge_options(lexicon(" + overrides + "), lexicon(\"rcs\", false, \"steering\", true, \"monoprop\", 30, \"translating\", false,\"error\", 0, "
                 + "\"rate\", 0, \"held_s\", 0, \"gate\", false, \"wheels_s\", 40, \"left_s\", -1)).\n"
                 + "local d is claudia_rcs_decide(s, " + tolerance + "). print d[\"on\"] + \"|\" + d:reason.").Single();
         }
@@ -548,6 +548,22 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [InlineData("\"rcs\", true, \"monoprop\", 0, \"error\", 34", "False|no monoprop")]
         [InlineData("\"monoprop\", 0, \"error\", 34, \"gate\", true, \"wheels_s\", -1", "False|")]
         public void RCS_goes_off_with_steering_released_or_no_monoprop(string state, string expected)
+        {
+            Assert.Equal(expected, Decide(state));
+        }
+
+        [Theory]
+        // Translating holds RCS on, reported once; whatever else says off (Aligned, steering released) is ignored.
+        [InlineData("\"translating\", true", "True|translating")]
+        [InlineData("\"translating\", true, \"steering\", false", "True|translating")]
+        [InlineData("\"translating\", true, \"rcs\", true", "True|")]
+        [InlineData("\"translating\", true, \"rcs\", true, \"error\", 0.5, \"rate\", 0.1, \"held_s\", 5", "True|")]
+        [InlineData("\"translating\", true, \"rcs\", true, \"steering\", false", "True|")]
+        // Off without monopropellant, even translating.
+        [InlineData("\"translating\", true, \"rcs\", true, \"monoprop\", 0", "False|no monoprop")]
+        // Cleared, the rule resumes: Aligned switches it off.
+        [InlineData("\"rcs\", true, \"error\", 0.5, \"rate\", 0.1", "False|aligned")]
+        public void Translating_holds_RCS_on_and_decides_nothing_else_until_cleared(string state, string expected)
         {
             Assert.Equal(expected, Decide(state));
         }
