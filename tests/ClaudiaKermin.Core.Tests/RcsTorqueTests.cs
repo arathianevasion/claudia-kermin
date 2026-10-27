@@ -13,9 +13,9 @@ namespace ClaudiaKermin.Core.Tests
     /// </summary>
     public sealed class RcsTorqueTests
     {
-        private static RcsThruster Nozzle(double x, double y, double z, double dirX, double dirY, double dirZ, double thrust = 1)
+        private static RcsNozzle Nozzle(double x, double y, double z, double dirX, double dirY, double dirZ, double thrust = 1)
         {
-            return new RcsThruster { X = x, Y = y, Z = z, DirX = dirX, DirY = dirY, DirZ = dirZ, Thrust = thrust };
+            return new RcsNozzle { X = x, Y = y, Z = z, DirX = dirX, DirY = dirY, DirZ = dirZ, Thrust = thrust };
         }
 
         [Fact]
@@ -78,7 +78,7 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void No_nozzles_give_no_torque()
         {
-            var torque = RcsTorque.Sum(new RcsThruster[0]);
+            var torque = RcsTorque.Sum(new RcsNozzle[0]);
             Assert.Equal(0, torque.Pitch);
             Assert.Equal(0, torque.Yaw);
         }

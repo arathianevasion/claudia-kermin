@@ -36,7 +36,7 @@ namespace ClaudiaKermin.Adapter
                 if (mp != null) monoprop += mp.amount;
             }
             craft.RcsUsable = monoprop > 0;
-            var nozzles = new List<RcsThruster>();
+            var nozzles = new List<RcsNozzle>();
             foreach (var part in vessel.parts)
             {
                 foreach (var module in part.Modules)
@@ -61,11 +61,13 @@ namespace ClaudiaKermin.Adapter
         }
 
         /// <summary>
-        /// The module's nozzles, as kOS's <c>CorrectedGetPotentialTorque</c> reads them. kOS also skips a module that is off
-        /// (<c>!rcs_active</c>) or flamed out; here the switch doesn't matter, and propellant is <see cref="TurnCraft.RcsUsable"/>'s
-        /// (<c>flameout</c> is only set while a nozzle is asked to fire).
+        /// The module's nozzles, as kOS's <c>CorrectedGetPotentialTorque</c> reads them: a part toggled off in its menu
+        /// (<c>rcsEnabled</c>, <c>isEnabled</c>) or shielded counts for nothing. kOS also skips a module while the RCS action group
+        /// is off (<c>!rcs_active</c>) or flamed out; here the action group doesn't matter, and propellant is
+        /// <see cref="TurnCraft.RcsUsable"/>'s (<c>flameout</c> is only set while a nozzle is asked to fire). The thrust direction
+        /// (<c>-forward</c>, or <c>up</c> for an older part) is kOS's as recalled, not checked against its assembly.
         /// </summary>
-        private static void AddNozzles(Vessel vessel, ModuleRCS rcs, List<RcsThruster> nozzles)
+        private static void AddNozzles(Vessel vessel, ModuleRCS rcs, List<RcsNozzle> nozzles)
         {
             if (rcs.part.ShieldedFromAirstream || !rcs.rcsEnabled || !rcs.isEnabled || rcs.isJustForShow) return;
             var com = vessel.CurrentCoM;
@@ -75,8 +77,8 @@ namespace ClaudiaKermin.Adapter
             {
                 if (nozzle == null) continue;
                 var at = frame.InverseTransformDirection(nozzle.position - com);
-                var dir = frame.InverseTransformDirection(rcs.useZaxis ? -nozzle.forward : -nozzle.up);
-                nozzles.Add(new RcsThruster { X = at.x, Y = at.y, Z = at.z, DirX = dir.x, DirY = dir.y, DirZ = dir.z, Thrust = thrust });
+                var dir = frame.InverseTransformDirection(rcs.useZaxis ? -nozzle.forward : nozzle.up);
+                nozzles.Add(new RcsNozzle { X = at.x, Y = at.y, Z = at.z, DirX = dir.x, DirY = dir.y, DirZ = dir.z, Thrust = thrust });
             }
         }
 
