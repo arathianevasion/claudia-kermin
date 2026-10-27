@@ -78,8 +78,8 @@ function transfer_to_unreadable {
 // (turn_time plus a minute for the lead), one the craft's dv_left (m/s, stock's; 0 or less for unknown) pays for, and
 // with max_duration given (auto false) one that leaves 120 s of it to burn in. Pure.
 function transfer_to_correction_ask {
-  parameter target, target_pe, now, turn_time, start_ut, max_duration, auto, dv_left.
-  local ask is lexicon("target", target, "target_pe", target_pe, "earliest_ut", now + turn_time + 60).
+  parameter dest_name, target_pe, now, turn_time, start_ut, max_duration, auto, dv_left.
+  local ask is lexicon("target", dest_name, "target_pe", target_pe, "earliest_ut", now + turn_time + 60).
   if not auto {
     set ask:latest_ut to start_ut + max_duration - 120.
   }
