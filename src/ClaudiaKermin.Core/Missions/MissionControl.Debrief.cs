@@ -156,7 +156,7 @@ namespace ClaudiaKermin.Core.Missions
         private static IList<PlannedSequence> RestOfPlan(Mission mission)
         {
             if (mission.Plan == null) return new List<PlannedSequence>();
-            return mission.Plan.Sequences.Skip(Math.Max(0, mission.SequencesProposed)).ToList();
+            return mission.Plan.Sequences.Skip(StepsBegun(mission)).ToList();
         }
 
         private bool StartRecheck(Mission mission, Turn turn)

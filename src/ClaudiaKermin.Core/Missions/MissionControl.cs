@@ -244,6 +244,10 @@ namespace ClaudiaKermin.Core.Missions
             public int SequencesProposed;
             /// <summary>The Maneuver Sequence in hand has had a Sequence Plan offered (so revisions don't count again).</summary>
             public bool SequenceCounted;
+            /// <summary>The Mission Plan step the Sequence Plan in hand named, 1-based (#413); null when it named none, so the count stands in.</summary>
+            public int? PlanStep;
+            /// <summary>The <see cref="PlanStep"/> from before the Sequence Plan in hand was counted: what a plan dropped unflown leaves.</summary>
+            public int? PlanStepBefore;
             /// <summary>What the Script Check last found, while "Couldn't produce a safe script" is shown.</summary>
             public IList<string> UnsafeProblems;
             public readonly List<LogEntry> Log = new List<LogEntry>();
@@ -1325,7 +1329,7 @@ namespace ClaudiaKermin.Core.Missions
             IList<string> checkWarnings = new List<string>();
             if (offered != null)
             {
-                var check = CheckScript(offered);
+                var check = CheckScript(mission, offered);
                 if (!check.Passed)
                 {
                     ScriptCheckFailed(mission, turn, offered, check.Problems);
@@ -1505,10 +1509,16 @@ namespace ClaudiaKermin.Core.Missions
             return CoreLibrary.Bundle(plan.Script);
         }
 
-        /// <summary>The Script Check over what would run (<see cref="Bundle"/>): the script comes first in it, so the line numbers are the script's.</summary>
-        private ScriptCheckResult CheckScript(SequencePlan plan)
+        /// <summary>
+        /// The Script Check over what would run (<see cref="Bundle"/>): the script comes first in it, so the line numbers are
+        /// the script's. A Mission Plan step the plan names outside the Mission Plan fails it too (<see cref="PlanStepProblem"/>).
+        /// </summary>
+        private ScriptCheckResult CheckScript(Mission mission, SequencePlan plan)
         {
-            return _scriptCheck.Check(Bundle(plan));
+            var check = _scriptCheck.Check(Bundle(plan));
+            var step = PlanStepProblem(mission, plan);
+            if (step == null) return check;
+            return new ScriptCheckResult(check.CompileError, check.Forbidden.Concat(new[] { step }).ToList()) { Warnings = check.Warnings };
         }
 
         /// <summary>Retry, Retry with a note (<paramref name="note"/>) or Re-plan, after "Couldn't produce a safe script".</summary>
@@ -1542,16 +1552,45 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>
         /// Drops the pending Sequence Plan unflown: its Due Time alarm goes, and it stops counting towards
-        /// <c>SequencesProposed</c>, so the plan bar and the rest-of-plan figures don't run a step ahead (#263).
-        /// Not for a plan that is asked for again as the same sequence (the unsafe-script and late-Approval re-plans,
-        /// a script that fails its check on load): those keep <c>SequenceCounted</c> so the retry isn't counted twice.
+        /// <c>SequencesProposed</c> (and the step it named gives way to the one before), so the plan bar and the
+        /// rest-of-plan figures don't run a step ahead (#263). Not for a plan that is asked for again as the same
+        /// sequence (the unsafe-script and late-Approval re-plans, a script that fails its check on load): those keep
+        /// <c>SequenceCounted</c> so the retry isn't counted twice.
         /// </summary>
         private void DropPendingSequence(Mission mission)
         {
             if (mission.PendingSequence != null && mission.PendingSequence.DueTimeUt.HasValue) _commands.Add(new ClearDueTimeAlarm(mission.Id));
             mission.PendingSequence = null;
-            if (mission.SequenceCounted) mission.SequencesProposed--;
+            if (mission.SequenceCounted)
+            {
+                mission.SequencesProposed--;
+                mission.PlanStep = mission.PlanStepBefore;
+            }
             mission.SequenceCounted = false;
+        }
+
+        /// <summary>
+        /// How many Mission Plan steps are begun: the step the Sequence Plan in hand named (#413), or, when it named
+        /// none, how many Sequence Plans were counted. The plan bar's current step is the last one begun, and "later"
+        /// (the rest-of-plan delta-v, the Debrief's "still to fly") is every step after it.
+        /// </summary>
+        private static int StepsBegun(Mission mission)
+        {
+            return Math.Max(0, mission.PlanStep ?? mission.SequencesProposed);
+        }
+
+        /// <summary>
+        /// The Script Check's problem with the step a Sequence Plan names, or null when it names one in the Mission Plan
+        /// or none at all (the count stands in). Checked with the script, so Claudia corrects it as she would a script.
+        /// </summary>
+        private static string PlanStepProblem(Mission mission, SequencePlan plan)
+        {
+            if (!plan.PlanStep.HasValue || mission.Plan == null) return null;
+            var steps = mission.Plan.Sequences.Count;
+            var step = plan.PlanStep.Value;
+            if (step >= 1 && step <= steps) return null;
+            return "plan_step " + step.ToString(CultureInfo.InvariantCulture) + " is not a step of the Mission Plan: name the step this sequence flies, "
+                + (steps == 1 ? "1 (the plan has one step)" : "1 to " + steps.ToString(CultureInfo.InvariantCulture)) + ".";
         }
 
         private void Revised(Mission mission, MissionReply reply, bool planPending)
@@ -1589,7 +1628,11 @@ namespace ClaudiaKermin.Core.Missions
             {
                 mission.SequencesProposed++;
                 mission.SequenceCounted = true;
+                mission.PlanStepBefore = mission.PlanStep;
             }
+            // The step it names, not the count, says where the Mission is: a retry names its step again (#413). A manual
+            // stretch skips the Script Check, so a step outside the Mission Plan is ignored here and the count stands in.
+            mission.PlanStep = PlanStepProblem(mission, plan) == null ? plan.PlanStep : null;
             mission.PendingSequence = plan;
             mission.PlanBaseline = _snapshot;
             PlanOffered(mission);
@@ -1965,7 +2008,7 @@ namespace ClaudiaKermin.Core.Missions
                     view.PlanSequences = mission.Plan.Sequences.Select(s => s.Name).ToList();
                     view.PlanSequencesManual = mission.Plan.Sequences.Select(s => s.Manual).ToList();
                 }
-                view.CurrentSequence = Math.Min(mission.SequencesProposed, view.PlanSequences.Count) - 1;
+                view.CurrentSequence = Math.Min(StepsBegun(mission), view.PlanSequences.Count) - 1;
                 if (mission.Stage == MissionStage.Running && mission.PendingSequence != null)
                 {
                     view.RunStatus = "Running: " + mission.PendingSequence.Name + (mission.RunningChild.Length > 0 ? " on " + mission.RunningChild : "");

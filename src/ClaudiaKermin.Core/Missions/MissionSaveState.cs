@@ -37,6 +37,10 @@ namespace ClaudiaKermin.Core.Missions
         public int SequencesProposed;
         /// <summary>The Maneuver Sequence in hand has already counted towards <see cref="SequencesProposed"/>.</summary>
         public bool SequenceCounted;
+        /// <summary>The Mission Plan step the Sequence Plan in hand named (#413); null when it named none, and in older saves.</summary>
+        public int? PlanStep;
+        /// <summary>The step named before the Sequence Plan in hand was counted, restored if that plan is dropped unflown; null for none.</summary>
+        public int? PlanStepBefore;
         /// <summary>What the Script Check found, while the Mission is at "Couldn't produce a safe script".</summary>
         public readonly List<string> UnsafeProblems = new List<string>();
         public string LatestLine = "";
@@ -150,6 +154,8 @@ namespace ClaudiaKermin.Core.Missions
                 { "handBackMessage", HandBackMessage },
                 { "reducedGoal", ReducedGoal },
             };
+            if (PlanStep.HasValue) values["planStep"] = PlanStep.Value.ToString(CultureInfo.InvariantCulture);
+            if (PlanStepBefore.HasValue) values["planStepBefore"] = PlanStepBefore.Value.ToString(CultureInfo.InvariantCulture);
             if (PauseCause.Length > 0) values["pauseCause"] = PauseCause;
             if (StopReason != null) values["stopReason"] = StopReason;
             if (InterruptReason != null) values["interruptReason"] = InterruptReason;
@@ -235,6 +241,8 @@ namespace ClaudiaKermin.Core.Missions
             if (int.TryParse(Get(values, "transcriptMarker"), NumberStyles.Integer, CultureInfo.InvariantCulture, out number)) state.TranscriptMarker = number;
             if (int.TryParse(Get(values, "sequencesProposed"), NumberStyles.Integer, CultureInfo.InvariantCulture, out number)) state.SequencesProposed = number;
             state.SequenceCounted = Get(values, "sequenceCounted") == "true";
+            if (int.TryParse(Get(values, "planStep"), NumberStyles.Integer, CultureInfo.InvariantCulture, out number)) state.PlanStep = number;
+            if (int.TryParse(Get(values, "planStepBefore"), NumberStyles.Integer, CultureInfo.InvariantCulture, out number)) state.PlanStepBefore = number;
             if (int.TryParse(Get(values, "recheckSince"), NumberStyles.Integer, CultureInfo.InvariantCulture, out number)) state.RecheckSince = number;
             string stopReason;
             if (values.TryGetValue("stopReason", out stopReason)) state.StopReason = stopReason;
@@ -342,7 +350,10 @@ namespace ClaudiaKermin.Core.Missions
             if (sequence == null) json.Null();
             else
             {
-                json.BeginObject().Field("name", sequence.Name).Field("intent", sequence.Intent).Field("why", sequence.Why)
+                json.BeginObject().Field("name", sequence.Name);
+                // Written only when named, so a plan that named none reads back as none.
+                if (sequence.PlanStep.HasValue) json.Field("plan_step", (long)sequence.PlanStep.Value);
+                json.Field("intent", sequence.Intent).Field("why", sequence.Why)
                     .Field("target", sequence.Target).Field("tolerances", sequence.Tolerances)
                     .Field("expected_delta_v", sequence.ExpectedDeltaV).Field("expected_duration_s", sequence.ExpectedDurationSeconds);
                 Strings(json, "abort_conditions", sequence.AbortConditions);

@@ -11,13 +11,15 @@ using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Config;
 using ClaudiaKermin.Core.Kos;
 using ClaudiaKermin.Core.Missions;
+using ClaudiaKermin.Core.Ui;
 using Xunit;
 
 namespace ClaudiaKermin.Core.Tests
 {
     /// <summary>
     /// The plan bar's step count (#263): a pending Sequence Plan that a reply turns into a revised Mission Plan is
-    /// dropped unflown, so it must not stay counted in <c>SequencesProposed</c>. Driven through the Mission seam.
+    /// dropped unflown, so it must not stay counted in <c>SequencesProposed</c>. And the step a Sequence Plan names
+    /// (#413), which a retry names again, is the step the bar shows. Driven through the Mission seam.
     /// </summary>
     public sealed class MissionSequenceCountTests : IDisposable
     {
@@ -54,19 +56,58 @@ namespace ClaudiaKermin.Core.Tests
                 + "\"total_delta_v\":5800,\"expected_duration\":\"short\",\"mission_time_s\":-1},\"sequence_plan\":null,\"debrief\":null,\"alert\":null}");
         }
 
-        private static ScriptedResponse SequencePlan(string name)
+        /// <summary>A Sequence Plan; <paramref name="step"/> is the Mission Plan step it names (1-based), or null for a plan that names none (as before #413).</summary>
+        private static ScriptedResponse SequencePlan(string name, int? step = null)
         {
             return Reply("{\"kind\":\"sequence_plan\",\"say\":\"Sequence Plan: " + name + ".\",\"reply_intent\":\"none\",\"mission_plan\":null,\"alert\":null,"
                 + "\"sequence_plan\":{\"name\":\"" + name + "\",\"intent\":\"Fly it.\",\"why\":\"Because.\",\"target\":\"t\",\"tolerances\":\"t\","
+                + (step.HasValue ? "\"plan_step\":" + step.Value + "," : "")
                 + "\"expected_delta_v\":100,\"expected_duration_s\":600,\"abort_conditions\":[],\"risks\":[],\"custom_script\":false,"
                 + "\"custom_script_reason\":\"\",\"script\":\"print \\\"go\\\".\\n\",\"due_time_ut\":-1,\"window_closes_ut\":-1,\"late_window_dv\":-1},\"debrief\":null}");
         }
 
         private static ScriptedResponse NominalDebrief()
         {
+            return Debrief("Nominal", "none");
+        }
+
+        private static ScriptedResponse Debrief(string outcome, string followUp)
+        {
             return Reply("{\"kind\":\"debrief\",\"say\":\"Debrief.\",\"reply_intent\":\"none\",\"mission_plan\":null,\"sequence_plan\":null,\"alert\":null,"
-                + "\"debrief\":{\"outcome\":\"Nominal\",\"why\":\"It went.\",\"what_happened\":\"It went.\",\"goal_reached\":false,\"next\":\"Fly on.\",\"eva_science\":\"\","
-                + "\"outcome_vs_target\":\"\",\"plan_margin\":\"\",\"science\":\"\",\"goal_checklist\":[],\"follow_up\":\"none\",\"follow_up_text\":\"\"}}");
+                + "\"debrief\":{\"outcome\":\"" + outcome + "\",\"why\":\"It went.\",\"what_happened\":\"It went.\",\"goal_reached\":false,\"next\":\"Fly on.\",\"eva_science\":\"\","
+                + "\"outcome_vs_target\":\"\",\"plan_margin\":\"\",\"science\":\"\",\"goal_checklist\":[],\"follow_up\":\"" + followUp + "\",\"follow_up_text\":\"\"}}");
+        }
+
+        private MissionControl Started(StreamingFakeTransport transport)
+        {
+            var client = new ClaudeClient(new CraftCheckRouter(transport), () => "sk-ant-test", l => { });
+            client.Timing.Wait = (d, c) => { };
+            var mission = new MissionControl(client, _background, new PlayerConfig { CheckDurationPercent = 1000 }, () => true, new PassingScriptCheck());
+            mission.Send(new SaveLoaded(_save.Path));
+            mission.Send(new SceneChanged(GameScene.Flight));
+            mission.Send(OnPad());
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission("Land on the Mun.", 10m, "claude-sonnet-5-5"));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval && !v.Busy);
+            return mission;
+        }
+
+        /// <summary>Approves the pending Sequence Plan, ends its run, and waits for what follows the Debrief to await Approval.</summary>
+        private void FlyAndDebrief(MissionControl mission)
+        {
+            mission.Send(new Approve());
+            var start = mission.TakeCommands().OfType<StartScript>().Single();
+            mission.Send(new KosRunEnded(new RunOutcome(RunOutcomeKind.Finished, null, "", "", false), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval && !v.Busy);
+        }
+
+        private static string StillToFly(HttpRequestSpec debriefRequest)
+        {
+            var text = LastUserText(debriefRequest);
+            var at = text.IndexOf("still to fly in the Mission Plan", StringComparison.Ordinal);
+            Assert.True(at >= 0, "the Debrief request doesn't list the rest of the plan");
+            return text.Substring(at);
         }
 
         private static GameSnapshot OnPad()
@@ -138,6 +179,143 @@ namespace ClaudiaKermin.Core.Tests
             Assert.DoesNotContain("Reach orbit.", rest);
             Assert.Contains("Mun transfer", rest);
             Assert.Contains("Mun landing", rest);
+        }
+
+        // ---- Each Sequence Plan names the Mission Plan step it flies (#413) ----
+
+        [Fact]
+        public void ARetryOfTheLaunchNamesStepOneAgainSoTheTransferIsStepTwoAndTheLandingIsStillToFly()
+        {
+            var transport = new StreamingFakeTransport(
+                ThreeSequenceMissionPlan(), SequencePlan("Launch", 1),
+                Debrief("Off-Nominal", "corrective_sequence"), SequencePlan("Launch (retry)", 1),
+                NominalDebrief(), SequencePlan("Mun transfer", 2),
+                NominalDebrief(), SequencePlan("Mun landing", 3));
+            var mission = Started(transport);
+            Assert.Equal(0, mission.View.CurrentSequence);
+
+            // The launch flies, Off-Nominal; the retry names step 1 again, so the bar stays on the launch.
+            FlyAndDebrief(mission);
+            Assert.Equal(0, mission.View.CurrentSequence);
+            Assert.Equal("step 1 of 3", MissionWindowRules.Step(mission.View));
+
+            // The retry flies, Nominal; the transfer is step 2, with step 1 done.
+            FlyAndDebrief(mission);
+            Assert.Equal(1, mission.View.CurrentSequence);
+            Assert.Equal("step 2 of 3", MissionWindowRules.Step(mission.View));
+            var segments = MissionWindowRules.Segments(mission.View);
+            Assert.Equal(new[] { SegmentState.Done, SegmentState.Current, SegmentState.Upcoming }, segments.Select(s => s.State).ToArray());
+
+            // The transfer flies: its Debrief has the landing still to fly, and its margin counts the landing's delta-v.
+            FlyAndDebrief(mission);
+            var rest = StillToFly(transport.Requests[6]);
+            Assert.DoesNotContain("Mun transfer", rest);
+            Assert.Contains("Mun landing", rest);
+            var detail = mission.View.Log.Last(e => e.Kind == LogKind.Debrief).Debrief;
+            Assert.Equal(1500, detail.Margin.RestOfPlan);
+            Assert.Equal(2, mission.View.CurrentSequence);
+        }
+
+        [Fact]
+        public void OneStepSplitOverTwoSequencesKeepsTheBarOnThatStepForBoth()
+        {
+            var transport = new StreamingFakeTransport(
+                ThreeSequenceMissionPlan(), SequencePlan("Launch", 1),
+                NominalDebrief(), SequencePlan("Mun transfer: plane change", 2),
+                NominalDebrief(), SequencePlan("Mun transfer: burn", 2),
+                NominalDebrief(), SequencePlan("Mun landing", 3));
+            var mission = Started(transport);
+            FlyAndDebrief(mission);
+            Assert.Equal(1, mission.View.CurrentSequence);
+            FlyAndDebrief(mission);
+            Assert.Equal(1, mission.View.CurrentSequence);
+            // Both halves of the transfer had the landing still to fly.
+            Assert.Contains("Mun landing", StillToFly(transport.Requests[4]));
+            FlyAndDebrief(mission);
+            Assert.Contains("Mun landing", StillToFly(transport.Requests[6]));
+            Assert.Equal(2, mission.View.CurrentSequence);
+        }
+
+        [Fact]
+        public void APlanThatNamesNoStepIsCountedAsBefore()
+        {
+            var transport = new StreamingFakeTransport(
+                ThreeSequenceMissionPlan(), SequencePlan("Launch"),
+                Debrief("Off-Nominal", "corrective_sequence"), SequencePlan("Launch (retry)"));
+            var mission = Started(transport);
+            Assert.Equal(0, mission.View.CurrentSequence);
+            FlyAndDebrief(mission);
+            // The count moves on with every plan offered after a Debrief, retry or not.
+            Assert.Equal(1, mission.View.CurrentSequence);
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(4)]
+        public void AStepOutsideTheMissionPlanIsRefusedAtTheScriptCheckWithTheValidRange(int step)
+        {
+            var transport = new StreamingFakeTransport(
+                ThreeSequenceMissionPlan(), SequencePlan("Launch", step), SequencePlan("Launch", 1));
+            var mission = Started(transport);
+
+            // The player never saw the refused plan: the rewrite, naming step 1, is what awaits Approval.
+            Assert.Equal(3, transport.Requests.Count);
+            var asked = LastUserText(transport.Requests[2]);
+            Assert.Contains("plan_step " + step, asked);
+            Assert.Contains("1 to 3", asked);
+            Assert.Single(mission.View.Log, e => e.Kind == LogKind.SequencePlan);
+            Assert.Equal(0, mission.View.CurrentSequence);
+        }
+
+        [Fact]
+        public void AManualStretchNamingAStepOutsideTheMissionPlanIsCountedInstead()
+        {
+            // A manual stretch has no script, so no Script Check to refuse its step: the count stands in.
+            var manual = Reply("{\"kind\":\"sequence_plan\",\"say\":\"Over to you.\",\"reply_intent\":\"none\",\"mission_plan\":null,\"alert\":null,"
+                + "\"sequence_plan\":{\"name\":\"Launch by hand\",\"plan_step\":9,\"intent\":\"Fly it.\",\"why\":\"Because.\",\"target\":\"t\",\"tolerances\":\"t\","
+                + "\"expected_delta_v\":100,\"expected_duration_s\":600,\"abort_conditions\":[],\"risks\":[],\"custom_script_reason\":\"\",\"script\":\"\","
+                + "\"due_time_ut\":-1,\"window_closes_ut\":-1,\"late_window_dv\":-1,\"manual\":true},\"debrief\":null}");
+            var mission = Started(new StreamingFakeTransport(ThreeSequenceMissionPlan(), manual));
+            Assert.Equal(0, mission.View.CurrentSequence);
+        }
+
+        [Fact]
+        public void TheNamedStepSurvivesASaveAndLoad()
+        {
+            var transport = new StreamingFakeTransport(
+                ThreeSequenceMissionPlan(), SequencePlan("Launch", 1),
+                Debrief("Off-Nominal", "corrective_sequence"), SequencePlan("Launch (retry)", 1));
+            var mission = Started(transport);
+            FlyAndDebrief(mission);
+            var state = Assert.Single(mission.ExportStates());
+            Assert.Equal(1, state.PlanStep);
+            Assert.Equal(1, state.SequencePlan.PlanStep);
+
+            var again = MissionSaveState.FromValues(state.ToValues());
+            Assert.Equal(1, again.PlanStep);
+            Assert.Equal(1, again.PlanStepBefore);
+            Assert.Equal(1, again.SequencePlan.PlanStep);
+            // The count ran on to 2; the named step is what the bar shows after the load.
+            Assert.Equal(2, again.SequencesProposed);
+
+            var client = new ClaudeClient(new CraftCheckRouter(new StreamingFakeTransport()), () => "sk-ant-test", l => { });
+            var loaded = new MissionControl(client, _background, new PlayerConfig { CheckDurationPercent = 1000 }, () => true, new PassingScriptCheck());
+            loaded.Send(new SaveLoaded(_save.Path));
+            loaded.Send(new MissionsRestored(_save.Path, new[] { again }));
+            Assert.Equal(MissionStage.AwaitingSequenceApproval, loaded.View.Stage);
+            Assert.Equal(0, loaded.View.CurrentSequence);
+        }
+
+        [Fact]
+        public void ASaveFromBeforeTheNamedStepReadsAsNone()
+        {
+            var state = new MissionSaveState { Id = "m1", SequencesProposed = 2 };
+            var values = state.ToValues();
+            Assert.False(values.ContainsKey("planStep"));
+            Assert.False(values.ContainsKey("planStepBefore"));
+            var again = MissionSaveState.FromValues(values);
+            Assert.Null(again.PlanStep);
+            Assert.Null(again.PlanStepBefore);
         }
     }
 }
