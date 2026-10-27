@@ -1,0 +1,433 @@
+<title>Auto Mode Switch Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* PROTOTYPE, throwaway (spec #327). Layout: the three in-game surfaces (Capcom strip, Mission window, Settings window)
+   side by side over a dark KSP-like backdrop, a prototype control panel, and a floating variant switcher. Colours are
+   ClaudiaSkin's own (src/ClaudiaKermin.Adapter/ClaudiaSkin.cs), so the page is deliberately dark-only. */
+:root {
+  color-scheme: dark;
+  --space: #0d1013;
+  --window: #1b2024; --raised: #20262b; --bar: #252b30; --card: #232a2f; --card-head: #2a3238; --input: #15191c;
+  --border: #3d464e; --border-strong: #4a545c;
+  --text: #dfe4e8; --text-2: #98a3ad; --muted: #8a96a0;
+  --accent: #b8d94a; --on-accent: #1a1f10;
+  --claudia: #6cbcf0; --info-fill: #1f3342; --info-text: #8fcdf4;
+  --attention: #f2b04e; --att-fill: #2a2720; --att-fill-strong: #3a3020; --att-border: #5a4a2c;
+  --success: #c9e66a; --danger: #f19a8e; --danger-border: #6a3b36;
+  --proto: #e9e3ff; --proto-bg: #3b2f6b;
+  --ui: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  background: radial-gradient(ellipse at 70% 0%, #1a2430 0%, var(--space) 60%);
+  color: var(--text); font-family: var(--ui); font-size: 14px; line-height: 1.4;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 110px; min-height: 100%;
+}
+h1 { font-size: 20px; font-weight: 600; margin: 0; text-wrap: balance; }
+.lede { color: var(--text-2); max-width: 70ch; margin: 6px 0 0; }
+.lede b { color: var(--text); font-weight: 600; }
+.page { max-width: 1240px; margin: 0 auto; display: grid; gap: 18px; }
+
+/* ---- prototype controls (not part of the design) ---- */
+.proto { border: 1px dashed #6b5bb0; border-radius: 6px; padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; background: #17142a; }
+.proto .tag { font: 600 11px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: #b9a8ff; }
+.proto button { font: 500 13px var(--ui); color: var(--proto); background: var(--proto-bg); border: 1px solid #5d4fa0; border-radius: 4px; padding: 5px 10px; cursor: pointer; }
+.proto button:hover { background: #4a3c85; }
+.proto .state { font: 12px var(--mono); color: #c9bfff; flex-basis: 100%; overflow-wrap: anywhere; }
+.variant-note { background: #17142a; border-left: 3px solid #8b78e6; padding: 8px 12px; border-radius: 0 4px 4px 0; color: var(--proto); max-width: 90ch; }
+.variant-note b { color: #fff; }
+
+/* ---- layout of the game surfaces ---- */
+.stage { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.col { display: grid; gap: 18px; min-width: 0; }
+@media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.label-above { font: 600 11px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+
+/* ---- shared skin ---- */
+.win { background: var(--window); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,.45); }
+.titlebar { display: flex; align-items: center; gap: 10px; background: var(--bar); border-bottom: 1px solid var(--border); padding: 7px 10px; }
+.titlebar .t { font-weight: 600; }
+.titlebar .t em { font-style: normal; color: var(--accent); }
+.titlebar .x { margin-left: auto; color: var(--muted); }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); background: var(--info-fill); color: var(--info-text); white-space: nowrap; }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--claudia); }
+.chip.att { background: var(--att-fill-strong); border-color: var(--att-border); color: var(--attention); }
+.chip.att::before { background: var(--attention); }
+.btn { font: 500 13px var(--ui); border-radius: 4px; padding: 6px 12px; cursor: pointer; border: 1px solid var(--border-strong); background: var(--card-head); color: var(--text); white-space: nowrap; }
+.btn:hover { border-color: var(--text-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn.danger { background: transparent; border-color: var(--danger-border); color: var(--danger); }
+.btn.small { padding: 4px 9px; font-size: 12px; }
+.btn.att { background: var(--attention); border-color: var(--attention); color: #241a08; font-weight: 600; }
+.icon-btn { width: 30px; height: 30px; display: inline-grid; place-items: center; border-radius: 4px; border: 1px solid var(--border); background: var(--card-head); color: var(--text-2); font-size: 15px; cursor: default; }
+.secondary { color: var(--text-2); font-size: 12.5px; }
+.muted { color: var(--muted); font-size: 12px; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.meter { display: grid; gap: 3px; justify-items: end; }
+.meter .bar { width: 84px; height: 4px; background: var(--input); border-radius: 2px; overflow: hidden; }
+.meter .bar i { display: block; height: 100%; background: var(--accent); }
+.meter.warn .bar i { background: var(--attention); }
+:focus-visible { outline: 2px solid var(--claudia); outline-offset: 2px; }
+
+/* switch: ClaudiaSkin.Switch look */
+.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; white-space: nowrap; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch .track { width: 32px; height: 18px; border-radius: 9px; background: var(--input); border: 1px solid var(--border-strong); position: relative; transition: background .15s; flex: none; }
+.switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--text-2); transition: transform .15s, background .15s; }
+.switch input:checked + .track { background: var(--accent); border-color: var(--accent); }
+.switch input:checked + .track::after { transform: translateX(14px); background: var(--on-accent); }
+.switch input:focus-visible + .track { outline: 2px solid var(--claudia); outline-offset: 2px; }
+/* checkbox: ClaudiaSkin.Checkbox look */
+.check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.check input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.check .box { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--border-strong); background: var(--input); display: grid; place-items: center; flex: none; font-size: 12px; color: var(--on-accent); }
+.check input:checked + .box { background: var(--accent); border-color: var(--accent); }
+.check input:checked + .box::after { content: "✓"; font-weight: 700; }
+.check input:focus-visible + .box { outline: 2px solid var(--claudia); outline-offset: 2px; }
+.auto-tag { font: 700 10.5px var(--ui); letter-spacing: .1em; color: var(--on-accent); background: var(--accent); border-radius: 3px; padding: 1px 5px; }
+.tip { position: relative; }
+.tip[data-tip]:hover::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 0; width: 280px; white-space: normal; background: #0f1215; color: var(--text); border: 1px solid var(--border-strong); border-radius: 4px; padding: 7px 9px; font: 12.5px/1.35 var(--ui); z-index: 5; box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+
+/* ---- Capcom strip ---- */
+.strip { background: rgba(27,32,36,.94); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; display: grid; gap: 8px; }
+.strip-row { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.portrait { width: 40px; height: 40px; border-radius: 6px; background: linear-gradient(135deg, #3f8f4a, #9ad06a); display: grid; place-items: center; font-weight: 700; color: #11240f; flex: none; position: relative; }
+.portrait .corner { position: absolute; right: -6px; bottom: -6px; }
+.strip-mid { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.strip-mid .top { display: flex; gap: 8px; align-items: center; }
+.name { color: var(--claudia); font-weight: 600; }
+.line { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.strip-right { display: flex; gap: 8px; align-items: center; }
+.track { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.seg { display: grid; gap: 3px; min-width: 0; }
+.seg i { height: 4px; border-radius: 2px; background: var(--border); }
+.seg.done i { background: var(--accent); } .seg.now i { background: var(--claudia); }
+.seg span { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg.now span { color: var(--text); }
+.strip-tab { justify-self: center; font-size: 11px; color: var(--text-2); border: 1px solid var(--border); border-top: 0; border-radius: 0 0 5px 5px; padding: 1px 14px; margin: -8px 0 -10px; background: var(--bar); }
+.strip-tab.att { color: #241a08; background: var(--attention); border-color: var(--attention); }
+
+/* ---- Mission window ---- */
+.goal { padding: 9px 12px; border-bottom: 1px solid var(--border); background: var(--raised); display: grid; gap: 2px; }
+.goal .k { font: 600 10.5px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.log { padding: 10px 12px; display: grid; gap: 8px; max-height: 340px; overflow-y: auto; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 5px; overflow: hidden; }
+.card .h { background: var(--card-head); padding: 6px 10px; display: flex; gap: 8px; align-items: center; font-weight: 600; font-size: 13px; }
+.card .h .kind { font: 600 10.5px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--claudia); }
+.card .h .dv { margin-left: auto; font: 12px var(--mono); color: var(--text-2); }
+.card .b { padding: 7px 10px; color: var(--text-2); font-size: 13px; }
+.note { font-size: 12.5px; color: var(--text-2); padding-left: 10px; border-left: 2px solid var(--border-strong); }
+.note.auto { border-left-color: var(--accent); color: var(--success); }
+.note.stop { border-left-color: var(--attention); color: var(--attention); }
+.note.abort { border-left-color: var(--danger); color: var(--danger); }
+.actions { padding: 9px 12px; border-top: 1px solid var(--border); display: grid; gap: 8px; }
+.actions .q { font-weight: 600; }
+.actions .q.att { color: var(--attention); }
+.actions .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.auto-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; background: #233016; border: 1px solid #4b5e2c; border-radius: 5px; padding: 7px 10px; color: var(--success); font-size: 13px; }
+.auto-banner .grow { flex: 1; min-width: 12ch; }
+.controlbar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--border); background: var(--bar); flex-wrap: wrap; }
+.controlbar .flex { flex: 1; }
+.title-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: 700 11px var(--ui); letter-spacing: .1em; border-radius: 10px; padding: 3px 9px; border: 1px solid var(--border-strong); color: var(--muted); background: var(--input); }
+.title-toggle .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.title-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.title-toggle[aria-pressed="true"] .dot { background: var(--on-accent); }
+
+/* ---- Settings window ---- */
+.ctx { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; margin: 10px 12px 0; }
+.ctx button { flex: 1; font: 500 12px var(--ui); color: var(--text-2); background: var(--input); border: 0; padding: 5px 4px; cursor: pointer; }
+.ctx button[aria-pressed="true"] { background: var(--card-head); color: var(--text); }
+.ctx-hint { margin: 4px 12px 0; font-size: 11.5px; color: #b9a8ff; }
+.settings { padding: 12px; display: grid; gap: 12px; }
+.section-label { font: 600 11px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.field { display: grid; gap: 4px; }
+.field .lab { font-weight: 600; font-size: 13px; display: flex; gap: 6px; align-items: center; }
+.field .lab .lock { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 11.5px; }
+.seg-ctl { display: flex; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; }
+.seg-ctl span { flex: 1; text-align: center; padding: 4px; font-size: 12.5px; color: var(--text-2); background: var(--input); }
+.seg-ctl span.on { background: var(--card-head); color: var(--text); }
+.cap { display: flex; align-items: center; gap: 6px; }
+.cap .in { background: var(--input); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-family: var(--mono); width: 90px; }
+.tile { background: var(--raised); border: 1px solid var(--border); border-radius: 4px; padding: 6px 9px; display: grid; gap: 1px; flex: 1; min-width: 0; }
+.tiles { display: flex; gap: 8px; flex-wrap: wrap; }
+.new-field { position: relative; border-radius: 5px; padding: 8px 9px; background: #1f2a17; border: 1px solid #4b5e2c; display: grid; gap: 4px; }
+.new-field::before { content: "new"; position: absolute; top: -8px; right: 8px; font: 700 9.5px var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--on-accent); background: var(--accent); padding: 0 5px; border-radius: 3px; }
+.footer { display: flex; justify-content: flex-end; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border); background: var(--bar); }
+
+/* ---- floating variant switcher (prototype chrome) ---- */
+.switcher { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; align-items: center; gap: 4px; background: #f4f0ff; color: #1d1636; border-radius: 999px; padding: 4px; box-shadow: 0 8px 28px rgba(0,0,0,.55); z-index: 20; max-width: calc(100% - 32px); }
+.switcher button { width: 34px; height: 34px; border-radius: 50%; border: 0; background: #ddd4ff; color: #1d1636; font-size: 16px; cursor: pointer; flex: none; }
+.switcher button:hover { background: #c8bbff; }
+.switcher .lbl { padding: 0 12px; font: 600 13px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="page">
+  <header>
+    <h1>Auto Mode switch prototype</h1>
+    <p class="lede">A throwaway mock of the <b>Capcom strip</b>, the <b>Mission window</b> and the <b>Settings window</b>, in the mod's own colours, with three placements for the Auto Mode switch. Use the pill at the bottom (or ← →) to change variant. Use the purple buttons to send Claudia's next move and see how each variant reacts.</p>
+  </header>
+
+  <div class="variant-note" id="variant-note"></div>
+
+  <div class="proto" aria-label="Prototype controls">
+    <span class="tag">Prototype controls</span>
+    <button type="button" id="p-plan">Claudia offers the next Sequence Plan</button>
+    <button type="button" id="p-lowcap">…with the Spending Cap nearly used</button>
+    <button type="button" id="p-abort">Claudia recommends Abort</button>
+    <button type="button" id="p-reset">Reset</button>
+    <div class="state" id="state"></div>
+  </div>
+
+  <div class="stage">
+    <div class="col">
+      <div>
+        <div class="label-above">Flight view · Capcom strip</div>
+        <div id="strip"></div>
+      </div>
+      <div>
+        <div class="label-above">Mission window</div>
+        <div id="mission"></div>
+      </div>
+    </div>
+    <div class="col">
+      <div>
+        <div class="label-above">Settings window (gear button)</div>
+        <div id="settings"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="switcher" role="group" aria-label="Variant switcher">
+  <button type="button" id="prev" aria-label="Previous variant">←</button>
+  <span class="lbl" id="vlabel"></span>
+  <button type="button" id="next" aria-label="Next variant">→</button>
+</div>
+
+<script>
+const TIP = "Approve Claudia's plans for you while the Spending Cap has room. Starting the Mission, Warnings, Manual stretches and Due Times still need you.";
+const VARIANTS = {
+  A: { name: "Control bar switch",
+       note: "<b>A · As the spec has it.</b> A switch in the Mission window's control bar, beside the spend meter. AUTO tag by the strip's Spending Cap figure. Settings: one switch under <i>Mission defaults</i>, for new Missions only." },
+  B: { name: "Title bar toggle",
+       note: "<b>B · Always in sight.</b> A clickable AUTO pill in the Mission window's title bar, next to the status chip, so it shows even when the control bar is scrolled or docked. The strip shows Auto Mode inside its status chip. Settings: the default switch, plus a live Auto Mode switch for <i>this</i> Mission while one is flying." },
+  C: { name: "With the approvals",
+       note: "<b>C · Where the decision happens.</b> The switch sits with Approve: \"Approve this and the rest for me\". While on, the quick-reply row becomes a green Auto Mode banner with a Turn off button. A small AUTO badge sits on Claudia's portrait on the strip. Settings: the default switch, plus an Auto Mode choice when setting up a Mission, prefilled from the default." },
+};
+const KEYS = Object.keys(VARIANTS);
+
+const fresh = () => ({
+  auto: false, defaultAuto: false, setupAuto: false, ctx: "during",
+  stage: "running", // running | waiting | stopped | abort
+  spent: 1.42, cap: 10,
+  log: [
+    { k: "card", kind: "Sequence Plan", title: "1 · Launch to 80 km orbit", dv: "3,400 m/s", body: "Gravity turn from 1 km, circularize at apoapsis." },
+    { k: "note", text: "Approved." },
+    { k: "card", kind: "Debrief", title: "Nominal", dv: "", body: "Orbit 80.4 × 79.8 km. 3,310 m/s used of 3,400." },
+    { k: "card", kind: "Sequence Plan", title: "2 · Mun transfer", dv: "860 m/s", body: "Burn at the window in 41 min; arrive in 6 d 2 h." },
+    { k: "note", text: "Approved." },
+  ],
+  seq: 2,
+});
+let S = fresh();
+let V = (() => { try { const v = sessionStorage.getItem("am-variant"); return KEYS.includes(v) ? v : "A"; } catch (e) { return "A"; } })();
+if (KEYS.includes(location.hash.slice(1))) V = location.hash.slice(1);
+
+const NAMES = ["Launch", "Mun transfer", "Land", "Return"];
+const money = n => "$" + n.toFixed(2);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function statusChip() {
+  if (S.stage === "abort") return { text: "Claudia recommends Abort", att: true };
+  if (S.stage === "waiting" || S.stage === "stopped") return { text: "Needs you · Approval", att: true };
+  const base = "Running · " + S.seq + " " + NAMES[S.seq - 1];
+  if (V === "B" && S.auto) return { text: "Auto · " + S.seq + " " + NAMES[S.seq - 1], att: false };
+  return { text: base, att: false };
+}
+function stripLine() {
+  const last = [...S.log].reverse().find(e => e.k === "note" || e.k === "card");
+  if (S.stage === "stopped") return "Auto Mode stopped: no room in the Spending Cap for this plan's Debrief and the next plan.";
+  if (S.stage === "abort") return "Fuel flow is below the plan: I recommend Abort.";
+  if (S.stage === "waiting") return "Plan for " + S.seq + " · " + NAMES[S.seq - 1] + " is ready for your Approval.";
+  return last && last.k === "note" ? last.text : "Flying " + NAMES[S.seq - 1] + ".";
+}
+const needsYou = () => S.stage !== "running";
+
+function autoSwitch(id, label) {
+  return `<label class="switch tip" data-tip="${esc(TIP)}"><input type="checkbox" id="${id}" ${S.auto ? "checked" : ""}><span class="track"></span><span>${label}</span></label>`;
+}
+function meter() {
+  const pct = Math.min(100, S.spent / S.cap * 100);
+  return `<div class="meter ${pct >= 80 ? "warn" : ""}"><span class="secondary mono">${money(S.spent)} / ${money(S.cap)}</span><span class="bar"><i style="width:${pct}%"></i></span></div>`;
+}
+
+function renderStrip() {
+  const chip = statusChip();
+  const tagA = V === "A" && S.auto ? `<span class="auto-tag" title="Auto Mode is on">AUTO</span>` : "";
+  const badgeC = V === "C" && S.auto ? `<span class="corner auto-tag" title="Auto Mode is on">AUTO</span>` : "";
+  const segs = NAMES.map((n, i) => `<div class="seg ${i + 1 < S.seq ? "done" : i + 1 === S.seq ? "now" : ""}"><i></i><span>${i + 1} · ${n}</span></div>`).join("");
+  document.getElementById("strip").innerHTML = `
+    <div class="strip">
+      <div class="strip-row">
+        <div class="portrait" aria-hidden="true">C${badgeC}</div>
+        <div class="strip-mid">
+          <div class="top"><span class="name">Claudia</span><span class="chip ${chip.att ? "att" : ""}">${esc(chip.text)}</span></div>
+          <div class="line">${esc(stripLine())}</div>
+        </div>
+        <div class="strip-right">${tagA}${meter()}</div>
+      </div>
+      <div class="track">${segs}</div>
+      <div class="strip-tab ${needsYou() ? "att" : ""}">Mission ▾</div>
+    </div>`;
+}
+
+function renderMission() {
+  const chip = statusChip();
+  const titleToggle = V === "B"
+    ? `<button type="button" class="title-toggle tip" id="mw-auto-b" aria-pressed="${S.auto}" data-tip="${esc(TIP)}"><span class="dot"></span>AUTO</button>` : "";
+  const log = S.log.map(e => e.k === "card"
+    ? `<div class="card"><div class="h"><span class="kind">${esc(e.kind)}</span><span>${esc(e.title)}</span>${e.dv ? `<span class="dv">${esc(e.dv)}</span>` : ""}</div><div class="b">${esc(e.body)}</div></div>`
+    : `<div class="note ${e.cls || ""}">${esc(e.text)}</div>`).join("");
+
+  let actions = "";
+  if (S.stage === "waiting" || S.stage === "stopped") {
+    const q = S.stage === "stopped"
+      ? `<div class="q att">Auto Mode stopped: the Spending Cap has no room for this plan's Debrief and the next plan. Approve it yourself or raise the cap.</div>`
+      : `<div class="q">Approve ${S.seq} · ${NAMES[S.seq - 1]}?</div>`;
+    const cBox = V === "C" ? `<label class="check tip" data-tip="${esc(TIP)}"><input type="checkbox" id="mw-auto-c" ${S.auto ? "checked" : ""}><span class="box"></span><span class="secondary">Approve this and the rest for me (Auto Mode)</span></label>` : "";
+    actions = `<div class="actions">${q}<div class="row"><button type="button" class="btn primary" id="approve">Approve</button><button type="button" class="btn">Re-plan</button>${S.stage === "stopped" ? `<button type="button" class="btn" id="raise">Raise cap…</button>` : ""}</div>${cBox}</div>`;
+  } else if (S.stage === "abort") {
+    actions = `<div class="actions"><div class="q att">Claudia recommends Abort: fuel flow is 18% below the plan.</div><div class="row"><button type="button" class="btn att" id="abort">Abort</button><button type="button" class="btn">Carry on</button></div></div>`;
+  } else if (V === "C" && S.auto) {
+    actions = `<div class="actions"><div class="auto-banner tip" data-tip="${esc(TIP)}"><span class="auto-tag">AUTO</span><span class="grow">Auto Mode is on. Claudia's plans are approved while the Spending Cap has room.</span><button type="button" class="btn small" id="mw-auto-off">Turn off</button></div></div>`;
+  } else if (V === "C") {
+    actions = `<div class="actions"><div class="row"><span class="secondary">Flying ${S.seq} · ${NAMES[S.seq - 1]}.</span><label class="check tip" data-tip="${esc(TIP)}"><input type="checkbox" id="mw-auto-c" ${S.auto ? "checked" : ""}><span class="box"></span><span class="secondary">Auto Mode</span></label></div></div>`;
+  }
+
+  document.getElementById("mission").innerHTML = `
+    <div class="win">
+      <div class="titlebar"><span class="t"><em>Claudia:</em> Mission</span><span class="chip ${chip.att ? "att" : ""}">${esc(chip.text)}</span>${titleToggle}<span class="x" aria-hidden="true">✕</span></div>
+      <div class="goal"><span class="k">Mission Goal</span><span>Land on the Mun, run 3 experiments, return to Kerbin.</span></div>
+      <div class="log" id="log">${log}</div>
+      ${actions}
+      <div class="controlbar">
+        <span class="icon-btn" title="Settings" aria-hidden="true">⚙</span>
+        <span class="icon-btn" title="Clear" aria-hidden="true">⌫</span>
+        ${V === "A" ? autoSwitch("mw-auto-a", "Auto Mode") : ""}
+        <span class="flex"></span>
+        ${meter()}
+        <button type="button" class="btn small">Pause Mission</button>
+        <button type="button" class="btn danger small">End Mission</button>
+      </div>
+    </div>`;
+  const l = document.getElementById("log"); l.scrollTop = l.scrollHeight;
+}
+
+function renderSettings() {
+  const during = S.ctx === "during", defaults = S.ctx === "defaults", setup = S.ctx === "setup";
+  const sub = during ? "This Mission. Changes while a plan awaits Approval ask Claudia for a revised plan."
+    : defaults ? "Every new Mission starts with these. You can change them per Mission before launch." : "For the Mission you're setting up";
+  const typeAndModel = during
+    ? `<div class="tiles"><div class="tile"><span class="secondary">Mission type 🔒</span><span>Crewed</span><span class="muted">Locked for this Mission</span></div><div class="tile"><span class="secondary">Model 🔒</span><span class="mono">claude-sonnet-5-5</span><span class="muted">Locked for this Mission</span></div></div>`
+    : `<div class="field"><span class="lab">Mission type${setup ? `<span class="lock">Locked once started 🔒</span>` : ""}</span><div class="seg-ctl"><span class="on">Crewed</span><span>Remote</span></div><span class="secondary">Claudia flies aboard as crew.</span></div>`;
+
+  let autoField = "";
+  if (defaults) {
+    autoField = `<div class="new-field"><label class="switch"><input type="checkbox" id="st-default" ${S.defaultAuto ? "checked" : ""}><span class="track"></span><span>Start new Missions in Auto Mode</span></label><span class="secondary">Claudia approves her own plans while the Spending Cap has room. Starting the Mission and Warnings still need you.</span></div>`;
+  } else if (setup && V === "C") {
+    autoField = `<div class="new-field"><label class="switch"><input type="checkbox" id="st-setup" ${S.setupAuto ? "checked" : ""}><span class="track"></span><span>Auto Mode for this Mission</span></label><span class="secondary">From your default (${S.defaultAuto ? "on" : "off"}). You can change it any time from the Mission window.</span></div>`;
+  } else if (during && V === "B") {
+    autoField = `<div class="new-field"><label class="switch"><input type="checkbox" id="st-during" ${S.auto ? "checked" : ""}><span class="track"></span><span>Auto Mode</span></label><span class="secondary">Same switch as the AUTO pill on the Mission window. Takes effect at once; doesn't ask Claudia for a revised plan.</span></div>`;
+  }
+  const hint = defaults ? "Shown with no Mission open." : setup ? "Shown while setting up a Mission, before Start." : "Shown while a Mission is flying.";
+
+  document.getElementById("settings").innerHTML = `
+    <div class="win">
+      <div class="titlebar"><span class="t">⚙ Settings</span><span class="x" aria-hidden="true">✕</span></div>
+      <div class="ctx" role="group" aria-label="Settings context (prototype)">
+        <button type="button" data-ctx="defaults" aria-pressed="${defaults}">No Mission</button>
+        <button type="button" data-ctx="setup" aria-pressed="${setup}">Setting up</button>
+        <button type="button" data-ctx="during" aria-pressed="${during}">During Mission</button>
+      </div>
+      <div class="ctx-hint">Prototype: pick when the Settings window is opened. ${hint}</div>
+      <div class="settings">
+        <div><div class="section-label">${defaults ? "Mission defaults" : "Mission"}</div><div class="secondary">${sub}</div></div>
+        ${typeAndModel}
+        <div class="field"><span class="lab">Spending Cap</span>${during ? `<span class="secondary">${money(S.spent)} spent so far</span>` : ""}<div class="cap"><span>$</span><span class="in">${S.cap.toFixed(2)}</span></div>${during ? "" : `<span class="secondary">Pauses the Mission when reached</span>`}</div>
+        <label class="switch"><input type="checkbox" checked disabled><span class="track"></span><span>Daylight landing</span></label>
+        <div class="field"><span class="lab">Time versus delta-v</span><div class="seg-ctl"><span>Fastest</span><span class="on">Balanced</span><span>Most efficient</span></div><span class="secondary">Waits up to 6 h for a cheaper window.</span></div>
+        ${autoField}
+      </div>
+      <div class="footer"><button type="button" class="btn small">Cancel</button><button type="button" class="btn primary small">Apply</button></div>
+    </div>`;
+}
+
+function renderState() {
+  document.getElementById("state").textContent =
+    `variant=${V} · auto_mode=${S.auto} · default_auto_mode=${S.defaultAuto} · stage=${S.stage} · spent=${money(S.spent)} cap=${money(S.cap)} · settings=${S.ctx}`;
+  document.getElementById("variant-note").innerHTML = VARIANTS[V].note;
+  document.getElementById("vlabel").textContent = V + " (" + VARIANTS[V].name + ")";
+}
+function render() { renderStrip(); renderMission(); renderSettings(); renderState(); }
+
+// ---- behaviour (stub of the spec's rules) ----
+const roomFor = () => S.cap - S.spent >= 0.64; // worst case of the Debrief + the next plan request
+function finishSequence() {
+  if (S.seq >= NAMES.length) return false;
+  S.log.push({ k: "card", kind: "Debrief", title: "Nominal", dv: "", body: NAMES[S.seq - 1] + " within tolerance." });
+  S.seq += 1; S.spent += 0.14;
+  S.log.push({ k: "card", kind: "Sequence Plan", title: S.seq + " · " + NAMES[S.seq - 1], dv: ["", "", "580 m/s", "310 m/s"][S.seq - 1], body: S.seq === 3 ? "Land at Midlands, daylight, 1.8 m/s touchdown." : "Ascend, then return burn at the window." });
+  return true;
+}
+function offerPlan() {
+  if (S.stage !== "running") return;
+  if (!finishSequence()) { S.log.push({ k: "note", text: "No more sequences in this prototype: press Reset." }); return; }
+  if (S.auto && roomFor()) { S.log.push({ k: "note", cls: "auto", text: "Approved by Auto Mode." }); S.stage = "running"; }
+  else if (S.auto) { S.stage = "stopped"; S.log.push({ k: "note", cls: "stop", text: "Auto Mode stopped: the Spending Cap has no room for this plan's Debrief and the next plan." }); }
+  else S.stage = "waiting";
+}
+function setAuto(on) {
+  S.auto = on;
+  if (on && (S.stage === "waiting" || S.stage === "stopped") && roomFor()) { S.log.push({ k: "note", cls: "auto", text: "Approved by Auto Mode." }); S.stage = "running"; }
+  if (on && S.stage === "abort") takeAbort();
+  render();
+}
+function takeAbort() { S.log.push({ k: "note", cls: "abort", text: "Abort taken by Auto Mode." }); S.stage = "running"; }
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.id === "p-plan") { offerPlan(); render(); }
+  else if (t.id === "p-lowcap") { S.spent = Math.max(S.spent, S.cap - 0.5); offerPlan(); render(); }
+  else if (t.id === "p-abort") { if (S.stage === "running") { if (S.auto) takeAbort(); else S.stage = "abort"; } render(); }
+  else if (t.id === "p-reset") { const keep = { ctx: S.ctx, defaultAuto: S.defaultAuto }; S = Object.assign(fresh(), keep); S.auto = S.defaultAuto; S.setupAuto = S.defaultAuto; render(); }
+  else if (t.id === "approve") { S.log.push({ k: "note", text: "Approved." }); S.stage = "running"; render(); }
+  else if (t.id === "raise") { S.cap += 5; if (S.auto && roomFor()) { S.log.push({ k: "note", cls: "auto", text: "Approved by Auto Mode." }); S.stage = "running"; } render(); }
+  else if (t.id === "abort") { S.log.push({ k: "note", text: "Aborted." }); S.stage = "running"; render(); }
+  else if (t.id === "mw-auto-b") setAuto(!S.auto);
+  else if (t.id === "mw-auto-off") setAuto(false);
+  else if (t.dataset.ctx) { S.ctx = t.dataset.ctx; render(); }
+  else if (t.id === "prev" || t.id === "next") step(t.id === "next" ? 1 : -1);
+});
+document.addEventListener("change", e => {
+  const id = e.target.id;
+  if (id === "mw-auto-a" || id === "mw-auto-c" || id === "st-during") setAuto(e.target.checked);
+  else if (id === "st-default") { S.defaultAuto = e.target.checked; S.setupAuto = S.defaultAuto; render(); }
+  else if (id === "st-setup") { S.setupAuto = e.target.checked; render(); }
+});
+function step(d) {
+  V = KEYS[(KEYS.indexOf(V) + d + KEYS.length) % KEYS.length];
+  try { sessionStorage.setItem("am-variant", V); } catch (e) {}
+  try { history.replaceState(null, "", "#" + V); } catch (e) {}
+  render();
+}
+document.addEventListener("keydown", e => {
+  const a = document.activeElement;
+  if (a && (a.matches("input[type=text], textarea, [contenteditable]"))) return;
+  if (e.key === "ArrowLeft") step(-1); else if (e.key === "ArrowRight") step(1);
+});
+render();
+</script>
