@@ -125,7 +125,7 @@ namespace ClaudiaKermin.Core.Missions
             else Close(ut);
         }
 
-        /// <summary>The run ended (or the Debrief reads the tally): a switch still on counts its seconds up to <paramref name="ut"/>.</summary>
+        /// <summary>The run ended (MissionControl.RunEnded calls this before the Debrief is built): a switch still on counts its seconds up to <paramref name="ut"/>.</summary>
         public void Close(double ut)
         {
             if (!_onSince.HasValue) return;
