@@ -7,8 +7,9 @@ namespace ClaudiaKermin.Core.Tools
 {
     /// <summary>
     /// What the turn-time model needs of a craft on a Coast: the torque it can turn with (kN·m, the weaker of the two directions
-    /// on each axis) and its moment of inertia (t·m²) about pitch and yaw. Reaction wheels always count; RCS counts only while
-    /// it's on. Gimbals and control surfaces don't: there's no thrust or air on a Coast. The adapter reads these from the game.
+    /// on each axis) and its moment of inertia (t·m²) about pitch and yaw. Reaction wheels always count; RCS counts whenever the
+    /// craft has MonoPropellant, whatever the RCS switch reads (RCS Use switches it on when the wheels need help). Gimbals and
+    /// control surfaces don't: there's no thrust or air on a Coast. The adapter reads these from the game.
     /// </summary>
     public sealed class TurnCraft
     {
@@ -16,10 +17,15 @@ namespace ClaudiaKermin.Core.Tools
         public double WheelPitch;
         public double WheelYaw;
 
-        /// <summary>The enabled RCS thrusters' torque (kN·m) about pitch and yaw; counted only when <see cref="RcsOn"/>.</summary>
+        /// <summary>
+        /// The enabled RCS thrusters' torque (kN·m) about pitch and yaw, as kOS counts it (<see cref="RcsTorque"/>); counted only
+        /// when <see cref="RcsUsable"/>.
+        /// </summary>
         public double RcsPitch;
         public double RcsYaw;
-        public bool RcsOn;
+
+        /// <summary>The craft has MonoPropellant aboard, so its thrusters can fire once RCS is switched on.</summary>
+        public bool RcsUsable;
 
         /// <summary>The moment of inertia (t·m²) about pitch and yaw.</summary>
         public double MoiPitch;
@@ -71,8 +77,22 @@ namespace ClaudiaKermin.Core.Tools
         /// </summary>
         public static TurnPrediction Predict(TurnCraft craft, double maxStoppingTime = KosMaxStoppingTime)
         {
-            var alpha = Math.Min(Acceleration(craft.WheelPitch, craft.RcsPitch, craft.RcsOn, craft.MoiPitch),
-                Acceleration(craft.WheelYaw, craft.RcsYaw, craft.RcsOn, craft.MoiYaw));
+            return Predict(craft, craft.RcsUsable, maxStoppingTime);
+        }
+
+        /// <summary>
+        /// The same turn on the reaction wheels alone, for RCS Use to judge whether the wheels make it in time; an
+        /// <see cref="TurnPrediction.Error"/> when the wheels have no torque about pitch or yaw.
+        /// </summary>
+        public static TurnPrediction PredictWheels(TurnCraft craft, double maxStoppingTime = KosMaxStoppingTime)
+        {
+            return Predict(craft, false, maxStoppingTime);
+        }
+
+        private static TurnPrediction Predict(TurnCraft craft, bool withRcs, double maxStoppingTime)
+        {
+            var alpha = Math.Min(Acceleration(craft.WheelPitch, craft.RcsPitch, withRcs, craft.MoiPitch),
+                Acceleration(craft.WheelYaw, craft.RcsYaw, withRcs, craft.MoiYaw));
             if (!(alpha > 0) || double.IsInfinity(alpha)) return new TurnPrediction { Error = NoTorque };
 
             var angle = TurnDegrees * Math.PI / 180;
