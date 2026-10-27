@@ -311,6 +311,32 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(1f, MissionWindowRules.SpendFraction(view));
         }
 
+        // ---- Auto Mode ----
+
+        [Fact]
+        public void TheAutoModeSwitchHasItsWordingAndTooltip()
+        {
+            Assert.Equal("Auto Mode", MissionWindowRules.AutoModeLabel);
+            Assert.Equal("Approve Claudia's plans for you while the Spending Cap has room. Starting the Mission, Warnings, Manual stretches and Due Times still need you.", MissionWindowRules.AutoModeTooltip);
+            Assert.Equal("Start new Missions in Auto Mode", MissionWindowRules.DefaultAutoModeLabel);
+        }
+
+        [Fact]
+        public void TheAutoModeSwitchIsOfferedOnlyOnceTheMissionHasStarted()
+        {
+            Assert.True(MissionWindowRules.OffersAutoMode(During(MissionStage.Running)));
+            Assert.True(MissionWindowRules.OffersAutoMode(During(MissionStage.AwaitingPlanApproval)));
+            Assert.False(MissionWindowRules.OffersAutoMode(new MissionView()));
+        }
+
+        [Fact]
+        public void TheAutoModeSwitchIsNotOfferedOnceTheMissionIsOver()
+        {
+            var view = During(MissionStage.Succeeded);
+            view.CanEndMission = false;
+            Assert.False(MissionWindowRules.OffersAutoMode(view));
+        }
+
         // ---- Craft Check card and approval checkbox ----
 
         private static CraftCheckView Checked(CraftVerdict verdict, params CraftFinding[] findings)

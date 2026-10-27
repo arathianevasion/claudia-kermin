@@ -53,6 +53,7 @@ namespace ClaudiaKermin.Adapter
         private bool _drafted;
         private Context _draftFor;
         private bool _remote;
+        private bool _autoMode;
         private string _model = "";
         private string _cap = "";
         // During a Mission: the cap the field was filled from, so a raise made elsewhere (the Mission window) refreshes an untouched field.
@@ -148,6 +149,7 @@ namespace ClaudiaKermin.Adapter
                     break;
                 default:
                     _remote = _config.DefaultRemote;
+                    _autoMode = _config.DefaultAutoMode;
                     _model = _config.DefaultModel;
                     _cap = Dollars(_config.DefaultSpendingCap);
                     _settings = MissionSettingsValues.Defaults(_config);
@@ -212,6 +214,12 @@ namespace ClaudiaKermin.Adapter
             DrawSpendingCap(during);
             GUILayout.Space(ClaudiaSkin.Gap);
             DrawMissionSettings(during);
+            if (defaults)
+            {
+                // The default only: a started Mission's Auto Mode is the switch in its control bar.
+                GUILayout.Space(ClaudiaSkin.Gap / 2);
+                _autoMode = ClaudiaSkin.Switch(_autoMode, MissionWindowRules.DefaultAutoModeLabel);
+            }
 
             if (during)
             {
@@ -552,6 +560,7 @@ namespace ClaudiaKermin.Adapter
                     break;
                 default:
                     _config.DefaultRemote = _remote;
+                    _config.DefaultAutoMode = _autoMode;
                     _config.SetDefaultModel(_model);
                     _config.DefaultSpendingCap = cap;
                     _config.DefaultDaylightLanding = _settings.DaylightLanding;

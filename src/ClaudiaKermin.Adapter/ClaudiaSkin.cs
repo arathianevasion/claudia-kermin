@@ -379,11 +379,11 @@ namespace ClaudiaKermin.Adapter
         }
 
         /// <summary>A toggle switch with its label on the left; the whole row is the click target.</summary>
-        public static bool Switch(bool on, string label)
+        public static bool Switch(bool on, string label, string tooltip = "")
         {
             Build();
             var row = GUILayoutUtility.GetRect(new GUIContent(label), _body, GUILayout.Height(MinClickable + 4), GUILayout.ExpandWidth(true));
-            if (GUI.Button(row, GUIContent.none, GUIStyle.none)) on = !on;
+            if (GUI.Button(row, new GUIContent("", tooltip), GUIStyle.none)) on = !on;
             if (Event.current.type == EventType.Repaint)
             {
                 const float w = 40, h = 22;

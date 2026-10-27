@@ -21,6 +21,27 @@ namespace ClaudiaKermin.Core.Tests
             return view;
         }
 
+        // ---- AUTO tag ----
+
+        [Fact]
+        public void TheAutoTagShowsByTheSpendingCapWhileAutoModeIsOn()
+        {
+            var view = During(MissionStage.Running, 0, "Launch");
+            Assert.Equal("", MissionWindowRules.AutoTag(view));
+            view.AutoMode = true;
+            Assert.Equal("AUTO", MissionWindowRules.AutoTag(view));
+        }
+
+        [Fact]
+        public void TheAutoTagStaysThroughAWaitAndGoesWithTheMission()
+        {
+            var view = During(MissionStage.Paused);
+            view.AutoMode = true;
+            Assert.Equal("AUTO", MissionWindowRules.AutoTag(view));
+            view.CanEndMission = false;
+            Assert.Equal("", MissionWindowRules.AutoTag(view));
+        }
+
         // ---- Status chip ----
 
         [Fact]

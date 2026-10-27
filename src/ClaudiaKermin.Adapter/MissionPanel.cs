@@ -512,6 +512,8 @@ namespace ClaudiaKermin.Adapter
                 if (OfferDock && SetDocked != null && ClaudiaSkin.IconButton(ClaudiaSkin.IconShape.Dock, "Dock", GUILayout.ExpandWidth(false))) SetDocked(true);
             }
 
+            if (MissionWindowRules.OffersAutoMode(_view)) DrawAutoMode();
+
             if (_debugTools)
             {
                 GUI.enabled = _view.CanCaptureSnapshot;
@@ -561,6 +563,17 @@ namespace ClaudiaKermin.Adapter
             GUILayout.FlexibleSpace();
             GUILayout.EndVertical();
             GUILayout.FlexibleSpace();
+        }
+
+        // The Auto Mode switch, beside the spend meter; flipping it sends SetAutoMode.
+        private void DrawAutoMode()
+        {
+            GUILayout.BeginVertical(GUILayout.Width(ClaudiaSkin.Scaled(150)));
+            GUILayout.FlexibleSpace();
+            var on = ClaudiaSkin.Switch(_view.AutoMode, MissionWindowRules.AutoModeLabel, MissionWindowRules.AutoModeTooltip);
+            GUILayout.FlexibleSpace();
+            GUILayout.EndVertical();
+            if (on != _view.AutoMode) _send(new SetAutoMode(on));
         }
 
         // End Mission needs a confirmation, shown just above the control bar.

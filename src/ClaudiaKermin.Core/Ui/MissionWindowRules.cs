@@ -248,6 +248,29 @@ namespace ClaudiaKermin.Core.Ui
             return "$" + Dollars(view.Spent + view.HeldCharges) + " / $" + Dollars(view.SpendingCap);
         }
 
+        // ---- Auto Mode ----
+
+        /// <summary>The Auto Mode switch in the control bar.</summary>
+        public const string AutoModeLabel = "Auto Mode";
+
+        /// <summary>The switch's tooltip: what Auto Mode does and what still needs the player.</summary>
+        public const string AutoModeTooltip = "Approve Claudia's plans for you while the Spending Cap has room. Starting the Mission, Warnings, Manual stretches and Due Times still need you.";
+
+        /// <summary>The Settings switch for whether new Missions start in Auto Mode (under Mission defaults only).</summary>
+        public const string DefaultAutoModeLabel = "Start new Missions in Auto Mode";
+
+        /// <summary>The control bar offers the Auto Mode switch once a Mission has started, and until it is over.</summary>
+        public static bool OffersAutoMode(MissionView view)
+        {
+            return view.CanEndMission;
+        }
+
+        /// <summary>The tag by the Spending Cap figure on the Capcom strip: "AUTO" while Auto Mode is on, else "".</summary>
+        public static string AutoTag(MissionView view)
+        {
+            return OffersAutoMode(view) && view.AutoMode ? "AUTO" : "";
+        }
+
         /// <summary>How full the spend meter's bar is, 0 to 1.</summary>
         public static float SpendFraction(MissionView view)
         {
