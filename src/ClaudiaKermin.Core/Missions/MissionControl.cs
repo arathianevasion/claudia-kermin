@@ -365,6 +365,7 @@ namespace ClaudiaKermin.Core.Missions
             var bodyTable = MissionPrompts.BodyTable(_snapshot != null ? _snapshot.Bodies : null);
             mission.System.Add(MissionPrompts.MissionLayer(id, goal, bodyTable));
             var settings = start.Settings != null ? start.Settings.Copy() : MissionSettingsValues.Defaults(_config);
+            settings.ConfigAllowsPhysicsWarp = _config.PhysicsWarp;
             settings.WriteTo(mission.Settings);
             mission.System.Add(MissionPrompts.TimingLayer(settings));
             // Raw stream dumps are a debug tool: on with debug_tools = true in the player config.
@@ -744,6 +745,7 @@ namespace ClaudiaKermin.Core.Missions
             var current = MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config));
             if (current.SameAs(edited)) return;
             edited = edited.Copy();
+            edited.ConfigAllowsPhysicsWarp = _config.PhysicsWarp;
             edited.WriteTo(mission.Settings);
             Note(LogKind.Player, "Mission Settings: " + edited.Summary());
             if (mission.Stage == MissionStage.WaitingForFlight)
@@ -1925,6 +1927,7 @@ namespace ClaudiaKermin.Core.Missions
                 view.StartForm.Estimates[model] = Math.Round(_config.Prices.EstimateMission(model), 2);
             view.StartForm.CanStart = _saveDirectory != null && MissionOver;
             view.StartForm.DefaultSettings = MissionSettingsValues.Defaults(_config);
+            view.PhysicsWarpAllowed = _config.PhysicsWarp;
             view.StartForm.DefaultRemote = _config.DefaultRemote;
             view.StartForm.Refusal = _startRefusal;
             _craftCheck.Populate(view.CraftCheck, _snapshot);
@@ -1979,6 +1982,7 @@ namespace ClaudiaKermin.Core.Missions
                 view.RunningChildVesselId = RunningChildVesselId(mission);
                 view.Settings = MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config));
                 view.CanEditSettings = CanEditSettings;
+                view.PhysicsWarpAllowed = view.Settings.PhysicsWarpOn;
                 var due = PendingDueTime;
                 if (due.HasValue)
                 {

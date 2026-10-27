@@ -59,8 +59,8 @@ namespace ClaudiaKermin.Core.Kos
         public bool OnCoast;
 
         /// <summary>
-        /// Physics warp is allowed at all: the <c>physics_warp</c> player config now, and the Mission Setting later (ADR 0008).
-        /// False unless the caller sets it, so a forgotten input refuses; the patches set it from <c>physics_warp</c>, which defaults to true.
+        /// Physics warp is allowed at all: the <c>physics_warp</c> player config and the Physics warp on Coasts Mission Setting, both on (ADR 0008).
+        /// False unless the caller sets it, so a forgotten input refuses; the patches set it from the Mission driver's input.
         /// </summary>
         public bool PhysicsWarpAllowed;
 

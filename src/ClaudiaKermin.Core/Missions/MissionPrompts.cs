@@ -198,20 +198,21 @@ namespace ClaudiaKermin.Core.Missions
         /// </summary>
         public static string TimingLayer(MissionSettingsValues settings)
         {
-            return "Timing. Wait for a time-based event (a transfer window, daylight at the landing site, a surface alignment, "
+            return "Timing. Wait for a time-based event (a transfer window, daylight at the landing site, "
                 + "a phase angle, a hold of a few orbits) inside the Mission Script, however long: the Building Blocks warp on rails "
                 + "to the time and drop to 1x at least 30 s before any burn, and coast(lexicon(\"until\", ut)) holds a script until "
-                + "a UT the same way. The player's Approval of the sequence approves its wait. Count every wait in "
+                + "a UT the same way. Count every wait in "
                 + "expected_duration_s, since the mod stops a script still running at 300% of it. A Due Time is only for a wait "
-                + "between sequences that needs the player, e.g. \"come back when you've docked\" or an EVA they must make; it is "
+                + "between sequences that needs the player, e.g. an EVA they must make; it is "
                 + "the earliest UT (seconds) the next Maneuver Sequence may start. Put it in due_time_ut in the Mission Plan's sequence "
                 + "and in the Sequence Plan (-1 otherwise, which is almost always), and give the Mission Plan's mission_time_s as the "
-                + "total Mission time including every wait. For a Due Time the mod sets an alarm and offers the player a Warp to Due "
-                + "Time button; it never warps between sequences itself. If a sequence depends on a window, set window_closes_ut to the UT after which that window is missed "
+                + "total Mission time including every wait. For a Due Time the mod sets an alarm and offers a Warp to Due "
+                + "Time button; it never warps between sequences. If a sequence depends on a window, set window_closes_ut to the UT after which that window is missed "
                 + "and late_window_dv to the delta-v (m/s) of the next window; when the player approves after the window has closed, "
                 + "the mod lets the script take the next window if late_window_dv is within tolerance of expected_delta_v, and "
                 + "otherwise asks you to re-plan. A Due Time the player has missed just waits; revise the Sequence Plan only if its "
-                + "timing no longer works.\n\n" + SettingsText(settings);
+                + "timing no longer works.\n\n" + SettingsText(settings)
+                + "\nAsked in chat to stop or allow physics warp, point the player to that setting; change no plan until they switch it.";
         }
 
         /// <summary>The Mission Settings in words, as Claudia must apply them.</summary>
@@ -225,7 +226,17 @@ namespace ClaudiaKermin.Core.Missions
             return "Mission Settings. Daylight landing: " + (settings.DaylightLanding
                     ? "on. Set the land block's daylight option to true and prefer a daylight landing."
                     : "off. Do not wait for daylight.")
-                + " Time versus delta-v, " + time;
+                + " Time versus delta-v, " + time + "\n" + PhysicsWarpText(settings);
+        }
+
+        /// <summary>The Physics warp on Coasts line of the Mission Settings (#348); with the config off, only the config turns it back on.</summary>
+        public static string PhysicsWarpText(MissionSettingsValues settings)
+        {
+            if (settings.PhysicsWarpOn)
+                return "Physics warp on Coasts: on. Blocks warp through Coasts with physics warp where rails can't; use the warp helpers for your own Coasts.";
+            return "Physics warp on Coasts: off. The mod refuses physics warp. "
+                + (settings.ConfigAllowsPhysicsWarp ? "" : "Only the player's config can turn it back on. ")
+                + "Where rails can't warp, Coasts run at 1×, so plan for the extra real time.";
         }
 
         public static string SettingsChanged(MissionSettingsValues settings)

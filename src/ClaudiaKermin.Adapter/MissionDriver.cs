@@ -164,9 +164,16 @@ namespace ClaudiaKermin.Adapter
             Carry();
         }
 
+        /// <summary>
+        /// The runtime gates' single "physics warp allowed" input (ADR 0008): the <c>physics_warp</c> config and the Mission
+        /// Setting, both on. Refreshed every frame from the Mission view; the kOS gates read it (KosGates.PhysicsWarpAllowed).
+        /// </summary>
+        public static volatile bool PhysicsWarpAllowed = true;
+
         /// <summary>Call each frame, after the background queue has drained.</summary>
         public void Update()
         {
+            PhysicsWarpAllowed = _mission.View.PhysicsWarpAllowed;
             // A new Game object means a save was loaded: continue, quickload, revert or another save. A scene
             // change keeps the same Game, so it never counts. The core puts the Missions in step with the save.
             if (HighLogic.CurrentGame != null && !ReferenceEquals(HighLogic.CurrentGame, _game))

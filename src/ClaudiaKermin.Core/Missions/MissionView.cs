@@ -388,6 +388,8 @@ namespace ClaudiaKermin.Core.Missions
         public MissionSettingsValues Settings = new MissionSettingsValues();
         /// <summary>The Mission Settings may be edited now (a plan awaits Approval, or Claudia has not planned yet).</summary>
         public bool CanEditSettings;
+        /// <summary>The runtime gates' single "physics warp allowed" input: the config and the Mission Setting, or the config alone with no Mission.</summary>
+        public bool PhysicsWarpAllowed = true;
         public DueTimeView DueTime = new DueTimeView();
 
         public IList<LogEntry> Log = new List<LogEntry>();

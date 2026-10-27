@@ -19,25 +19,6 @@ namespace ClaudiaKermin.KOS
     [KSPAddon(KSPAddon.Startup.Flight, false)]
     public class CoastGuard : MonoBehaviour
     {
-        private void Start()
-        {
-            KosGates.PhysicsWarpAllowed = ReadConfig();
-        }
-
-        /// <summary><c>physics_warp</c> in the player config: the gates' single "physics warp allowed" input (a Mission Setting will feed it later).</summary>
-        private static bool ReadConfig()
-        {
-            try
-            {
-                return PlayerConfig.LoadOrCreate(ConfigDirectory.ResolveCurrent()).PhysicsWarp;
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning(ModInfo.LogTag + " couldn't read physics_warp from the player config; physics warp stays on: " + e.Message);
-                return true;
-            }
-        }
-
         private void FixedUpdate()
         {
             if (!KosGates.Runs.Any || TimeWarp.fetch == null) return;
