@@ -71,8 +71,8 @@ if any:haskey("error") {
     }
   }
 
-  // 3. Near the sub-solar point (where the sun is overhead now), in daylight: the sun hardly moves in an hour at the Mun or Minmus,
-  // so the track's pass over it within the hour is in daylight. (A point on the far side from the craft was night about half the
+  // 3. Near the sub-solar point (where the sun is overhead now), in daylight: the sun hardly moves across the Mun in an hour (it
+  // drifts about 32 degrees an hour across Minmus, still well inside daylight), so the pass over it is in daylight. (A point on the far side from the craft was night about half the
   // time, #312.) The craft is warped to the pass to see where its ground track really is.
   local to_sun is (body("Sun"):position - b:position):normalized.
   local subsolar is b:geopositionof(b:position + to_sun * b:radius).

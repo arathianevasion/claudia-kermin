@@ -243,8 +243,9 @@ namespace ClaudiaKermin.Core.Tests
             };
             var snapshot = Snapshot(meanAnomaly: Math.PI / 2);
             var far = Run(snapshot, "{\"body\":\"Mun\",\"daylight\":true,\"within_hours\":1,\"near\":{\"latitude\":0,\"longitude\":-90}}", fake);
+            Assert.InRange(Lon(Sites(Run(snapshot, "{\"body\":\"Mun\",\"daylight\":false,\"within_hours\":1}", fake))[0]), 89, 91);
             Assert.Empty(Sites(far));
-            Assert.Contains("0 also in daylight", far.GetProperty("note").GetString());
+            Assert.Contains(", 0 also in daylight", far.GetProperty("note").GetString());
             var near = Run(snapshot, "{\"body\":\"Mun\",\"daylight\":true,\"within_hours\":1,\"near\":{\"latitude\":0,\"longitude\":90}}", fake);
             Assert.NotEmpty(Sites(near));
             Assert.All(Sites(near), s => Assert.InRange(Num(s, "sun_elevation_deg"), LandingSiteSearch.MinSunElevationDeg, 90));
