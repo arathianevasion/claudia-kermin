@@ -151,6 +151,8 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>Claudia's line for the Capcom strip.</summary>
         public string Say = "";
         public ReplyIntent Intent;
+        /// <summary>Why she is unsure of this reply; "" when sure. Only a kind that can get a Second look reads it (<see cref="SecondLook"/>).</summary>
+        public string UnsureBecause = "";
         public MissionPlan MissionPlan;
         public SequencePlan SequencePlan;
         public Debrief Debrief;
@@ -196,7 +198,7 @@ namespace ClaudiaKermin.Core.Missions
             var parts = Parts.Where(p => kinds.Contains(p.Key)).ToList();
             var nullable = kinds.Distinct().Count() > 1;
             var json = new System.Text.StringBuilder();
-            json.Append("{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"say\",\"reply_intent\"");
+            json.Append("{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"say\",\"reply_intent\",\"unsure_because\"");
             foreach (var part in parts) json.Append(",\"").Append(part.Key).Append('"');
             json.Append("],\"properties\":{\"kind\":{\"type\":\"string\",\"enum\":[")
                 .Append(string.Join(",", AllKinds.Where(kinds.Contains).Select(k => "\"" + k + "\"").ToArray())).Append("]},")
@@ -213,7 +215,8 @@ namespace ClaudiaKermin.Core.Missions
         private const string SayAndIntent =
             "\"say\":{\"type\":\"string\",\"description\":\"Your line to the player: concise mission-control voice, key numbers first, one or two sentences.\"},"
             + "\"reply_intent\":{\"type\":\"string\",\"enum\":[\"none\",\"approve\",\"revise\",\"question\",\"unclear\"],"
-            + "\"description\":\"Only when classifying the player's typed reply to a pending plan; otherwise none.\"}";
+            + "\"description\":\"Only when classifying the player's typed reply to a pending plan; otherwise none.\"},"
+            + SecondLook.FieldJson;
 
         private const string MissionPlanSchema =
             "{\"type\":\"object\",\"additionalProperties\":false,"
@@ -310,6 +313,7 @@ namespace ClaudiaKermin.Core.Missions
                 Kind = JsonNode.Str(root["kind"]) ?? "",
                 Say = JsonNode.Str(root["say"]) ?? "",
                 Intent = ParseIntent(JsonNode.Str(root["reply_intent"])),
+                UnsureBecause = SecondLook.Reason(root),
             };
 
             var plan = Object(root["mission_plan"]);

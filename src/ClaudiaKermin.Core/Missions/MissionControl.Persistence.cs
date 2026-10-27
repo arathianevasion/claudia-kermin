@@ -160,6 +160,7 @@ namespace ClaudiaKermin.Core.Missions
                     ReducedGoalRetry = turn.ReducedGoalRetry,
                     Waits = turn.Waits,
                     CutOffRetry = turn.CutOffRetry,
+                    SecondLookReason = turn.SecondLookReason,
                     BaseMessages = mission.Conversation.Count,
                 });
             }
@@ -611,6 +612,7 @@ namespace ClaudiaKermin.Core.Missions
                     ReducedGoalRetry = unanswered.ReducedGoalRetry,
                     Waits = unanswered.Waits,
                     CutOffRetry = unanswered.CutOffRetry,
+                    SecondLookReason = unanswered.SecondLookReason,
                 };
                 if (unanswered.ReducedGoalRetry) mission.Pending.Gate = mission.Gate = RetryGate();
                 var requestStage = StageOf(purpose);

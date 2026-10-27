@@ -189,6 +189,11 @@ namespace ClaudiaKermin.Core.Missions
             /// the cut-off note. At most one automatic retry per turn, and any Retry sends this form, never the identical request.
             /// </summary>
             public bool CutOffRetry;
+            /// <summary>
+            /// The turn is in its Second look (<see cref="SecondLook"/>): high effort and the first reply's reason for doubt added, which
+            /// is never "" once set. At most one per turn, and never with a <see cref="CutOffRetry"/>, in either order.
+            /// </summary>
+            public string SecondLookReason = "";
             /// <summary>An Alert's crossed Telemetry Check, which its verdict is recorded on; null for other turns.</summary>
             public Crossing Crossing;
             /// <summary>A Debrief's extras from the mod: its events, the rest of the plan and the margin recheck (MissionControl.Debrief.cs); null before it begins.</summary>
@@ -905,19 +910,31 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The effort table's entry for a turn's reply kind (<see cref="Config.EffortTable"/>); the Margin recheck has its own request.</summary>
         private string EffortFor(Purpose purpose)
         {
+            return _config.Efforts.For(KindOf(purpose));
+        }
+
+        /// <summary>The effort table's key for a turn's reply kind.</summary>
+        private static string KindOf(Purpose purpose)
+        {
             switch (purpose)
             {
-                case Purpose.MissionPlan: return _config.Efforts.For("mission_plan");
-                case Purpose.SequencePlan: return _config.Efforts.For("sequence_plan");
-                case Purpose.Debrief: return _config.Efforts.For("debrief");
-                case Purpose.Reply: return _config.Efforts.For("reply");
-                case Purpose.Change: return _config.Efforts.For("change");
-                case Purpose.Question: return _config.Efforts.For("question");
-                case Purpose.Settings: return _config.Efforts.For("settings");
-                case Purpose.Alert: return _config.Efforts.For("alert");
-                case Purpose.Margin: return _config.Efforts.For("margin_recheck");
+                case Purpose.MissionPlan: return "mission_plan";
+                case Purpose.SequencePlan: return "sequence_plan";
+                case Purpose.Debrief: return "debrief";
+                case Purpose.Reply: return "reply";
+                case Purpose.Change: return "change";
+                case Purpose.Question: return "question";
+                case Purpose.Settings: return "settings";
+                case Purpose.Alert: return "alert";
+                case Purpose.Margin: return "margin_recheck";
                 default: throw new ArgumentOutOfRangeException("purpose");
             }
+        }
+
+        /// <summary>What the Capcom strip says while a request is out: "thinking", or the Second look.</summary>
+        private static string Thinking(Turn turn)
+        {
+            return turn.SecondLookReason.Length > 0 ? SecondLook.Activity : "thinking";
         }
 
         /// <summary>A bad entry in the config's effort table keeps its default; the Mission's event log says so, once, as the Mission starts.</summary>
@@ -963,7 +980,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.Requests++;
             LogCost(mission, "pending", worstCase, "");
             mission.InFlight = true;
-            mission.Activity = "thinking";
+            mission.Activity = Thinking(turn);
             turn.Cancel = new CancellationTokenSource();
             var cancel = turn.Cancel.Token;
             var dump = mission.Dump;
@@ -987,6 +1004,7 @@ namespace ClaudiaKermin.Core.Missions
                 turn.Messages.Add(Message.UserText(turn.UserText));
                 var notice = turn.Notice + BlackoutNotice(mission);
                 if (turn.CutOffRetry) notice += "\n\n" + MissionPrompts.CutOffNote;
+                if (turn.SecondLookReason.Length > 0) notice += "\n\n" + SecondLook.Note(turn.SecondLookReason);
                 turn.Messages.Add(Message.SystemText(notice));
             }
 
@@ -1007,7 +1025,7 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>
         /// Discards the turn's uncommitted messages and builds them again from the turn's own fields, with the
         /// Game Snapshot of this moment: the one step of "discard the uncommitted turn and resend it from scratch"
-        /// (the cut-off retry, a discarded tool loop, and the Second look to come). A tool loop in the turn goes with it. <paramref name="reshape"/> changes
+        /// (the cut-off retry, a discarded tool loop, and the Second look). A tool loop in the turn goes with it. <paramref name="reshape"/> changes
         /// the turn first (its effort, a note). The turn is recorded as unanswered again, so a quit or save before
         /// the reply loads it in its new form, and nothing is sent: <see cref="Send"/> does that.
         /// </summary>
@@ -1030,9 +1048,11 @@ namespace ClaudiaKermin.Core.Missions
         private void CutOff(Mission mission, Turn turn)
         {
             var again = turn.CutOffRetry;
+            // A Second look that is cut off never stacks an automatic retry on it: the turn fails, and the player's Retry sends the reduced form.
+            var looked = turn.SecondLookReason.Length > 0;
             if (!again)
-                ResendFromScratch(mission, turn, t => { t.CutOffRetry = true; t.Effort = MissionPrompts.CutOffEffort; });
-            if (!again && HasCapRoom(mission, turn))
+                ResendFromScratch(mission, turn, t => { t.CutOffRetry = true; t.Effort = MissionPrompts.CutOffEffort; t.SecondLookReason = ""; });
+            if (!again && !looked && HasCapRoom(mission, turn))
             {
                 Event(mission, "cut_off_retry", turn.Purpose.ToString());
                 mission.Activity = "thinking";
@@ -1041,6 +1061,44 @@ namespace ClaudiaKermin.Core.Missions
             }
             Failed(mission, turn, "Claudia's reply was cut short.");
             if (mission.Stage == MissionStage.Paused && mission.Pending == turn) mission.PauseCause = PauseCause.CutOff;
+        }
+
+        /// <summary>
+        /// The Second look (#272) for a turn's reply: when it is of an eligible kind and says it is unsure, the reply is dropped
+        /// uncommitted and the turn goes again at high effort with its reason, if the Spending Cap has room for that worst case;
+        /// without room the reply is kept and the skip noted, as a skipped margin recheck is. True when the turn was resent.
+        /// The second reply's own doubt is only logged.
+        /// </summary>
+        private bool TakeSecondLook(Mission mission, Turn turn, MissionReply reply)
+        {
+            if (reply.UnsureBecause.Length == 0) return false;
+            if (turn.SecondLookReason.Length > 0)
+            {
+                Event(mission, "second_look_unsure", turn.Purpose + ": " + reply.UnsureBecause);
+                return false;
+            }
+            if (turn.CutOffRetry || !SecondLook.Eligible(KindOf(turn.Purpose), turn.Effort)) return false;
+            if (!SecondLookRoom(mission, turn, reply.UnsureBecause))
+                return false;
+            ResendFromScratch(mission, turn, t => { t.SecondLookReason = reply.UnsureBecause; t.Effort = SecondLook.Effort; });
+            Event(mission, "second_look", turn.Purpose + ": " + reply.UnsureBecause);
+            Note(LogKind.Notice, "Claudia was unsure of her first reply (" + Shorten(reply.UnsureBecause) + ") and is taking a second look.");
+            mission.Activity = Thinking(turn);
+            Send(mission, turn);
+            return true;
+        }
+
+        /// <summary>Whether a Second look fits the Spending Cap; with none, the skip is logged. Judged on the request just answered (it holds more than the resend will) plus the reason line.</summary>
+        private bool SecondLookRoom(Mission mission, Turn turn, string reason)
+        {
+            var request = BuildRequest(mission, turn);
+            var estimatedInput = (request.ToJson().Length + SecondLook.Note(reason).Length + 400 + 2) / 3;
+            var worst = _config.Prices.WorstCase(mission.Model, estimatedInput, request.MaxTokens);
+            if (mission.Committed + worst <= mission.SpendingCap) return true;
+            LogCost(mission, "blocked", worst, "over_cap");
+            Event(mission, "second_look_skipped", turn.Purpose + ": " + reason);
+            Note(LogKind.Notice, "A second look was skipped: it could pass the Spending Cap ($" + Dollars(mission.SpendingCap) + "). Claudia's first reply was unsure because: " + Shorten(reason));
+            return false;
         }
 
         /// <summary>Whether the Spending Cap has room for the turn's request at its worst case; unlike <see cref="MaySend"/> it never Pauses or waits.</summary>
@@ -1106,8 +1164,8 @@ namespace ClaudiaKermin.Core.Missions
         {
             if (mission != _mission || mission.Pending != turn || !mission.InFlight) return;
             var activity = mission.Activity;
-            if (update.Kind == StreamUpdateKind.Restarted) activity = "thinking";
-            else if (update.Kind == StreamUpdateKind.TextDelta) activity = "writing";
+            if (update.Kind == StreamUpdateKind.Restarted) activity = Thinking(turn);
+            else if (update.Kind == StreamUpdateKind.TextDelta && turn.SecondLookReason.Length == 0) activity = "writing";
             if (activity == mission.Activity) return;
             mission.Activity = activity;
             Rebuild();
@@ -1181,6 +1239,7 @@ namespace ClaudiaKermin.Core.Missions
                 Failed(mission, turn, "Claudia's reply didn't fit: " + problem + ".");
                 return;
             }
+            if (TakeSecondLook(mission, turn, reply)) return;
 
             // Append-only: the turn and its reply join the conversation together, then the transcript is rewritten.
             var committed = message.ToMessage();
@@ -1963,7 +2022,7 @@ namespace ClaudiaKermin.Core.Missions
             if (!view.Busy && view.CraftCheck.State == CraftCheckState.Running)
             {
                 view.Busy = true;
-                view.Activity = _craftCheck.ToolActivity.Length > 0 ? _craftCheck.ToolActivity : "checking the craft";
+                view.Activity = _craftCheck.ToolActivity.Length > 0 ? _craftCheck.ToolActivity : _craftCheck.SecondLooking ? SecondLook.Activity : "checking the craft";
             }
             _view = view;
         }

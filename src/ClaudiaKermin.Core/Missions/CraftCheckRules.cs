@@ -108,7 +108,8 @@ namespace ClaudiaKermin.Core.Missions
             var codes = new JsonWriter().BeginArray();
             foreach (var rule in All) codes.String(rule.Code);
             codes.EndArray();
-            return "{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"summary\",\"findings\",\"child_vessel_stages\"],\"properties\":{"
+            return "{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"summary\",\"findings\",\"child_vessel_stages\",\"unsure_because\"],\"properties\":{"
+                + SecondLook.FieldJson + ","
                 + "\"summary\":{\"type\":\"string\",\"description\":\"Your line to the player: concise mission-control voice, key numbers first, one or two sentences.\"},"
                 + "\"child_vessel_stages\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"},\"description\":\"The separation stages (from the separations facts) "
                 + "whose vessels the Mission Goal plans to fly as Child Vessels; empty when it plans none.\"},"

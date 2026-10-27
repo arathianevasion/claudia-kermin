@@ -19,19 +19,20 @@ namespace ClaudiaKermin.Core.Missions
     internal sealed partial class CraftCheckFlow
     {
         /// <summary>The request for a margin recheck of <paramref name="snapshot"/> against <paramref name="restOfPlan"/> (the Maneuver Sequences still to fly).</summary>
-        public MessagesRequest RecheckRequest(string goal, string model, GameSnapshot snapshot, bool remote, string restOfPlan)
+        public MessagesRequest RecheckRequest(string goal, string model, GameSnapshot snapshot, bool remote, string restOfPlan, string secondLookReason = null)
         {
             var request = new MessagesRequest
             {
                 Model = _config.Models.Contains(model) ? model : _config.DefaultModel,
                 MaxTokens = 8000,
-                Effort = _config.Efforts.For("margin_recheck"),
+                Effort = secondLookReason != null ? SecondLook.Effort : _config.Efforts.For("margin_recheck"),
                 OutputSchemaJson = CraftCheckRules.SchemaJson(),
             };
             request.Tools.AddRange(Tools.Definitions(ClaudiaKermin.Core.Tools.ToolOffer.CraftCheck));
             request.System.Add(CraftCheckPrompts.System);
             request.System.Add(RecheckPrompts.System);
-            request.Messages.Add(Message.UserText(RecheckPrompts.Facts(goal, snapshot, _config.CraftCheckMarginPercent, ResolvePreferred(snapshot), remote, restOfPlan)));
+            var facts = RecheckPrompts.Facts(goal, snapshot, _config.CraftCheckMarginPercent, ResolvePreferred(snapshot), remote, restOfPlan);
+            request.Messages.Add(Message.UserText(secondLookReason == null ? facts : facts + "\n" + SecondLook.Note(secondLookReason)));
             return request;
         }
 

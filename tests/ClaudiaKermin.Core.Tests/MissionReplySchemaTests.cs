@@ -64,7 +64,7 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(new[] { "mission_plan", "sequence_plan", "answer" }, Kinds(MissionReply.PlanningSchemaJson));
             Assert.Equal(new[] { "sequence_plan", "debrief", "answer", "alert" }, Kinds(MissionReply.FlightSchemaJson));
             var planning = JsonReader.Parse(MissionReply.PlanningSchemaJson);
-            Assert.Equal(new[] { "kind", "say", "reply_intent", "mission_plan", "sequence_plan" }, planning["required"].Items.Select(JsonNode.Str).ToArray());
+            Assert.Equal(new[] { "kind", "say", "reply_intent", "unsure_because", "mission_plan", "sequence_plan" }, planning["required"].Items.Select(JsonNode.Str).ToArray());
         }
 
         [Fact]

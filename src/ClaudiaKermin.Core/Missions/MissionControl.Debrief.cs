@@ -34,6 +34,8 @@ namespace ClaudiaKermin.Core.Missions
             public GameSnapshot RecheckSnapshot;
             public int RecheckToolSteps;
             public bool RecheckLimitSent;
+            /// <summary>The recheck has had its Second look (a Debrief's own is on its turn).</summary>
+            public bool RecheckLooked;
         }
 
         private sealed partial class Mission
@@ -177,7 +179,7 @@ namespace ClaudiaKermin.Core.Missions
             mission.Requests++;
             LogCost(mission, "pending", worst, "margin_recheck");
             mission.InFlight = true;
-            mission.Activity = "rechecking margins";
+            mission.Activity = turn.Gate.RecheckLooked ? SecondLook.Activity : "rechecking margins";
             turn.Cancel = new CancellationTokenSource();
             var probe = new Turn { Purpose = Purpose.Margin };
             _craftCheck.SendRecheck(turn.Gate.RecheckRequest, turn.Cancel.Token, result => Rechecked(mission, turn, probe, result));
@@ -231,6 +233,7 @@ namespace ClaudiaKermin.Core.Missions
                 }
                 string problem;
                 var reply = CraftCheckFlow.ParseRecheck(result, out problem);
+                if (reply != null && mission.DeferredRestore == null && RecheckSecondLook(mission, turn, reply)) return;
                 RecheckAnswered(mission, turn, reply, problem, result);
             }
             finally
@@ -238,6 +241,51 @@ namespace ClaudiaKermin.Core.Missions
                 if (mission.DeferredRestore != null) CompleteDeferredRestore(mission);
                 Rebuild();
             }
+        }
+
+        /// <summary>
+        /// The Second look (#272) for a margin recheck that says it is unsure: its reply is dropped and the recheck goes again at high
+        /// effort with the reason, from the Game Snapshot of this moment, if the Spending Cap still leaves room for it and the Debrief;
+        /// without room the reply is kept and the skip noted. True when the recheck was sent again. The second reply's doubt is only logged.
+        /// </summary>
+        private bool RecheckSecondLook(Mission mission, Turn turn, CraftCheckReply reply)
+        {
+            var gate = turn.Gate;
+            if (reply.UnsureBecause.Length == 0) return false;
+            if (gate.RecheckLooked)
+            {
+                Event(mission, "second_look_unsure", "margin_recheck: " + reply.UnsureBecause);
+                return false;
+            }
+            if (!SecondLook.Eligible("margin_recheck", gate.RecheckRequest.Effort)) return false;
+            var snapshot = _snapshot ?? gate.RecheckSnapshot;
+            var request = _craftCheck.RecheckRequest(mission.Goal, mission.Model, snapshot, mission.Remote, RestOfPlanText(mission), reply.UnsureBecause);
+            var worst = RequestCharge.WorstCase(_config.Prices, mission.Model, request);
+            if (mission.Committed + worst + DebriefReserve(mission, turn) > mission.SpendingCap)
+            {
+                LogCost(mission, "blocked", worst, "over_cap");
+                Event(mission, "second_look_skipped", "margin_recheck: " + reply.UnsureBecause);
+                Note(LogKind.Notice, "A second look at the margin recheck was skipped: it could pass the Spending Cap ($" + Dollars(mission.SpendingCap)
+                    + "). Claudia's first reply was unsure because: " + Shorten(reply.UnsureBecause));
+                return false;
+            }
+            // The first reply is charged like any request (the 80% warning, a Pause at the cap), which ends the recheck as a tool step's Pause does.
+            AfterCharge(mission);
+            if (mission != _mission) return true;
+            if (mission.Stage == MissionStage.Paused)
+            {
+                RecheckAnswered(mission, turn, null, "the Mission was Paused", null);
+                return true;
+            }
+            gate.RecheckLooked = true;
+            gate.RecheckRequest = request;
+            gate.RecheckSnapshot = snapshot;
+            gate.RecheckToolSteps = 0;
+            gate.RecheckLimitSent = false;
+            Event(mission, "second_look", "margin_recheck: " + reply.UnsureBecause);
+            Note(LogKind.Notice, "Claudia was unsure of the margin recheck (" + Shorten(reply.UnsureBecause) + ") and is taking a second look.");
+            SendRecheck(mission, turn, worst);
+            return true;
         }
 
         /// <summary>

@@ -20,6 +20,8 @@ namespace ClaudiaKermin.Core.Missions
         public readonly List<CraftFinding> Findings = new List<CraftFinding>();
         /// <summary>The separation stages whose vessels the Mission Goal plans as Child Vessels.</summary>
         public readonly List<int> ChildVesselStages = new List<int>();
+        /// <summary>Why she is unsure of this reply; "" when sure (<see cref="SecondLook"/>).</summary>
+        public string UnsureBecause = "";
 
         /// <summary>The reply in a message's text, or null when it isn't in the schema or names a finding outside the fixed lists.</summary>
         public static CraftCheckReply Parse(string text)
@@ -34,7 +36,7 @@ namespace ClaudiaKermin.Core.Missions
                 return null;
             }
             if (root.Kind != JsonKind.Object || root["findings"] == null) return null;
-            var reply = new CraftCheckReply { Summary = JsonNode.Str(root["summary"]) ?? "" };
+            var reply = new CraftCheckReply { Summary = JsonNode.Str(root["summary"]) ?? "", UnsureBecause = SecondLook.Reason(root) };
             var stages = root["child_vessel_stages"];
             if (stages != null)
                 foreach (var stage in stages.Items.Select(JsonNode.Long).Where(s => s.HasValue))
@@ -222,16 +224,7 @@ namespace ClaudiaKermin.Core.Missions
                 return;
             }
 
-            var request = new MessagesRequest
-            {
-                Model = _config.Models.Contains(model) ? model : _config.DefaultModel,
-                MaxTokens = 8000,
-                Effort = _config.Efforts.For("craft_check"),
-                OutputSchemaJson = CraftCheckRules.SchemaJson(),
-            };
-            request.Tools.AddRange(Tools.Definitions(ToolOffer.CraftCheck));
-            request.System.Add(CraftCheckPrompts.System);
-            request.Messages.Add(Message.UserText(CraftCheckPrompts.Facts(goal, snapshot, _config.CraftCheckMarginPercent, ResolvePreferred(snapshot), remote)));
+            var request = CheckRequest(model, goal, snapshot, remote, null);
             var worstCase = RequestCharge.WorstCase(_config.Prices, request.Model, request);
             if (worstCase > spendingCap)
             {
@@ -259,6 +252,23 @@ namespace ClaudiaKermin.Core.Missions
                 () => _client.Stream(request, update => { }, cancel.Token),
                 result => Finished(cancel, charge, result),
                 error => Finished(cancel, charge, null));
+        }
+
+        /// <summary>The check's request; a Second look (<paramref name="secondLookReason"/> not null) is sent at high effort with the reason added.</summary>
+        private MessagesRequest CheckRequest(string model, string goal, GameSnapshot snapshot, bool remote, string secondLookReason)
+        {
+            var request = new MessagesRequest
+            {
+                Model = _config.Models.Contains(model) ? model : _config.DefaultModel,
+                MaxTokens = 8000,
+                Effort = secondLookReason != null ? SecondLook.Effort : _config.Efforts.For("craft_check"),
+                OutputSchemaJson = CraftCheckRules.SchemaJson(),
+            };
+            request.Tools.AddRange(Tools.Definitions(ToolOffer.CraftCheck));
+            request.System.Add(CraftCheckPrompts.System);
+            var facts = CraftCheckPrompts.Facts(goal, snapshot, _config.CraftCheckMarginPercent, ResolvePreferred(snapshot), remote);
+            request.Messages.Add(Message.UserText(secondLookReason == null ? facts : facts + "\n" + SecondLook.Note(secondLookReason)));
+            return request;
         }
 
         /// <summary>Drops a request in flight and the result, e.g. when another save loads.</summary>
@@ -328,6 +338,7 @@ namespace ClaudiaKermin.Core.Missions
                 ToolsCalled(cancel, charge, result.Message);
                 return;
             }
+            if (SecondLookSent(cancel, charge, result)) return;
             charge.Earlier.AddRange(_stepCharges);
             _stepCharges.Clear();
             _cost = charge;
