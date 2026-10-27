@@ -45,10 +45,11 @@ namespace ClaudiaKermin.KsCompile
             }
 
             var check = new KosScriptCheck();
+            var toolTestCheck = new KosScriptCheck(forToolTests: true);
             var failures = 0;
             foreach (var file in files)
             {
-                var result = check.Check(File.ReadAllText(file));
+                var result = (IsToolTest(file) ? toolTestCheck : check).Check(File.ReadAllText(file));
                 if (result.Passed)
                 {
                     Console.WriteLine("ok   " + file);
@@ -64,6 +65,18 @@ namespace ClaudiaKermin.KsCompile
                 ? "Script Check passed " + files.Count + " file(s)"
                 : failures + " of " + files.Count + " file(s) failed the Script Check");
             return failures == 0 ? 0 : 1;
+        }
+
+        /// <summary>
+        /// A Planning Tool scenario's script (anything under a tests/tools/ folder): it may call Planning Tools through the
+        /// test-only kOS bridge (ADR 0006), so it is checked as a block test's script, not a Mission Script.
+        /// </summary>
+        private static bool IsToolTest(string file)
+        {
+            var segments = Path.GetFullPath(file).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            for (var i = 0; i + 1 < segments.Length; i++)
+                if (segments[i] == "tests" && segments[i + 1] == "tools") return true;
+            return false;
         }
     }
 }

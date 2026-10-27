@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using ClaudiaKermin.Core;
 using ClaudiaKermin.Core.Kos;
+using ClaudiaKermin.Core.Tools;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
@@ -20,6 +21,8 @@ namespace ClaudiaKermin.KOS
     /// into the test's orbit (or rolls it out to the launch pad), flies to it, runs the test's Mission Script bundled with the Core Library
     /// through the kOS bridge, and judges its Script Result against the contract ranges in
     /// <c>test.cfg</c>. Results go to KSP.log and <c>saves/claudia_block_tests/block-tests.log</c>.
+    /// Planning Tool scenarios (<c>tests/tools/&lt;name&gt;/</c>, the same four files) run the same way as <c>tools/&lt;name&gt;</c>;
+    /// while any test runs, its processor may call Planning Tools through the test-only bridge (<see cref="ToolTestGate"/>).
     /// A developer tool: Claude is never involved, so it sits outside the Approval rule of ADR 0002.
     /// </summary>
     [KSPAddon(KSPAddon.Startup.MainMenu, true)]
@@ -27,6 +30,9 @@ namespace ClaudiaKermin.KOS
     {
         private const string SaveFolder = "claudia_block_tests";
         private const string ResourcePrefix = "ClaudiaKermin.KOS.blocktests.";
+        /// <summary>Planning Tool scenarios (<c>tests/tools/&lt;name&gt;/</c>), run as <c>tools/&lt;name&gt;</c> with the test-only tool bridge open.</summary>
+        private const string ToolResourcePrefix = "ClaudiaKermin.KOS.tooltests.";
+        private const string ToolTestPrefix = "tools/";
 
         private enum Stage
         {
@@ -65,20 +71,32 @@ namespace ClaudiaKermin.KOS
             get { return Path.Combine(Path.Combine(KSPUtil.ApplicationRootPath, "saves"), SaveFolder); }
         }
 
-        /// <summary>The tests shipped in this DLL, by folder name under <c>tests/blocks/</c>.</summary>
+        /// <summary>The tests shipped in this DLL: by folder name under <c>tests/blocks/</c>, then <c>tools/</c> and the folder name under <c>tests/tools/</c>.</summary>
         private static IEnumerable<string> TestNames()
         {
+            return Shipped(ResourcePrefix).Concat(Shipped(ToolResourcePrefix).Select(n => ToolTestPrefix + n));
+        }
+
+        private static IEnumerable<string> Shipped(string prefix)
+        {
             return typeof(BlockTestRunner).Assembly.GetManifestResourceNames()
-                .Where(n => n.StartsWith(ResourcePrefix, StringComparison.Ordinal) && n.EndsWith(".test.cfg", StringComparison.Ordinal))
-                .Select(n => n.Substring(ResourcePrefix.Length, n.Length - ResourcePrefix.Length - ".test.cfg".Length))
+                .Where(n => n.StartsWith(prefix, StringComparison.Ordinal) && n.EndsWith(".test.cfg", StringComparison.Ordinal))
+                .Select(n => n.Substring(prefix.Length, n.Length - prefix.Length - ".test.cfg".Length))
                 .OrderBy(n => n, StringComparer.Ordinal);
+        }
+
+        private static bool IsToolTest(string test)
+        {
+            return test.StartsWith(ToolTestPrefix, StringComparison.Ordinal);
         }
 
         private static string Resource(string test, string file)
         {
-            using (var stream = typeof(BlockTestRunner).Assembly.GetManifestResourceStream(ResourcePrefix + test + "." + file))
+            var name = IsToolTest(test) ? ToolResourcePrefix + test.Substring(ToolTestPrefix.Length) : ResourcePrefix + test;
+            using (var stream = typeof(BlockTestRunner).Assembly.GetManifestResourceStream(name + "." + file))
             {
-                if (stream == null) throw new FileNotFoundException("not shipped in the DLL: tests/blocks/" + test + "/" + file);
+                if (stream == null)
+                    throw new FileNotFoundException("not shipped in the DLL: tests/" + (IsToolTest(test) ? test : "blocks/" + test) + "/" + file);
                 using (var reader = new StreamReader(stream)) return reader.ReadToEnd();
             }
         }
@@ -217,6 +235,8 @@ namespace ClaudiaKermin.KOS
             _deadline = Time.realtimeSinceStartup + (float)_spec.TimeoutSeconds;
             Note("running " + _spec.Block + " (timeout " + _spec.TimeoutSeconds + " s)");
             var source = CoreLibrary.Bundle(Resource(_test, "test.ks"));
+            // Planning Tools open to this test's processor until Finish (ADR 0006); never to a Mission Script.
+            ToolTestGate.Shared.Open(_partId);
             bridge.BeginRun(_partId, "claudia-blocktest:" + _test, source, Judge, reason => Fail("the bridge refused: " + reason));
         }
 
@@ -257,6 +277,7 @@ namespace ClaudiaKermin.KOS
         private void Finish(BlockTestResult result)
         {
             _stage = Stage.Idle;
+            ToolTestGate.Shared.Close();
             Note(result.Headline);
             foreach (var line in result.Lines) Note("  " + line);
             try

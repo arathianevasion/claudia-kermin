@@ -33,6 +33,28 @@ namespace ClaudiaKermin.KOS
             return value == null ? null : value.ToString();
         }
 
+        /// <summary>The reverse of <see cref="ToPlain"/>: dictionary → lexicon, list → list, double → scalar, bool → boolean, anything else → its string.</summary>
+        public static Structure FromPlain(object value)
+        {
+            var dictionary = value as IDictionary<string, object>;
+            if (dictionary != null)
+            {
+                var lexicon = new Lexicon();
+                foreach (var entry in dictionary) lexicon.Add(new StringValue(entry.Key), FromPlain(entry.Value));
+                return lexicon;
+            }
+            var items = value as IList<object>;
+            if (items != null)
+            {
+                var list = new ListValue();
+                foreach (var item in items) list.Add(FromPlain(item));
+                return list;
+            }
+            if (value is double) return ScalarValue.Create((double)value);
+            if (value is bool) return new BooleanValue((bool)value);
+            return new StringValue(value == null ? "" : value.ToString());
+        }
+
         /// <summary>A one-line, kerboscript-like rendering of a converted report, for logs and the debug window.</summary>
         public static string Format(object value)
         {
