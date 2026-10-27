@@ -405,7 +405,7 @@ function launch {
   local reason is "".
   local done is false.
   // One tick of the climb or the coast: sets tset and aim, and done (with reason if it failed).
-  local step is {
+  local fly_tick is {
     local q_pa is ship:q * constant:atmtokpa * 1000.
     set q_max to max(q_max, q_pa).
     local spd is ship:velocity:surface:mag.
@@ -500,15 +500,15 @@ function launch {
 
   until done {
     if coasting {
-      // The coast is one wait (claudia_warp_to), the step its stop: physics warp by the q rule (KSP
+      // The coast is one wait (claudia_warp_to), fly_tick its stop (it flies each tick and says when the Coast ends): physics warp by the q rule (KSP
       // refuses rails in the air), back at 1x at the top of the atmosphere or the hop, or before a top-up.
-      local waited is claudia_warp_to(ctx, time:seconds + max(1, eta:apoapsis), 0, { step:call(). return done or not coasting. }).
+      local waited is claudia_warp_to(ctx, time:seconds + max(1, eta:apoapsis), 0, { fly_tick:call(). return done or not coasting. }).
       if waited <> "" {
         set reason to waited.
         set done to true.
       }
     } else {
-      step:call().
+      fly_tick:call().
       if not done {
         local ticked is claudia_tick(ctx, tset).
         if ticked <> "" {

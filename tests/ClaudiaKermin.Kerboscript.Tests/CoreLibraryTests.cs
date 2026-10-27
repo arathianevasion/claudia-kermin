@@ -326,7 +326,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         [Theory]
-        // A burn: physics warp is over lead s before it (30 at least, as rails is); the end of a coast where nothing acts (lead 0): at the event.
+        // Physics warp is over lead s before ut, with no 30 s floor: 30 before a burn; lead 0 at the end of a coast where nothing acts: at the event.
         [InlineData(5400, 30, "5370")]
         [InlineData(5400, 0, "5400")]
         [InlineData(5400, 10, "5390")]
@@ -343,8 +343,8 @@ namespace ClaudiaKermin.Kerboscript.Tests
                 "local rate is 1. local rates is list(). local t is 0.\n"
                 + "until t > 100 {\n"
                 + "  local want is claudia_q_rate(max(0, 20000 - 300 * t), 0).\n"
-                + "  local r is claudia_physics_step(t, claudia_physics_end(100, 0), rate, want, false, false).\n"
-                + "  if r > 0 { set rate to r. rates:add(t + \":\" + r). }\n"
+                + "  local next_rate is claudia_physics_step(t, claudia_physics_end(100, 0), rate, want, false, false).\n"
+                + "  if next_rate > 0 { set rate to next_rate. rates:add(t + \":\" + next_rate). }\n"
                 + "  set t to t + 1.\n"
                 + "}\n"
                 + "print rates:join(\",\"). print rate.");
@@ -375,7 +375,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Contains("parameter ctx, ut, lead, stop is 0, cap is 0.", bundle);
             Assert.Contains("return claudia_warp_to(ctx, ut, 30, ground_near).", bundle);
             // launch's coast: to the top of the atmosphere or the hop, physics warp to the event itself (lead 0).
-            Assert.Contains("claudia_warp_to(ctx, time:seconds + max(1, eta:apoapsis), 0, { step:call(). return done or not coasting. })", bundle);
+            Assert.Contains("claudia_warp_to(ctx, time:seconds + max(1, eta:apoapsis), 0, { fly_tick:call(). return done or not coasting. })", bundle);
             Assert.Single(System.Text.RegularExpressions.Regex.Matches(bundle, "timewarp:warpto\\("));
             Assert.Single(System.Text.RegularExpressions.Regex.Matches(bundle, "addons:claudia:waitstart\\("));
         }

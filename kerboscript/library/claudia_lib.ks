@@ -794,6 +794,7 @@ function claudia_warp_to {
     local reason is claudia_tick(ctx, 0).
     if reason <> "" {
       kuniverse:timewarp:cancelwarp().
+      claudia_warp_rails().
       addons:claudia:waitend().
       return reason.
     }
@@ -804,8 +805,17 @@ function claudia_warp_to {
     kuniverse:timewarp:cancelwarp().
   }
   wait until kuniverse:timewarp:issettled and ship:unpacked.
+  claudia_warp_rails().
   addons:claudia:waitend().
   return "".
+}
+
+// Leaves warp in rails mode once it is at 1x, as it was before the wait: a later WARPTO in physics
+// mode would trip the runtime gate.
+function claudia_warp_rails {
+  if kuniverse:timewarp:mode = "PHYSICS" and kuniverse:timewarp:warp = 0 {
+    set kuniverse:timewarp:mode to "RAILS".
+  }
 }
 
 // claudia_warp_to with the 30 s lead every burn needs.
