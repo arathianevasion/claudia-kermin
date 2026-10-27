@@ -125,6 +125,7 @@ namespace ClaudiaKermin.Core.Missions
             _toolSnapshot = null;
             _toolSteps = 0;
             _toolLimitSent = false;
+            _secondLooked = false;
             ToolActivity = "";
         }
     }

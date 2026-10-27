@@ -39,6 +39,8 @@ namespace ClaudiaKermin.Core.Missions
         public bool Waits;
         /// <summary>The turn is in its reduced form after a cut-off reply (medium effort, with a note), so a re-sent one is never the identical request; false in older files.</summary>
         public bool CutOffRetry;
+        /// <summary>The turn is in its Second look, with the first reply's reason; "" otherwise and in older files.</summary>
+        public string SecondLookReason = "";
         /// <summary>How many messages the committed conversation held when the turn was sent; the turn is stale once the transcript has grown past it.</summary>
         public int BaseMessages;
     }
@@ -144,6 +146,7 @@ namespace ClaudiaKermin.Core.Missions
                 .Field("reduced_goal_retry", turn.ReducedGoalRetry)
                 .Field("waits", turn.Waits)
                 .Field("cut_off_retry", turn.CutOffRetry)
+                .Field("second_look_reason", turn.SecondLookReason)
                 .Field("base_messages", turn.BaseMessages)
                 .EndObject();
             MissionFolder.ReplaceAtomically(Path.Combine(folder, UnansweredFile), json.ToString());
@@ -165,6 +168,7 @@ namespace ClaudiaKermin.Core.Missions
                 ReducedGoalRetry = JsonNode.Bool(root["reduced_goal_retry"]) ?? false,
                 Waits = JsonNode.Bool(root["waits"]) ?? false,
                 CutOffRetry = JsonNode.Bool(root["cut_off_retry"]) ?? false,
+                SecondLookReason = JsonNode.Str(root["second_look_reason"]) ?? "",
                 BaseMessages = (int)(JsonNode.Long(root["base_messages"]) ?? 0),
             };
         }
