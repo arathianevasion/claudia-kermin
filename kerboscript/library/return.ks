@@ -75,9 +75,9 @@ function return_unreadable {
     return pe.
   }
   if return_aims(opt) {
-    local target is claudia_target_unreadable(opt:target).
-    if target <> "" {
-      return target.
+    local bad_target is claudia_target_unreadable(opt:target).
+    if bad_target <> "" {
+      return bad_target.
     }
   }
   local window is claudia_window_unreadable(opt:window).
