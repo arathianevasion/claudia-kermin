@@ -32,6 +32,15 @@ namespace ClaudiaKermin.Core.Missions
         public bool DaylightLanding = true;
         public TimeVersusDeltaV TimeVersusDeltaV = TimeVersusDeltaV.Balanced;
 
+        /// <summary>The wait Balanced allows, hours (<see cref="Label"/> says 6 h); the most a Planning Tool defaults a search window to.</summary>
+        public const double BalancedWaitHours = 6;
+
+        /// <summary>How long a Planning Tool looks ahead when Claudia gives no window: Fastest never waits for a better window, Most efficient waits for the best.</summary>
+        public double TimeCapHours
+        {
+            get { return TimeVersusDeltaV == TimeVersusDeltaV.Fastest ? 1 : TimeVersusDeltaV == TimeVersusDeltaV.MostEfficient ? 24 : BalancedWaitHours; }
+        }
+
         public static MissionSettingsValues Defaults(PlayerConfig config)
         {
             return new MissionSettingsValues { DaylightLanding = config.DefaultDaylightLanding, TimeVersusDeltaV = config.DefaultTimeVersusDeltaV };

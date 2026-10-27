@@ -117,6 +117,13 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The RCS switch on the craft: true on, false off, null when it isn't read (the editor). Claudia plans around it; the mod never changes it.</summary>
         public bool? RcsOn;
 
+        /// <summary>
+        /// What the Mission Settings give a Planning Tool for the inputs Claudia leaves out: daylight landing on, and the time cap in
+        /// hours. The Mission sets them on the turn's snapshot before a tool runs; they are not part of the snapshot's JSON.
+        /// </summary>
+        public bool DaylightLandingDefault = true;
+        public double TimeCapHours = MissionSettingsValues.BalancedWaitHours;
+
         // ---- Craft Check facts, computed by the adapter from the game ----
 
         /// <summary>SANDBOX, SCIENCE_SANDBOX or CAREER.</summary>

@@ -26,14 +26,76 @@ namespace ClaudiaKermin.Core.Tools
 
         /// <summary>The sun's elevation above the horizon at the point at <paramref name="ut"/>, degrees; NaN when it can't be read.</summary>
         double SunElevation(string body, double latitude, double longitude, double ut);
+
+        /// <summary>
+        /// Reads the <paramref name="facts"/> asked for at every sample in one go (the adapter serves a batch within its frame
+        /// budget, so a search never pays a frame per point). A fact that can't be read stays at its default (NaN, "").
+        /// </summary>
+        void Survey(string body, IList<SiteSample> samples, SiteFacts facts);
+
+        /// <summary>
+        /// The latitude and longitude, degrees, of the surface point under a position <paramref name="x"/>, <paramref name="y"/>,
+        /// <paramref name="z"/> from the body's centre, given in the frame orbit elements use (the reference plane, z north),
+        /// with the body as it is now. False when it can't be read. A search calls it a few times to learn how that frame sits
+        /// on the body, then does the ground track itself.
+        /// </summary>
+        bool SurfaceUnder(string body, double x, double y, double z, out double latitude, out double longitude);
+    }
+
+    /// <summary>What <see cref="IPlanningBody.Survey"/> reads at a sample.</summary>
+    [Flags]
+    public enum SiteFacts
+    {
+        Altitude = 1,
+        Biome = 2,
+        Sun = 4,
+    }
+
+    /// <summary>One point for <see cref="IPlanningBody.Survey"/>: where and when to ask, and the answers it fills in.</summary>
+    public sealed class SiteSample
+    {
+        public double Latitude;
+        public double Longitude;
+        /// <summary>The UT the sun is asked at.</summary>
+        public double Ut;
+        /// <summary>Terrain height above sea level, m.</summary>
+        public double Altitude = double.NaN;
+        public string Biome = "";
+        /// <summary>Degrees above the horizon at <see cref="Ut"/>.</summary>
+        public double SunElevation = double.NaN;
+    }
+
+    /// <summary>A body interface built on the single reads: what a fake in a test derives from.</summary>
+    public abstract class PlanningBodyBase : IPlanningBody
+    {
+        public abstract double TerrainAltitude(string body, double latitude, double longitude);
+        public abstract string Biome(string body, double latitude, double longitude);
+        public abstract double SunElevation(string body, double latitude, double longitude, double ut);
+        public abstract bool SurfaceUnder(string body, double x, double y, double z, out double latitude, out double longitude);
+
+        public virtual void Survey(string body, IList<SiteSample> samples, SiteFacts facts)
+        {
+            foreach (var sample in samples)
+            {
+                if ((facts & SiteFacts.Altitude) != 0) sample.Altitude = TerrainAltitude(body, sample.Latitude, sample.Longitude);
+                if ((facts & SiteFacts.Biome) != 0) sample.Biome = Biome(body, sample.Latitude, sample.Longitude) ?? "";
+                if ((facts & SiteFacts.Sun) != 0) sample.SunElevation = SunElevation(body, sample.Latitude, sample.Longitude, sample.Ut);
+            }
+        }
     }
 
     /// <summary>A body interface that can read nothing: the stand-in until the adapter passes the real one, and for tools that never ask it.</summary>
-    public sealed class NoPlanningBody : IPlanningBody
+    public sealed class NoPlanningBody : PlanningBodyBase
     {
-        public double TerrainAltitude(string body, double latitude, double longitude) { return double.NaN; }
-        public string Biome(string body, double latitude, double longitude) { return ""; }
-        public double SunElevation(string body, double latitude, double longitude, double ut) { return double.NaN; }
+        public override double TerrainAltitude(string body, double latitude, double longitude) { return double.NaN; }
+        public override string Biome(string body, double latitude, double longitude) { return ""; }
+        public override double SunElevation(string body, double latitude, double longitude, double ut) { return double.NaN; }
+        public override bool SurfaceUnder(string body, double x, double y, double z, out double latitude, out double longitude)
+        {
+            latitude = double.NaN;
+            longitude = double.NaN;
+            return false;
+        }
     }
 
     /// <summary>Which requests a tool is offered on (#265 "Tool loop"): every tool is on Mission turns; only some are on the Craft Check and Margin recheck.</summary>
@@ -96,7 +158,7 @@ namespace ClaudiaKermin.Core.Tools
         /// <summary>Every tool the mod ships, in the fixed order the tools list is sent in (so the cached prefix never changes).</summary>
         public static PlanningTools Default(IScriptCheck scriptCheck = null)
         {
-            var tools = new List<IPlanningTool> { new PredictBurn(), new SolveBurn(), new StagePerformance() };
+            var tools = new List<IPlanningTool> { new PredictBurn(), new SolveBurn(), new StagePerformance(), new FindLandingSite() };
             if (scriptCheck != null) tools.Add(new CheckScript(scriptCheck));
             return new PlanningTools(tools);
         }
