@@ -66,7 +66,7 @@ namespace ClaudiaKermin.Core.Tools
         /// <c>ADDONS:CLAUDIA:DEORBITBURN</c>, for <c>deorbit</c>: the deorbit burn search (<see cref="DeorbitBurn"/>) from the craft's
         /// orbit, by the reentry predictor with <paramref name="air"/> and <paramref name="craft"/>. Takes <c>lat</c>, <c>lng</c>
         /// (the target), <c>earliest_ut</c>, <c>max_wait</c> (s), <c>ground_alt</c> (m), <c>accuracy_km</c> and <c>isp</c> (s; 0 or
-        /// missing for none). Gives <c>error</c> "", <c>burn_ut</c>, <c>prograde</c>, <c>normal</c>, <c>radial</c> (m/s, maneuver
+        /// missing for none); <c>leave_out</c> (<see cref="LeftOut"/>) is for the adapter's <paramref name="craft"/>. Gives <c>error</c> "", <c>burn_ut</c>, <c>prograde</c>, <c>normal</c>, <c>radial</c> (m/s, maneuver
         /// node components), <c>dv</c>, and the landing: <c>lat</c>, <c>lng</c>, <c>error_km</c>, <c>landing_ut</c>. A best burn
         /// outside the accuracy gives its <c>error</c> with the landing; a search that could not run, only <c>error</c>.
         /// </summary>
@@ -127,6 +127,23 @@ namespace ClaudiaKermin.Core.Tools
             var result = Landing(landing, km);
             result["error"] = "";
             return result;
+        }
+
+        /// <summary>
+        /// The parts a reentry call leaves out of the craft (#326): <c>leave_out</c>, the kOS UIDs of the parts <c>deorbit</c> drops
+        /// after its burn, so the predictor flies only what stays. One UID may be given bare. The adapter builds the craft from it.
+        /// </summary>
+        public static IList<string> LeftOut(IDictionary<string, object> input)
+        {
+            var uids = new List<string>();
+            object value;
+            if (input == null || !new Dictionary<string, object>(input, StringComparer.OrdinalIgnoreCase).TryGetValue("leave_out", out value) || value == null)
+                return uids;
+            var many = value as System.Collections.IEnumerable;
+            if (value is string || many == null) many = new[] { value };
+            foreach (var uid in many)
+                if (uid != null) uids.Add(Convert.ToString(uid, CultureInfo.InvariantCulture));
+            return uids;
         }
 
         /// <summary>The body, the craft's orbit and how the frame sits on the body, for a reentry call; or why there are none.</summary>

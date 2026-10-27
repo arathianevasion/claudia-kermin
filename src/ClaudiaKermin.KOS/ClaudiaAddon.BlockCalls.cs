@@ -24,7 +24,7 @@ namespace ClaudiaKermin.KOS
             AddSuffix("LANDINGSITE", new OneArgsSuffix<Lexicon, Lexicon>(LandingSite,
                 "Core Library only (land): find_landing_site's search on the body orbited; gives the first site as lexicon error, lat, lng, biome, ..."));
             AddSuffix("DEORBITBURN", new OneArgsSuffix<Lexicon, Lexicon>(DeorbitBurn,
-                "Core Library only (deorbit): the deorbit burn that lands on lat, lng by the reentry predictor; lexicon error, burn_ut, prograde, normal, radial, dv, lat, lng, error_km, ..."));
+                "Core Library only (deorbit): the deorbit burn that lands on lat, lng by the reentry predictor; lexicon error, burn_ut, prograde, normal, radial, dv, lat, lng, error_km, ...; leave_out (part UIDs) flies the craft without them"));
             AddSuffix("REENTRYIMPACT", new OneArgsSuffix<Lexicon, Lexicon>(ReentryImpact,
                 "Core Library only (deorbit, return): where the orbit as it is now, or the one given as orbit_sma, orbit_ecc, ..., comes down, held retrograde; lexicon error, lat, lng, landing_ut, error_km"));
         }
@@ -33,8 +33,9 @@ namespace ClaudiaKermin.KOS
         {
             var watch = Stopwatch.StartNew();
             var vessel = shared.Vessel;
-            var found = BlockCalls.DeorbitBurn(KosValues.ToDictionary(input), SnapshotReader.Read(vessel), new PlanningBody(),
-                new ReentryAir(vessel.mainBody), new ReentryCraft(vessel));
+            var ask = KosValues.ToDictionary(input);
+            var found = BlockCalls.DeorbitBurn(ask, SnapshotReader.Read(vessel), new PlanningBody(),
+                new ReentryAir(vessel.mainBody), new ReentryCraft(vessel, BlockCalls.LeftOut(ask)));
             Debug.Log(ModInfo.LogTag + " block call DEORBITBURN took " + Ms(watch) + " ms: " + Landing(found));
             return (Lexicon)KosValues.FromPlain(found);
         }
@@ -43,8 +44,9 @@ namespace ClaudiaKermin.KOS
         {
             var watch = Stopwatch.StartNew();
             var vessel = shared.Vessel;
-            var landing = BlockCalls.ReentryImpact(KosValues.ToDictionary(input), SnapshotReader.Read(vessel), new PlanningBody(),
-                new ReentryAir(vessel.mainBody), new ReentryCraft(vessel));
+            var ask = KosValues.ToDictionary(input);
+            var landing = BlockCalls.ReentryImpact(ask, SnapshotReader.Read(vessel), new PlanningBody(),
+                new ReentryAir(vessel.mainBody), new ReentryCraft(vessel, BlockCalls.LeftOut(ask)));
             Debug.Log(ModInfo.LogTag + " block call REENTRYIMPACT took " + Ms(watch) + " ms: " + Landing(landing));
             return (Lexicon)KosValues.FromPlain(landing);
         }

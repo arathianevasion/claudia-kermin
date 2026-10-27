@@ -2,7 +2,10 @@
 // Copyright (C) 2026 Andrew Watson
 
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using ClaudiaKermin.Core.Tools;
+using UnityEngine;
 
 namespace ClaudiaKermin.Adapter
 {
@@ -42,30 +45,83 @@ namespace ClaudiaKermin.Adapter
     /// back along the airflow, so the air comes from below. Each part's drag cubes are read once, with KSP's own
     /// <c>DragCubeList.AddSurfaceDragDirection</c> (as the Trajectories mod does), at a table of Mach numbers; drag between them
     /// is interpolated, times stock's multipliers and pseudo-Reynolds curve. Parts shielded from the airstream add none.
+    /// Parts the block will drop (#326, by kOS UID, which is the part's flightID) are left out, mass and drag: a part that
+    /// stays faces the air bare where one of them is attached, as it will once they have gone.
     /// Main thread; reads only (the cube data is a local copy).
     /// </summary>
     public sealed class ReentryCraft : IReentryCraft
     {
         private static readonly double[] Machs = MachTable();
+        /// <summary>A drag cube's faces in stock's order (DragCubeList.faceDirections, internal there).</summary>
+        private static readonly Vector3[] Faces = { Vector3.right, Vector3.left, Vector3.up, Vector3.down, Vector3.forward, Vector3.back };
         private readonly double[] _area = new double[Machs.Length];
         private readonly double _mass;
 
-        public ReentryCraft(Vessel vessel)
+        public ReentryCraft(Vessel vessel, ICollection<string> leaveOut = null)
         {
-            _mass = vessel.totalMass * 1000;
+            var gone = new HashSet<string>(leaveOut ?? new string[0]);
             // The way the craft moves through the air when its forward axis points at surface retrograde.
             var flow = -vessel.ReferenceTransform.up;
+            if (gone.Count == 0) _mass = vessel.totalMass * 1000;
             foreach (var part in vessel.parts)
             {
+                if (Gone(part, gone)) continue;
+                if (gone.Count > 0) _mass += (part.mass + part.GetResourceMass()) * 1000;
                 if (part.ShieldedFromAirstream || part.DragCubes == null || part.DragCubes.None) continue;
                 var local = part.partTransform.InverseTransformDirection(flow);
+                var bared = BaredFaces(part, gone);
                 for (var i = 0; i < Machs.Length; i++)
                 {
+                    if (bared != null)
+                    {
+                        _area[i] += AreaDrag(part.DragCubes, bared, local, (float)Machs[i]);
+                        continue;
+                    }
                     var data = default(DragCubeList.CubeData);
                     part.DragCubes.AddSurfaceDragDirection(local, (float)Machs[i], ref data);
                     _area[i] += data.areaDrag;
                 }
             }
+        }
+
+        private static bool Gone(Part part, HashSet<string> gone)
+        {
+            return gone.Count > 0 && gone.Contains(part.flightID.ToString(CultureInfo.InvariantCulture));
+        }
+
+        /// <summary>
+        /// The part's face areas with every face toward an attached part that will be dropped bared (unoccluded), or null when
+        /// none is: stock occludes a face by what is attached at its node (DragCubeList.SetPartOcclusion), and that goes.
+        /// </summary>
+        private static float[] BaredFaces(Part part, HashSet<string> gone)
+        {
+            float[] areas = null;
+            foreach (var node in part.attachNodes)
+            {
+                if (node == null || node.attachedPart == null || !Gone(node.attachedPart, gone)) continue;
+                var direction = node.orientation.normalized;
+                for (var f = 0; f < Faces.Length; f++)
+                {
+                    if (Vector3.Dot(direction, Faces[f]) < 0.7f) continue;
+                    if (areas == null) areas = (float[])part.DragCubes.AreaOccluded.Clone();
+                    areas[f] = part.DragCubes.WeightedArea[f];
+                }
+            }
+            return areas;
+        }
+
+        /// <summary>Stock's DragCubeList.AddSurfaceDragDirection's areaDrag (decompiled), with the face areas given.</summary>
+        private static double AreaDrag(DragCubeList cubes, float[] areas, Vector3 direction, float mach)
+        {
+            double sum = 0;
+            for (var f = 0; f < Faces.Length; f++)
+            {
+                var dot = Vector3.Dot(direction, Faces[f]);
+                var area = areas[f] * PhysicsGlobals.DragCurveValue(cubes.SurfaceCurves, (dot + 1) * 0.5f, mach);
+                var cd = cubes.WeightedDrag[f];
+                sum += area * (cd < 1 ? Mathf.Pow(cubes.DragCurveCd.Evaluate(cd), cubes.DragCurveCdPower.Evaluate(mach)) : cd);
+            }
+            return sum;
         }
 
         public double MassKg

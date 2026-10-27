@@ -276,6 +276,16 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void The_parts_to_leave_out_are_the_uids_given_as_leave_out()
+        {
+            // kOS gives a part's UID as a string; a list of them, as KosValues turns it, or one bare.
+            Assert.Equal(new[] { "4294512936", "17" }, BlockCalls.LeftOut(Ask("leave_out", new System.Collections.Generic.List<object> { "4294512936", 17.0 })));
+            Assert.Equal(new[] { "99" }, BlockCalls.LeftOut(Ask("leave_out", "99")));
+            Assert.Empty(BlockCalls.LeftOut(Ask("lat", 0.0)));
+            Assert.Empty(BlockCalls.LeftOut(null));
+        }
+
+        [Fact]
         public void The_engines_isp_lightens_the_craft_after_the_burn_and_the_search_allows_for_it()
         {
             var orbit = Circular();
