@@ -31,10 +31,14 @@ namespace ClaudiaKermin.Core.Missions
             return Kinds.Contains(kind) && effort != Effort;
         }
 
-        /// <summary>The reply's reason for doubt, trimmed; "" when it gave none.</summary>
+        /// <summary>The longest reason kept: it goes back into the resent request and the Spending Cap check counts for no more.</summary>
+        private const int MaxReason = 300;
+
+        /// <summary>The reply's reason for doubt, trimmed and on one line; "" when it gave none.</summary>
         public static string Reason(JsonNode reply)
         {
-            return (JsonNode.Str(reply["unsure_because"]) ?? "").Trim();
+            var reason = string.Join(" ", (JsonNode.Str(reply["unsure_because"]) ?? "").Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries)).Trim();
+            return reason.Length <= MaxReason ? reason : reason.Substring(0, MaxReason).TrimEnd();
         }
 
         /// <summary>The line added to the resent turn.</summary>

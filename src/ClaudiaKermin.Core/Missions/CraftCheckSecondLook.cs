@@ -28,6 +28,9 @@ namespace ClaudiaKermin.Core.Missions
         private bool SecondLookSent(CancellationTokenSource cancel, CraftCheckCharge charge, StreamResult result)
         {
             if (result == null || result.Status != StreamStatus.Completed) return false;
+            // A refused or cut-off reply fails the check as it always did.
+            if (result.Message.StopReason == StopReason.Refusal || result.Message.StopReason == StopReason.MaxTokens) return false;
+            if (!_secondLooked && !SecondLook.Eligible("craft_check", _request.Effort)) return false;
             var reply = CraftCheckReply.Parse(result.Message.Text);
             if (reply == null || reply.UnsureBecause.Length == 0) return false;
             if (_secondLooked)
@@ -35,7 +38,6 @@ namespace ClaudiaKermin.Core.Missions
                 _client.Log("Craft Check second look was unsure too: " + reply.UnsureBecause);
                 return false;
             }
-            if (!SecondLook.Eligible("craft_check", _request.Effort)) return false;
 
             var request = CheckRequest(_request.Model, _goal, _toolSnapshot, _remote, reply.UnsureBecause);
             var worstCase = RequestCharge.WorstCase(_config.Prices, request.Model, request);
