@@ -198,8 +198,12 @@ namespace ClaudiaKermin.Core.Missions
             public bool ToolLimitSent;
             /// <summary>The Game Snapshot taken for the turn when its messages were built: what its tools calculate from.</summary>
             public GameSnapshot ToolSnapshot;
-            /// <summary>The compaction block the turn's last request went out behind (null for none): its usage measures the conversation only if that is still the block in force.</summary>
-            public CompactionBlock SentAfter;
+            /// <summary>
+            /// The compaction block in force when the turn's messages were built (null for none) and how many messages it stood in
+            /// for: every request of the turn goes out behind it (MissionControl.Compaction.cs).
+            /// </summary>
+            public CompactionBlock CompactionBase;
+            public int CompactedBase;
             public List<Message> Messages;
             public CancellationTokenSource Cancel;
         }
@@ -960,7 +964,6 @@ namespace ClaudiaKermin.Core.Missions
             mission.InFlight = true;
             mission.Activity = "thinking";
             turn.Cancel = new CancellationTokenSource();
-            turn.SentAfter = mission.CompactionBlock;
             var cancel = turn.Cancel.Token;
             var dump = mission.Dump;
             _background.Run(
@@ -976,6 +979,8 @@ namespace ClaudiaKermin.Core.Missions
             {
                 if (turn.Effort == null) turn.Effort = EffortFor(turn.Purpose);
                 turn.ToolSnapshot = _snapshot;
+                turn.CompactionBase = mission.CompactionBlock;
+                turn.CompactedBase = mission.CompactedMessages;
                 turn.Messages = new List<Message>();
                 if (turn.Effort != mission.Effort) turn.Messages.Add(Message.SystemEffort(turn.Effort));
                 turn.Messages.Add(Message.UserText(turn.UserText));
@@ -993,7 +998,7 @@ namespace ClaudiaKermin.Core.Missions
             // The same tools list on every Mission request, whatever the turn may call, so the cached prefix never changes.
             request.Tools.AddRange(_tools.Definitions(ToolOffer.Mission));
             request.System.AddRange(mission.System);
-            request.Messages.AddRange(Sent(mission));
+            request.Messages.AddRange(Sent(mission, turn.CompactionBase, turn.CompactedBase));
             request.Messages.AddRange(turn.Messages);
             return request;
         }
@@ -1177,8 +1182,10 @@ namespace ClaudiaKermin.Core.Missions
             }
 
             // Append-only: the turn and its reply join the conversation together, then the transcript is rewritten.
+            var committed = message.ToMessage();
+            DropStaleThinking(mission, turn, committed);
             mission.Conversation.AddRange(turn.Messages);
-            mission.Conversation.Add(message.ToMessage());
+            mission.Conversation.Add(committed);
             foreach (var m in turn.Messages)
                 if (m.Effort != null) mission.Effort = m.Effort;
             mission.Pending = null;

@@ -51,15 +51,39 @@ namespace ClaudiaKermin.Core.Missions
             public decimal CompactionCharge;
             /// <summary>The conversation's length when a compaction was last skipped after its retry; -1 when none was.</summary>
             public int CompactionSkippedAt = -1;
+            /// <summary>The Spending Cap deferred a compaction: the ceiling stops asking until the next start of Running.</summary>
+            public bool CompactionWaitsForRun;
         }
 
         /// <summary>What a request sends of the conversation: the compaction block first and the messages after those it stands in for, or every message.</summary>
         private static IEnumerable<Message> Sent(Mission mission)
         {
-            if (mission.CompactionBlock == null) return mission.Conversation;
+            return Sent(mission, mission.CompactionBlock, mission.CompactedMessages);
+        }
+
+        /// <summary>
+        /// The conversation as sent behind <paramref name="compaction"/> (null for none), standing in for the first
+        /// <paramref name="covers"/> messages. A turn keeps the one it was built on for every step of its tool loop, so a block
+        /// landing mid-loop never changes the loop's prefix.
+        /// </summary>
+        private static IEnumerable<Message> Sent(Mission mission, CompactionBlock compaction, int covers)
+        {
+            if (compaction == null) return mission.Conversation;
             var block = new Message { Role = Role.Assistant };
-            block.Content.Add(mission.CompactionBlock);
-            return new[] { block }.Concat(mission.Conversation.Skip(mission.CompactedMessages));
+            block.Content.Add(compaction);
+            return new[] { block }.Concat(mission.Conversation.Skip(covers));
+        }
+
+        /// <summary>
+        /// A turn built behind an older block than the one now in force (an Alert sent while the compaction ran) joins the
+        /// conversation after the new block, but its replies' thinking was produced on a prefix no later request sends, so it
+        /// could no longer be checked: it is dropped.
+        /// </summary>
+        private static void DropStaleThinking(Mission mission, Turn turn, Message reply)
+        {
+            if (turn.CompactionBase == mission.CompactionBlock) return;
+            foreach (var message in turn.Messages.Concat(new[] { reply }).Where(m => m.Role == Role.Assistant))
+                message.Content.RemoveAll(b => b is ThinkingBlock);
         }
 
         /// <summary>The effort the conversation as sent last set: per-message effort before the block is gone with what it summarized.</summary>
@@ -78,7 +102,7 @@ namespace ClaudiaKermin.Core.Missions
         /// </summary>
         private static void TrackContext(Mission mission, Turn turn, AssistantMessage message)
         {
-            if (turn.SentAfter != mission.CompactionBlock) return;
+            if (turn.CompactionBase != mission.CompactionBlock) return;
             var usage = message.Usage;
             mission.ContextTokens = usage.InputTokens + usage.CacheReadInputTokens + usage.CacheCreationInputTokens + usage.OutputTokens;
         }
@@ -91,7 +115,8 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>A run has started: past the threshold, a sequence expected to take long enough is when to compact.</summary>
         private void CompactAtRunStart(Mission mission, SequencePlan plan)
         {
-            if (mission.ContextTokens < _config.CompactionTriggerTokens) return;
+            mission.CompactionWaitsForRun = false;
+            if (mission.ContextTokens < _config.CompactionTriggerTokens || mission.Pending != null) return;
             if (plan.ExpectedDurationSeconds < _config.CompactionMinRunSeconds)
             {
                 Event(mission, "compaction_waits", "the sequence expects " + plan.ExpectedDurationSeconds.ToString("0", CultureInfo.InvariantCulture)
@@ -108,8 +133,10 @@ namespace ClaudiaKermin.Core.Missions
         private bool WaitsForCompaction(Mission mission, Turn turn)
         {
             if (turn.Purpose == Purpose.Alert) return false;
-            // One try per boundary: a compaction skipped here waits for the next committed turn.
-            if (mission.Compacting == null && mission.ContextTokens >= CompactionCeiling && mission.Conversation.Count != mission.CompactionSkippedAt)
+            // One try per boundary: a compaction skipped here waits for the next committed turn, and one the Spending Cap
+            // deferred waits for the next start of Running.
+            if (mission.Compacting == null && mission.ContextTokens >= CompactionCeiling && mission.Conversation.Count != mission.CompactionSkippedAt
+                && !mission.CompactionWaitsForRun)
                 StartCompaction(mission, "ceiling");
             return mission.Compacting != null;
         }
@@ -140,6 +167,7 @@ namespace ClaudiaKermin.Core.Missions
             {
                 LogCost(mission, "blocked", worst, "over_cap");
                 Event(mission, "compaction_deferred", "it could pass the Spending Cap; the next start of Running tries again");
+                mission.CompactionWaitsForRun = true;
                 return false;
             }
             var run = new CompactionRun { Covers = mission.Conversation.Count, Attempt = attempt, Why = why, Cancel = new CancellationTokenSource() };

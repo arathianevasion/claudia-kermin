@@ -246,7 +246,81 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("high", debrief[5].GetProperty("output_config").GetProperty("effort").GetString());
         }
 
+        [Fact]
+        public void AnAlertWhoseLoopIsMidWayWhenTheBlockLandsKeepsItsPrefixAndJoinsAfterTheBlockWithoutItsThinking()
+        {
+            var held = Compaction();
+            held.PauseAt = 10;
+            var step = ToolUseStreams.ToolUse("alert", ("stage_performance", "{\"situation\":\"vacuum\"}"));
+            step.PauseAt = 10;
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                Sized(LongRun(WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), AltitudeCheck(100)), 600), 160000),
+                held,
+                step,
+                ScriptedResponse.Fixture("mission-alert-carry-on-plain.sse"),
+                ScriptedResponse.Fixture("mission-debrief.sse"));
+            var mission = Control(new CraftCheckRouter(transport));
+            var start = ToRunning(mission);
+            DrainUntil(mission, v => transport.Requests.Count == 3);
+            mission.Send(Snapshot(s => s.Altitude = 500));
+            DrainUntil(mission, v => transport.Requests.Count == 4);
+
+            // The block lands while the Alert's first step is still out; the step then calls a tool.
+            held.Gate.Set();
+            DrainUntil(mission, v => Summarized(v));
+            step.Gate.Set();
+            DrainUntil(mission, v => !v.Busy && v.LatestLine == "Alert, altitude: carry on. Still fine.");
+
+            // Its second step is its first plus two messages, still behind no block: compaction never changes a loop mid-way.
+            var first = Body(transport.Requests[3]).GetProperty("messages").EnumerateArray().Select(m => m.GetRawText()).ToList();
+            var second = Body(transport.Requests[4]).GetProperty("messages").EnumerateArray().Select(m => m.GetRawText()).ToList();
+            Assert.Equal(first, second.Take(first.Count));
+            Assert.Equal(first.Count + 2, second.Count);
+            Assert.DoesNotContain(second, m => m.Contains("\"type\":\"compaction\""));
+
+            mission.Send(new KosRunEnded(Finished(), start.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Succeeded);
+            var debrief = Body(transport.Requests[5]).GetProperty("messages").EnumerateArray().Select(m => m.GetRawText()).ToList();
+            Assert.Equal("{\"role\":\"assistant\",\"content\":[" + Block + "]}", debrief[0]);
+            Assert.Contains("Alert: a Telemetry Check was crossed", debrief[2]);
+            Assert.Contains("\"type\":\"tool_use\"", debrief[4]);
+            Assert.Contains("\"type\":\"tool_result\"", debrief[5]);
+            // Its thinking came from a prefix no later request sends, so it goes; the tool call and the reply stay.
+            Assert.DoesNotContain(debrief.Skip(1), m => m.Contains("\"type\":\"thinking\""));
+            // Block; the Alert's effort, facts, notice, tool call, result and reply; the Debrief's effort, facts and notice.
+            Assert.Equal(10, debrief.Count);
+        }
+
         // ---- Failure and the Spending Cap ----
+
+        [Fact]
+        public void ACeilingCompactionTheSpendingCapDefersWaitsForTheNextStartOfRunning()
+        {
+            var transport = new StreamingFakeTransport(
+                Priced(ScriptedResponse.Fixture("mission-plan.sse"), 190000),
+                Sized(LongRun(ScriptedResponse.Fixture("mission-sequence-plan.sse"), 600), 185000),
+                Sized(ScriptedResponse.Fixture("mission-answer.sse"), 170000),
+                Compaction());
+            var mission = Control(new CraftCheckRouter(transport));
+            // The plan's worst case (about $0.36) fits; after its $0.38, neither a compaction nor the Sequence Plan does.
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 0.50m, Sonnet));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new Approve());
+            Assert.Equal(MissionStage.Paused, mission.View.Stage);
+
+            mission.Send(new RaiseCap(10m));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval && !v.Busy);
+            // Still past the ceiling, but the deferred compaction waits for a start of Running, not this turn boundary.
+            mission.Send(new AskQuestion("How long will it take?"));
+            DrainUntil(mission, v => !v.Busy && v.LatestLine == "About 5 seconds, and no engines fire.");
+            Assert.Equal(3, transport.Requests.Count);
+            Assert.Single(Regex.Matches(Events(mission), "compaction_deferred"));
+
+            mission.Send(new Approve());
+            DrainUntil(mission, v => Summarized(v));
+            Assert.True(Body(transport.Requests[3]).TryGetProperty("compaction", out _));
+        }
 
         [Fact]
         public void AFailedCompactionIsTriedOnceMoreThenSkippedAndLoggedAndTheMissionCarriesOn()
