@@ -21,7 +21,7 @@ Claudia's crew role, combining the abilities of a Pilot, an Engineer and a Scien
 _Avoid_: trait (alone), class, profession
 
 **Mission Goal**:
-The player's plain-language statement of what a mission must achieve, e.g. "Land on the Mun, run 3 experiments, return to Kerbin." It changes only when the player gives Approval to a revised Mission Plan that names a new goal; Claudia cannot change it on her own.
+The player's plain-language statement of what a mission must achieve, e.g. "Land on the Mun, run 3 experiments, return to Kerbin." It changes only when the player gives Approval to a revised Mission Plan that names a new goal (an Approval Auto Mode gives counts); Claudia cannot change it on her own.
 _Avoid_: objective, prompt, task
 
 **Mission Settings**:
@@ -99,8 +99,12 @@ A Debrief outcome: the Mission Goal can no longer be reached as stated.
 _Avoid_: Lost (which is a Mission outcome, not a Debrief outcome)
 
 **Approval**:
-The player's go-ahead, given in chat, for Claudia to execute the proposed Maneuver Sequence.
+The player's go-ahead, given in chat, for Claudia to execute the proposed Maneuver Sequence; under Auto Mode the player has given it in advance.
 _Avoid_: confirmation, sign-off
+
+**Auto Mode**:
+A per-Mission switch on the Mission window, which the player may flip at any point in the Mission, under which the player's Approval is given in advance: every plan Claudia proposes after the first Mission Plan (Sequence Plans, revised Mission Plans, a reduced or changed Mission Goal) is approved the moment it arrives and an unsafe script is re-planned once, each only while the Spending Cap has room for the worst case of the Debrief and next plan that follow; an Abort she recommends is always taken. It never starts a Mission, acknowledges a Warning, raises the Spending Cap, resumes a Paused Mission, or stands in for the player at a Manual stretch or Due Time; there, and when the Spending Cap has no room, it stops and calls the player. New Missions take the player's default, off unless set otherwise.
+_Avoid_: autopilot, autonomous mode (Blackout's word to avoid), auto-approve (as a noun)
 
 **Mission**:
 One Mission Goal pursued by Claudia with one craft and any Child Vessels, from its Craft Check until it succeeds or is abandoned.
