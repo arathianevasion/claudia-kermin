@@ -1009,9 +1009,12 @@ function land {
 
   // After the deorbit and correction burns, before the fall: a current stage that can't cover the braking
   // is staged off now, in vacuum and not braking, so the craft has the fall to settle and turn (#382).
-  // The braking need is the figure above less the deorbit burn already flown.
+  // The braking need is the figure above less the deorbit burn already flown; it already carries its
+  // 1.2 x and 100 m/s of margin, so the decision adds none. It stays put if the craft would not have the
+  // braking left without the stage, or if stock reads no delta-v (as with the check above).
   local brake_need is needed - abs(deorbit_dv).
-  if land_stage_short(ship:stagedeltav(stage:number):vacuum, brake_need, opt:burn_margin) {
+  local stage_dv is ship:stagedeltav(stage:number):vacuum.
+  if ship:deltav:current > 0 and land_stage_short(stage_dv, brake_need, 1) and ship:deltav:current - stage_dv >= brake_need {
     local early is land_stage_early(ctx).
     if early:staged {
       set extra:staged_before_braking to true.
