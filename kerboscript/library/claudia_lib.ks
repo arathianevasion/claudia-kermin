@@ -49,10 +49,9 @@
 //| splashed or on the pad, geo (lexicon lat, lng, alt), and stage (current stage number); plus the
 //| block's extra results. An abort leaves the craft safe (throttle 0, SAS holding attitude) and
 //| sets reason "abort <option>: <detail>". Waits use on-rails warp only, back at 1x at least 30 s before
-//| a burn, and have no cap: a block waits for its window or daylight however long, and coast holds
-//| until a UT. Warp drops to 1x when the Mission needs the player and resumes after; the player may
-//| cancel it and the wait won't override them: ADDONS:CLAUDIA:WARPCANCELLED is then true until the next wait
-//| starts. Waits ask for warp again if KSP cuts it. Own wait: claudia_warp_to(ctx, ut, lead[, stop, cap]). Don't warp yourself (physics warp is blocked). Report the Script Result yourself, once, at the end, e.g.
+//| a burn, and have no cap: a block waits for its window or daylight however long, coast holds
+//| until a UT. Warp drops to 1x when the Mission needs the player, then resumes. If the player
+//| cancels it the wait won't override them: ADDONS:CLAUDIA:WARPCANCELLED stays true until the next wait. Waits re-ask for warp if KSP cuts it. Own wait: claudia_warp_to(ctx, ut, lead[, stop, cap]); never warp yourself. Report the Script Result yourself, once, at the end, e.g.
 //| `addons:claudia:report(res).`, or a lexicon of your own with at least success and reason.
 
 // ---- Options ----
