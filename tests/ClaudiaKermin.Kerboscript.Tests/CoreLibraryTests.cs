@@ -463,12 +463,130 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         [Theory]
-        [InlineData(1.5, 0.2, "True")]
-        [InlineData(2.5, 0.2, "False")]
-        [InlineData(1.5, 0.6, "False")]
-        public void Aligned_is_within_2_degrees_and_turning_under_half_a_degree_a_second(double angle, double rate, string expected)
+        [InlineData(1.5, 0.2, 0, "True")]
+        [InlineData(2.5, 0.2, 0, "False")]
+        [InlineData(1.5, 0.6, 0, "False")]
+        // Within the tolerance for 3 s while the target itself turns: Aligned whatever the rate.
+        [InlineData(1.5, 0.6, 2.9, "False")]
+        [InlineData(1.5, 0.6, 3, "True")]
+        [InlineData(2.5, 0.2, 10, "False")]
+        public void Aligned_is_within_2_degrees_and_turning_under_half_a_degree_a_second_or_within_for_3_s(double angle, double rate, double held, string expected)
         {
-            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_aligned({0}, {1})", angle, rate)));
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_aligned({0}, {1}, {2}, claudia_rcs_defaults())", angle, rate, held)));
+        }
+
+        [Theory]
+        [InlineData(4.5, 0.6, 0, "True")]
+        [InlineData(4.5, 0.9, 0, "False")]
+        [InlineData(5.5, 0.1, 0, "False")]
+        public void Aligned_takes_its_thresholds_from_rcs_tolerance(double angle, double rate, double held, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture,
+                "claudia_aligned({0}, {1}, {2}, claudia_options(lexicon(\"rcs_tolerance\", lexicon(\"aligned_deg\", 5, \"aligned_rate\", 0.8)), exec_node_defaults(), \"auto\"):opt:rcs_tolerance)", angle, rate, held)));
+        }
+
+        [Theory]
+        // Not within: no hold. Coming within starts the hold now; staying within keeps its start.
+        [InlineData(-1, false, 100, "-1")]
+        [InlineData(90, false, 100, "-1")]
+        [InlineData(-1, true, 100, "100")]
+        [InlineData(90, true, 100, "90")]
+        public void The_hold_within_tolerance_starts_when_the_error_comes_within_and_ends_when_it_leaves(double since, bool within, double now, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_within_ut({0}, {1}, {2})", since, within, now)));
+        }
+
+        // ---- RCS Use ----
+
+        // One tick's state for claudia_rcs_decide: a craft with RCS off, steering, monoprop, on target and still, the gate
+        // not due, wheels that turn in 40 s and no deadline; each case overrides what it needs.
+        private static string Decide(string overrides, string tolerance = "claudia_rcs_defaults()")
+        {
+            return Run("local s is claudia_merge_options(lexicon(" + overrides + "), lexicon(\"rcs\", false, \"steering\", true, \"monoprop\", 30, \"error\", 0, "
+                + "\"rate\", 0, \"held_s\", 0, \"gate\", false, \"wheels_s\", 40, \"left_s\", -1)).\n"
+                + "local d is claudia_rcs_decide(s, " + tolerance + "). print d[\"on\"] + \"|\" + d:reason.").Single();
+        }
+
+        [Theory]
+        // Over on_deg, the gate due: with a deadline the wheels can't make, turning; one they can, nothing changes.
+        [InlineData("\"error\", 34, \"gate\", true, \"left_s\", 30", "True|turning")]
+        [InlineData("\"error\", 34, \"gate\", true, \"left_s\", 60", "False|")]
+        // With no deadline (launch, ascend, land's braking), crossing on_deg is enough.
+        [InlineData("\"error\", 34, \"gate\", true", "True|falling behind")]
+        // Wheels with no pitch or yaw torque, with or without a deadline.
+        [InlineData("\"error\", 34, \"gate\", true, \"wheels_s\", -1", "True|no wheel torque")]
+        [InlineData("\"error\", 34, \"gate\", true, \"wheels_s\", -1, \"left_s\", 600", "True|no wheel torque")]
+        // Held off: at or under on_deg, or over it with the gate not due (it is checked once a second).
+        [InlineData("\"error\", 10, \"gate\", true", "False|")]
+        [InlineData("\"error\", 9, \"gate\", true, \"wheels_s\", -1", "False|")]
+        [InlineData("\"error\", 34, \"gate\", false", "False|")]
+        public void RCS_goes_on_over_on_deg_only_when_the_wheels_cannot_make_the_turn(string state, string expected)
+        {
+            Assert.Equal(expected, Decide(state));
+        }
+
+        [Theory]
+        // Aligned by the rate, or by 3 s within aligned_deg while the target turns.
+        [InlineData("\"rcs\", true, \"error\", 1.5, \"rate\", 0.2", "False|aligned")]
+        [InlineData("\"rcs\", true, \"error\", 1.5, \"rate\", 0.9, \"held_s\", 3", "False|aligned")]
+        // Between the thresholds, or within aligned_deg but still turning and not yet held 3 s: stays on.
+        [InlineData("\"rcs\", true, \"error\", 6, \"rate\", 0.1", "True|")]
+        [InlineData("\"rcs\", true, \"error\", 1.5, \"rate\", 0.9, \"held_s\", 2", "True|")]
+        [InlineData("\"rcs\", true, \"error\", 34, \"rate\", 3, \"gate\", true", "True|")]
+        public void RCS_goes_off_once_Aligned_and_stays_on_between_the_thresholds(string state, string expected)
+        {
+            Assert.Equal(expected, Decide(state));
+        }
+
+        [Theory]
+        [InlineData("\"rcs\", true, \"steering\", false, \"error\", 34", "False|steering released")]
+        [InlineData("\"steering\", false, \"error\", 34, \"gate\", true", "False|")]
+        // No monopropellant: off, and never back on, whatever else says on.
+        [InlineData("\"rcs\", true, \"monoprop\", 0, \"error\", 34", "False|no monoprop")]
+        [InlineData("\"monoprop\", 0, \"error\", 34, \"gate\", true, \"wheels_s\", -1", "False|")]
+        public void RCS_goes_off_with_steering_released_or_no_monoprop(string state, string expected)
+        {
+            Assert.Equal(expected, Decide(state));
+        }
+
+        [Fact]
+        public void A_custom_rcs_tolerance_moves_the_thresholds()
+        {
+            const string tolerance = "claudia_options(lexicon(\"rcs_tolerance\", lexicon(\"on_deg\", 30, \"aligned_deg\", 5)), exec_node_defaults(), \"auto\"):opt:rcs_tolerance";
+            Assert.Equal("False|", Decide("\"error\", 25, \"gate\", true", tolerance));
+            Assert.Equal("True|falling behind", Decide("\"error\", 31, \"gate\", true", tolerance));
+            Assert.Equal("False|aligned", Decide("\"rcs\", true, \"error\", 4, \"rate\", 0.2", tolerance));
+        }
+
+        [Fact]
+        public void A_partial_rcs_tolerance_merges_with_the_defaults()
+        {
+            var printed = Run("local c is claudia_options(lexicon(\"rcs_tolerance\", lexicon(\"aligned_deg\", 1)), exec_node_defaults(), \"auto\"). print c:error. "
+                + "local t is c:opt:rcs_tolerance. print t:on_deg. print t:aligned_deg. print t:aligned_rate.\n"
+                + "local d is claudia_options(lexicon(), exec_node_defaults(), \"auto\"):opt:rcs_tolerance. print d:on_deg. print d:aligned_deg. print d:aligned_rate.");
+            Assert.Equal(new[] { "", "10", "1", "0.5", "10", "2", "0.5" }, printed);
+        }
+
+        [Theory]
+        [InlineData("5")]
+        [InlineData("\"tight\"")]
+        [InlineData("lexicon(\"on_dg\", 5)")]
+        [InlineData("lexicon(\"on_deg\", \"5\")")]
+        public void A_bad_rcs_tolerance_fails_the_block(string value)
+        {
+            Assert.Equal("rcs_tolerance must be a lexicon of on_deg, aligned_deg (degrees) and aligned_rate (deg/s), given as numbers",
+                One("claudia_options(lexicon(\"rcs_tolerance\", " + value + "), exec_node_defaults(), \"auto\"):error"));
+        }
+
+        [Theory]
+        // Checked when the error first crosses on_deg, then once a second while it stays over.
+        [InlineData(34, false, 100, 50, "True")]
+        [InlineData(34, true, 100, 99.5, "False")]
+        [InlineData(34, true, 100, 99, "True")]
+        [InlineData(8, false, 100, 50, "False")]
+        public void The_on_gate_is_checked_at_the_crossing_then_once_a_second(double error, bool wasAbove, double now, double checkedUt, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_rcs_gate_due({0}, 10, {1}, {2}, {3})", error, wasAbove, now, checkedUt)));
         }
 
         [Theory]

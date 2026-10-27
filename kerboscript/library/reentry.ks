@@ -434,10 +434,12 @@ function reentry {
       set drogues_out to true.
       // Open parachutes steer the craft themselves.
       unlock steering.
+      claudia_rcs_off("steering released").
     } else if chute_plan = "mains" {
       reentry_open_chutes(false).
       set mains_out to true.
       unlock steering.
+      claudia_rcs_off("steering released").
     }
 
     // The next parachute or shield drop, by height (falling at the vertical speed) or by speed (slowing
@@ -469,6 +471,7 @@ function reentry {
   }
 
   unlock steering.
+  claudia_rcs_off("block end").
   set extra:touchdown_speed to round(last_speed, 1).
   set extra:max_g to round(extra:max_g, 2).
   set extra:max_temp_pct to round(max(extra:max_temp_pct, reentry_hottest()), 1).

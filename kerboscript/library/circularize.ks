@@ -163,6 +163,7 @@ function circularize {
     "min_ec_pct", opt:min_ec_pct,
     "abort_on_part_loss", opt:abort_on_part_loss,
     "stage_limit", opt:stage_limit,
+    "rcs_tolerance", opt:rcs_tolerance,
     "drop_empty", opt:drop_empty)).
   set ctx:dv_used to flown:dv_used.
   claudia_note_dropped(ctx, flown).

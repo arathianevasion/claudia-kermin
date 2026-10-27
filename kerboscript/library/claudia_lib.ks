@@ -11,15 +11,15 @@
 //   documented defaults returned by <block>_defaults(); an unknown option fails at once with reason
 //   "unknown option <name>". Block-only helpers are prefixed <block>_.
 // - Every block also takes the common options from claudia_common_defaults(): min_ec_pct,
-//   max_duration, abort_on_part_loss, stage_limit and drop_empty.
+//   max_duration, abort_on_part_loss, stage_limit, drop_empty and rcs_tolerance.
 // - A block returns one result lexicon built by claudia_finish(): the Script Result's common fields
 //   plus the block's extra results. It never reports: the Mission Script reports once.
 // - claudia_begin and claudia_finish tell the mod a block began and what it returned
 //   (ADDONS:CLAUDIA:BLOCKSTART, BLOCKRESULT), for the Capcom strip's progress and the log.
 // - An abort makes the craft safe (claudia_make_safe) and returns success false with reason
 //   "abort <option>: <detail>"; there is no in-block recovery.
-// - Block loops call claudia_tick() each physics tick: it measures delta-v used, auto-stages and
-//   checks the common aborts. Waits go through claudia_wait_until() (or claudia_warp_to() for a
+// - Block loops call claudia_tick() each physics tick: it measures delta-v used, auto-stages,
+//   switches RCS (RCS Use, claudia_rcs_tick) and checks the common aborts. Waits go through claudia_wait_until() (or claudia_warp_to() for a
 //   longer lead), which warp with no cap: on rails, or physics warp on a Coast where rails is refused.
 // - A block that flies another block (e.g. a burn through exec_node) passes on its common options
 //   and folds the result into its own with claudia_add_result (claudia_fly_node does both for nodes).
@@ -43,6 +43,7 @@
 //|   abort_on_part_loss [true]: abort when the craft loses a part other than by the block's own staging.
 //|   stage_limit [0]: auto-staging stages on flameout but never below this stage number, and never
 //|     fires a stage holding parachutes or heat-shield separation. Out of fuel at the limit fails.
+//|   rcs_tolerance [lexicon("on_deg", 10, "aligned_deg", 2, "aligned_rate", 0.5)]: RCS Use. Blocks switch RCS on only when the steering error is over on_deg and the reaction wheels can't make the turn in time, and off once the craft is Aligned: within aligned_deg and turning under aligned_rate deg/s, or within aligned_deg for 3 s. Aligned also lets a burn start, so loosening it loosens burn pointing. Give only the keys you change.
 //| A block returns a result lexicon (it does not report). Common fields: success (boolean), reason
 //| ("" on success), dv_used (m/s), dv_remaining (m/s, stock estimate; -1 and a dv_remaining_note at a trickle throttle), duration (s), body,
 //| situation (e.g. "ORBITING"), orbit (lexicon ap, pe in m, inc in degrees) or, when landed,
@@ -59,7 +60,14 @@
 // The common options every block takes. max_duration is the block's own default.
 function claudia_common_defaults {
   parameter max_duration.
-  return lexicon("min_ec_pct", 10, "max_duration", max_duration, "abort_on_part_loss", true, "stage_limit", 0, "drop_empty", list()).
+  return lexicon("min_ec_pct", 10, "max_duration", max_duration, "abort_on_part_loss", true, "stage_limit", 0, "drop_empty", list(),
+    "rcs_tolerance", claudia_rcs_defaults()).
+}
+
+// rcs_tolerance's defaults (RCS Use): on over on_deg degrees of steering error; Aligned within aligned_deg
+// and turning under aligned_rate deg/s.
+function claudia_rcs_defaults {
+  return lexicon("on_deg", 10, "aligned_deg", 2, "aligned_rate", 0.5).
 }
 
 // "" if every key in opts is a known option (a key of defaults), else "unknown option <key>".
@@ -101,6 +109,19 @@ function claudia_options {
   if error = "" and not merged:drop_empty:istype("List") {
     set error to "drop_empty must be a list of part names or tags".
   }
+  // A partial rcs_tolerance takes the rest from the defaults.
+  local tolerance_ok is merged:rcs_tolerance:istype("Lexicon").
+  if tolerance_ok {
+    set tolerance_ok to claudia_unknown_option(merged:rcs_tolerance, claudia_rcs_defaults()) = "".
+    for key in merged:rcs_tolerance:keys {
+      set tolerance_ok to tolerance_ok and merged:rcs_tolerance[key]:istype("Scalar").
+    }
+  }
+  if tolerance_ok {
+    set merged:rcs_tolerance to claudia_merge_options(merged:rcs_tolerance, claudia_rcs_defaults()).
+  } else if error = "" {
+    set error to "rcs_tolerance must be a lexicon of on_deg, aligned_deg (degrees) and aligned_rate (deg/s), given as numbers".
+  }
   return lexicon("error", error, "opt", merged).
 }
 
@@ -132,12 +153,22 @@ function claudia_ec_pct {
   return 100.
 }
 
-// Leaves the craft safe: throttle 0, steering released to SAS holding the current attitude.
+// Leaves the craft safe: throttle 0, steering released to SAS holding the current attitude. RCS goes
+// off (RCS Use), except on a craft whose wheels have no pitch or yaw torque: there RCS is left on (or
+// switched on, with monoprop) so SAS can hold it.
 function claudia_make_safe {
   set ship:control:pilotmainthrottle to 0.
   unlock throttle.
   unlock steering.
   set ship:control:neutralize to true.
+  local mono is claudia_monoprop().
+  if mono:amount > 0 and claudia_wheels_turn_time() < 0 {
+    if not rcs {
+      claudia_rcs_switch(true, "no wheel torque", lexicon("monoprop", round(mono:amount, 1), "monoprop_max", round(mono:capacity, 1))).
+    }
+  } else {
+    claudia_rcs_off("block end").
+  }
   sas on.
 }
 
@@ -930,10 +961,34 @@ function claudia_burn_timing {
   return lexicon("burn_time", burn, "lead", lead, "start_in", node_eta - lead).
 }
 
-// Aligned for a burn: within 2 degrees of it and turning under 0.5 deg/s. Pure.
+// Aligned (GLOSSARY), the one test: within tol:aligned_deg of the steering target and turning under
+// tol:aligned_rate deg/s, or within aligned_deg for held_s >= 3 s while the target itself turns. tol:
+// the block's rcs_tolerance. It lets a burn start and switches RCS off (RCS Use). Pure.
 function claudia_aligned {
-  parameter angle_deg, rate_deg_s.
-  return angle_deg < 2 and rate_deg_s < 0.5.
+  parameter angle_deg, rate_deg_s, held_s, tol.
+  return angle_deg < tol:aligned_deg and (rate_deg_s < tol:aligned_rate or held_s >= 3).
+}
+
+// The UT the error came within tolerance (within), for Aligned's 3 s hold: since_ut while it stays
+// within, now as it comes within, -1 while it isn't. Pure.
+function claudia_within_ut {
+  parameter since_ut, within, now.
+  if not within {
+    return -1.
+  }
+  if since_ut < 0 {
+    return now.
+  }
+  return since_ut.
+}
+
+// Seconds held within tolerance since since_ut (claudia_within_ut); 0 while not within. Pure.
+function claudia_held_s {
+  parameter since_ut, now.
+  if since_ut < 0 {
+    return 0.
+  }
+  return now - since_ut.
 }
 
 // Seconds (to 0.1) a burn starting at now started after its start_ut; 0 within a second of it (a
@@ -958,10 +1013,14 @@ function claudia_soi_leg_ut {
   return start_ut.
 }
 
-// Whether the craft is aligned with nd's burn vector now.
+// Whether the craft is Aligned with nd's burn vector now, by the block's rcs_tolerance; keeps the hold
+// within tolerance in ctx:burn_within_ut.
 function claudia_aligned_to {
-  parameter nd.
-  return claudia_aligned(vang(ship:facing:forevector, nd:deltav), ship:angularvel:mag * constant:radtodeg).
+  parameter ctx, nd.
+  local tol is ctx:opt:rcs_tolerance.
+  local angle is vang(ship:facing:forevector, nd:deltav).
+  set ctx:burn_within_ut to claudia_within_ut(ctx:burn_within_ut, angle < tol:aligned_deg, time:seconds).
+  return claudia_aligned(angle, ship:angularvel:mag * constant:radtodeg, claudia_held_s(ctx:burn_within_ut, time:seconds), tol).
 }
 
 // Turns to nd's burn vector (steering must be locked to it) until aligned, for at most 120 s and
@@ -972,14 +1031,18 @@ function claudia_turn_to_burn {
   parameter ctx, nd, start_ut.
   local began is time:seconds.
   local reason is "".
-  until claudia_aligned_to(nd) or time:seconds >= min(began + 120, start_ut) {
+  // RCS Use: the turn has until start_ut, so RCS helps only if the wheels alone can't make it by then.
+  set ctx:turn_by to start_ut.
+  set ctx:burn_within_ut to -1.
+  until claudia_aligned_to(ctx, nd) or time:seconds >= min(began + 120, start_ut) {
     set reason to claudia_tick(ctx, 0).
     if reason <> "" {
       break.
     }
     wait 0.
   }
-  local timed_out is reason = "" and time:seconds >= began + 120 and not claudia_aligned_to(nd).
+  set ctx:turn_by to 0.
+  local timed_out is reason = "" and time:seconds >= began + 120 and not claudia_aligned_to(ctx, nd).
   if timed_out {
     print ctx:block + ": not aligned after 120 s, " + round(vang(ship:facing:forevector, nd:deltav), 1) + " deg off".
   }
@@ -1029,7 +1092,7 @@ function claudia_warp_to_burn {
     // A drop KSP made (not a hold, not the player) while there's warp left to ask for, off the burn.
     local off_burn is {
       return check and kuniverse:timewarp:rate <= 1 and time:seconds < warp_end - 5
-        and not addons:claudia:warphold and not addons:claudia:warpcancelled and not claudia_aligned_to(nd).
+        and not addons:claudia:warphold and not addons:claudia:warpcancelled and not claudia_aligned_to(ctx, nd).
     }.
     local waited is claudia_warp_to(ctx, leg_ut, max(30, turn_time), off_burn).
     if waited <> "" {
@@ -1097,6 +1160,168 @@ function claudia_burn_throttle {
   return min(1, max(0.005, dv_left / max_accel)).
 }
 
+// ---- RCS Use ----
+
+// RCS Use (GLOSSARY): blocks own RCS from the moment Claudia takes the craft. It goes on only when the
+// reaction wheels need help, and off once the craft is Aligned. kOS facts (docs/research/rcs-use-thresholds.md):
+// a switch takes effect next physics frame with no PID reset; steeringmanager:angleerror can be negative,
+// and is stale unless steering is enabled and SAS is off; KSP ignores RCS input under 5%.
+
+// What RCS should do this tick. Pure. s: lexicon rcs (on now), steering (kOS steering enabled), monoprop
+// (units ship-wide), error (|steering error|, degrees), rate (deg/s), held_s (s the error has stayed
+// under aligned_deg), gate (the on-gate is due: claudia_rcs_gate_due), wheels_s (the wheels-only turn
+// time, -1 with no wheel torque on pitch or yaw), left_s (s to the deadline ctx:turn_by, -1 for none).
+// tol: rcs_tolerance. Returns lexicon on (what RCS should be) and reason (why it switched; "" for no switch).
+function claudia_rcs_decide {
+  parameter s, tol.
+  local want is s:rcs.
+  local reason is "".
+  if s:monoprop <= 0 {
+    // The RCS group still reads on with empty tanks, so this is checked first, and it never goes back on.
+    set want to false.
+    set reason to "no monoprop".
+  } else if not s:steering {
+    set want to false.
+    set reason to "steering released".
+  } else if s:rcs {
+    if claudia_aligned(s:error, s:rate, s:held_s, tol) {
+      set want to false.
+      set reason to "aligned".
+    }
+  } else if s:error > tol:on_deg and s:gate {
+    if s:wheels_s < 0 {
+      set want to true.
+      set reason to "no wheel torque".
+    } else if s:left_s < 0 {
+      set want to true.
+      set reason to "falling behind".
+    } else if s:wheels_s > s:left_s {
+      set want to true.
+      set reason to "turning".
+    }
+  }
+  if want = s:rcs {
+    set reason to "".
+  }
+  return lexicon("on", want, "reason", reason).
+}
+
+// Whether the on-gate is checked this tick: the error (degrees) is over on_deg and either just crossed
+// it (was_above false) or it was last checked (checked_ut) a second or more ago. Pure.
+function claudia_rcs_gate_due {
+  parameter error, on_deg, was_above, now, checked_ut.
+  return error > on_deg and (not was_above or now >= checked_ut + 1).
+}
+
+// MonoPropellant ship-wide: lexicon amount, capacity (units).
+function claudia_monoprop {
+  for res in ship:resources {
+    if res:name = "MonoPropellant" {
+      return lexicon("amount", res:amount, "capacity", res:capacity).
+    }
+  }
+  return lexicon("amount", 0, "capacity", 0).
+}
+
+// The wheels-only turn time from TURNTIME (s), or -1 when the wheels have no pitch or yaw torque (or the
+// craft has no usable torque at all).
+function claudia_wheels_turn_time {
+  local turn is addons:claudia:turntime(lexicon("max_stopping_time", steeringmanager:maxstoppingtime)).
+  if turn:error <> "" or not turn:haskey("wheels_turn_time") {
+    return -1.
+  }
+  return turn:wheels_turn_time.
+}
+
+// Switches RCS on or off and reports it (ADDONS:CLAUDIA:RCSSWITCH) with its reason and figures (a
+// lexicon of error_deg, rate_dps, wheels_s with left_s, monoprop with monoprop_max; any may be left out).
+function claudia_rcs_switch {
+  parameter on, reason, figures.
+  set rcs to on.
+  local report is lexicon("on", on, "reason", reason).
+  for key in figures:keys {
+    set report[key] to figures[key].
+  }
+  addons:claudia:rcsswitch(report).
+}
+
+// Switches RCS off for reason ("block end", "steering released") if it is on.
+function claudia_rcs_off {
+  parameter reason.
+  if rcs {
+    claudia_rcs_switch(false, reason, lexicon("rate_dps", round(ship:angularvel:mag * constant:radtodeg, 2))).
+  }
+}
+
+// One tick of RCS Use, from claudia_tick: turns SAS off if it finds it on (it fights kOS steering and
+// fires RCS through holds), reads kOS state, applies claudia_rcs_decide and reports each switch. TURNTIME
+// is read only when the on-gate is checked, and once per craft (again after it loses parts). Traces to
+// KSP.log at most once a second while RCS is on or the error is over on_deg.
+function claudia_rcs_tick {
+  parameter ctx.
+  if sas {
+    sas off.
+    addons:claudia:blocktrace(ctx:block, lexicon("phase", "sas", "note", "SAS was on: turned off, it fights kOS steering")).
+  }
+  if ctx:rcs_translating {
+    return.
+  }
+  local tol is ctx:opt:rcs_tolerance.
+  local now is time:seconds.
+  local steer_on is steeringmanager:enabled.
+  local error is 0.
+  if steer_on {
+    set error to abs(steeringmanager:angleerror).
+  }
+  local rate is ship:angularvel:mag * constant:radtodeg.
+  local mono is claudia_monoprop().
+  if mono:amount <= 0 {
+    set ctx:rcs_dry to true.
+  }
+  set ctx:rcs_within_ut to claudia_within_ut(ctx:rcs_within_ut, steer_on and error < tol:aligned_deg, now).
+  local gate is steer_on and not rcs and claudia_rcs_gate_due(error, tol:on_deg, ctx:rcs_above, now, ctx:rcs_gate_ut).
+  set ctx:rcs_above to error > tol:on_deg.
+  local left_s is -1.
+  if gate {
+    set ctx:rcs_gate_ut to now.
+    if ctx:rcs_wheels_parts <> ship:parts:length {
+      set ctx:rcs_wheels_s to claudia_wheels_turn_time().
+      set ctx:rcs_wheels_parts to ship:parts:length.
+    }
+    if ctx:turn_by > 0 {
+      set left_s to max(0, ctx:turn_by - now).
+    }
+  }
+  local monoprop is mono:amount.
+  if ctx:rcs_dry {
+    set monoprop to 0.
+  }
+  local decided is claudia_rcs_decide(lexicon("rcs", rcs, "steering", steer_on, "monoprop", monoprop, "error", error, "rate", rate,
+    "held_s", claudia_held_s(ctx:rcs_within_ut, now), "gate", gate, "wheels_s", ctx:rcs_wheels_s, "left_s", left_s), tol).
+  if decided:reason <> "" {
+    local figures is lexicon("rate_dps", round(rate, 2)).
+    if steer_on {
+      set figures:error_deg to round(error, 1).
+    }
+    if decided:reason = "turning" {
+      set figures:wheels_s to round(ctx:rcs_wheels_s).
+      set figures:left_s to round(left_s).
+    }
+    if decided["on"] or decided:reason = "no monoprop" {
+      set figures:monoprop to round(mono:amount, 1).
+      set figures:monoprop_max to round(mono:capacity, 1).
+    }
+    claudia_rcs_switch(decided["on"], decided:reason, figures).
+  }
+  if (rcs or error > tol:on_deg) and now >= ctx:rcs_trace_ut + 1 {
+    set ctx:rcs_trace_ut to now.
+    // Actuation per axis: KSP fires RCS only on an axis over 0.05.
+    local act is steeringmanager:actuation.
+    addons:claudia:blocktrace(ctx:block, lexicon("phase", "rcs", "error", round(error, 1), "rate", round(rate, 2), "rcs", rcs,
+      "actuation", round(act:x, 3) + "/" + round(act:y, 3) + "/" + round(act:z, 3))).
+  }
+}
+
 // ---- Block lifecycle ----
 
 // Starts a block: checks and merges its options and notes where it started. Returns the block's
@@ -1117,7 +1342,19 @@ function claudia_begin {
     "parts", ship:parts:length,
     "dropped", list(),
     "drop_tried", list(),
-    "drop_ut", 0).
+    "drop_ut", 0,
+    // RCS Use (claudia_rcs_tick): turn_by is the UT a turn must be done by (0: no deadline), set around a
+    // turn to a burn; while rcs_translating is true RCS stays on and the rule decides nothing.
+    "turn_by", 0,
+    "rcs_translating", false,
+    "rcs_dry", false,
+    "rcs_above", false,
+    "rcs_gate_ut", -1,
+    "rcs_within_ut", -1,
+    "rcs_wheels_s", -1,
+    "rcs_wheels_parts", -1,
+    "rcs_trace_ut", -1,
+    "burn_within_ut", -1).
 }
 
 // Whether the tick auto-stages. burning: true / false when the block says whether it means the
@@ -1136,10 +1373,11 @@ function claudia_is_burning {
 // out and burning means tset > 0. Delta-v used is counted from tset either way. Callers that
 // pass tset 0 and no signal (return, transfer_to, science, the warp and wait loops) are coasting
 // with the engines off and never stage (#379).
-// Adds up delta-v used, auto-stages while burning and checks the common aborts.
-// Returns "" or the reason the block must fail.
+// Adds up delta-v used, auto-stages while burning, switches RCS by the RCS Use rule (claudia_rcs_tick)
+// and checks the common aborts. Returns "" or the reason the block must fail.
 function claudia_tick {
   parameter ctx, tset, burning is "unsaid".
+  claudia_rcs_tick(ctx).
   local now is time:seconds.
   if tset > 0 and ship:mass > 0 {
     set ctx:dv_used to ctx:dv_used + tset * ship:availablethrust / ship:mass * (now - ctx:last_ut).
@@ -1171,7 +1409,7 @@ function claudia_add_result {
 function claudia_fly_node {
   parameter ctx, nd.
   local opt is ctx:opt.
-  local inner is exec_node(lexicon("node", nd, "min_ec_pct", opt:min_ec_pct, "abort_on_part_loss", opt:abort_on_part_loss, "stage_limit", opt:stage_limit, "drop_empty", opt:drop_empty)).
+  local inner is exec_node(lexicon("node", nd, "min_ec_pct", opt:min_ec_pct, "abort_on_part_loss", opt:abort_on_part_loss, "stage_limit", opt:stage_limit, "drop_empty", opt:drop_empty, "rcs_tolerance", opt:rcs_tolerance)).
   claudia_add_result(ctx, inner).
   if not inner:success {
     remove nd.
@@ -1250,11 +1488,13 @@ function claudia_stage_into_engines {
   return "".
 }
 
-// The tail of a burn that succeeded: throttle to 0 and the throttle and steering locks released.
+// The tail of a burn that succeeded: throttle to 0, the throttle and steering locks released and RCS
+// off (RCS Use).
 function claudia_release_controls {
   set ship:control:pilotmainthrottle to 0.
   unlock throttle.
   unlock steering.
+  claudia_rcs_off("block end").
 }
 
 // ---- Transfers: shared by transfer_to and return ----
@@ -1432,7 +1672,7 @@ function claudia_pe_error {
 function claudia_burn_options {
   parameter ctx, nd.
   local opt is ctx:opt.
-  local burn is lexicon("node", nd, "min_ec_pct", opt:min_ec_pct, "abort_on_part_loss", opt:abort_on_part_loss, "stage_limit", opt:stage_limit, "drop_empty", opt:drop_empty).
+  local burn is lexicon("node", nd, "min_ec_pct", opt:min_ec_pct, "abort_on_part_loss", opt:abort_on_part_loss, "stage_limit", opt:stage_limit, "drop_empty", opt:drop_empty, "rcs_tolerance", opt:rcs_tolerance).
   if opt:max_duration:istype("Scalar") {
     set burn:max_duration to max(1, opt:max_duration - (time:seconds - ctx:start_ut)).
   }
