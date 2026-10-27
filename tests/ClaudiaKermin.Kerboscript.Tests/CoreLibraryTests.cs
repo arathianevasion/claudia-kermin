@@ -388,8 +388,11 @@ namespace ClaudiaKermin.Kerboscript.Tests
             var bundle = CoreLibrary.Bundle("@lazyglobal off.\nprint 1.").Replace("\r\n", "\n");
             Assert.Contains("parameter ctx, ut, lead, stop is 0, cap is 0.", bundle);
             Assert.Contains("return claudia_warp_to(ctx, ut, 30, ground_near, cap).", bundle);
-            // exec_node's wait (ascend's coast to apoapsis below the rails limit): physics warp ends 30 s or more before the burn.
-            Assert.Contains("claudia_warp_to(ctx, leg_ut, max(30, turn_time), off_burn)", bundle);
+            // exec_node's wait (ascend's coast to apoapsis below the rails limit): physics warp ends 30 s or more before the burn
+            // (claudia_burn_warp_lead, #405); a Burn Start over a day away is warped to a day out first, with no stop.
+            Assert.Contains("claudia_warp_to(ctx, leg_ut, lead, off_burn)", bundle);
+            Assert.Contains("local lead is claudia_burn_warp_lead(turned:aligned, turn_time).", bundle);
+            Assert.Contains("claudia_warp_to(ctx, day_out, 30)", bundle);
             // launch's coast: to the top of the atmosphere or the hop, physics warp to the event itself (lead 0).
             Assert.Contains("claudia_warp_to(ctx, time:seconds + max(1, eta:apoapsis), 0, { fly_tick:call(). return done or not coasting. })", bundle);
             Assert.Single(System.Text.RegularExpressions.Regex.Matches(bundle, "timewarp:warpto\\("));
@@ -623,6 +626,30 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         [Theory]
+        // #405: a craft Aligned before the warp needs only 30 s at 1x before the Burn Start; one whose turn
+        // timed out keeps its turn time (never under 30 s) to turn at 1x.
+        [InlineData("true", 143.8, "30")]
+        [InlineData("false", 143.8, "143.8")]
+        [InlineData("false", 20, "30")]
+        [InlineData("true", 20, "30")]
+        public void The_warp_lead_before_a_burn_is_30_s_once_aligned(string aligned, double turn, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_burn_warp_lead({0}, {1})", aligned, turn)));
+        }
+
+        [Theory]
+        // #405: a Burn Start over a day away is warped to a day before it first, with no turn (-1: none).
+        [InlineData(0, 2 * 6 * 3600, 6, "21600")]
+        [InlineData(0, 2 * 3600, 6, "-1")]
+        [InlineData(0, 30 * 3600, 24, "21600")]
+        [InlineData(1000, 1000 + 6 * 3600, 6, "-1")]
+        [InlineData(1000, 1001 + 6 * 3600, 6, "1001")]
+        public void A_burn_start_over_a_day_away_is_warped_to_a_day_out_first(double now, double start, double hoursPerDay, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_day_out_ut({0}, {1}, {2})", now, start, hoursPerDay)));
+        }
+
+        [Theory]
         // No SOI change, one behind us, or one too close to the burn to turn between: straight to the start.
         [InlineData(0, -1, 1000, 20, "1000")]
         [InlineData(500, 400, 1000, 20, "1000")]
@@ -632,9 +659,9 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [InlineData(0, 400, 1000, 20, "401")]
         [InlineData(0, 400, 1000, 75, "401")]
         [InlineData(0, 925, 1000, 75, "1000")]
-        public void A_warp_to_a_burn_goes_one_SOI_at_a_time(double now, double patch, double start, double turn, string expected)
+        public void A_warp_to_a_burn_goes_one_SOI_at_a_time(double now, double patch, double start, double lead, string expected)
         {
-            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_soi_leg_ut({0}, {1}, {2}, {3})", now, patch, start, turn)));
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_soi_leg_ut({0}, {1}, {2}, {3})", now, patch, start, lead)));
         }
 
         [Theory]
