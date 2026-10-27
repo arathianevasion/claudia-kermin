@@ -101,6 +101,9 @@ namespace ClaudiaKermin.Core.Kos
         /// <summary>The highest warp rate seen while the block ran (1 if it never warped).</summary>
         public double MaxRate { get; internal set; }
 
+        /// <summary>The highest rate a physics-warp request reached while the block ran (1 if it never physics-warped, #339).</summary>
+        public double PhysicsMaxRate { get; internal set; }
+
         public int Requests { get; internal set; }
         public int Retries { get; internal set; }
         public int Drops { get; internal set; }
@@ -125,7 +128,7 @@ namespace ClaudiaKermin.Core.Kos
         private const double EndMargin = 10;
 
         /// <summary>The fields a block test may check, as <c>warp.&lt;field&gt;</c> or <c>warp.&lt;block&gt;.&lt;field&gt;</c>.</summary>
-        public static readonly IList<string> CheckFields = new[] { "first_request_real_s", "real_s_at_1x", "max_rate", "retries", "requests", "drops" };
+        public static readonly IList<string> CheckFields = new[] { "first_request_real_s", "real_s_at_1x", "max_rate", "physics_max_rate", "retries", "requests", "drops" };
 
         private readonly double _startReal;
         private readonly List<WarpTraceEntry> _entries = new List<WarpTraceEntry>();
@@ -154,7 +157,7 @@ namespace ClaudiaKermin.Core.Kos
 
         public void BlockStarted(string block, double real)
         {
-            _blocks.Add(new WarpTraceBlock { Name = block ?? "", StartRealS = real - _startReal, MaxRate = 1, Open = true });
+            _blocks.Add(new WarpTraceBlock { Name = block ?? "", StartRealS = real - _startReal, MaxRate = 1, PhysicsMaxRate = 1, Open = true });
         }
 
         /// <summary>Closes the innermost open block of that name (blocks nest: <c>circularize</c> runs <c>exec_node</c>).</summary>
@@ -225,7 +228,12 @@ namespace ClaudiaKermin.Core.Kos
                     foreach (var block in OpenBlocks()) block.RealSAt1x += at1x;
             }
             foreach (var block in OpenBlocks()) block.MaxRate = Math.Max(block.MaxRate, rate);
-            if (_lastRequest != null) _lastRequest.RateReached = Math.Max(_lastRequest.RateReached, rate);
+            if (_lastRequest != null)
+            {
+                _lastRequest.RateReached = Math.Max(_lastRequest.RateReached, rate);
+                if (_lastRequest.Mode == "physics")
+                    foreach (var block in OpenBlocks()) block.PhysicsMaxRate = Math.Max(block.PhysicsMaxRate, rate);
+            }
 
             var fell = _waiting && _lastRate > At1x && rate <= At1x && ut < Target() - EndMargin;
             // KSP lerps a stop down over a few frames, so the player's fall comes after PlayerDropped named it.
@@ -328,7 +336,7 @@ namespace ClaudiaKermin.Core.Kos
             }
             foreach (var b in _blocks)
                 lines.Add("block " + b.Name + ": first request " + (b.FirstRequestRealS.HasValue ? Seconds(b.FirstRequestRealS.Value) : "none") + ", "
-                    + Seconds(b.RealSAt1x) + " at 1x in waits, top rate " + Rate(b.MaxRate) + ", " + b.Requests + " requests, " + b.Retries
+                    + Seconds(b.RealSAt1x) + " at 1x in waits, top rate " + Rate(b.MaxRate) + " (physics " + Rate(b.PhysicsMaxRate) + "), " + b.Requests + " requests, " + b.Retries
                     + " retries, " + b.Drops + " drops");
             return lines;
         }
@@ -339,6 +347,7 @@ namespace ClaudiaKermin.Core.Kos
             {
                 { "real_s_at_1x", Math.Round(block.RealSAt1x, 2) },
                 { "max_rate", block.MaxRate },
+                { "physics_max_rate", block.PhysicsMaxRate },
                 { "retries", (double)block.Retries },
                 { "requests", (double)block.Requests },
                 { "drops", (double)block.Drops },
