@@ -477,6 +477,21 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         [Theory]
+        // No SOI change, one behind us, or one too close to the burn to turn between: straight to the start.
+        [InlineData(0, -1, 1000, 20, "1000")]
+        [InlineData(500, 400, 1000, 20, "1000")]
+        [InlineData(0, 975, 1000, 20, "1000")]
+        // An SOI change well before the burn: warp to just past it, turn, warp on.
+        [InlineData(0, 20, 1000, 20, "1000")]
+        [InlineData(0, 400, 1000, 20, "401")]
+        [InlineData(0, 400, 1000, 75, "401")]
+        [InlineData(0, 925, 1000, 75, "1000")]
+        public void A_warp_to_a_burn_goes_one_SOI_at_a_time(double now, double patch, double start, double turn, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_soi_leg_ut({0}, {1}, {2}, {3})", now, patch, start, turn)));
+        }
+
+        [Theory]
         [InlineData(100, 10, 0, "1")]
         [InlineData(2, 10, 0, "0.2")]
         [InlineData(0.001, 10, 0, "0.005")]
