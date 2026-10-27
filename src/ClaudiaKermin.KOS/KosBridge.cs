@@ -171,15 +171,15 @@ namespace ClaudiaKermin.KOS
 
         /// <summary>
         /// From <c>ADDONS:CLAUDIA:BLOCKTRACE</c> (#365): written to KSP.log at once, so it is there even if the craft is lost the
-        /// next frame, and kept as the run's last word should it end without a Script Result. Every mod-started run's.
+        /// next frame, and kept as the run's last word should it end without a Script Result (unless keep is false, #407). Every mod-started run's.
         /// </summary>
-        public void OnBlockTrace(uint partId, string block, IDictionary<string, object> state)
+        public void OnBlockTrace(uint partId, string block, IDictionary<string, object> state, bool keep = true)
         {
             ActiveRun run;
             if (!_runs.TryGetValue(partId, out run) || run.Run.HasEnded) return;
             var ut = WarpTracing.Ut;
             Debug.Log(ModInfo.LogTag + " " + BlockTrace.Line(block, ut, state) + " ('" + run.Label + "')");
-            run.Run.BlockTraced(block, ut, state);
+            run.Run.BlockTraced(block, ut, state, keep);
         }
 
         /// <summary>
