@@ -68,6 +68,10 @@ _Avoid_: on target, settled, pointed
 The moment a maneuver node's burn lights its engines: ahead of the node by about the time it takes to burn half the node's delta-v, worked out from every stage the burn will use. Leads before a burn (when warp ends, when the craft must be Aligned) count back from the Burn Start, not from the node.
 _Avoid_: node time, burn time (the burn's length)
 
+**Daylight**:
+At a landing site, the sun is more than 20° above the horizon there. A daylight landing touches down only in Daylight; a sun lower than that, though up, is not Daylight.
+_Avoid_: lit, sunlit, daytime
+
 **Boost stage**:
 A stage that lights while the craft is on a suborbital trajectory (periapsis below the atmosphere top, or below the surface where there is no air), in or out of the atmosphere; a stage that lights suborbital stays a Boost stage even if its burn reaches orbit. It may have a thrust-to-weight ratio below 1 when the climb before it was steep enough.
 _Avoid_: booster, lower stage, first stage
