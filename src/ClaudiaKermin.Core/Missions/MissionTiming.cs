@@ -63,7 +63,8 @@ namespace ClaudiaKermin.Core.Missions
             {
                 DaylightLanding = config.DefaultDaylightLanding,
                 TimeVersusDeltaV = config.DefaultTimeVersusDeltaV,
-                PhysicsWarp = config.PhysicsWarp,
+                // The player's own choice starts on; the config alone gates it (PhysicsWarpOn), so turning the config back on turns it back on.
+                PhysicsWarp = true,
                 ConfigAllowsPhysicsWarp = config.PhysicsWarp,
             };
         }

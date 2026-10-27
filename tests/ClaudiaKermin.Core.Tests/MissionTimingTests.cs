@@ -512,7 +512,7 @@ namespace ClaudiaKermin.Core.Tests
             Assert.True(on.View.StartForm.DefaultSettings.ConfigAllowsPhysicsWarp);
 
             var off = Control(new StreamingFakeTransport(TimedMissionPlan()), new PlayerConfig { PhysicsWarp = false });
-            Assert.False(off.View.StartForm.DefaultSettings.PhysicsWarp);
+            Assert.False(off.View.StartForm.DefaultSettings.PhysicsWarpOn);
             Assert.False(off.View.StartForm.DefaultSettings.ConfigAllowsPhysicsWarp);
             StartMission(off);
             DrainUntil(off, v => v.Stage == MissionStage.AwaitingPlanApproval);
