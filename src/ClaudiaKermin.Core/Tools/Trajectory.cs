@@ -162,7 +162,7 @@ namespace ClaudiaKermin.Core.Tools
             var children = Children(body).ToList();
             if (children.Count == 0) return null;
             var armed = children.Select(c => justLeft == null || !string.Equals(c.Name, justLeft.Name, StringComparison.OrdinalIgnoreCase)).ToArray();
-            var end = double.IsInfinity(horizon) ? start + LongestSearch(body, children) : horizon;
+            var end = double.IsInfinity(horizon) ? start + LongestSearch(children) : horizon;
             var maxStep = (end - start) / 100;
             var t = start;
             var previous = start;
@@ -204,7 +204,7 @@ namespace ClaudiaKermin.Core.Tools
         }
 
         /// <summary>How far ahead to look for an encounter on a hyperbola round the star, which never leaves: one orbit of its slowest child.</summary>
-        private double LongestSearch(SnapshotBody body, IEnumerable<SnapshotBody> children)
+        private double LongestSearch(IEnumerable<SnapshotBody> children)
         {
             return children.Max(c => OrbitOf(c).Period);
         }

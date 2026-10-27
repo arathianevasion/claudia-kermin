@@ -22,6 +22,8 @@ namespace ClaudiaKermin.Core.Tools
         private const double G0 = 9.80665;
         /// <summary>Patches in the result, the first being the orbit after the last burn.</summary>
         private const int MaxPatches = 4;
+        /// <summary>Patches followed to place a later burn on the path (the result itself shows only <see cref="MaxPatches"/>).</summary>
+        private const int PathPatches = 8;
         /// <summary>A burn longer than this is spread far enough round its time that the impulsive answer is flagged.</summary>
         public const double LongBurnSeconds = 60;
         public const string Model = "impulsive burns on patched conics from this turn's Game Snapshot; no drag, so nothing after reaching an "
@@ -101,14 +103,14 @@ namespace ClaudiaKermin.Core.Tools
 
             var stages = BurnStages(snapshot);
             var burns = new List<BurnDone>();
-            var path = system.Follow(at, start, now, 8);
+            var path = system.Follow(at, start, now, PathPatches);
             var burnInputs = input["burns"].Items;
             for (var i = 0; i < burnInputs.Count; i++)
             {
                 var label = "burn " + (i + 1).ToString(CultureInfo.InvariantCulture);
                 var after = burns.Count > 0 ? burns[burns.Count - 1].Ut : now;
                 string problem;
-                var ut = BurnTime(burnInputs[i]["at"], path, after, now, label, out problem);
+                var ut = BurnUt(burnInputs[i]["at"], path, after, now, label, out problem);
                 if (problem != null) return PlanningJson.Error(problem);
                 var patch = Containing(path, ut.Value);
                 if (patch == null)
@@ -126,12 +128,12 @@ namespace ClaudiaKermin.Core.Tools
                 var along = v.Normalized;
                 var up = Vec3.Cross(r, v).Normalized;
                 var outward = Vec3.Cross(along, up);
-                var after1 = Conic.FromState(patch.Body.Gm, r, v + along * prograde + up * normal + outward * radial, ut.Value);
+                var burned = Conic.FromState(patch.Body.Gm, r, v + along * prograde + up * normal + outward * radial, ut.Value);
                 var magnitude = Math.Sqrt(prograde * prograde + normal * normal + radial * radial);
-                burns.Add(new BurnDone { Ut = ut.Value, DeltaV = magnitude, Body = patch.Body, Orbit = after1, BurnTime = stages.Take(magnitude) });
-                path = system.Follow(patch.Body, after1, ut.Value, i == burnInputs.Count - 1 ? MaxPatches : 8);
+                burns.Add(new BurnDone { Ut = ut.Value, DeltaV = magnitude, Body = patch.Body, Orbit = burned, BurnTime = stages.Take(magnitude) });
+                path = system.Follow(patch.Body, burned, ut.Value, i == burnInputs.Count - 1 ? MaxPatches : PathPatches);
             }
-            return Result(snapshot, system, burns, path, target, now);
+            return Result(system, burns, path, target, now);
         }
 
         private sealed class BurnDone
@@ -145,7 +147,7 @@ namespace ClaudiaKermin.Core.Tools
         }
 
         /// <summary>The burn's UT from its <c>at</c>, or why it can't be placed.</summary>
-        private static double? BurnTime(JsonNode at, List<Patch> path, double after, double now, string label, out string problem)
+        private static double? BurnUt(JsonNode at, List<Patch> path, double after, double now, string label, out string problem)
         {
             problem = null;
             double ut;
@@ -224,7 +226,7 @@ namespace ClaudiaKermin.Core.Tools
             }
         }
 
-        private static ToolOutcome Result(GameSnapshot snapshot, BodySystem system, List<BurnDone> burns, List<Patch> path, SnapshotBody target, double now)
+        private static ToolOutcome Result(BodySystem system, List<BurnDone> burns, List<Patch> path, SnapshotBody target, double now)
         {
             var json = new JsonWriter().BeginObject().Field("model", Model);
             json.Name("burns").BeginArray();

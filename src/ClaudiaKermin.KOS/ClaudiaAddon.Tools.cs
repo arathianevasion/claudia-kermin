@@ -42,7 +42,7 @@ namespace ClaudiaKermin.KOS
             var outcome = PlanningTools.Default().Run(tool, inputJson, snapshot, new NoPlanningBody());
             var callMs = watch.Elapsed.TotalMilliseconds;
 
-            Debug.Log(ModInfo.LogTag + " tool test call: " + tool + " " + inputJson + " -> " + outcome.Json);
+            Debug.Log(ModInfo.LogTag + " Planning Tool test: " + tool + " " + inputJson + " -> " + outcome.Json);
             Debug.Log(ModInfo.LogTag + " " + ToolTestGate.TimingLine(tool, snapshotMs, callMs));
             var result = (Lexicon)KosValues.FromPlain(ToolTestGate.ResultValues(outcome.Json));
             result.Add(new StringValue("call_ms"), ScalarValue.Create(callMs));
