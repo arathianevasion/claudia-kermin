@@ -52,6 +52,10 @@ _Avoid_: dv chart, cheat sheet
 One self-contained stretch of flight that Claudia plans and kOS executes in a single go, e.g. launch to orbit, Mun transfer burn, landing.
 _Avoid_: step, phase, maneuver (alone), burn
 
+**Coast**:
+A stretch of flight with no engine or RCS thrust, in an atmosphere or not (e.g. launch's climb out of the air after cutoff, a fall under parachutes, the fall before a landing burn); the only stretch on which a Mission Script may use physics warp.
+_Avoid_: drift, glide, cruise
+
 **Mission Plan**:
 The ordered list of Maneuver Sequences Claudia intends to fly to reach a Mission Goal, each with its delta-v budget and Due Time or rough timing; approved once to start the Mission and revised as Debriefs require.
 _Avoid_: flight plan, roadmap
