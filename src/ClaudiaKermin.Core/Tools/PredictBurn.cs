@@ -75,54 +75,117 @@ namespace ClaudiaKermin.Core.Tools
 
         public ToolOutcome Run(JsonNode input, GameSnapshot snapshot, IPlanningBody body)
         {
-            if (snapshot.Bodies.Count == 0) return PlanningJson.Error("the Game Snapshot has no body table");
-            var orbit = snapshot.Orbit;
-            if (orbit == null || orbit.SemiMajorAxis == 0) return PlanningJson.Error("the Game Snapshot has no orbit for the craft");
-            var situation = snapshot.Situation ?? "";
-            if (situation == "PRELAUNCH" || situation == "LANDED" || situation == "SPLASHED")
-                return PlanningJson.Error("the craft is " + situation.ToLowerInvariant() + ", not in flight; there is no orbit to burn from");
-            var system = new BodySystem(snapshot.Bodies);
-            var at = system.Find(string.IsNullOrEmpty(orbit.Body) ? snapshot.Body : orbit.Body);
-            if (at == null || at.Gm <= 0) return PlanningJson.Error("the body table has no " + PlanningJson.Quote(orbit.Body) + " to propagate round");
-            SnapshotBody target = null;
-            var targetName = JsonNode.Str(input["target"]);
-            if (!string.IsNullOrEmpty(targetName))
+            ToolOutcome error;
+            var setup = Setup.Prepare(snapshot, JsonNode.Str(input["target"]), out error);
+            if (setup == null) return error;
+            var requests = new List<BurnRequest>();
+            foreach (var burn in input["burns"].Items)
             {
-                target = system.Find(targetName);
-                if (target == null)
-                    return PlanningJson.Error("there is no body named " + PlanningJson.Quote(targetName) + "; the bodies are "
-                        + string.Join(", ", snapshot.Bodies.Select(b => b.Name).ToArray()));
+                var dv = burn["dv"];
+                requests.Add(new BurnRequest
+                {
+                    At = burn["at"],
+                    Prograde = JsonNode.Double(dv["prograde"]) ?? 0,
+                    Normal = JsonNode.Double(dv["normal"]) ?? 0,
+                    Radial = JsonNode.Double(dv["radial"]) ?? 0,
+                });
             }
+            List<BurnDone> burns;
+            List<Patch> path;
+            var problem = Simulate(setup, requests, out burns, out path);
+            if (problem != null) return PlanningJson.Error(problem);
+            return Result(setup.System, burns, path, setup.Target, setup.Now);
+        }
 
-            var now = snapshot.Ut;
-            var start = Conic.FromElements(at.Gm, orbit.SemiMajorAxis, orbit.Eccentricity, orbit.Inclination, orbit.Lan,
-                orbit.ArgumentOfPeriapsis, orbit.MeanAnomalyAtEpoch, orbit.Epoch);
-            if (start.Radius(now) < at.Radius + at.AtmosphereHeight)
-                return PlanningJson.Error("the craft is " + (at.AtmosphereHeight > 0 ? "inside " + at.Name + "'s atmosphere" : "below " + at.Name + "'s surface")
-                    + "; the impulsive model has no drag, so wait until it is above " + Math.Round(at.AtmosphereHeight).ToString("0", CultureInfo.InvariantCulture) + " m");
+        /// <summary>One burn asked for: when (an <c>at</c> as predict_burn takes it) and its maneuver-node components, m/s.</summary>
+        internal sealed class BurnRequest
+        {
+            public JsonNode At;
+            public double Prograde;
+            public double Normal;
+            public double Radial;
+        }
 
-            var stages = BurnStages(snapshot);
-            var burns = new List<BurnDone>();
-            var path = system.Follow(at, start, now, PathPatches);
-            var burnInputs = input["burns"].Items;
-            for (var i = 0; i < burnInputs.Count; i++)
+        /// <summary>What every propagation starts from: the snapshot's craft orbit over its body table, checked to be in flight and above the atmosphere.</summary>
+        internal sealed class Setup
+        {
+            public GameSnapshot Snapshot;
+            public BodySystem System;
+            public SnapshotBody Body;
+            public Conic Start;
+            public double Now;
+            /// <summary>The body asked for the closest approach to; null for none.</summary>
+            public SnapshotBody Target;
+
+            /// <summary>The setup, or null with <paramref name="error"/> saying why the snapshot can't be propagated.</summary>
+            public static Setup Prepare(GameSnapshot snapshot, string targetName, out ToolOutcome error)
+            {
+                error = null;
+                if (snapshot.Bodies.Count == 0) { error = PlanningJson.Error("the Game Snapshot has no body table"); return null; }
+                var orbit = snapshot.Orbit;
+                if (orbit == null || orbit.SemiMajorAxis == 0) { error = PlanningJson.Error("the Game Snapshot has no orbit for the craft"); return null; }
+                var situation = snapshot.Situation ?? "";
+                if (situation == "PRELAUNCH" || situation == "LANDED" || situation == "SPLASHED")
+                {
+                    error = PlanningJson.Error("the craft is " + situation.ToLowerInvariant() + ", not in flight; there is no orbit to burn from");
+                    return null;
+                }
+                var system = new BodySystem(snapshot.Bodies);
+                var at = system.Find(string.IsNullOrEmpty(orbit.Body) ? snapshot.Body : orbit.Body);
+                if (at == null || at.Gm <= 0) { error = PlanningJson.Error("the body table has no " + PlanningJson.Quote(orbit.Body) + " to propagate round"); return null; }
+                SnapshotBody target = null;
+                if (!string.IsNullOrEmpty(targetName))
+                {
+                    target = system.Find(targetName);
+                    if (target == null)
+                    {
+                        error = PlanningJson.Error("there is no body named " + PlanningJson.Quote(targetName) + "; the bodies are "
+                            + string.Join(", ", snapshot.Bodies.Select(b => b.Name).ToArray()));
+                        return null;
+                    }
+                }
+                var now = snapshot.Ut;
+                var start = Conic.FromElements(at.Gm, orbit.SemiMajorAxis, orbit.Eccentricity, orbit.Inclination, orbit.Lan,
+                    orbit.ArgumentOfPeriapsis, orbit.MeanAnomalyAtEpoch, orbit.Epoch);
+                if (start.Radius(now) < at.Radius + at.AtmosphereHeight)
+                {
+                    error = PlanningJson.Error("the craft is " + (at.AtmosphereHeight > 0 ? "inside " + at.Name + "'s atmosphere" : "below " + at.Name + "'s surface")
+                        + "; the impulsive model has no drag, so wait until it is above " + Math.Round(at.AtmosphereHeight).ToString("0", CultureInfo.InvariantCulture) + " m");
+                    return null;
+                }
+                return new Setup { Snapshot = snapshot, System = system, Body = at, Start = start, Now = now, Target = target };
+            }
+        }
+
+        /// <summary>
+        /// The burns applied one after another to the setup's orbit: the burns done and the patches after the last. Null when it
+        /// worked, otherwise why a burn can't be placed. This is the propagation both predict_burn and solve_burn use.
+        /// </summary>
+        internal static string Simulate(Setup setup, List<BurnRequest> requests, out List<BurnDone> burns, out List<Patch> path, bool withBurnTime = true)
+        {
+            // The search in solve_burn runs this hundreds of times and doesn't need the times.
+            var stages = withBurnTime ? BurnStages(setup.Snapshot) : null;
+            var system = setup.System;
+            var now = setup.Now;
+            burns = new List<BurnDone>();
+            path = system.Follow(setup.Body, setup.Start, now, PathPatches);
+            for (var i = 0; i < requests.Count; i++)
             {
                 var label = "burn " + (i + 1).ToString(CultureInfo.InvariantCulture);
                 var after = burns.Count > 0 ? burns[burns.Count - 1].Ut : now;
                 string problem;
-                var ut = BurnUt(burnInputs[i]["at"], path, after, now, label, out problem);
-                if (problem != null) return PlanningJson.Error(problem);
+                var ut = BurnUt(requests[i].At, path, after, now, label, out problem);
+                if (problem != null) return problem;
                 var patch = Containing(path, ut.Value);
                 if (patch == null)
                 {
                     var last = path[path.Count - 1];
-                    return PlanningJson.Error(label + " is after the craft reaches " + Ending(last) + " at UT " + Math.Round(last.EndUt).ToString("0", CultureInfo.InvariantCulture)
-                        + "; nothing after that is predicted");
+                    return label + " is after the craft reaches " + Ending(last) + " at UT " + Math.Round(last.EndUt).ToString("0", CultureInfo.InvariantCulture)
+                        + "; nothing after that is predicted";
                 }
-                var dv = burnInputs[i]["dv"];
-                var prograde = JsonNode.Double(dv["prograde"]) ?? 0;
-                var normal = JsonNode.Double(dv["normal"]) ?? 0;
-                var radial = JsonNode.Double(dv["radial"]) ?? 0;
+                var prograde = requests[i].Prograde;
+                var normal = requests[i].Normal;
+                var radial = requests[i].Radial;
                 Vec3 r, v;
                 patch.Orbit.State(ut.Value, out r, out v);
                 var along = v.Normalized;
@@ -130,13 +193,13 @@ namespace ClaudiaKermin.Core.Tools
                 var outward = Vec3.Cross(along, up);
                 var burned = Conic.FromState(patch.Body.Gm, r, v + along * prograde + up * normal + outward * radial, ut.Value);
                 var magnitude = Math.Sqrt(prograde * prograde + normal * normal + radial * radial);
-                burns.Add(new BurnDone { Ut = ut.Value, DeltaV = magnitude, Body = patch.Body, Orbit = burned, BurnTime = stages.Take(magnitude) });
-                path = system.Follow(patch.Body, burned, ut.Value, i == burnInputs.Count - 1 ? MaxPatches : PathPatches);
+                burns.Add(new BurnDone { Ut = ut.Value, DeltaV = magnitude, Body = patch.Body, Orbit = burned, BurnTime = stages != null ? stages.Take(magnitude) : null });
+                path = system.Follow(patch.Body, burned, ut.Value, i == requests.Count - 1 ? MaxPatches : PathPatches);
             }
-            return Result(system, burns, path, target, now);
+            return null;
         }
 
-        private sealed class BurnDone
+        internal sealed class BurnDone
         {
             public double Ut;
             public double DeltaV;
@@ -147,7 +210,7 @@ namespace ClaudiaKermin.Core.Tools
         }
 
         /// <summary>The burn's UT from its <c>at</c>, or why it can't be placed.</summary>
-        private static double? BurnUt(JsonNode at, List<Patch> path, double after, double now, string label, out string problem)
+        internal static double? BurnUt(JsonNode at, List<Patch> path, double after, double now, string label, out string problem)
         {
             problem = null;
             double ut;
@@ -195,14 +258,14 @@ namespace ClaudiaKermin.Core.Tools
         }
 
         /// <summary>The patch flown at <paramref name="ut"/>; null when the path has ended (an impact, the atmosphere) before it.</summary>
-        private static Patch Containing(List<Patch> path, double ut)
+        internal static Patch Containing(List<Patch> path, double ut)
         {
             foreach (var patch in path)
                 if (ut <= patch.EndUt || patch.End == PatchEnd.Stable) return patch;
             return null;
         }
 
-        private static string Ending(Patch patch)
+        internal static string Ending(Patch patch)
         {
             switch (patch.End)
             {
@@ -214,7 +277,7 @@ namespace ClaudiaKermin.Core.Tools
             }
         }
 
-        private static string EndWord(Patch patch)
+        internal static string EndWord(Patch patch)
         {
             switch (patch.End)
             {
@@ -226,7 +289,7 @@ namespace ClaudiaKermin.Core.Tools
             }
         }
 
-        private static ToolOutcome Result(BodySystem system, List<BurnDone> burns, List<Patch> path, SnapshotBody target, double now)
+        internal static ToolOutcome Result(BodySystem system, List<BurnDone> burns, List<Patch> path, SnapshotBody target, double now)
         {
             var json = new JsonWriter().BeginObject().Field("model", Model);
             json.Name("burns").BeginArray();
