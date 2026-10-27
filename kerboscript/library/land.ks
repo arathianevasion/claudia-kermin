@@ -26,8 +26,9 @@
 //|     pass within 20 km of the ground track in the next 3 orbits; plan a plane change first
 //|     otherwise. A biome target (e.g. lexicon("biome", "Midlands")), with an optional "near" point
 //|     (LATLNG or lat/lng lexicon), finds its site when it flies, with find_landing_site's search: the
-//|     soonest pass (or the one nearest near) over the biome under the ground track in the next 3
-//|     orbits, in daylight if daylight is set, within max_slope. It then flies that site as a LATLNG.
+//|     soonest pass (or the one nearest near) over the biome under the ground track in the time cap,
+//|     5 km inside its edge if it can, in daylight if daylight is set, within max_slope. It warps there
+//|     on rails and flies that site as a LATLNG.
 //|     Use find_landing_site to see such sites when you plan; pass land the biome, not a site.
 //|   daylight [true]: set it from the Mission Setting Daylight landing. true touches down only with
 //|     the sun at least 5 degrees up at the site. For a site it looks up to a day of the body ahead
@@ -158,12 +159,12 @@ function land_is_biome {
 
 // What land asks ADDONS:CLAUDIA:LANDINGSITE (find_landing_site's search) for a biome target: a
 // site in the biome, in daylight if wanted, no steeper than max_slope, under the ground track in the
-// next 3 orbits (period s), nearest the near point if there is one. The search wants a slope over 0,
-// so max_slope 0 asks for 0.1 degrees. Pure.
+// window find_landing_site defaults to (the Mission Settings time cap, no within_hours) and at
+// least the search's default margin inside the biome, nearest the near point if there is one. The
+// search wants a slope over 0, so max_slope 0 asks for 0.1 degrees. Pure.
 function land_site_query {
-  parameter target_opt, daylight, max_slope, period.
-  local query is lexicon("biome", target_opt:biome, "daylight", daylight, "max_slope_deg", max(0.1, max_slope),
-    "within_hours", 3 * period / 3600).
+  parameter target_opt, daylight, max_slope.
+  local query is lexicon("biome", target_opt:biome, "daylight", daylight, "max_slope_deg", max(0.1, max_slope)).
   if target_opt:haskey("near") {
     query:add("near", lexicon("latitude", target_opt:near:lat, "longitude", target_opt:near:lng)).
   }
@@ -556,13 +557,21 @@ function land_next_lit {
   return -1.
 }
 
+// The UT land's pass search starts from: 120 s from now, or when the craft passes over a site
+// (pass_ut, -1 for none) an orbit before it, so the 3 orbits searched hold that pass however far
+// ahead it is (a biome site's pass may be hours on). Pure.
+function land_search_start {
+  parameter now, pass_ut, period.
+  return max(now + 120, pass_ut - period).
+}
+
 // When to burn to land at the site (or anywhere, for site ""): lexicon("error", "" or why not,
 // "burn_ut", "arrive_ut", "site" (lat, lng), "r_pe"). Looks 3 orbits ahead; when daylight is wanted
 // and every pass over a site in that time is dark, it looks on for a lit pass up to a day of the body
 // ahead (land_daylight_horizon). There is no wait cap: the block warps there (ADR 0004).
 function land_plan {
-  parameter opt, site, approach.
-  local earliest is time:seconds + 120.
+  parameter opt, site, approach, pass_ut is -1.
+  local earliest is land_search_start(time:seconds, pass_ut, ship:orbit:period).
   local plan is land_plan_from(opt, site, approach, earliest).
   if not plan:haskey("dark") {
     return plan.
@@ -735,8 +744,9 @@ function land {
   // (find_landing_site's), through a block-internal call the Script Check allows only here in the
   // Core Library (ADR 0007), so it stays inline rather than in a helper a Mission Script could call.
   local site is "".
+  local pass_ut is -1.
   if by_biome {
-    local found is addons:claudia:landingsite(land_site_query(opt:target, opt:daylight, opt:max_slope, ship:orbit:period)).
+    local found is addons:claudia:landingsite(land_site_query(opt:target, opt:daylight, opt:max_slope)).
     if found:error <> "" {
       local advice is "raise max_slope, try another biome or near point, or change the orbit's plane".
       if opt:daylight {
@@ -745,6 +755,10 @@ function land {
       return claudia_finish(ctx, false, found:error + "; " + advice, extra).
     }
     set site to lexicon("lat", found:lat, "lng", found:lng).
+    set pass_ut to found:pass_ut.
+    if found:near_edge {
+      addons:claudia:blocktrace("land", lexicon("phase", "site", "note", "at the " + opt:target:biome + " biome edge: nothing deeper reachable")).
+    }
   } else {
     set site to land_site_of(opt:target).
   }
@@ -756,7 +770,7 @@ function land {
   }
 
   local approach is 3000.
-  local plan is land_plan(opt, site, approach).
+  local plan is land_plan(opt, site, approach, pass_ut).
   if plan:error <> "" {
     return claudia_finish(ctx, false, plan:error, extra).
   }

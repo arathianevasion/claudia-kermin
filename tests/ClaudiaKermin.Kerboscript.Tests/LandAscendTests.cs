@@ -126,29 +126,39 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         [Fact]
-        public void A_biome_target_asks_the_site_search_for_its_biome_daylight_slope_and_the_next_3_orbits()
+        public void A_biome_target_asks_the_site_search_for_its_biome_daylight_and_slope_and_leaves_the_window_to_its_default()
         {
-            // A 2000 s orbit: 3 orbits is 6000 s, 1.667 h.
+            // No within_hours: the search looks as far as find_landing_site does by default (the time cap), not 3 orbits.
             var printed = Run(
-                "local q is land_site_query(lexicon(\"biome\", \"Midlands\"), true, 8, 2000).\n"
-                + "print q:biome. print q:daylight. print q:max_slope_deg. print round(q:within_hours, 3). print q:haskey(\"near\").");
-            Assert.Equal(new[] { "Midlands", "True", "8", "1.667", "False" }, printed);
+                "local q is land_site_query(lexicon(\"biome\", \"Midlands\"), true, 8).\n"
+                + "print q:biome. print q:daylight. print q:max_slope_deg. print q:haskey(\"within_hours\"). print q:haskey(\"near\").");
+            Assert.Equal(new[] { "Midlands", "True", "8", "False", "False" }, printed);
+        }
+
+        [Fact]
+        public void The_pass_search_starts_an_orbit_before_a_far_pass_and_two_minutes_on_for_a_near_or_no_one()
+        {
+            // A 2000 s orbit, now 1000: a pass at 13000 is searched from an orbit before it, 11000.
+            Assert.Equal("11000", One("land_search_start(1000, 13000, 2000)"));
+            // No pass given (-1), or one inside the first orbit: now + 120.
+            Assert.Equal("1120", One("land_search_start(1000, -1, 2000)"));
+            Assert.Equal("1120", One("land_search_start(1000, 2500, 2000)"));
         }
 
         [Fact]
         public void A_biome_targets_near_point_goes_to_the_site_search_as_latitude_and_longitude()
         {
             var printed = Run(
-                "local q is land_site_query(lexicon(\"biome\", \"Flats\", \"near\", lexicon(\"lat\", 2.5, \"lng\", -30)), false, 5, 3600).\n"
-                + "print q:near:latitude. print q:near:longitude. print q:daylight. print q:within_hours.");
-            Assert.Equal(new[] { "2.5", "-30", "False", "3" }, printed);
+                "local q is land_site_query(lexicon(\"biome\", \"Flats\", \"near\", lexicon(\"lat\", 2.5, \"lng\", -30)), false, 5).\n"
+                + "print q:near:latitude. print q:near:longitude. print q:daylight.");
+            Assert.Equal(new[] { "2.5", "-30", "False" }, printed);
         }
 
         [Fact]
         public void A_max_slope_of_0_asks_the_site_search_for_the_flattest_it_takes()
         {
             // land allows max_slope 0; the search wants more than 0.
-            Assert.Equal("0.1", One("land_site_query(lexicon(\"biome\", \"Flats\"), false, 0, 3600):max_slope_deg"));
+            Assert.Equal("0.1", One("land_site_query(lexicon(\"biome\", \"Flats\"), false, 0):max_slope_deg"));
         }
 
         [Fact]

@@ -191,6 +191,65 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void A_biome_site_is_the_edge_margin_inside_the_biome_not_the_first_point_in_it()
+        {
+            // A Mun degree is 3.49 km, so a 10 km margin is 2.86 degrees. The biome starts at longitude 45.5; the track is a point every ~2 degrees.
+            var fake = new FakeBody { BiomeAt = (lat, lon) => lon >= 45.5 ? "EastCrater" : "Highlands" };
+            var bare = Run(Snapshot(), "{\"body\":\"Mun\",\"daylight\":false,\"biome\":\"EastCrater\",\"edge_margin_m\":0}", fake);
+            Assert.InRange(Lon(Sites(bare)[0]), 45.5, 47.5);
+            var deep = Run(Snapshot(), "{\"body\":\"Mun\",\"daylight\":false,\"biome\":\"EastCrater\",\"edge_margin_m\":10000}", fake);
+            Assert.InRange(Lon(Sites(deep)[0]), 45.5 + 2.86, 60);
+            Assert.False(Sites(deep)[0].TryGetProperty("near_biome_edge", out _));
+            Assert.False(deep.TryGetProperty("note", out _));
+        }
+
+        [Fact]
+        public void The_default_margin_is_the_landing_accuracy_of_5_km()
+        {
+            var fake = new FakeBody { BiomeAt = (lat, lon) => lon >= 45.5 ? "EastCrater" : "Highlands" };
+            var site = Sites(Run(Snapshot(), "{\"body\":\"Mun\",\"daylight\":false,\"biome\":\"EastCrater\"}", fake))[0];
+            Assert.InRange(Lon(site), 45.5 + 1.43, 60);
+        }
+
+        [Fact]
+        public void A_biome_with_nothing_deeper_than_the_margin_gives_its_edge_sites_marked_and_says_so()
+        {
+            // A 2 degree (7 km) strip: no point has 5 km of biome all round it.
+            var fake = new FakeBody { BiomeAt = (lat, lon) => lon >= 45.5 && lon < 47.5 ? "EastCrater" : "Highlands" };
+            var result = Run(Snapshot(), "{\"body\":\"Mun\",\"daylight\":false,\"biome\":\"EastCrater\"}", fake);
+            var site = Sites(result)[0];
+            Assert.Equal("EastCrater", site.GetProperty("biome").GetString());
+            Assert.True(site.GetProperty("near_biome_edge").GetBoolean());
+            Assert.Contains("5000 m inside the EastCrater biome", result.GetProperty("note").GetString());
+        }
+
+        [Fact]
+        public void A_deeper_site_further_on_beats_an_edge_site_sooner()
+        {
+            // A 2 degree strip at 45.5 (edge only), then a wide stretch from 100 on.
+            var fake = new FakeBody { BiomeAt = (lat, lon) => lon >= 45.5 && lon < 47.5 || lon >= 100 && lon < 150 ? "EastCrater" : "Highlands" };
+            var result = Run(Snapshot(), "{\"body\":\"Mun\",\"daylight\":false,\"biome\":\"EastCrater\"}", fake);
+            Assert.All(Sites(result), s =>
+            {
+                Assert.False(s.TryGetProperty("near_biome_edge", out _));
+                Assert.InRange(Lon(s), 101.43, 150);
+            });
+        }
+
+        [Fact]
+        public void Without_a_biome_no_margin_is_applied()
+        {
+            var site = Sites(Run(Snapshot(), "{\"body\":\"Mun\",\"daylight\":false}", new FakeBody()))[0];
+            Assert.False(site.TryGetProperty("near_biome_edge", out _));
+        }
+
+        [Fact]
+        public void A_negative_edge_margin_is_an_error()
+        {
+            Assert.Contains("edge_margin_m", Error(Snapshot(), "{\"body\":\"Mun\",\"biome\":\"X\",\"edge_margin_m\":-1}", new FakeBody()));
+        }
+
+        [Fact]
         public void A_biome_the_track_never_crosses_gives_no_sites_and_says_how_far_the_search_got()
         {
             var result = Run(Snapshot(), "{\"body\":\"Mun\",\"daylight\":false,\"biome\":\"Poles\"}", new FakeBody());
@@ -379,6 +438,27 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(0, (double)site["lat"], 1);
             Assert.True((double)site["pass_ut"] > 1000);
             Assert.Equal(45.0, site["sun_elevation_deg"]);
+        }
+
+        [Fact]
+        public void The_block_call_says_when_its_site_is_at_the_biome_edge()
+        {
+            var strip = new FakeBody { BiomeAt = (lat, lon) => lon >= 45.5 && lon < 47.5 ? "EastCrater" : "Highlands" };
+            Assert.Equal(true, BlockCalls.LandingSite(Ask("biome", "EastCrater", "daylight", false), Snapshot(), strip)["near_edge"]);
+            var wide = new FakeBody { BiomeAt = (lat, lon) => lon >= 45.5 ? "EastCrater" : "Highlands" };
+            Assert.Equal(false, BlockCalls.LandingSite(Ask("biome", "EastCrater", "daylight", false), Snapshot(), wide)["near_edge"]);
+        }
+
+        [Fact]
+        public void The_block_call_with_no_within_hours_searches_the_snapshots_time_cap()
+        {
+            // A daylight pass only later in the window: dark until 5 h on, which land's old 3 orbits (about 2.5 h here) never reached.
+            var fake = new FakeBody { Sun = (lat, lon, ut) => ut > 1000 + 5 * 3600 ? 30 : -30 };
+            var snapshot = Snapshot();
+            snapshot.TimeCapHours = 8;
+            var site = BlockCalls.LandingSite(Ask("biome", "Midlands", "daylight", true), snapshot, fake);
+            Assert.Equal("", site["error"]);
+            Assert.True((double)site["pass_ut"] - 1000 > 5 * 3600);
         }
 
         [Fact]

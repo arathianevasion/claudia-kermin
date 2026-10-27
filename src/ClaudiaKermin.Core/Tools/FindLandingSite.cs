@@ -45,6 +45,7 @@ namespace ClaudiaKermin.Core.Tools
                     + "\"daylight\":{\"type\":\"boolean\",\"description\":\"Only sites with the sun above the horizon when the track passes; defaults to the Mission Settings.\"},"
                     + "\"max_slope_deg\":{\"type\":\"number\",\"description\":\"The steepest ground allowed, degrees; default 5.\"},"
                     + "\"within_hours\":{\"type\":\"number\",\"description\":\"How far ahead to look along the ground track, hours (at most 48); defaults to the Mission Settings time cap.\"},"
+                    + "\"edge_margin_m\":{\"type\":\"number\",\"description\":\"With a biome: how far inside its edge a site should be, m; default 5000 (about the landing accuracy), 0 for none. Sites at the edge come back only when nothing deeper is reachable, marked near_biome_edge.\"},"
                     + "\"near\":{\"type\":\"object\",\"properties\":{\"latitude\":{\"type\":\"number\"},\"longitude\":{\"type\":\"number\"}},"
                     + "\"required\":[\"latitude\",\"longitude\"],\"additionalProperties\":false,\"description\":\"Prefer sites close to this point, degrees (within 15 degrees of arc of it).\"}"
                     + "},\"required\":[\"body\"],\"additionalProperties\":false}";
@@ -84,7 +85,9 @@ namespace ClaudiaKermin.Core.Tools
                 MaxSlopeDeg = JsonNode.Double(input["max_slope_deg"]) ?? 5,
                 WithinHours = JsonNode.Double(input["within_hours"]) ?? snapshot.TimeCapHours,
             };
+            query.EdgeMarginM = JsonNode.Double(input["edge_margin_m"]) ?? LandingSiteSearch.DefaultEdgeMarginM;
             if (query.MaxSlopeDeg <= 0 || query.WithinHours <= 0) return PlanningJson.Error("max_slope_deg and within_hours must be more than 0");
+            if (!(query.EdgeMarginM >= 0 && query.EdgeMarginM <= 50000)) return PlanningJson.Error("edge_margin_m must be from 0 to 50000");
             var near = input["near"];
             if (near != null)
             {
@@ -112,10 +115,14 @@ namespace ClaudiaKermin.Core.Tools
                 PlanningJson.Time(json, "pass", site.PassUt, snapshot.Ut)
                     .Field("sun_elevation_deg", PlanningJson.Round(site.SunElevationDeg, 1));
                 if (!double.IsNaN(site.FromNearDeg)) json.Field("from_near_deg", PlanningJson.Round(site.FromNearDeg, 1));
+                if (site.AtEdge) json.Field("near_biome_edge", true);
                 json.EndObject();
             }
             json.EndArray();
             json.Field("window_hours", PlanningJson.Round(found.WindowHours, 2));
+            if (found.Sites.Count > 0 && found.Sites[0].AtEdge)
+                json.Field("note", "no site more than " + query.EdgeMarginM.ToString("0.##", CultureInfo.InvariantCulture) + " m inside the " + found.Sites[0].Biome
+                    + " biome was reachable in " + found.WindowHours.ToString("0.##", CultureInfo.InvariantCulture) + " h; the sites returned are closer than that to the edge, so a landing may come down outside the biome");
             if (found.Sites.Count == 0)
                 json.Field("note", "no site met the limits; of " + LandingSiteSearch.Count(found.Candidates) + " ground-track points, "
                     + LandingSiteSearch.Count(found.AfterBiome) + " were in the biome, " + LandingSiteSearch.Count(found.AfterDaylight)
