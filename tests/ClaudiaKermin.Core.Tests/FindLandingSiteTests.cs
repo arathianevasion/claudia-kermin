@@ -233,6 +233,25 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void With_the_sun_at_a_known_place_the_far_side_of_the_craft_is_night_and_the_sub_solar_point_is_day()
+        {
+            // #312: the sun is overhead at longitude 90 at UT 1000 and, the body turning east, drifts west on it. The craft starts over
+            // longitude 90, so the point opposite it (-90) is night for the whole hour: no site there is correct, and the note says why.
+            var fake = new FakeBody
+            {
+                Sun = (lat, lon, ut) => 90 - LandingSiteSearch.ArcDegrees(lat, lon, 0, 90 - 360 * (ut - 1000) / Slow),
+            };
+            var snapshot = Snapshot(meanAnomaly: Math.PI / 2);
+            var far = Run(snapshot, "{\"body\":\"Mun\",\"daylight\":true,\"within_hours\":1,\"near\":{\"latitude\":0,\"longitude\":-90}}", fake);
+            Assert.InRange(Lon(Sites(Run(snapshot, "{\"body\":\"Mun\",\"daylight\":false,\"within_hours\":1}", fake))[0]), 89, 91);
+            Assert.Empty(Sites(far));
+            Assert.Contains(", 0 also in daylight", far.GetProperty("note").GetString());
+            var near = Run(snapshot, "{\"body\":\"Mun\",\"daylight\":true,\"within_hours\":1,\"near\":{\"latitude\":0,\"longitude\":90}}", fake);
+            Assert.NotEmpty(Sites(near));
+            Assert.All(Sites(near), s => Assert.InRange(Num(s, "sun_elevation_deg"), LandingSiteSearch.MinSunElevationDeg, 90));
+        }
+
+        [Fact]
         public void The_sun_is_asked_at_the_ut_of_the_pass()
         {
             var asked = new List<double>();
