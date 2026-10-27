@@ -29,7 +29,7 @@
 //|     (LATLNG or lat/lng lexicon), finds its site when it flies, with find_landing_site's search: the
 //|     soonest pass (or the one nearest near) over the biome under the ground track in the time cap,
 //|     5 km inside its edge if it can, in daylight if daylight is set, within max_slope. It flies that
-//|     site as a LATLNG on the soonest pass it can (warping there on rails), not always the search's pass.
+//|     site as a LATLNG on the soonest pass it can (warping there on rails), which may be before find_landing_site's.
 //|     Use find_landing_site to see such sites when you plan; pass land the biome, not a site.
 //|   daylight [true]: set it from the Mission Setting Daylight landing. true touches down only with
 //|     the sun at least 5 degrees up at the site. For a site it looks up to a day of the body ahead
@@ -874,7 +874,8 @@ function land_pass_search {
 // search, each pass and the plan (#383).
 function land_plan {
   parameter opt, site, approach, pass_ut is -1.
-  addons:claudia:blocktrace("land", lexicon("phase", "search", "now", round(time:seconds, 1), "given_pass", round(pass_ut, 1))).
+  addons:claudia:blocktrace("land", lexicon("phase", "search", "now", round(time:seconds, 1), "given_pass", round(pass_ut, 1),
+    "note", "a burn under 120 s on is too soon to plan; passes outside each 3-orbit window's from and to aren't looked at")).
   local plan is land_plan_site(opt, site, approach, pass_ut).
   if plan:error = "" {
     addons:claudia:blocktrace("land", lexicon("phase", "plan", "burn_ut", round(plan:burn_ut, 1), "arrive_ut", round(plan:arrive_ut, 1),
@@ -885,7 +886,7 @@ function land_plan {
   return plan.
 }
 
-// land_plan's search, which traces each window searched and each pass.
+// land_plan's search (land_plan_any's for "any"), which traces each window searched and each pass.
 function land_plan_site {
   parameter opt, site, approach, pass_ut.
   if site:istype("String") {
@@ -1161,18 +1162,11 @@ function land {
   local coast_ut is land_coast_end(brake_ut, turn:turn_time).
   addons:claudia:blocktrace("land", lexicon("phase", "turn", "turn_time", round(turn:turn_time, 1), "turn_s", round(turn:turn_s, 1),
     "top_rate", round(turn:top_rate, 2), "error", turn:error, "brake_ut", round(brake_ut, 1), "coast_ut", round(coast_ut, 1))).
-  // When braking is planned to start, and when this orbit meets the ground: the terrain the fall
-  // passes over (the samples), else the site's height (-1: it clears it), so a braking burn planned
-  // after the impact shows in the result. braking_began_ut is set when braking does begin.
+  // When braking is planned to start, and when this orbit meets the terrain the fall passes over (-1:
+  // it clears it to 5 minutes past periapsis), so a braking burn planned after the impact shows in the
+  // result. braking_began_ut is set when braking does begin.
   set extra:burn_start_ut to round(brake_ut, 1).
   local impact_ut is land_impact_ut(samples).
-  if impact_ut < 0 {
-    local ground_r is body:radius + max(0, body:geopositionlatlng(aim:lat, aim:lng):terrainheight).
-    local fall_s is claudia_fall_eta(ship:orbit:eccentricity, ship:orbit:semimajoraxis, mu, ground_r, ship:orbit:trueanomaly).
-    if fall_s >= 0 {
-      set impact_ut to time:seconds + fall_s.
-    }
-  }
   if impact_ut >= 0 {
     set extra:impact_ut to round(impact_ut, 1).
   }
