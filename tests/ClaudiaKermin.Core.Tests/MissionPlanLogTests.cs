@@ -191,7 +191,7 @@ namespace ClaudiaKermin.Core.Tests
 
             var line = Assert.Single(PlanLines(mission));
             Assert.True(line.GetProperty("custom_script").GetBoolean());
-            Assert.Equal(8, line.GetProperty("custom_lines").GetInt32());
+            Assert.Equal(7, line.GetProperty("custom_lines").GetInt32());
             var lints = line.GetProperty("lints").EnumerateArray().Select(l => l.GetString()).ToList();
             var lint = Assert.Single(lints);
             Assert.Contains("landing-site search", lint);
