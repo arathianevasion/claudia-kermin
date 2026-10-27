@@ -782,45 +782,18 @@ function land {
   return claudia_finish(ctx, true, "", extra).
 }
 
-// claudia_warp_to's loop to ut, ended early (returns "") once land_brake_now says the terrain under
-// the craft is coming too soon, since KSP can cut rails warp short near the ground and then ticks at
-// 1x without looking. a_brake: m/s^2 the engines brake with. Returns "" (at ut, or early for the
-// ground; the descent follows either way) or an abort reason. Keep in step with claudia_warp_to.
+// The shared wait loop (claudia_warp_to) to ut, with a stop condition: ended early (returns "") once
+// land_brake_now says the terrain under the craft is coming too soon, since KSP can cut rails warp
+// short near the ground. a_brake: m/s^2 the engines brake with. Returns "" (at ut, or early for the
+// ground; the descent follows either way) or an abort reason.
 function land_coast {
   parameter ctx, ut, a_brake.
-  local warp_end is claudia_warp_end(ut, 30).
-  local want is true.
-  addons:claudia:waitstart(warp_end).
-  until time:seconds >= ut {
+  local ground_near is {
     local g is body:mu / (body:radius + altitude) ^ 2.
     local t_impact is land_fall_eta(alt:radar, -ship:verticalspeed, g).
-    if land_brake_now(t_impact, -ship:verticalspeed, a_brake, ctx:opt:burn_margin) {
-      kuniverse:timewarp:cancelwarp().
-      break.
-    }
-    local held is addons:claudia:warphold.
-    local action is claudia_warp_step(time:seconds, warp_end, kuniverse:timewarp:rate, held, want).
-    if action = "drop" {
-      kuniverse:timewarp:cancelwarp().
-    } else if action = "warp" {
-      set kuniverse:timewarp:mode to "RAILS".
-      kuniverse:timewarp:warpto(warp_end).
-      set want to false.
-    }
-    if held and not addons:claudia:warpcancelled {
-      set want to true.
-    }
-    local reason is claudia_tick(ctx, 0).
-    if reason <> "" {
-      kuniverse:timewarp:cancelwarp().
-      addons:claudia:waitend().
-      return reason.
-    }
-    wait 0.
-  }
-  wait until kuniverse:timewarp:issettled and ship:unpacked.
-  addons:claudia:waitend().
-  return "".
+    return land_brake_now(t_impact, -ship:verticalspeed, a_brake, ctx:opt:burn_margin).
+  }.
+  return claudia_warp_to(ctx, ut, 30, ground_near).
 }
 
 // The powered descent onto aim, to touchdown and a settled craft. Sets best_effort, reversals,

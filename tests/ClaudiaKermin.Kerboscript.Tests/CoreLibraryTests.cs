@@ -208,43 +208,79 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         [Theory]
-        // Asked for once, at the start of the wait.
-        [InlineData(0, 1, false, true, "warp")]
+        // Asked for at the start of the wait.
+        [InlineData(0, 1, false, false, "warp")]
         // Warping: carry on.
         [InlineData(3000, 100, false, false, "none")]
         // At the warp's end: drop to 1x before the burn.
         [InlineData(5370, 100, false, false, "drop")]
         [InlineData(5380, 1, false, false, "none")]
-        // The player cancelled warp: never overridden.
-        [InlineData(3000, 1, false, false, "none")]
-        // The mod holds warp at 1x (the Mission needs the player): drop, and don't warp while held.
+        // Retry: KSP cut warp (1x again, not held, not cancelled): ask again.
+        [InlineData(3000, 1, false, false, "warp")]
+        // Cancel: the player lowered or stopped warp; never overridden for the rest of the wait.
+        [InlineData(3000, 1, false, true, "none")]
+        [InlineData(0, 1, false, true, "none")]
+        // Hold: the mod holds warp at 1x (the Mission needs the player): drop, and don't warp while held.
         [InlineData(3000, 100, true, false, "drop")]
-        [InlineData(3000, 1, true, true, "none")]
+        [InlineData(3000, 1, true, false, "none")]
         // After the hold: warp again.
-        [InlineData(3100, 1, false, true, "warp")]
+        [InlineData(3100, 1, false, false, "warp")]
         // Too close to the end to be worth warping.
-        [InlineData(5366, 1, false, true, "none")]
-        public void A_wait_warps_once_drops_to_1x_before_the_burn_and_warps_again_after_a_hold(double now, double rate, bool held, bool want, string expected)
+        [InlineData(5366, 1, false, false, "none")]
+        public void A_wait_asks_for_warp_whenever_it_is_at_1x_unless_held_or_cancelled(double now, double rate, bool held, bool cancelled, string expected)
         {
-            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_warp_step({0}, 5370, {1}, {2}, {3})", now, rate, Bool(held), Bool(want))));
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_warp_step({0}, 5370, {1}, {2}, {3})", now, rate, Bool(held), Bool(cancelled))));
         }
 
         [Fact]
-        public void A_three_orbit_hold_warps_by_itself_and_is_at_1x_30_s_before_the_burn()
+        public void A_three_orbit_wait_cut_twice_asks_again_and_is_at_1x_30_s_before_the_burn()
         {
-            // claudia_warp_to's loop over a 3-orbit wait (a 1800 s orbit), with a stand-in for KSP's warp:
-            // WARPTO raises the rate to 1000x until the rate is cancelled. Longer than one orbit, and no Due Time.
+            // The wait loop's steps over a 3-orbit wait (a 1800 s orbit), with a stand-in for KSP's warp:
+            // a request raises the rate to 1000x until KSP cuts it (at t=1000 and t=2000) or the step drops it.
             var printed = Run(
-                "local ut is 3 * 1800. local warp_end is claudia_warp_end(ut, 30). local rate is 1. local want is true.\n"
+                "local ut is 3 * 1800. local warp_end is claudia_warp_end(ut, 30). local rate is 1.\n"
                 + "local warps is 0. local dropped_at is -1. local t is 0.\n"
                 + "until t >= ut {\n"
-                + "  local action is claudia_warp_step(t, warp_end, rate, false, want).\n"
-                + "  if action = \"warp\" { set rate to 1000. set want to false. set warps to warps + 1. }\n"
+                + "  if t = 1000 or t = 2000 { set rate to 1. }\n"
+                + "  local action is claudia_warp_step(t, warp_end, rate, false, false).\n"
+                + "  if action = \"warp\" { set rate to 1000. set warps to warps + 1. }\n"
                 + "  if action = \"drop\" { set rate to 1. set dropped_at to t. }\n"
                 + "  set t to t + 10.\n"
                 + "}\n"
                 + "print warps. print dropped_at. print ut - dropped_at >= 30. print rate.");
-            Assert.Equal(new[] { "1", "5370", "True", "1" }, printed);
+            Assert.Equal(new[] { "3", "5370", "True", "1" }, printed);
+        }
+
+        [Fact]
+        public void A_cancel_stops_the_asking_for_the_rest_of_the_wait()
+        {
+            var printed = Run(
+                "local warp_end is 5370. local rate is 1. local warps is 0. local cancelled is false. local t is 0.\n"
+                + "until t >= 5400 {\n"
+                + "  if t = 1000 { set rate to 1. set cancelled to true. }\n"
+                + "  if claudia_warp_step(t, warp_end, rate, false, cancelled) = \"warp\" { set rate to 1000. set warps to warps + 1. }\n"
+                + "  set t to t + 10.\n"
+                + "}\n"
+                + "print warps.");
+            Assert.Equal(new[] { "1" }, printed);
+        }
+
+        [Fact]
+        public void The_default_stop_is_a_number_and_a_stop_condition_is_a_delegate()
+        {
+            // claudia_warp_to tells them apart with istype("Scalar") before calling the stop.
+            var printed = Run("local d is { return true. }. local n is 0. print n:istype(\"Scalar\"). print d:istype(\"Scalar\"). print d:call().");
+            Assert.Equal(new[] { "True", "False", "True" }, printed);
+        }
+
+        [Fact]
+        public void There_is_one_wait_loop_taking_an_optional_stop_and_cap_and_land_coasts_through_it()
+        {
+            var bundle = CoreLibrary.Bundle("@lazyglobal off.\nprint 1.").Replace("\r\n", "\n");
+            Assert.Contains("parameter ctx, ut, lead, stop is 0, cap is 0.", bundle);
+            Assert.Contains("return claudia_warp_to(ctx, ut, 30, ground_near).", bundle);
+            Assert.Single(System.Text.RegularExpressions.Regex.Matches(bundle, "timewarp:warpto\\("));
+            Assert.Single(System.Text.RegularExpressions.Regex.Matches(bundle, "addons:claudia:waitstart\\("));
         }
 
         // ---- coast ----

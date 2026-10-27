@@ -129,7 +129,6 @@ namespace ClaudiaKermin.Core.Tests
         // #335: the warp trace counts real time at 1x only inside waits, so every wait loop says when it starts and ends.
         [Theory]
         [InlineData("claudia_warp_to")]
-        [InlineData("land_coast")]
         public void EveryWaitLoopReportsItsWaitToTheWarpTraceAndEndsItOnEveryReturn(string function)
         {
             var bundle = CoreLibrary.Bundle(Script).Replace("\r\n", "\n");

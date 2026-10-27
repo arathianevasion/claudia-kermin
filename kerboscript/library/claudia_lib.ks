@@ -49,10 +49,9 @@
 //| splashed or on the pad, geo (lexicon lat, lng, alt), and stage (current stage number); plus the
 //| block's extra results. An abort leaves the craft safe (throttle 0, SAS holding attitude) and
 //| sets reason "abort <option>: <detail>". Waits use on-rails warp only, back at 1x at least 30 s before
-//| a burn, and have no cap: a block waits for its window or daylight however long, and coast holds
-//| until a UT. Warp drops to 1x when the Mission needs the player and resumes after; the player may
-//| cancel it and the wait won't override them: ADDONS:CLAUDIA:WARPCANCELLED is then true until the next wait
-//| starts. Don't warp yourself (physics warp is blocked). Report the Script Result yourself, once, at the end, e.g.
+//| a burn, and have no cap: a block waits for its window or daylight however long, coast holds
+//| until a UT. Warp drops to 1x when the Mission needs the player, then resumes. If the player
+//| cancels it the wait won't override them: ADDONS:CLAUDIA:WARPCANCELLED stays true until the next wait. Waits re-ask for warp if KSP cuts it. Own wait: claudia_warp_to(ctx, ut, lead[, stop, cap]); never warp yourself. Report the Script Result yourself, once, at the end, e.g.
 //| `addons:claudia:report(res).`, or a lexicon of your own with at least success and reason.
 
 // ---- Options ----
@@ -607,47 +606,70 @@ function claudia_warp_end {
 
 // What a wait does this tick; pure, so it is tested off KSP. now: UT; warp_end: from
 // claudia_warp_end; rate: the warp rate now; held: the mod holds warp at 1x because the Mission
-// needs the player (ADDONS:CLAUDIA:WARPHOLD); want: warp is still to be asked for. Returns "drop"
-// (cancel warp), "warp" (ask for warp to warp_end) or "none". Warp under 5 s from its end isn't
-// worth asking for.
+// needs the player (ADDONS:CLAUDIA:WARPHOLD); cancelled: the player lowered or stopped warp during
+// this wait (ADDONS:CLAUDIA:WARPCANCELLED). Returns "drop" (cancel warp), "warp" (ask for warp to
+// warp_end) or "none". Retry: at 1x, with the wait not over, no hold and no cancel, warp is asked
+// for again, whoever cut it (KSP cuts rails warp near a body, at a stock alarm, at a SOI change).
+// Warp under 5 s from its end isn't worth asking for.
 function claudia_warp_step {
-  parameter now, warp_end, rate, held, want.
+  parameter now, warp_end, rate, held, cancelled.
   if held or now >= warp_end {
     if rate > 1 {
       return "drop".
     }
     return "none".
   }
-  if want and warp_end > now + 5 {
+  if cancelled {
+    return "none".
+  }
+  if rate <= 1 and warp_end > now + 5 {
     return "warp".
   }
   return "none".
 }
 
-// Waits until ut, warping on rails and back at 1x lead seconds before it (at least 30). Warp is
-// asked for once; once the mod has held warp at 1x (a Pause, link loss, the Spending Cap, a stock
-// alarm) it is asked for again when the hold ends, unless the player lowered or stopped warp during
-// this wait (ADDONS:CLAUDIA:WARPCANCELLED, reset by waitstart), so the player is never overridden.
-// Physics warp is never used: the mode is set to rails first (and the runtime gates refuse physics
-// warp anyway). Keeps ticking, so the common aborts still apply. Returns "" or an abort reason.
-// The wait is marked for the mod's warp trace (WAITSTART, WAITEND), which times it at 1x.
+// Asks KSP for warp to warp_end. The one place a wait chooses its warp rate: rails only for now
+// (the mode is set first, and the runtime gates refuse physics warp anyway). Physics warp (#339)
+// goes here, and cap, the block's rate-cap function (0 for none), limits what it may choose.
+function claudia_warp_request {
+  parameter warp_end, cap.
+  set kuniverse:timewarp:mode to "RAILS".
+  kuniverse:timewarp:warpto(warp_end).
+}
+
+// Waits until ut, warping on rails and back at 1x lead seconds before it (at least 30). This is the
+// one wait loop: claudia_wait_until, coast and land go through it. Warp is asked for at the start
+// and again whenever the rate is back at 1x (claudia_warp_step), except while the mod holds warp at
+// 1x (a Pause, link loss, the Spending Cap, a stock alarm) and after the player lowered or stopped
+// warp during this wait (ADDONS:CLAUDIA:WARPCANCELLED, reset by waitstart), so the player is never
+// overridden. stop: a delegate returning true to end the wait early (warp is cancelled and the wait
+// returns ""), or 0 for none. cap: the block's rate-cap function, or 0 for none. Keeps ticking, so
+// the common aborts still apply. Returns "" or an abort reason. The wait is marked for the mod's
+// warp trace (WAITSTART, WAITEND), which times it at 1x.
 function claudia_warp_to {
-  parameter ctx, ut, lead.
+  parameter ctx, ut, lead, stop is 0, cap is 0.
   local warp_end is claudia_warp_end(ut, lead).
-  local want is true.
+  local settle is 0.
   addons:claudia:waitstart(warp_end).
   until time:seconds >= ut {
-    local held is addons:claudia:warphold.
-    local action is claudia_warp_step(time:seconds, warp_end, kuniverse:timewarp:rate, held, want).
+    if not stop:istype("Scalar") {
+      if stop:call() {
+        kuniverse:timewarp:cancelwarp().
+        break.
+      }
+    }
+    local action is "none".
+    if settle > 0 {
+      // A request was just made; give KSP a few ticks to raise the rate before judging it cut.
+      set settle to settle - 1.
+    } else {
+      set action to claudia_warp_step(time:seconds, warp_end, kuniverse:timewarp:rate, addons:claudia:warphold, addons:claudia:warpcancelled).
+    }
     if action = "drop" {
       kuniverse:timewarp:cancelwarp().
     } else if action = "warp" {
-      set kuniverse:timewarp:mode to "RAILS".
-      kuniverse:timewarp:warpto(warp_end).
-      set want to false.
-    }
-    if held and not addons:claudia:warpcancelled {
-      set want to true.
+      claudia_warp_request(warp_end, cap).
+      set settle to 10.
     }
     local reason is claudia_tick(ctx, 0).
     if reason <> "" {
