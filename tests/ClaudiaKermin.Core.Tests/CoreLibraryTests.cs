@@ -23,16 +23,19 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
-        public void NoBundledFileOrBlockTestScriptDeclaresANameThatHidesAKosBuiltin()
+        public void NoBundledFileBlockTestOrToolTestScriptDeclaresANameThatHidesAKosBuiltin()
         {
             var bad = KosBuiltinNames.Clashes("bundle", CoreLibrary.Bundle(Script));
             var root = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory);
             while (root != null && !System.IO.File.Exists(System.IO.Path.Combine(root.FullName, "ClaudiaKermin.sln"))) root = root.Parent;
             Assert.NotNull(root);
-            var scripts = System.IO.Directory.GetFiles(System.IO.Path.Combine(root.FullName, "tests", "blocks"), "*.ks", System.IO.SearchOption.AllDirectories);
-            Assert.NotEmpty(scripts);
-            foreach (var file in scripts)
-                bad.AddRange(KosBuiltinNames.Clashes(file.Substring(root.FullName.Length + 1), System.IO.File.ReadAllText(file)));
+            foreach (var dir in new[] { "blocks", "tools" })
+            {
+                var scripts = System.IO.Directory.GetFiles(System.IO.Path.Combine(root.FullName, "tests", dir), "*.ks", System.IO.SearchOption.AllDirectories);
+                Assert.NotEmpty(scripts);
+                foreach (var file in scripts)
+                    bad.AddRange(KosBuiltinNames.Clashes(file.Substring(root.FullName.Length + 1), System.IO.File.ReadAllText(file)));
+            }
             Assert.True(bad.Count == 0, string.Join("\n", bad));
         }
 
