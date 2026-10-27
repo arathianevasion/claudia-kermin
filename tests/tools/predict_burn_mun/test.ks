@@ -20,17 +20,17 @@ function phase_to {
   return angle.
 }
 
-local mun is body("Mun").
+local target_body is body("Mun").
 local mu is ship:body:mu.
 local r1 is ship:orbit:semimajoraxis.
-local r2 is mun:orbit:semimajoraxis.
+local r2 is target_body:orbit:semimajoraxis.
 local transfer_sma is (r1 + r2) / 2.
 local transfer_time is constant:pi * sqrt(transfer_sma ^ 3 / mu).
 local hohmann_dv is sqrt(mu * (2 / r1 - 1 / transfer_sma)) - sqrt(mu / r1).
 // At the burn the Mun must lead the craft by what it covers during the half-orbit transfer, short of 180°.
-local want is 180 - transfer_time * 360 / mun:orbit:period.
-local closing is 360 / ship:orbit:period - 360 / mun:orbit:period.
-local wait_s is mod(phase_to(mun) - want + 720, 360) / closing.
+local want is 180 - transfer_time * 360 / target_body:orbit:period.
+local closing is 360 / ship:orbit:period - 360 / target_body:orbit:period.
+local wait_s is mod(phase_to(target_body) - want + 720, 360) / closing.
 // Leave exec_node time to turn and stage before the burn.
 if wait_s < 300 { set wait_s to wait_s + 360 / closing. }
 local ask is lexicon(
