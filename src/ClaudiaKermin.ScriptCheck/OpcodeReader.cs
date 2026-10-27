@@ -417,14 +417,6 @@ namespace ClaudiaKermin.ScriptCheck
             return stack.Count > 0 ? stack.Pop() : new Value { Parameter = true };
         }
 
-        /// <summary>The value is that constant whichever way any branch went.</summary>
-        private static bool IsText(Value value, string text)
-        {
-            foreach (var plain in Each(value))
-                if (!plain.IsConstant || !string.Equals(plain.Text, text, StringComparison.OrdinalIgnoreCase)) return false;
-            return true;
-        }
-
         /// <summary>The value may be that constant.</summary>
         private static bool MayBeText(Value value, string text)
         {

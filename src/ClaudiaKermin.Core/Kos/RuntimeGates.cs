@@ -60,7 +60,7 @@ namespace ClaudiaKermin.Core.Kos
 
         /// <summary>
         /// Physics warp is allowed at all: the <c>physics_warp</c> player config now, and the Mission Setting later (ADR 0008).
-        /// False unless the caller sets it, so a forgotten input refuses.
+        /// False unless the caller sets it, so a forgotten input refuses; the patches set it from <c>physics_warp</c>, which defaults to true.
         /// </summary>
         public bool PhysicsWarpAllowed;
 
