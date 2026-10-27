@@ -338,6 +338,156 @@ namespace ClaudiaKermin.Core.Tests
             Assert.DoesNotContain(mission.View.Log, e => e.Text == Approved);
         }
 
+        // ---- Stops, hand-backs and attention (#330) ----
+
+        private const string NoRoomStop = "Auto Mode stopped: the Spending Cap has no room for this plan's Debrief and the next plan. Approve it yourself or raise the cap.";
+
+        [Fact]
+        public void ARoomCheckFailureStopsWithTheMessageInTheLogAndTheViewAndCallsThePlayerWithItAndAutoModeStaysTicked()
+        {
+            var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse"), ScriptedResponse.Fixture("mission-sequence-plan.sse")), AutoModeOn());
+            var watch = new AttentionWatch();
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 0.90m, Sonnet));
+            Baseline(watch, mission);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval && !v.Busy);
+            Assert.Equal(AttentionKind.Approval, watch.Observe(mission.View).Kind);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval && !v.Busy);
+
+            Assert.Contains(QuickReply.Approve, mission.View.QuickReplies);
+            Assert.True(mission.View.AutoMode);
+            Assert.Equal(NoRoomStop, mission.View.AutoModeStop);
+            mission.Send(new UtAdvanced(1300));
+            Assert.Single(mission.View.Log, e => e.Text == NoRoomStop && e.Kind == LogKind.Notice);
+            var alert = watch.Observe(mission.View);
+            Assert.Equal(AttentionKind.Approval, alert.Kind);
+            Assert.Equal(NoRoomStop, alert.Text);
+            Assert.Null(watch.Observe(mission.View));
+        }
+
+        [Fact]
+        public void RaisingTheCapOnAWaitingSequencePlanApprovesItAndLiftsTheStop()
+        {
+            var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse"), ScriptedResponse.Fixture("mission-sequence-plan.sse")), AutoModeOn());
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 0.90m, Sonnet));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval && !v.Busy);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval && !v.Busy);
+            Assert.Equal(NoRoomStop, mission.View.AutoModeStop);
+            var blocked = CostLines(mission).Single(l => l.GetProperty("event").GetString() == "blocked");
+
+            mission.Send(new RaiseCap(mission.View.Spent + mission.View.HeldCharges + blocked.GetProperty("amount").GetDecimal()));
+            Assert.Equal(MissionStage.Running, mission.View.Stage);
+            Assert.Equal("", mission.View.AutoModeStop);
+            Assert.Single(mission.View.Log, e => e.Text == Approved);
+            Assert.True(mission.View.AutoMode);
+        }
+
+        [Fact]
+        public void AnAutomaticApprovalRaisesNoAttentionAndPostsNoScreenMessage()
+        {
+            var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse"), ScriptedResponse.Fixture("mission-sequence-plan.sse")), AutoModeOn());
+            var watch = new AttentionWatch();
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
+            Baseline(watch, mission);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval && !v.Busy);
+            Assert.Equal(AttentionKind.Approval, watch.Observe(mission.View).Kind);
+            mission.Send(new Approve());
+            mission.TakeCommands();
+
+            DrainUntil(mission, v => v.Stage == MissionStage.Running);
+            var commands = mission.TakeCommands();
+            Assert.Single(commands.OfType<StartScript>());
+            Assert.DoesNotContain(commands.OfType<PostScreenMessage>(), m => m.Text.Contains("for your Approval"));
+            Assert.DoesNotContain(commands, c => c is DropWarp);
+            Assert.Null(watch.Observe(mission.View));
+        }
+
+        [Fact]
+        public void AnAutomaticReplanRaisesNoScreenMessageForTheUnsafeScript()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport, AutoModeOn(), new QuicksaveCheck());
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new Approve());
+            mission.TakeCommands();
+            DrainUntil(mission, v => v.Stage == MissionStage.Running && transport.Requests.Count == 4);
+            Assert.DoesNotContain(mission.TakeCommands().OfType<PostScreenMessage>(), m => m.Text.Contains("safe script"));
+        }
+
+        [Fact]
+        public void AManualStretchADueTimeAndASecondUnsafeScriptEachShowTheirWaitingForYouLineAndCallThePlayerWithIt()
+        {
+            var manual = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse"), ScriptedResponse.Fixture("mission-sequence-plan-manual.sse")), AutoModeOn());
+            var manualWatch = new AttentionWatch();
+            ToSequencePlan(manual, 10m, manualWatch);
+            AssertWaitingForYou(manual, manualWatch, "Auto Mode is waiting for you: a Manual stretch.", AttentionKind.Approval);
+
+            var due = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), "\"due_time_ut\":1250,")), AutoModeOn());
+            var dueWatch = new AttentionWatch();
+            ToSequencePlan(due, 10m, dueWatch);
+            AssertWaitingForYou(due, dueWatch, "Auto Mode is waiting for you: a Due Time.", AttentionKind.Approval);
+
+            var unsafeScript = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"));
+            var failing = Control(unsafeScript, AutoModeOn(), new QuicksaveCheck());
+            var failingWatch = new AttentionWatch();
+            CraftCheckRouter.StartChecked(failing, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
+            Baseline(failingWatch, failing);
+            DrainUntil(failing, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            failing.Send(new Approve());
+            DrainUntil(failing, v => v.Stage == MissionStage.UnsafeScript && !v.Busy && unsafeScript.Requests.Count == 5);
+            AssertWaitingForYou(failing, failingWatch, "Auto Mode is waiting for you: the script failed again after a re-plan.", AttentionKind.Pause);
+        }
+
+        [Fact]
+        public void APausedMissionShowsTheWaitingForYouLineAndCallsThePlayerWithIt()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Error(529, "overloaded_error", "Overloaded"),
+                ScriptedResponse.Error(529, "overloaded_error", "Overloaded"),
+                ScriptedResponse.Error(529, "overloaded_error", "Overloaded"),
+                ScriptedResponse.Error(529, "overloaded_error", "Overloaded"));
+            var mission = Control(transport, AutoModeOn());
+            var watch = new AttentionWatch();
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
+            Baseline(watch, mission);
+            DrainUntil(mission, v => v.Stage == MissionStage.Paused);
+            AssertWaitingForYou(mission, watch, "Auto Mode is waiting for you: the Mission is Paused.", AttentionKind.Pause);
+        }
+
+        [Fact]
+        public void NoStopLineWithAutoModeOff()
+        {
+            var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse"), ScriptedResponse.Fixture("mission-sequence-plan-manual.sse")));
+            var watch = new AttentionWatch();
+            ToSequencePlan(mission, 10m, watch);
+            Assert.Equal("", mission.View.AutoModeStop);
+            Assert.DoesNotContain(mission.View.Log, e => e.Text.StartsWith("Auto Mode"));
+            Assert.Equal("Claudia has a plan for your Approval.", watch.Observe(mission.View).Text);
+        }
+
+        private static void AssertWaitingForYou(MissionControl mission, AttentionWatch watch, string line, AttentionKind kind)
+        {
+            Assert.True(mission.View.AutoMode);
+            Assert.Equal(line, mission.View.AutoModeStop);
+            mission.Send(new UtAdvanced(1300));
+            Assert.Single(mission.View.Log, e => e.Text == line && e.Kind == LogKind.Notice);
+            var alert = watch.Observe(mission.View);
+            Assert.Equal(kind, alert.Kind);
+            Assert.Equal(line, alert.Text);
+        }
+
         // ---- The switch ----
 
         [Fact]
@@ -624,9 +774,16 @@ namespace ClaudiaKermin.Core.Tests
             return mission;
         }
 
-        private void ToSequencePlan(MissionControl mission, decimal cap = 10m)
+        /// <summary>The watch's baseline is the Mission as it began, as the adapter's first view of it would be.</summary>
+        private static void Baseline(AttentionWatch watch, MissionControl mission)
+        {
+            Assert.Null(watch.Observe(new MissionView { MissionId = mission.View.MissionId, Stage = MissionStage.Planning }));
+        }
+
+        private void ToSequencePlan(MissionControl mission, decimal cap = 10m, AttentionWatch watch = null)
         {
             CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, cap, Sonnet));
+            if (watch != null) Baseline(watch, mission);
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
             mission.Send(new Approve());
             DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval || v.Stage == MissionStage.Running);

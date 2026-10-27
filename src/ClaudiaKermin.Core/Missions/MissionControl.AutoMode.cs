@@ -31,6 +31,10 @@ namespace ClaudiaKermin.Core.Missions
             /// for the player (not saved).
             /// </summary>
             public bool AutoModeReplanned;
+            /// <summary>Why Auto Mode is waiting for the player on the plan in hand ("" when it isn't); see <see cref="AutoModeStopLine"/> (not saved).</summary>
+            public string AutoModeStop = "";
+            /// <summary>The stop line last written to the log, so a wait that lasts through many inputs is logged once (not saved).</summary>
+            public string AutoModeStopLogged = "";
         }
 
         /// <summary>What a plan in hand waits for, though the player's Approval was given in advance.</summary>
@@ -70,6 +74,35 @@ namespace ClaudiaKermin.Core.Missions
         /// recommendation, a reduced goal and an unsafe script.
         /// </summary>
         private void ApproveInAdvance(Mission mission)
+        {
+            // A request in flight keeps the wait as it was (a question asked meanwhile doesn't lift it).
+            if (!mission.InFlight) mission.AutoModeStop = "";
+            ApproveOrWait(mission);
+            var stop = AutoModeStopLine(mission);
+            if (stop != mission.AutoModeStopLogged)
+            {
+                mission.AutoModeStopLogged = stop;
+                if (stop.Length > 0) Note(LogKind.Notice, stop);
+            }
+        }
+
+        /// <summary>
+        /// The line for a hand-back under Auto Mode (spec #327, Wording): the log's line, the view's <c>AutoModeStop</c> and
+        /// the text of the attention it raises. "" when Auto Mode is off, in a Blackout (whose own lines speak) or not waiting.
+        /// </summary>
+        private static string AutoModeStopLine(Mission mission)
+        {
+            if (!mission.AutoMode || mission.Blackout) return "";
+            if (mission.Stage == MissionStage.Paused && !mission.InFlight) return AutoModeWaitsFor("the Mission is Paused");
+            return mission.AutoModeStop;
+        }
+
+        private static string AutoModeWaitsFor(string what)
+        {
+            return "Auto Mode is waiting for you: " + what + ".";
+        }
+
+        private void ApproveOrWait(Mission mission)
         {
             if (!mission.Blackout && !mission.AutoMode) return;
             if (MissionOver) return;
@@ -124,6 +157,7 @@ namespace ClaudiaKermin.Core.Missions
             else
             {
                 mission.AutoModeApprovedFor = inHand;
+                RetractPlanNews();
                 Note(LogKind.Notice, AutoModeApprovedNote);
             }
             Approval();
@@ -168,6 +202,7 @@ namespace ClaudiaKermin.Core.Missions
                 return true;
             }
             mission.AutoModeReplanned = true;
+            RetractPlanNews();
             Note(LogKind.Notice, AutoModeReplannedNote);
             ScriptRetried(null, replan: true);
             return true;
@@ -175,11 +210,23 @@ namespace ClaudiaKermin.Core.Missions
 
         /// <summary>
         /// The plan waits for the player as any plan does, with the usual quick replies and attention. In a Blackout the log
-        /// says so once; under Auto Mode nothing more is said yet (the stop messages are spec #327's Wording).
+        /// says so once; under Auto Mode the stop line is set (<see cref="AutoModeStopLine"/>), the one place the wording is used.
         /// </summary>
         private void WaitsForPlayer(Mission mission, AdvanceWait wait, string planName)
         {
-            if (mission.Blackout) WaitsForLink(mission, wait, planName);
+            if (mission.Blackout)
+            {
+                WaitsForLink(mission, wait, planName);
+                return;
+            }
+            // Under Auto Mode the player is called with the stop line; the first Mission Plan is their go-ahead, not a stop.
+            switch (wait)
+            {
+                case AdvanceWait.ManualStretch: mission.AutoModeStop = AutoModeWaitsFor("a Manual stretch"); break;
+                case AdvanceWait.DueTime: mission.AutoModeStop = AutoModeWaitsFor("a Due Time"); break;
+                case AdvanceWait.ScriptFailedAgain: mission.AutoModeStop = AutoModeWaitsFor("the script failed again after a re-plan"); break;
+                case AdvanceWait.NoRoom: mission.AutoModeStop = AutoModeNoRoomStop; break;
+            }
         }
 
         /// <summary>
@@ -223,6 +270,26 @@ namespace ClaudiaKermin.Core.Missions
             return DebriefReserve(mission, debrief) + _config.Prices.WorstCase(mission.Model, nextInput, next.MaxTokens);
         }
 
+        /// <summary>The screen message for the plan just offered, still unsent: Auto Mode takes it back if it approves the plan in the same input (not saved).</summary>
+        private AdapterCommand _planNews;
+
+        /// <summary>Claudia's news that a plan waits for Approval (<see cref="HerNews"/>), kept so an automatic approval can retract it.</summary>
+        private void PlanNews(string text)
+        {
+            var before = _commands.Count;
+            HerNews(text);
+            _planNews = _commands.Count > before ? _commands[_commands.Count - 1] : null;
+        }
+
+        /// <summary>An automatic approval or re-plan raises no screen message: the plan is never one that waits.</summary>
+        private void RetractPlanNews()
+        {
+            if (_planNews != null) _commands.Remove(_planNews);
+            _planNews = null;
+        }
+
+        /// <summary>Auto Mode stopped because the Spending Cap has no room for the Debrief and next plan request after the plan.</summary>
+        private const string AutoModeNoRoomStop = "Auto Mode stopped: the Spending Cap has no room for this plan's Debrief and the next plan. Approve it yourself or raise the cap.";
         /// <summary>Logged after a plan's card when Auto Mode approves it.</summary>
         private const string AutoModeApprovedNote = "Approved by Auto Mode.";
         /// <summary>Logged after the "Couldn't produce a safe script" card when Auto Mode re-plans it.</summary>

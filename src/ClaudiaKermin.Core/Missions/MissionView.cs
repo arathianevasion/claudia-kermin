@@ -330,6 +330,8 @@ namespace ClaudiaKermin.Core.Missions
         public bool Remote;
         /// <summary>The Mission is in Auto Mode: Claudia's plans after the first Mission Plan are approved as they arrive, while the Spending Cap has room.</summary>
         public bool AutoMode;
+        /// <summary>Under Auto Mode: why it is waiting for the player (spec #327, Wording), also the text of the attention it raises; "" when it isn't.</summary>
+        public string AutoModeStop = "";
         /// <summary>While Paused for EVA science: what the player is to do by hand, then Resume; "" otherwise.</summary>
         public string EvaScience = "";
         /// <summary>

@@ -29,6 +29,31 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AnAutoModeStopOnAPlanIsAnApprovalAlertWithTheStopAsItsText()
+        {
+            var watch = new AttentionWatch();
+            watch.Observe(View(MissionStage.Planning));
+            var view = Awaiting(Card(LogKind.SequencePlan));
+            view.AutoModeStop = "Auto Mode is waiting for you: a Manual stretch.";
+            var alert = watch.Observe(view);
+            Assert.Equal(AttentionKind.Approval, alert.Kind);
+            Assert.Equal(view.AutoModeStop, alert.Text);
+        }
+
+        [Fact]
+        public void AnAutoModeStopOnAReducedGoalCallsThePlayerOnce()
+        {
+            var watch = new AttentionWatch();
+            watch.Observe(View(MissionStage.Planning));
+            // The Debrief that offered the goal is its own alert; the stop is what follows it.
+            Assert.Equal(AttentionKind.Debrief, watch.Observe(View(MissionStage.AwaitingReducedGoal, Card(LogKind.Debrief))).Kind);
+            var view = View(MissionStage.AwaitingReducedGoal, Card(LogKind.Debrief));
+            view.AutoModeStop = "Auto Mode stopped: no room.";
+            Assert.Equal("Auto Mode stopped: no room.", watch.Observe(view).Text);
+            Assert.Null(watch.Observe(view));
+        }
+
+        [Fact]
         public void NoMissionNeedsNobody()
         {
             Assert.Null(new AttentionWatch().Observe(new MissionView()));
