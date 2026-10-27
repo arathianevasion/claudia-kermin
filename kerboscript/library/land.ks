@@ -47,7 +47,8 @@
 //|   burn_margin [1.10]: braking starts this much farther out than the stopping distance needs.
 //|   max_duration ["auto"]: the wait to the deorbit burn plus 2400 s.
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block.
-//| Extra results: slope (degrees where it came to rest), touchdown_speed_actual (m/s),
+//| Stages off a stage that can't cover the braking before the fall (within stage_limit), so plan the deorbit on it if you like.
+//| Extra results: staged_before_braking (true if it did; stage_left is the stage it left), slope (degrees where it came to rest), touchdown_speed_actual (m/s),
 //| touchdown_h_speed (m/s sideways at touchdown), lean (degrees from upright once settled),
 //| reversals (times the descent turned back after braking began; 0 normally), distance_to_target
 //| (m from the site asked for, or the spot chosen for "any" or a biome), best_effort (true if nothing within
@@ -489,6 +490,41 @@ function land_turn_back {
   return s < -max_overshoot and speed < 1.
 }
 
+// ---- Pure helpers: staging off a short stage before the fall (#382) ----
+
+// Whether the current stage, with stage_dv m/s (vacuum) left, can't cover the braking need (m/s, as land's
+// delta-v check works it out) times margin, so it should be staged off before the fall. Pure.
+function land_stage_short {
+  parameter stage_dv, brake_need, margin.
+  return stage_dv < brake_need * margin.
+}
+
+// "" if the stages below the current one can be fired early, else why not: "stage_limit" (the next stage
+// is at or below it), "unsafe" (a stage on the way would fire parachutes or separate a heat shield) or
+// "no engines" (the run of stages never reaches engines). engines_below / unsafe_below as for
+// claudia_stage_chain, from the next stage to fire downwards. Pure.
+function land_stage_early_block {
+  parameter stage_number, stage_limit, engines_below, unsafe_below.
+  if claudia_stage_chain(stage_number, stage_limit, false, false, engines_below, unsafe_below) {
+    return "".
+  }
+  local step is 0.
+  until step >= engines_below:length {
+    if stage_number - step <= stage_limit or stage_number - step <= 0 {
+      return "stage_limit".
+    }
+    if unsafe_below[step] {
+      return "unsafe".
+    }
+    set step to step + 1.
+  }
+  // No stage below to fire: the current one is at stage_limit.
+  if engines_below:length = 0 {
+    return "stage_limit".
+  }
+  return "no engines".
+}
+
 // ---- Pure helpers: when braking starts, for a craft that turns slowly (#380) ----
 
 // The horizontal deceleration (m/s^2) braking plans on: 95% of a_max (m/s^2) with g (m/s^2) held up.
@@ -843,7 +879,8 @@ function land_node_for {
 function land {
   parameter options is lexicon().
   local extra is lexicon("slope", -1, "touchdown_speed_actual", -1, "touchdown_h_speed", -1, "lean", -1, "reversals", 0,
-    "distance_to_target", -1, "best_effort", false, "burn_start_ut", -1, "impact_ut", -1, "biome", "").
+    "distance_to_target", -1, "best_effort", false, "burn_start_ut", -1, "impact_ut", -1, "biome", "",
+    "staged_before_braking", false, "stage_left", -1).
   local ctx is claudia_begin("land", options, land_defaults(), "auto").
   if ctx:error <> "" {
     return claudia_finish(ctx, false, ctx:error, extra).
@@ -970,6 +1007,23 @@ function land {
     }
   }
 
+  // After the deorbit and correction burns, before the fall: a current stage that can't cover the braking
+  // is staged off now, in vacuum and not braking, so the craft has the fall to settle and turn (#382).
+  // The braking need is the figure above less the deorbit burn already flown; it already carries its
+  // 1.2 x and 100 m/s of margin, so the decision adds none. It stays put if the craft would not have the
+  // braking left without the stage, or if stock reads no delta-v (as with the check above).
+  local brake_need is needed - abs(deorbit_dv).
+  local stage_dv is ship:stagedeltav(stage:number):vacuum.
+  if ship:deltav:current > 0 and land_stage_short(stage_dv, brake_need, 1) and ship:deltav:current - stage_dv >= brake_need {
+    local early is land_stage_early(ctx).
+    if early:staged {
+      set extra:staged_before_braking to true.
+      set extra:stage_left to early:left.
+    }
+    addons:claudia:blocktrace("land", lexicon("phase", "stage", "staged", early:staged, "note", early:note,
+      "brake_need", round(brake_need))).
+  }
+
   // The craft's turn, read once for the descent: the fall turns it onto its braking direction, and
   // braking starts earlier by the turn still left (#380). The call is block-internal (ADR 0006, ADR
   // 0007), so it sits in the block. A craft with no torque gets no turn allowance.
@@ -1029,6 +1083,42 @@ function land {
     }
   }
   return claudia_finish(ctx, true, "", extra).
+}
+
+// Stages off the current stage, on through decoupler-only stages into engines (the run claudia_autostage
+// uses), if the stages below allow it. Returns lexicon(staged, left (the stage it left), note).
+function land_stage_early {
+  parameter ctx.
+  local left is stage:number.
+  local limit is ctx:opt:stage_limit.
+  local engines_below is list().
+  local unsafe_below is list().
+  local n is left - 1.
+  until n < 0 or n < limit {
+    engines_below:add(claudia_stage_has_engine(n)).
+    unsafe_below:add(claudia_stage_unsafe(n)).
+    set n to n - 1.
+  }
+  local blocked is land_stage_early_block(left, limit, engines_below, unsafe_below).
+  if blocked <> "" {
+    return lexicon("staged", false, "left", left, "note", "not staged early, carrying on: " + blocked).
+  }
+  wait until stage:ready.
+  local fired is left - 1.
+  stage.
+  // The current stage still gives thrust, so claudia_stage_run_on gets had_thrust false to run on
+  // through any decoupler-only stages to the engines.
+  local fired_engines is claudia_stage_has_engine(fired).
+  until not claudia_stage_run_on(fired, limit, fired_engines, false) {
+    wait until stage:ready.
+    stage.
+    set fired to fired - 1.
+    set fired_engines to claudia_stage_has_engine(fired).
+  }
+  wait 0.5.
+  set ctx:parts to ship:parts:length.
+  set ctx:last_ut to time:seconds.
+  return lexicon("staged", true, "left", left, "note", "staged from stage " + left + " to " + stage:number).
 }
 
 // The shared wait loop (claudia_warp_to) to ut, with a stop condition: ended early (returns "") once

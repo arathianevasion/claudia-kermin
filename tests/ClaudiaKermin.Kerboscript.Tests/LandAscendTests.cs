@@ -233,6 +233,35 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal("27500", One("round(land_stop_distance(500, 5, 1.1), 3)"));
         }
 
+        [Theory]
+        // Mun Shot v2: stage 3 had 554 m/s against about 600+ m/s of braking need.
+        [InlineData(554, 600, "True")]
+        // Covers the need but not with the margin (600 * 1.1 = 660).
+        [InlineData(650, 600, "True")]
+        [InlineData(700, 600, "False")]
+        public void Land_stages_a_stage_that_cannot_cover_the_braking_with_margin(double stageDv, double need, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "land_stage_short({0}, {1}, 1.1)", stageDv, need)));
+        }
+
+        [Theory]
+        // Stage 3, next stage 2 holds engines: fires.
+        [InlineData(3, 0, "list(true)", "list(false)", "")]
+        // A decoupler-only stage 2 then engines in 1: runs on.
+        [InlineData(3, 0, "list(false, true)", "list(false, false)", "")]
+        // Next stage fires parachutes or a heat shield.
+        [InlineData(3, 0, "list(true)", "list(true)", "unsafe")]
+        // The next stage is at stage_limit.
+        [InlineData(3, 3, "list()", "list()", "stage_limit")]
+        [InlineData(3, 2, "list(true)", "list(false)", "")]
+        // No engines below at all.
+        [InlineData(2, 0, "list(false, false)", "list(false, false)", "no engines")]
+        public void Land_stages_early_only_into_engines_within_the_limit_and_nothing_unsafe(int stageNumber, int limit, string engines, string unsafeBelow, string expected)
+        {
+            Assert.Equal(expected, string.Join("", Run(string.Format(CultureInfo.InvariantCulture,
+                "print land_stage_early_block({0}, {1}, {2}, {3}) + \"|\".", stageNumber, limit, engines, unsafeBelow))).TrimEnd('|'));
+        }
+
         [Fact]
         public void Land_works_out_the_time_to_impact_from_height_and_downward_speed()
         {
