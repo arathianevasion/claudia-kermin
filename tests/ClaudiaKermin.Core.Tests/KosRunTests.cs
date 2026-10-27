@@ -49,6 +49,82 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("Undefined Variable Name 'nope'.\nAt claudia-test on line 2:", outcome.ErrorText);
         }
 
+        // ---- A block's trace (#365) ----
+
+        private static Dictionary<string, object> Descent(string phase, double h)
+        {
+            return new Dictionary<string, object> { { "phase", phase }, { "h", h }, { "v_h", 201.5 } };
+        }
+
+        [Fact]
+        public void ARunLostMidBlockReportsTheBlocksLastTracedState()
+        {
+            var run = new KosRun(Blank);
+            run.BlockTraced("land", 428270, Descent("braking", 900));
+            run.BlockTraced("land", 428272.4, Descent("braking", 450));
+            run.Interrupted("the kOS processor was lost");
+            run.ProgramEnded();
+
+            var outcome = run.Finish(Blank);
+
+            // Still a run that failed, but the Debrief gets where the block was.
+            Assert.Equal(RunOutcomeKind.Interrupted, outcome.Kind);
+            Assert.Equal(false, outcome.Report["success"]);
+            Assert.Equal("land", outcome.Report["block"]);
+            Assert.Contains("no Script Result", (string)outcome.Report["reason"]);
+            var last = (IDictionary<string, object>)outcome.Report["last_state"];
+            Assert.Equal("braking", last["phase"]);
+            Assert.Equal(450.0, last["h"]);
+            Assert.Equal(428272.4, last["ut"]);
+        }
+
+        [Fact]
+        public void ABlockThatReturnedLeavesNoStateForANoReport()
+        {
+            var run = new KosRun(Blank);
+            run.BlockTraced("land", 100, Descent("touchdown", 0));
+            run.BlockEnded("land");
+            run.ProgramEnded();
+
+            var outcome = run.Finish(Blank);
+
+            Assert.Equal(RunOutcomeKind.NoReport, outcome.Kind);
+            Assert.Null(outcome.Report);
+        }
+
+        [Fact]
+        public void AnInnerBlockEndingKeepsTheOuterBlocksState()
+        {
+            var run = new KosRun(Blank);
+            run.BlockTraced("land", 100, Descent("fall", 3000));
+            run.BlockEnded("exec_node");
+            run.ProgramEnded();
+
+            Assert.Equal("land", run.Finish(Blank).Report["block"]);
+        }
+
+        [Fact]
+        public void TheScriptsOwnReportWinsOverATrace()
+        {
+            var run = new KosRun(Blank);
+            run.BlockTraced("land", 100, Descent("braking", 900));
+            run.Report(Report("ok", true));
+            run.ProgramEnded();
+
+            var outcome = run.Finish(Blank);
+
+            Assert.Equal(RunOutcomeKind.Finished, outcome.Kind);
+            Assert.False(outcome.Report.ContainsKey("last_state"));
+        }
+
+        [Fact]
+        public void ATraceLineForTheLogNamesTheBlockTheUtAndEachValueInOrder()
+        {
+            var state = new Dictionary<string, object> { { "phase", "braking" }, { "h", 450.0 }, { "v_h", 201.5 }, { "flat", true } };
+
+            Assert.Equal("land trace at UT 428272.4: phase braking, h 450, v_h 201.5, flat true", BlockTrace.Line("land", 428272.43, state));
+        }
+
         [Fact]
         public void AnAbortTheModRecordedIsAbortedWithItsReason()
         {

@@ -33,6 +33,9 @@ namespace ClaudiaKermin.KOS
             // The Core Library's claudia_begin and claudia_finish call these, so the Capcom strip can show progress with no Claude call.
             AddSuffix("BLOCKSTART", new OneArgsSuffix<StringValue>(BlockStart, "A Building Block began"));
             AddSuffix("BLOCKRESULT", new TwoArgsSuffix<StringValue, Lexicon>(BlockResult, "A Building Block returned its result"));
+            // A block's trace line for KSP.log (#365), e.g. land's descent; the last one stands for the block if the run ends
+            // without a Script Result. A report to the mod like BLOCKSTART, so the Script Check allows it anywhere.
+            AddSuffix("BLOCKTRACE", new TwoArgsSuffix<StringValue, Lexicon>(BlockTrace, "A Building Block traced its state for the log"));
             // The Core Library's waits read this: true holds in-script warp at 1x while the Mission needs the player (ADR 0004).
             AddSuffix("WARPHOLD", new Suffix<BooleanValue>(() => ScriptWarpHold.Held, "In-script warp is held at 1x while the Mission needs the player"));
             // The Core Library's waits mark themselves for the warp trace (#335), which times the 1x inside them. Common calls,
@@ -125,6 +128,12 @@ namespace ClaudiaKermin.KOS
         {
             var bridge = KosBridge.Instance;
             if (shared.KSPPart != null && bridge != null) bridge.OnBlock(shared.KSPPart.persistentId, block.ToString(), KosValues.ToDictionary(result));
+        }
+
+        private void BlockTrace(StringValue block, Lexicon state)
+        {
+            var bridge = KosBridge.Instance;
+            if (shared.KSPPart != null && bridge != null) bridge.OnBlockTrace(shared.KSPPart.persistentId, block.ToString(), KosValues.ToDictionary(state));
         }
 
         private void WaitStart(ScalarValue warpEnd)
