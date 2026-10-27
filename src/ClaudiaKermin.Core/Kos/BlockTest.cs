@@ -17,11 +17,16 @@ namespace ClaudiaKermin.Core.Kos
     /// <c>value</c> is a literal, never another field: a number; for <c>==</c> and <c>!=</c> also <c>true</c>,
     /// <c>false</c>, a vessel situation (<c>LANDED</c>), a stock body (<c>Kerbin</c>) or nothing (an empty
     /// string). Anything else (a field name, say) is refused when the spec is read; a test that needs to
-    /// compare two fields has its <c>test.ks</c> report the comparison.
+    /// compare two fields has its <c>test.ks</c> report the comparison. A field under <c>warp.</c> is read from the run's
+    /// warp trace instead (<see cref="WarpTrace.CheckFields"/>, e.g. <c>check = warp.first_request_real_s &lt; 10</c>): the
+    /// test's own block, or another block's first run as <c>warp.&lt;block&gt;.&lt;field&gt;</c>.
     /// </summary>
     public sealed class BlockTestSpec
     {
         private static readonly string[] Operators = { "==", "!=", "<=", ">=", "<", ">" };
+
+        /// <summary>A check on <c>warp.&lt;field&gt;</c> reads the run's <see cref="WarpTrace"/> (#335), for the test's own block.</summary>
+        private const string WarpPrefix = "warp";
 
         /// <summary>kOS's <c>status</c> values and the stock bodies' names: the words a check may compare with.</summary>
         private static readonly string[] KnownValues =
@@ -117,12 +122,17 @@ namespace ClaudiaKermin.Core.Kos
                 return new BlockTestResult(false, "FAIL " + Name + ": " + lines[0], lines);
             }
 
+            // warp.* reads the run's warp trace, not the Script Result.
+            var warp = new Dictionary<string, object>
+            {
+                { WarpPrefix, outcome.Trace == null ? new Dictionary<string, object>() : outcome.Trace.Checks(Block) },
+            };
             var passed = true;
             foreach (var check in Checks)
             {
                 var parts = Split(Name, check);
                 object actual;
-                var found = TryField(outcome.Report, parts[0], out actual);
+                var found = TryField(IsWarp(parts[0]) ? warp : outcome.Report, parts[0], out actual);
                 var ok = found && Holds(actual, parts[1], parts[2]);
                 passed &= ok;
                 lines.Add((ok ? "ok   " : "FAIL ") + check + (found ? " (got " + Format(actual) + ")" : " (missing)"));
@@ -160,9 +170,24 @@ namespace ClaudiaKermin.Core.Kos
             throw new FormatException(name + ": a check needs 'field op value': " + check);
         }
 
-        /// <summary>Throws unless the check's expected value is one <see cref="Holds"/> reads as a literal.</summary>
+        private static bool IsWarp(string field)
+        {
+            return field.StartsWith(WarpPrefix + ".", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Throws unless the check's expected value is one <see cref="Holds"/> reads as a literal, and a <c>warp.</c> field is
+        /// one the trace has (<c>warp.&lt;field&gt;</c> or <c>warp.&lt;block&gt;.&lt;field&gt;</c>).
+        /// </summary>
         private static void Readable(string name, string check, string[] parts)
         {
+            if (IsWarp(parts[0]))
+            {
+                var path = parts[0].Split('.');
+                if (path.Length > 3 || !WarpTrace.CheckFields.Contains(path[path.Length - 1], StringComparer.OrdinalIgnoreCase))
+                    throw new FormatException(name + ": '" + check + "' checks the warp trace for '" + parts[0].Substring(WarpPrefix.Length + 1)
+                        + "', which it doesn't have (it has warp." + string.Join(", warp.", WarpTrace.CheckFields.ToArray()) + ", and each under warp.<block>.)");
+            }
             double number;
             if (double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out number)) return;
             if (parts[1] == "==" || parts[1] == "!=")

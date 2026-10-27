@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Andrew Watson
 
 using System.Collections.Generic;
+using System.Linq;
 using ClaudiaKermin.Core.Kos;
 using Xunit;
 
@@ -174,6 +175,190 @@ namespace ClaudiaKermin.Core.Tests
         {
             var spec = BlockTestSpec.Parse("t", "block = exec_node\n" + check + "\n");
             Assert.Single(spec.Checks);
+        }
+
+        // ---- Checks on the warp trace (#335) ----
+
+        private const string CoastSpec = "block = coast\ncheck = success == true\ncheck = warp.first_request_real_s < 10\n";
+
+        private static RunOutcome Traced(WarpTrace trace)
+        {
+            return new RunOutcome(RunOutcomeKind.Finished, Report(true, 0.1, 1), "", "", false, trace);
+        }
+
+        /// <summary>A coast block that waits from real second 0, asking for warp at real second firstAsk (UT 1000 + firstAsk) to UT 6000.</summary>
+        private static WarpTrace Coast(double firstAsk)
+        {
+            var trace = new WarpTrace(100);
+            trace.BlockStarted("coast", 100);
+            trace.WaitStarted(100, 1000, 6000);
+            trace.Sample(100, 1000, 1);
+            trace.Sample(100 + firstAsk, 1000 + firstAsk, 1);
+            trace.Requested(100 + firstAsk, 1000 + firstAsk, 6000, "rails", null, "");
+            trace.Sample(101 + firstAsk, 1100 + firstAsk, 1000);
+            return trace;
+        }
+
+        [Fact]
+        public void AWarpCheckPassesWhenTheBlocksFirstRequestCameSoonEnough()
+        {
+            var result = BlockTestSpec.Parse("coast", CoastSpec).Judge(Traced(Coast(3)));
+            Assert.True(result.Passed, string.Join("\n", result.Lines));
+            Assert.Contains("ok   warp.first_request_real_s < 10 (got 3)", result.Lines);
+        }
+
+        [Fact]
+        public void AFailingWarpCheckFailsTheTest()
+        {
+            var result = BlockTestSpec.Parse("coast", CoastSpec).Judge(Traced(Coast(25)));
+            Assert.False(result.Passed);
+            Assert.Contains("FAIL warp.first_request_real_s < 10 (got 25)", result.Lines);
+        }
+
+        [Fact]
+        public void ABlockThatNeverAskedForWarpFailsItsFirstRequestCheck()
+        {
+            var trace = new WarpTrace(0);
+            trace.BlockStarted("coast", 0);
+            trace.BlockEnded("coast", 50);
+            var result = BlockTestSpec.Parse("coast", CoastSpec).Judge(Traced(trace));
+            Assert.False(result.Passed);
+            Assert.Contains("FAIL warp.first_request_real_s < 10 (missing)", result.Lines);
+        }
+
+        [Fact]
+        public void ARunWithNoTraceFailsItsWarpChecks()
+        {
+            var result = BlockTestSpec.Parse("coast", CoastSpec).Judge(Finished(Report(true, 0.1, 1)));
+            Assert.False(result.Passed);
+            Assert.Contains("FAIL warp.first_request_real_s < 10 (missing)", result.Lines);
+        }
+
+        [Fact]
+        public void TheTraceGivesRealTimeAt1xInsideWaitsTheTopRateAndRetries()
+        {
+            var trace = new WarpTrace(0);
+            trace.BlockStarted("coast", 0);
+            trace.Sample(0, 1000, 1);
+            // 20 real s at 1x before the wait doesn't count.
+            trace.Sample(20, 1020, 1);
+            trace.WaitStarted(20, 1020, 9000);
+            trace.Sample(24, 1024, 1);
+            trace.Requested(24, 1024, 9000, "rails", null, "");
+            trace.Sample(25, 1100, 1000);
+            trace.Sample(30, 6000, 10000);
+            // KSP cut it; 6 s at 1x before the wait asks again. With the frame after each request, 12 s at 1x in all.
+            trace.Sample(31, 6001, 1);
+            trace.Sample(37, 6007, 1);
+            trace.Requested(37, 6007, 9000, "rails", null, "");
+            trace.Sample(38, 6100, 1000);
+            trace.WaitEnded(40, 9000);
+            trace.Sample(60, 9020, 1);
+            trace.BlockEnded("coast", 60);
+
+            var spec = BlockTestSpec.Parse("coast", "block = coast\n"
+                + "check = warp.first_request_real_s == 24\ncheck = warp.real_s_at_1x == 12\n"
+                + "check = warp.max_rate == 10000\ncheck = warp.retries == 1\ncheck = warp.coast.retries == 1\n");
+            var result = spec.Judge(Traced(trace));
+            Assert.True(result.Passed, string.Join("\n", result.Lines));
+        }
+
+        [Fact]
+        public void EachRequestKeepsItsTargetModeRateReachedAndKspsRefusal()
+        {
+            var trace = new WarpTrace(10);
+            trace.BlockStarted("exec_node", 10);
+            trace.WaitStarted(12, 500, 900);
+            trace.Requested(12, 500, 900, "rails", null, "Cannot warp faster than 1x while in atmosphere.");
+            trace.Sample(13, 501, 1);
+            trace.Requested(15, 503, 900, "physics", 4, "");
+            trace.Sample(16, 507, 4);
+
+            var first = trace.Entries[0];
+            Assert.Equal(WarpTraceKind.Request, first.Kind);
+            Assert.Equal("exec_node", first.Block);
+            Assert.Equal(2.0, first.RealS);
+            Assert.Equal(500.0, first.Ut);
+            Assert.Equal(900.0, first.TargetUt);
+            Assert.Equal("rails", first.Mode);
+            Assert.Null(first.RateAsked);
+            Assert.Equal(1.0, first.RateReached);
+            Assert.Equal("Cannot warp faster than 1x while in atmosphere.", first.Refusal);
+            Assert.Equal(1, first.Attempt);
+
+            var second = trace.Entries[1];
+            Assert.Equal("physics", second.Mode);
+            Assert.Equal(4.0, second.RateAsked);
+            Assert.Equal(4.0, second.RateReached);
+            Assert.Equal(2, second.Attempt);
+            Assert.True(second.Retry);
+        }
+
+        [Fact]
+        public void ARateThatFallsTo1xMidWaitIsADropAndADropAlreadyNamedIsNotCountedTwice()
+        {
+            var trace = new WarpTrace(0);
+            trace.BlockStarted("coast", 0);
+            trace.WaitStarted(0, 1000, 9000);
+            trace.Requested(0, 1000, 9000, "rails", null, "");
+            trace.Sample(1, 1100, 1000);
+            Assert.True(trace.Sample(2, 2000, 1));
+            trace.Dropped(2, 2000, "cut", "Cannot warp faster than 1x while the ship is under acceleration.");
+
+            trace.Requested(3, 2001, 9000, "rails", null, "");
+            trace.Sample(4, 2100, 1000);
+            // A drop the mod names itself (the player's, a hold, thrust) before the frame's sample.
+            trace.Dropped(5, 3000, "player", "");
+            Assert.False(trace.Sample(5, 3000, 1));
+            // At the request's target, falling to 1x is the warp ending, not a drop.
+            trace.Requested(6, 3001, 9000, "rails", null, "");
+            trace.Sample(7, 8000, 1000);
+            Assert.False(trace.Sample(8, 8995, 1));
+
+            var drops = trace.Entries.Where(e => e.Kind == WarpTraceKind.Drop).ToList();
+            Assert.Equal(new[] { "cut", "player" }, drops.Select(d => d.Drop));
+            Assert.Equal(1000.0, drops[0].RateReached);
+            Assert.Equal("Cannot warp faster than 1x while the ship is under acceleration.", drops[0].Refusal);
+        }
+
+        [Fact]
+        public void ANestedBlockCountsItsOwnFirstRequestAndSoDoesTheBlockAroundIt()
+        {
+            var trace = new WarpTrace(0);
+            trace.BlockStarted("circularize", 0);
+            trace.Sample(0, 0, 1);
+            trace.BlockStarted("exec_node", 30);
+            trace.WaitStarted(31, 100, 900);
+            trace.Requested(34, 103, 900, "rails", null, "");
+            var spec = BlockTestSpec.Parse("circularize", "block = circularize\n"
+                + "check = warp.first_request_real_s == 34\ncheck = warp.exec_node.first_request_real_s == 4\n");
+            Assert.True(spec.Judge(Traced(trace)).Passed);
+        }
+
+        [Theory]
+        [InlineData("check = warp.first_request_real_s < 10")]
+        [InlineData("check = warp.real_s_at_1x < 60")]
+        [InlineData("check = warp.max_rate >= 1000")]
+        [InlineData("check = warp.retries <= 3")]
+        [InlineData("check = warp.exec_node.first_request_real_s < 10")]
+        public void TheWarpTraceFieldsAreChecksASpecReads(string check)
+        {
+            Assert.Single(BlockTestSpec.Parse("t", "block = coast\n" + check + "\n").Checks);
+        }
+
+        [Fact]
+        public void AWarpCheckOnAFieldTheTraceDoesNotHaveIsRejectedWhenTheSpecIsRead()
+        {
+            var e = Assert.Throws<System.FormatException>(() => BlockTestSpec.Parse("t", "block = coast\ncheck = warp.first_reqest_real_s < 10\n"));
+            Assert.Contains("first_reqest_real_s", e.Message);
+        }
+
+        [Fact]
+        public void TheTraceReadsAsOneLinePerEntryAndOnePerBlock()
+        {
+            var lines = Coast(3).Lines();
+            Assert.Contains("request real 3.0 s, UT 1003, target 6000, rails, asked KSP's pick, reached 1000x, attempt 1, in coast", lines);
+            Assert.Contains("block coast: first request 3.0 s, 4.0 s at 1x in waits, top rate 1000x, 1 requests, 0 retries, 0 drops", lines);
         }
     }
 }

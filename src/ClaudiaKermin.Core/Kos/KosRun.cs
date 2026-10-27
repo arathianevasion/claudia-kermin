@@ -40,8 +40,13 @@ namespace ClaudiaKermin.Core.Kos
         /// <summary>The mod aborted the run, even if the script had already reported.</summary>
         public bool WasAborted { get; private set; }
 
-        public RunOutcome(RunOutcomeKind kind, IDictionary<string, object> report, string errorText, string reason, bool wasAborted)
+        /// <summary>The run's warp trace (#335): every warp request and drop, and each block's warp timings; null if none was kept.</summary>
+        public WarpTrace Trace { get; private set; }
+
+        public RunOutcome(RunOutcomeKind kind, IDictionary<string, object> report, string errorText, string reason, bool wasAborted,
+            WarpTrace trace = null)
         {
+            Trace = trace;
             Kind = kind;
             Report = report;
             ErrorText = errorText ?? "";
@@ -78,6 +83,9 @@ namespace ClaudiaKermin.Core.Kos
         {
             _terminalBefore = terminalBefore;
         }
+
+        /// <summary>The run's warp trace (#335), which the adapter feeds; handed on in the outcome. Null if none is kept.</summary>
+        public WarpTrace Trace { get; set; }
 
         /// <summary>The script called <c>ADDONS:CLAUDIA:REPORT(lexicon)</c>.</summary>
         public void Report(IDictionary<string, object> report)
@@ -116,13 +124,13 @@ namespace ClaudiaKermin.Core.Kos
         public RunOutcome Finish(IList<string> terminalAfter)
         {
             var aborted = _abortReason != null;
-            if (_report != null) return new RunOutcome(RunOutcomeKind.Finished, _report, "", _abortReason, aborted);
+            if (_report != null) return new RunOutcome(RunOutcomeKind.Finished, _report, "", _abortReason, aborted, Trace);
             var lines = TerminalText.LinesSince(_terminalBefore, terminalAfter);
             var printed = string.Join("\n", lines);
-            if (aborted) return new RunOutcome(RunOutcomeKind.Aborted, null, printed, _abortReason, true);
-            if (_interruptReason != null) return new RunOutcome(RunOutcomeKind.Interrupted, null, printed, _interruptReason, false);
-            if (lines.Contains(BreakMessage)) return new RunOutcome(RunOutcomeKind.StoppedByPlayer, null, printed, "", false);
-            return new RunOutcome(RunOutcomeKind.NoReport, null, printed, "", false);
+            if (aborted) return new RunOutcome(RunOutcomeKind.Aborted, null, printed, _abortReason, true, Trace);
+            if (_interruptReason != null) return new RunOutcome(RunOutcomeKind.Interrupted, null, printed, _interruptReason, false, Trace);
+            if (lines.Contains(BreakMessage)) return new RunOutcome(RunOutcomeKind.StoppedByPlayer, null, printed, "", false, Trace);
+            return new RunOutcome(RunOutcomeKind.NoReport, null, printed, "", false, Trace);
         }
     }
 }
