@@ -141,6 +141,49 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(due ? "True" : "False", One(string.Format(CultureInfo.InvariantCulture, "reentry_shield_due({0}, {1}, {2})", gone.ToString().ToLowerInvariant(), speed, agl)));
         }
 
+        [Theory]
+        // reentry_warp_cap(hot_pct, drogues_out, mains_out, agl, event_eta): the heat cap, 2x over 50% of a part's limit.
+        [InlineData("20, false, false, 30000, -1", "4")]
+        [InlineData("50, false, false, 30000, -1", "4")]
+        [InlineData("50.1, false, false, 30000, -1", "2")]
+        [InlineData("90, false, false, 30000, -1", "2")]
+        // Drogues 3x, mains 4x, each wherever the heat is (the chutes outlast the heating).
+        [InlineData("90, true, false, 5000, -1", "3")]
+        [InlineData("20, true, true, 1000, -1", "4")]
+        // 1x under 100 m from the ground, chutes or not; 100 m itself is still fast.
+        [InlineData("20, true, true, 99.9, -1", "1")]
+        [InlineData("20, true, true, 100, -1", "4")]
+        [InlineData("20, true, false, 50, -1", "1")]
+        // 1x from 10 s before a predicted chute opening or shield drop; none predicted (-1) or further off is not.
+        [InlineData("20, false, false, 30000, 10", "1")]
+        [InlineData("20, false, false, 30000, 0", "1")]
+        [InlineData("20, false, false, 30000, 10.1", "4")]
+        [InlineData("90, true, false, 5000, 5", "1")]
+        public void The_reentry_physics_rate_is_capped_by_heat_chutes_the_last_100_m_and_coming_events(string args, string expected)
+        {
+            Assert.Equal(expected, One("reentry_warp_cap(" + args + ")"));
+        }
+
+        [Theory]
+        [InlineData(9000, 3000, 100, "60")]
+        [InlineData(3000, 3000, 100, "0")]
+        [InlineData(9000, 3000, 0, "-1")]
+        [InlineData(9000, 3000, -5, "-1")]
+        public void The_time_to_an_event_is_the_distance_over_the_rate(double value, double limit, double rate, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "reentry_eta_to({0}, {1}, {2})", value, limit, rate)));
+        }
+
+        [Theory]
+        [InlineData(-1, 8, "8")]
+        [InlineData(8, -1, "8")]
+        [InlineData(8, 5, "5")]
+        [InlineData(-1, -1, "-1")]
+        public void The_sooner_event_counts_and_none_is_ignored(double a, double b, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "reentry_eta_first({0}, {1})", a, b)));
+        }
+
         // #214: stock HeatShield1's ModuleDecouple is renamed by its menuName, so kOS lists its event as
         // "jettison heat shield", never "decouple", and a lookup by that one name found no shield to drop.
         [Theory]

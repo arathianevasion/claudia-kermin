@@ -10,7 +10,7 @@
 //| reentry(options): brings the craft down through the atmosphere of its body: waits (on rails) for
 //| the atmosphere if it is still in space, holds the heat shield forward (surface retrograde), drops
 //| the heat shield once the worst of the heating is over, opens the parachutes only when it is safe
-//| (never staged, never fired by hand) and ends once the craft is landed or splashed.
+//| (never staged, never fired by hand), physics-warping the fall (1x below 100 m), and ends once landed or splashed.
 //| Options:
 //|   chute_mode ["safe"]: "safe" opens the parachutes in two stages: drogue chutes first (under 500 m/s,
 //|     over 0.02 atm, or at the latest 3000 m above the ground), then the main parachutes once the drogues
@@ -53,6 +53,17 @@ function reentry_shield_speed { return 400. }
 function reentry_shield_last_agl { return 3000. }
 // Touchdown faster than this (m/s) fails the block.
 function reentry_touchdown_limit { return 15. }
+
+// Physics warp (the cap reentry gives claudia_warp_to, under the q rule): at most hot_cap times while the
+// hottest part is over hot_pct percent of its heat limit; drogue_cap under drogues; main_cap under mains.
+// Always 1x below low_agl metres above the ground, so the touchdown speed is measured fairly, and in the
+// last event_s seconds before a parachute opens or the heat shield drops.
+function reentry_warp_hot_pct { return 50. }
+function reentry_warp_hot_cap { return 2. }
+function reentry_warp_drogue_cap { return 3. }
+function reentry_warp_main_cap { return 4. }
+function reentry_warp_low_agl { return 100. }
+function reentry_warp_event_s { return 10. }
 
 // The block's own options and defaults (max_duration "auto" is resolved once the entry is known).
 function reentry_defaults {
@@ -140,6 +151,54 @@ function reentry_shield_due {
     return false.
   }
   return speed <= reentry_shield_speed() or agl <= reentry_shield_last_agl().
+}
+
+// Seconds until a falling value (height in m or speed in m/s) reaches limit, at rate per second: 0 if
+// it is there already, -1 if it is not falling (so no event is predicted).
+function reentry_eta_to {
+  parameter value, limit, rate.
+  if value <= limit {
+    return 0.
+  }
+  if rate <= 0 {
+    return -1.
+  }
+  return (value - limit) / rate.
+}
+
+// The sooner of two etas from reentry_eta_to (-1 counts as none).
+function reentry_eta_first {
+  parameter a, b.
+  if a < 0 {
+    return b.
+  }
+  if b < 0 {
+    return a.
+  }
+  return min(a, b).
+}
+
+// The physics rate cap now (4 is no extra cap; the q rule applies under it). hot_pct: the hottest part in
+// percent of its heat limit; drogues_out, mains_out: those chutes are open; agl: height above the ground
+// in m; event_eta: seconds to the next predicted chute opening or heat-shield drop, -1 for none.
+function reentry_warp_cap {
+  parameter hot_pct, drogues_out, mains_out, agl, event_eta.
+  if agl < reentry_warp_low_agl() {
+    return 1.
+  }
+  if event_eta >= 0 and event_eta <= reentry_warp_event_s() {
+    return 1.
+  }
+  if mains_out {
+    return reentry_warp_main_cap().
+  }
+  if drogues_out {
+    return reentry_warp_drogue_cap().
+  }
+  if hot_pct > reentry_warp_hot_pct() {
+    return reentry_warp_hot_cap().
+  }
+  return 4.
 }
 
 // Touchdown within what the crew and craft survive.
@@ -331,7 +390,17 @@ function reentry {
   local last_speed is ship:velocity:surface:mag.
   local sample_ut is time:seconds.
   local sample_v is ship:velocity:orbit.
-  until claudia_on_ground() {
+  local sample_speed is last_speed.
+  local decel is 0.
+  local hot is 0.
+  local event_eta is -1.
+
+  // One tick of the fall; true once the craft is on the ground. The wait loop (claudia_warp_to) calls it
+  // each tick as its stop and physics-warps the fall under reentry_warp_cap.
+  local fall_tick is {
+    if claudia_on_ground() {
+      return true.
+    }
     local now is time:seconds.
     set last_speed to ship:velocity:surface:mag.
     local agl is reentry_agl().
@@ -340,9 +409,12 @@ function reentry {
     // Heat and g, sampled a quarter second apart so frame noise doesn't read as g.
     if now - sample_ut >= 0.25 {
       set extra:max_g to max(extra:max_g, reentry_g_felt(sample_v, ship:velocity:orbit, now - sample_ut, ship:position - body_:position, body_:mu)).
-      set extra:max_temp_pct to max(extra:max_temp_pct, reentry_hottest()).
+      set hot to reentry_hottest().
+      set extra:max_temp_pct to max(extra:max_temp_pct, hot).
+      set decel to (sample_speed - last_speed) / (now - sample_ut).
       set sample_ut to now.
       set sample_v to ship:velocity:orbit.
+      set sample_speed to last_speed.
     }
 
     if reentry_shield_due(shield_gone, last_speed, agl) {
@@ -368,15 +440,32 @@ function reentry {
       unlock steering.
     }
 
-    local ticked is claudia_tick(ctx, 0).
-    if ticked <> "" {
-      reentry_abort(opt).
-      set extra:max_temp_pct to round(max(extra:max_temp_pct, reentry_hottest()), 1).
-      set extra:max_g to round(extra:max_g, 2).
-      set extra:geo to reentry_geo().
-      return claudia_finish(ctx, false, ticked, extra).
+    // The next parachute or shield drop, by height (falling at the vertical speed) or by speed (slowing
+    // at the sampled rate); the air-pressure test is not predicted.
+    local descent is -ship:verticalspeed.
+    set event_eta to reentry_eta_to(agl, reentry_warp_low_agl(), descent).
+    if not shield_gone {
+      set event_eta to reentry_eta_first(event_eta, reentry_eta_first(reentry_eta_to(agl, reentry_shield_last_agl(), descent), reentry_eta_to(last_speed, reentry_shield_speed(), decel))).
     }
-    wait 0.
+    if opt:chute_mode = "safe" and not mains_out {
+      local chute_eta is 0.
+      if has_drogues and not drogues_out {
+        set chute_eta to reentry_eta_first(reentry_eta_to(agl, reentry_drogue_last_agl(), descent), reentry_eta_to(last_speed, reentry_drogue_max_speed(), decel)).
+      } else {
+        set chute_eta to reentry_eta_first(reentry_eta_to(agl, reentry_chute_last_agl(), descent), reentry_eta_to(last_speed, reentry_chute_max_speed(), decel)).
+      }
+      set event_eta to reentry_eta_first(event_eta, chute_eta).
+    }
+    return claudia_on_ground().
+  }.
+  local cap is { return reentry_warp_cap(hot, drogues_out, mains_out, reentry_agl(), event_eta). }.
+  local fell is claudia_warp_to(ctx, time:seconds + opt:max_duration + 3600, 0, fall_tick, cap).
+  if fell <> "" {
+    reentry_abort(opt).
+    set extra:max_temp_pct to round(max(extra:max_temp_pct, reentry_hottest()), 1).
+    set extra:max_g to round(extra:max_g, 2).
+    set extra:geo to reentry_geo().
+    return claudia_finish(ctx, false, fell, extra).
   }
 
   unlock steering.
