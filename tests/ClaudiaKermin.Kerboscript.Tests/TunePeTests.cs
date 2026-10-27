@@ -52,47 +52,116 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [Fact]
         public void The_current_patch_burns_at_the_apoapsis()
         {
-            Assert.Equal("|3000", One("tune_pe_burn_point(\"current\", 0.3, 3000, 7000, false, 0):error + \"|\" + tune_pe_burn_point(\"current\", 0.3, 3000, 7000, false, 0):in"));
+            Assert.Equal("|3000", One("tune_pe_burn_point(\"current\", 0.3, 3000, 500, 7000, false, false, 0):error + \"|\" + tune_pe_burn_point(\"current\", 0.3, 3000, 500, 7000, false, false, 0):in"));
         }
 
         [Fact]
         public void An_apoapsis_under_two_minutes_off_waits_for_the_next_one()
         {
-            Assert.Equal("7060", One("tune_pe_burn_point(\"current\", 0.3, 60, 7000, false, 0):in"));
+            Assert.Equal("7060", One("tune_pe_burn_point(\"current\", 0.3, 60, 500, 7000, false, false, 0):in"));
         }
 
         [Fact]
         public void The_current_patch_refuses_an_escape_orbit()
         {
-            Assert.Equal("the orbit escapes (ecc 1.2): no apoapsis to burn at", One("tune_pe_burn_point(\"current\", 1.2, 0, 0, true, 5000):error"));
+            Assert.Equal("the orbit escapes (ecc 1.2): no apoapsis to burn at", One("tune_pe_burn_point(\"current\", 1.2, 0, 0, 0, false, true, 5000):error"));
         }
 
         [Fact]
         public void The_current_patch_refuses_an_apoapsis_after_the_sphere_of_influence_change()
         {
-            Assert.Equal("the apoapsis comes after the sphere-of-influence change (in 4000 s): use patch next", One("tune_pe_burn_point(\"current\", 0.9, 9000, 20000, true, 4000):error"));
-            Assert.Equal("", One("tune_pe_burn_point(\"current\", 0.9, 3000, 20000, true, 4000):error"));
+            Assert.Equal("the apoapsis comes after the sphere-of-influence change (in 4000 s): use patch next", One("tune_pe_burn_point(\"current\", 0.9, 9000, 500, 20000, false, true, 4000):error"));
+            Assert.Equal("", One("tune_pe_burn_point(\"current\", 0.9, 3000, 500, 20000, false, true, 4000):error"));
         }
 
         [Fact]
         public void The_next_patch_burns_halfway_to_the_sphere_of_influence_change()
         {
-            Assert.Equal("|2500", One("tune_pe_burn_point(\"next\", 0.9, 9000, 20000, true, 5000):error + \"|\" + tune_pe_burn_point(\"next\", 0.9, 9000, 20000, true, 5000):in"));
+            Assert.Equal("|2500", One("tune_pe_burn_point(\"next\", 0.9, 9000, 500, 20000, false, true, 5000):error + \"|\" + tune_pe_burn_point(\"next\", 0.9, 9000, 500, 20000, false, true, 5000):in"));
         }
 
         [Fact]
         public void The_next_patch_fails_without_one()
         {
-            Assert.Equal("no next patch: the orbit stays in this sphere of influence", One("tune_pe_burn_point(\"next\", 0.1, 3000, 7000, false, 0):error"));
+            Assert.Equal("no next patch: the orbit stays in this sphere of influence", One("tune_pe_burn_point(\"next\", 0.1, 3000, 500, 7000, false, false, 0):error"));
         }
 
         [Fact]
         public void The_next_patch_fails_when_the_change_is_too_close_to_fly_a_burn()
         {
-            Assert.Equal("the sphere-of-influence change is too close (200 s) to plan and fly a burn", One("tune_pe_burn_point(\"next\", 0.9, 9000, 20000, true, 200):error"));
+            Assert.Equal("the sphere-of-influence change is too close (200 s) to plan and fly a burn", One("tune_pe_burn_point(\"next\", 0.9, 9000, 500, 20000, false, true, 200):error"));
+        }
+
+        [Fact]
+        public void An_unsafe_periapsis_before_the_apoapsis_burns_as_soon_as_a_burn_can_be_led()
+        {
+            // Inbound: periapsis in 1500 s, the next apoapsis 9000 s off. Burn 120 s on, not at the apoapsis.
+            const string point = "tune_pe_burn_point(\"current\", 0.9, 9000, 1500, 20000, true, false, 0)";
+            Assert.Equal("|120|True", One(point + ":error + \"|\" + " + point + ":in + \"|\" + " + point + ":early"));
+        }
+
+        [Fact]
+        public void An_unsafe_periapsis_after_the_apoapsis_keeps_the_apoapsis_burn()
+        {
+            const string point = "tune_pe_burn_point(\"current\", 0.9, 3000, 9000, 20000, true, false, 0)";
+            Assert.Equal("|3000|False", One(point + ":error + \"|\" + " + point + ":in + \"|\" + " + point + ":early"));
+        }
+
+        [Fact]
+        public void A_safe_periapsis_keeps_the_apoapsis_burn_even_when_it_comes_first()
+        {
+            const string point = "tune_pe_burn_point(\"current\", 0.9, 9000, 1500, 20000, false, false, 0)";
+            Assert.Equal("9000|False", One(point + ":in + \"|\" + " + point + ":early"));
+        }
+
+        [Fact]
+        public void An_unsafe_periapsis_too_soon_to_burn_before_fails_with_the_reason()
+        {
+            Assert.Equal("the periapsis is inside the atmosphere or the surface and comes in 150 s, too soon to plan and fly a burn before it",
+                One("tune_pe_burn_point(\"current\", 0.9, 9000, 150, 20000, true, false, 0):error"));
+        }
+
+        [Fact]
+        public void An_early_burn_after_the_sphere_of_influence_change_is_refused()
+        {
+            Assert.Equal("the apoapsis comes after the sphere-of-influence change (in 60 s): use patch next",
+                One("tune_pe_burn_point(\"current\", 0.9, 9000, 1500, 20000, true, true, 60):error"));
         }
 
         // ---- the burn ----
+
+        [Fact]
+        public void A_burn_off_the_apoapsis_matches_the_apoapsis_burn_where_the_two_meet()
+        {
+            var at = Number("tune_pe_burn_at(3.5316e12, 1600000, sqrt(3.5316e12 * (2 / 1600000 - 1 / 1200000)), 0, 700000):prograde");
+            var ap = Number("tune_pe_apoapsis_burn(3.5316e12, 1600000, 1200000, 700000):prograde");
+            Assert.Equal(ap, at, 3);
+        }
+
+        [Fact]
+        public void A_burn_on_the_way_in_lifts_the_periapsis_to_the_value()
+        {
+            // A 35 km x 8005 km Kerbin orbit (radius 600 km), inbound at 2000 km from the centre; rebuild the orbit after the burn.
+            const double mu = 3.5316e12, rp = 635000, ra = 8605000, r = 2000000, want = 645000;
+            var a = (rp + ra) / 2;
+            var v = System.Math.Sqrt(mu * (2 / r - 1 / a));
+            var h = System.Math.Sqrt(mu * a * (1 - System.Math.Pow((ra - rp) / (ra + rp), 2)));
+            var vr = -System.Math.Sqrt(v * v - System.Math.Pow(h / r, 2));
+            var dv = Number("tune_pe_burn_at(3.5316e12, 2000000, " + v.ToString("R", CultureInfo.InvariantCulture) + ", " + vr.ToString("R", CultureInfo.InvariantCulture) + ", 645000):prograde");
+            Assert.True(dv > 0);
+            var w = v + dv;
+            var h2 = h * w / v;
+            var e2 = w * w / 2 - mu / r;
+            var a2 = -mu / (2 * e2);
+            var ecc = System.Math.Sqrt(1 + 2 * e2 * h2 * h2 / (mu * mu));
+            Assert.Equal(want, a2 * (1 - ecc), 0);
+        }
+
+        [Fact]
+        public void A_value_not_below_the_burn_point_is_refused()
+        {
+            Assert.StartsWith("value is not below the burn point", One("tune_pe_burn_at(3.5316e12, 1600000, 500, 0, 1700000):error"));
+        }
 
         [Fact]
         public void Lowering_the_periapsis_from_the_apoapsis_is_a_retrograde_burn_that_lands_on_the_new_orbit()
