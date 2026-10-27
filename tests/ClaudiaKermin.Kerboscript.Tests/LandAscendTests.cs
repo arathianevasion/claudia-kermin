@@ -145,6 +145,128 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal("1120", One("land_search_start(1000, 2500, 2000)"));
         }
 
+        // ---- land: the pass search (#383) ----
+
+        // Mission m20261027-141128-3c1d: a Mun 30 km circular orbit inclined 2.8 degrees, the craft over
+        // East Crater's site (-2.139, 83.39) at t0 = 568694, the pass Claudia planned for. land was called
+        // at t0 - 6000 with a near point, and the site search, ranking by closeness to it, gave the pass
+        // two over-the-site passes (2769.6 s apart) later. The craft and site are unit vectors in a frame
+        // fixed to the stars, as the ship's positionat and land_site_vector give them; apart_at and facts_at
+        // are land_plan_site's, with the sun from sun_at and any cross-track miss from cross_at (both of the
+        // touchdown UT; cross_at -1 for the orbit's own). Prints which pass the search chose (0 for t0's,
+        // -1 the one before, "none") and each trace line's phase and verdict.
+        private const string MunPasses = @"
+local pi is 3.141592653589793.
+local mu is 6.5138398e10.
+local period is 2 * pi * sqrt(230000 ^ 3 / mu).
+local fall_s is land_transfer_time(mu, 230000, 205435).
+local rot is 138984.48.
+local inc is 2.8.
+local site_lat is -2.139.
+local t0 is 568694.
+local now is t0 - 6000.
+local given is t0 + 2 * 2769.6.
+local u_s is arcsin(sin(site_lat) / sin(inc)).
+local lam_s is arctan2(sin(u_s) * cos(inc), cos(u_s)).
+local dot3 is { parameter a, b. return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]. }.
+local craft_at is { parameter t. local u is u_s + 360 * (t - t0) / period. return list(cos(u), sin(u) * cos(inc), sin(u) * sin(inc)). }.
+local site_at is { parameter t. local l is lam_s + 360 * (t - t0) / rot. return list(cos(site_lat) * cos(l), cos(site_lat) * sin(l), sin(site_lat)). }.
+local normal is list(0, -sin(inc), cos(inc)).
+local apart_at is { parameter burn_ut. return arccos(max(-1, min(1, -dot3:call(craft_at:call(burn_ut), site_at:call(burn_ut + fall_s))))). }.
+local facts_at is {
+  parameter burn_ut.
+  local cross is cross_at:call(burn_ut + fall_s).
+  if cross < 0 { set cross to abs(arcsin(dot3:call(normal, site_at:call(burn_ut + fall_s)))) * pi / 180 * 200000. }
+  return lexicon(""cross"", cross, ""sun"", sun_at:call(burn_ut + fall_s)).
+}.
+function search {
+  parameter starts.
+  local trace is list().
+  local found is land_pass_search(starts, period, fall_s, true, land_daylight_horizon(rot), rot / 720, apart_at, facts_at, trace).
+  if found:burn_ut < 0 { print ""none"". } else { print round((found:burn_ut + fall_s - t0) / 2769.6). }
+  for line in trace {
+    if line:haskey(""verdict"") { print line:phase + "": "" + line:verdict. } else { print line:phase. }
+  }
+}
+";
+
+        private static string[] MunSearch(string sunAt, string crossAt, string starts)
+        {
+            return Run("local sun_at is " + sunAt + ".\nlocal cross_at is " + crossAt + ".\n" + MunPasses + "search(" + starts + ").");
+        }
+
+        private const string Lit = "{ parameter t. return 54. }";
+        private const string OnTrack = "{ parameter t. return -1. }";
+
+        [Fact]
+        public void Lands_pass_search_takes_the_soonest_lit_pass_over_the_site_not_the_one_the_site_search_ranked_first()
+        {
+            // Before #383 the search started an orbit before the site search's pass, so it flew that pass,
+            // about two orbits after Claudia's: the passes before it were never looked at.
+            Assert.Equal(new[] { "2", "search", "pass: chosen" }, MunSearch(Lit, OnTrack, "list(land_search_start(now, given, period))"));
+            // From now, the first pass over the site is lit and within 20 km of the track: the one before
+            // Claudia's, as soon as land can plan it.
+            Assert.Equal(new[] { "-1", "search", "pass: chosen" }, MunSearch(Lit, OnTrack, "land_search_starts(now, given, period)"));
+        }
+
+        [Fact]
+        public void The_pass_search_traces_a_dark_pass_and_takes_the_next_lit_one()
+        {
+            var printed = MunSearch("{ parameter t. if t < t0 - 1000 { return -20. } return 40. }", OnTrack, "land_search_starts(now, given, period)");
+            Assert.Equal(new[] { "0", "search", "pass: dark: the sun -20 degrees up, under 5", "pass: chosen" }, printed);
+        }
+
+        [Fact]
+        public void The_pass_search_falls_back_to_the_site_searchs_far_pass_when_the_passes_from_now_are_off_the_track()
+        {
+            // An inclined orbit whose track crosses the site only hours on: the 3 orbits from now miss it by
+            // 50 km, so the search goes on from an orbit before the site search's pass, as for #364.
+            var printed = MunSearch(Lit, "{ parameter t. if t < t0 + 4000 { return 50000. } return -1. }", "land_search_starts(now, given, period)");
+            Assert.Equal(new[] { "2", "search", "pass: off the ground track by 50 km, over 20", "pass: off the ground track by 50 km, over 20", "pass: off the ground track by 50 km, over 20", "search", "pass: chosen" }, printed);
+        }
+
+        [Fact]
+        public void A_site_dark_for_3_orbits_is_searched_on_for_its_first_lit_pass()
+        {
+            var printed = MunSearch("{ parameter t. if t < t0 + 20000 { return -30. } return 30. }", OnTrack, "land_search_starts(now, given, period)");
+            // The first pass whose touchdown is after t0 + 20000: the 8th after t0's (t0 + 22157 - 108).
+            Assert.Equal("8", printed[0]);
+            Assert.Equal("pass: chosen", printed.Last());
+            Assert.Contains("pass: dark: the sun -30 degrees up, under 5", printed);
+        }
+
+        [Fact]
+        public void The_pass_search_starts_from_now_and_then_an_orbit_before_a_far_pass()
+        {
+            Assert.Equal(new[] { "1120", "11000" }, Run("for s in land_search_starts(1000, 13000, 2000) { print s. }"));
+            Assert.Equal(new[] { "1120" }, Run("for s in land_search_starts(1000, -1, 2000) { print s. }"));
+            Assert.Equal(new[] { "1120" }, Run("for s in land_search_starts(1000, 2500, 2000) { print s. }"));
+        }
+
+        [Theory]
+        [InlineData(25000, 30, true, "off the ground track by 25 km, over 20")]
+        [InlineData(1000, 4.9, true, "dark: the sun 4.9 degrees up, under 5")]
+        [InlineData(1000, -40, false, "")]
+        [InlineData(20000, 5, true, "")]
+        public void A_pass_is_rejected_off_the_track_or_dark_and_says_which(double cross, double sun, bool daylight, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "land_pass_rejected({0}, {1}, {2})", cross, sun, daylight ? "true" : "false")));
+        }
+
+        // ---- land: impact_ut over the terrain on the way down (#383) ----
+
+        [Fact]
+        public void The_impact_time_allows_for_terrain_higher_than_the_site()
+        {
+            // A fall from 6000 m, 30 m down a second, over ground rising from the site's 0 m to 3000 m: it
+            // meets the ground at 3000 m (100 s), not at the site's height (200 s).
+            const string Fall = "local samples is list().\n"
+                + "for t in range(0, 200, 5) { samples:add(lexicon(\"ut\", t, \"alt\", 6000 - 30 * t, \"ground\", min(3000, 40 * t))). }\n";
+            Assert.Equal(new[] { "100" }, Run(Fall + "print round(land_impact_ut(samples), 1)."));
+            // Ground that stays under the fall: -1.
+            Assert.Equal(new[] { "-1" }, Run("print land_impact_ut(list(lexicon(\"ut\", 0, \"alt\", 5000, \"ground\", 0), lexicon(\"ut\", 5, \"alt\", 4000, \"ground\", 100)))."));
+        }
+
         [Fact]
         public void A_biome_targets_near_point_goes_to_the_site_search_as_latitude_and_longitude()
         {
@@ -221,7 +343,8 @@ namespace ClaudiaKermin.Kerboscript.Tests
         public void Land_documents_its_burn_start_and_impact_times()
         {
             var land = CoreLibrary.FullDocs(new[] { "land" });
-            Assert.Contains("burn_start_ut", land);
+            Assert.Contains("burn_start_ut (when braking was planned to start", land);
+            Assert.Contains("braking_began_ut (when braking actually began", land);
             Assert.Contains("impact_ut", land);
         }
 
