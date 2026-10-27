@@ -76,8 +76,9 @@ namespace ClaudiaKermin.Core.Tests
             // The base layer was 8,401 characters before #285; the rules and the example are all it gains.
             Assert.InRange(MissionPrompts.HowToPlan.Length, 1, 1500);
             // was 8401 + 1500 = 9901; raised for #349 Claudia's warp guidance (human decision 2026-10-27); raised by the
-            // rcs_tolerance doc worded in the RCS Use spec (#393, #400); to 10762 for the claudia_rcs_translate doc (#401)
-            Assert.InRange(MissionPrompts.BaseLayer.Length, 1, 10762);
+            // rcs_tolerance doc worded in the RCS Use spec (#393, #400); to 10762 for the claudia_rcs_translate doc (#401);
+            // to 10921 for the spec's RCS Use / SAS wording in the mission prompt (#402; spec-mandated, not yet human-approved)
+            Assert.InRange(MissionPrompts.BaseLayer.Length, 1, 10921);
         }
 
         [Fact]

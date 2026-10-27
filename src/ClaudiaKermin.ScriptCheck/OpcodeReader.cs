@@ -182,6 +182,8 @@ namespace ClaudiaKermin.ScriptCheck
                 if (op is OpcodeStoreGlobal) StoredGlobal(stored, line);
                 else if (op.GetType() == typeof(OpcodeStore) && delegateLabel != null) FunctionStored(stored, delegateLabel, line);
                 Stored(Lower(((OpcodeIdentifierBase)op).Identifier).TrimStart('$'), value, line);
+                if (stored == "sas" && !(op is OpcodeStoreLocal) && line < _libraryFromLine && !IsFalse(value))
+                    Found(line, "SET SAS", ForbiddenList.SasOn);
                 return;
             }
 
@@ -415,6 +417,14 @@ namespace ClaudiaKermin.ScriptCheck
         private static Value Pop(Stack<Value> stack)
         {
             return stack.Count > 0 ? stack.Pop() : new Value { Parameter = true };
+        }
+
+        /// <summary>The value is certainly the constant false (anything else may switch SAS on).</summary>
+        private static bool IsFalse(Value value)
+        {
+            foreach (var plain in Each(value))
+                if (!plain.IsConstant || !string.Equals(plain.Text, "False", StringComparison.OrdinalIgnoreCase)) return false;
+            return true;
         }
 
         /// <summary>The value may be that constant.</summary>

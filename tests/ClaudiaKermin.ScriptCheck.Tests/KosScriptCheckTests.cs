@@ -325,6 +325,38 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             AssertAllowed("addons:claudia:rcsswitch(lexicon(\"on\", true, \"reason\", \"translating\")).");
         }
 
+        // #402 (RCS Use): SAS stays off while a Mission Script runs. The library's own abort (claudia_make_safe) turns it on.
+        [Theory]
+        [InlineData("sas on.")]
+        [InlineData("set sas to true.")]
+        [InlineData("local x is true.\nset sas to x.")]
+        [InlineData("set sas to not sas.")]
+        [InlineData("if ship:altitude > 10 { sas on. }")]
+        public void SwitchingSasOnFails(string script)
+        {
+            AssertForbidden("SAS must stay off while a Mission Script runs: it fights kOS steering and fires RCS through holds", script);
+            AssertForbidden("SAS must stay off while a Mission Script runs: it fights kOS steering and fires RCS through holds", CoreLibrary.Bundle(script));
+        }
+
+        [Theory]
+        [InlineData("sas off.")]
+        [InlineData("set sas to false.")]
+        [InlineData("rcs on.")]
+        [InlineData("rcs off.")]
+        [InlineData("set rcs to true.\nprint sas.")]
+        public void SwitchingSasOffAndRcsOnOrOffPass(string script)
+        {
+            AssertAllowed(script);
+            AssertAllowed(CoreLibrary.Bundle(script));
+        }
+
+        [Fact]
+        public void TheCoreLibrarysOwnSasOnPasses()
+        {
+            Assert.Contains("sas on.", CoreLibrary.Bundle("").ToLowerInvariant());
+            AssertAllowed(CoreLibrary.Bundle("claudia_make_safe(lexicon())."));
+        }
+
         [Fact]
         public void TheCoreLibrarysOwnBlockInternalCallPasses()
         {
