@@ -642,9 +642,9 @@ function land_impact_ut {
       if i = 0 {
         return p:ut.
       }
-      local q is samples[i - 1].
-      local was is q:alt - q:ground.
-      return q:ut + (p:ut - q:ut) * was / (was - over).
+      local before is samples[i - 1].
+      local was is before:alt - before:ground.
+      return before:ut + (p:ut - before:ut) * was / (was - over).
     }
   }
   return -1.
