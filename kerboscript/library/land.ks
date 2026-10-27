@@ -32,7 +32,7 @@
 //|     site as a LATLNG on the soonest pass it can (warping there on rails), which may be before find_landing_site's.
 //|     Use find_landing_site to see such sites when you plan; pass land the biome, not a site.
 //|   daylight [true]: set it from the Mission Setting Daylight landing. true touches down only with
-//|     the sun at least 5 degrees up at the site. For a site it looks up to a day of the body ahead
+//|     Daylight at the site: the sun more than 20 degrees up. For a site it looks up to a day of the body ahead
 //|     for such a pass (about 47 h at the Mun, 13 h at Minmus) and warps there on rails, with no Due
 //|     Time needed; give expected_duration_s that wait. "any" with daylight fails only on an orbit
 //|     that runs along the day-night line.
@@ -718,11 +718,23 @@ function land_too_low {
   return lexicon("error", "orbit too low to land from: it must be at least " + round(lowest) + " m up, 1 km over the descent's start").
 }
 
+// Daylight is the sun more than this many degrees up at the touchdown (GLOSSARY.md); the same as
+// LandingSiteSearch.MinSunElevationDeg in find_landing_site. Pure.
+function land_daylight_sun_deg {
+  return 20.
+}
+
+// True if the sun sun_deg up is Daylight: more than land_daylight_sun_deg up. Pure.
+function land_is_daylight {
+  parameter sun_deg.
+  return sun_deg > land_daylight_sun_deg().
+}
+
 // True if a touchdown cross_m off the ground track with the sun sun_deg up is one land may plan for
-// in daylight: within 20 km of the track and the sun at least 5 degrees up. Pure.
+// in Daylight: within 20 km of the track and the sun more than 20 degrees up. Pure.
 function land_lit_near {
   parameter cross_m, sun_deg.
-  return cross_m <= 20000 and sun_deg >= 5.
+  return cross_m <= 20000 and land_is_daylight(sun_deg).
 }
 
 // How far ahead (s) land looks for a daylight pass over a site: a little over one turn of the body
@@ -778,8 +790,8 @@ function land_pass_rejected {
   if cross_m > 20000 {
     return "off the ground track by " + round(cross_m / 1000, 1) + " km, over 20".
   }
-  if daylight and sun_deg < 5 {
-    return "dark: the sun " + round(sun_deg, 1) + " degrees up, under 5".
+  if daylight and not land_is_daylight(sun_deg) {
+    return "dark: the sun " + round(sun_deg, 1) + " degrees up, not over " + land_daylight_sun_deg().
   }
   return "".
 }
@@ -920,7 +932,7 @@ function land_plan_site {
     return lexicon("error", "", "burn_ut", found:burn_ut, "arrive_ut", found:burn_ut + fall_s, "site", site, "r_pe", r_pe).
   }
   if found:dark and opt:daylight {
-    return lexicon("error", "no daylight pass over the site within a day of " + body:name + " (" + round(land_daylight_horizon(body:rotationperiod) / 3600, 1) + " h) on this orbit: change the orbit's plane, or land with daylight false").
+    return lexicon("error", "no daylight pass over the site within a day of " + body:name + " (" + round(land_daylight_horizon(body:rotationperiod) / 3600, 1) + " h) on this orbit: the sun never gets over " + land_daylight_sun_deg() + " degrees there in that time; pick a lower-latitude site, change the orbit's plane, or land with daylight false").
   }
   if found:best_cross < 1e9 {
     return lexicon("error", "the site is " + round(found:best_cross / 1000, 1) + " km off the ground track, over 20 km: plan a plane change first").
@@ -942,7 +954,7 @@ function land_plan_any {
     local here is positionat(ship, burn_ut) - body:position.
     local arrive_ut is burn_ut + land_transfer_time(mu, here:mag, body:radius + approach).
     local arrival is -here:normalized * body:radius.
-    if not opt:daylight or land_sun_elevation(arrival, arrive_ut) >= 5 {
+    if not opt:daylight or land_is_daylight(land_sun_elevation(arrival, arrive_ut)) {
       local now_geo is body:geopositionof(body:position + arrival).
       local lng is land_site_lng(now_geo:lng, -(arrive_ut - time:seconds), body:rotationperiod).
       local chosen is lexicon("lat", now_geo:lat, "lng", lng).
@@ -955,7 +967,7 @@ function land_plan_any {
   }
   // Anywhere on the ring is dark for 3 orbits only when the orbit runs along the day-night line,
   // which turns too slowly (with the body's year) to wait out.
-  return lexicon("error", "no daylight touchdown in the next 3 orbits: the orbit runs along the day-night line; change its plane, or land with daylight false").
+  return lexicon("error", "no daylight touchdown in the next 3 orbits: the sun never gets over " + land_daylight_sun_deg() + " degrees on the orbit's ring in that time, as it runs along the day-night line; change its plane, or land with daylight false").
 }
 
 // Adds a node at ut whose burn is the vector dv (m/s, raw frame), choosing the radial and normal

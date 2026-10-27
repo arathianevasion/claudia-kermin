@@ -291,6 +291,19 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(-10, Num(Sites(any)[0], "sun_elevation_deg"));
         }
 
+        [Theory]
+        [InlineData(20, true, false)]
+        [InlineData(21, true, true)]
+        [InlineData(20, false, true)]
+        [InlineData(21, false, true)]
+        public void Daylight_is_the_sun_more_than_20_degrees_up_not_20(double sun, bool daylight, bool kept)
+        {
+            var fake = new FakeBody { Sun = (lat, lon, ut) => sun };
+            var result = Run(Snapshot(), "{\"body\":\"Mun\",\"daylight\":" + (daylight ? "true" : "false") + "}", fake);
+            Assert.Equal(kept, Sites(result).Count > 0);
+            if (!kept) Assert.Contains("the sun never gets over 20 degrees there in the window", result.GetProperty("note").GetString());
+        }
+
         [Fact]
         public void With_the_sun_at_a_known_place_the_far_side_of_the_craft_is_night_and_the_sub_solar_point_is_day()
         {
@@ -314,7 +327,7 @@ namespace ClaudiaKermin.Core.Tests
         public void The_sun_is_asked_at_the_ut_of_the_pass()
         {
             var asked = new List<double>();
-            var fake = new FakeBody { Sun = (lat, lon, ut) => { asked.Add(ut); return 20; } };
+            var fake = new FakeBody { Sun = (lat, lon, ut) => { asked.Add(ut); return 30; } };
             var result = Run(Snapshot(), "{\"body\":\"Mun\"}", fake);
             foreach (var site in Sites(result)) Assert.Contains(asked, ut => Math.Abs(ut - Num(site, "pass_ut")) < 0.5);
         }

@@ -42,7 +42,7 @@ namespace ClaudiaKermin.Core.Tools
                 return "{\"type\":\"object\",\"properties\":{"
                     + "\"body\":{\"type\":\"string\",\"description\":\"The airless body to land on, which the craft is orbiting.\"},"
                     + "\"biome\":{\"type\":\"string\",\"description\":\"Only sites in this biome (e.g. Highlands, Midlands, Poles); omit for any.\"},"
-                    + "\"daylight\":{\"type\":\"boolean\",\"description\":\"Only sites with the sun above the horizon when the track passes; defaults to the Mission Settings.\"},"
+                    + "\"daylight\":{\"type\":\"boolean\",\"description\":\"Only sites in Daylight when the track passes: the sun more than 20 degrees above the horizon; defaults to the Mission Settings.\"},"
                     + "\"max_slope_deg\":{\"type\":\"number\",\"description\":\"The steepest ground allowed, degrees; default 5.\"},"
                     + "\"within_hours\":{\"type\":\"number\",\"description\":\"How far ahead to look along the ground track, hours (at most 48); defaults to the Mission Settings time cap.\"},"
                     + "\"edge_margin_m\":{\"type\":\"number\",\"description\":\"With a biome: how far inside its edge a site should be, m; default 5000 (about the landing accuracy), 0 for none. Sites at the edge come back only when nothing deeper is reachable, marked near_biome_edge.\"},"
@@ -126,7 +126,11 @@ namespace ClaudiaKermin.Core.Tools
             if (found.Sites.Count == 0)
                 json.Field("note", "no site met the limits; of " + LandingSiteSearch.Count(found.Candidates) + " ground-track points, "
                     + LandingSiteSearch.Count(found.AfterBiome) + " were in the biome, " + LandingSiteSearch.Count(found.AfterDaylight)
-                    + " also in daylight, " + LandingSiteSearch.Count(found.AfterSlope) + " also gentle enough; widen within_hours, the slope or the biome");
+                    + " also in daylight, " + LandingSiteSearch.Count(found.AfterSlope) + " also gentle enough"
+                    + (query.Daylight && found.AfterDaylight == 0 && found.AfterBiome > 0
+                        ? "; the sun never gets over " + LandingSiteSearch.MinSunElevationDeg.ToString("0.##", CultureInfo.InvariantCulture) + " degrees there in the window, so try a lower-latitude site, a longer window, or daylight false"
+                        : "")
+                    + "; widen within_hours, the slope or the biome");
             json.EndObject();
 
             return new ToolOutcome
