@@ -807,7 +807,7 @@ function land_coast {
       kuniverse:timewarp:warpto(warp_end).
       set want to false.
     }
-    if held {
+    if held and not addons:claudia:warpcancelled {
       set want to true.
     }
     local reason is claudia_tick(ctx, 0).
