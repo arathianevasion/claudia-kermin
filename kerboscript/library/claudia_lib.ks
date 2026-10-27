@@ -946,6 +946,18 @@ function claudia_late_start {
   return round(now - start_ut, 1).
 }
 
+// The UT the next leg of a warp to a burn runs to (spec #314: one SOI at a time). patch_ut: when the
+// orbit next changes SOI (-1 for none); start_ut: the burn start. If the change comes well before the
+// burn (more than max(30 s, turn_time) of 1x ahead of the start once 1 s past it), the leg ends 1 s past
+// the change, so the craft turns in the new SOI before warping on; else it ends at start_ut. Pure.
+function claudia_soi_leg_ut {
+  parameter now, patch_ut, start_ut, turn_time.
+  if patch_ut > now and patch_ut + 1 < claudia_warp_end(start_ut, turn_time) {
+    return patch_ut + 1.
+  }
+  return start_ut.
+}
+
 // Whether the craft is aligned with nd's burn vector now.
 function claudia_aligned_to {
   parameter nd.
@@ -1007,18 +1019,24 @@ function claudia_warp_to_burn {
   set out:start_ut to start_ut.
   local recheck is not turned:timed_out.
   until time:seconds >= start_ut {
-    local warp_end is claudia_warp_end(start_ut, turn_time).
+    local patch_ut is -1.
+    if ship:orbit:hasnextpatch {
+      set patch_ut to time:seconds + ship:orbit:nextpatcheta.
+    }
+    local leg_ut is claudia_soi_leg_ut(time:seconds, patch_ut, start_ut, turn_time).
+    local warp_end is claudia_warp_end(leg_ut, turn_time).
     local check is recheck.
     // A drop KSP made (not a hold, not the player) while there's warp left to ask for, off the burn.
     local off_burn is {
       return check and kuniverse:timewarp:rate <= 1 and time:seconds < warp_end - 5
         and not addons:claudia:warphold and not addons:claudia:warpcancelled and not claudia_aligned_to(nd).
     }.
-    local waited is claudia_warp_to(ctx, start_ut, turn_time, off_burn).
+    local waited is claudia_warp_to(ctx, leg_ut, turn_time, off_burn).
     if waited <> "" {
       set out:error to waited.
       return out.
     }
+    // After an SOI leg warp has settled (claudia_warp_to waits for it); turn again before warping on.
     if time:seconds < start_ut {
       set turned to claudia_turn_to_burn(ctx, nd, start_ut).
       if turned:error <> "" {
