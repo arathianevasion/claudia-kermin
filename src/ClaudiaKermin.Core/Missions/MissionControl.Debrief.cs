@@ -447,8 +447,9 @@ namespace ClaudiaKermin.Core.Missions
             {
                 mission.ReducedGoal = debrief.FollowUpText;
                 mission.Stage = MissionStage.AwaitingReducedGoal;
+                // Under Auto Mode the reduced goal doesn't wait for the link: the player approved it in advance.
                 Note(LogKind.Notice, "The Mission Goal can't be reached as stated. Claudia offers a reduced goal for your Approval: " + mission.ReducedGoal
-                    + (mission.Blackout ? " It waits for the link." : ""));
+                    + (mission.Blackout && !mission.AutoMode ? " It waits for the link." : ""));
                 return;
             }
             mission.ReducedGoal = "";
@@ -487,24 +488,32 @@ namespace ClaudiaKermin.Core.Missions
         }
 
         /// <summary>Approve reduced goal: the goal changes, and Claudia revises the Mission Plan for it, which needs Approval in turn.</summary>
-        private void ReducedGoalAccepted()
+        /// <param name="inAdvance">Auto Mode approved it (MissionControl.AutoMode.cs), not the player's button.</param>
+        private void ReducedGoalAccepted(bool inAdvance = false)
         {
             var mission = _mission;
             if (mission == null || mission.Stage != MissionStage.AwaitingReducedGoal || mission.InFlight || mission.ReducedGoal.Length == 0) return;
-            var original = mission.Goal;
+            var turn = ReducedGoalTurn(mission);
             mission.Goal = mission.ReducedGoal;
             mission.ReducedGoal = "";
-            Note(LogKind.Player, "Reduced Mission Goal approved: " + mission.Goal);
+            Note(inAdvance ? LogKind.Notice : LogKind.Player, "Reduced Mission Goal approved: " + mission.Goal);
+            if (inAdvance) Note(LogKind.Notice, AutoModeApproved);
             Event(mission, "goal_reduced", mission.Goal);
             mission.Stage = MissionStage.Planning;
             mission.SequenceCounted = false;
-            Begin(new Turn
+            Begin(turn);
+        }
+
+        /// <summary>The turn that asks for a Mission Plan for the reduced goal on offer; also the probe the Auto Mode room check prices.</summary>
+        private Turn ReducedGoalTurn(Mission mission)
+        {
+            return new Turn
             {
                 Purpose = Purpose.MissionPlan,
-                UserText = "The player approved a reduced Mission Goal (quoted data): " + MissionPrompts.Quoted(mission.Goal)
-                    + " in place of the original (quoted data): " + MissionPrompts.Quoted(original) + ".\n" + MissionPrompts.Facts(_ut, _snapshot),
+                UserText = "The player approved a reduced Mission Goal (quoted data): " + MissionPrompts.Quoted(mission.ReducedGoal)
+                    + " in place of the original (quoted data): " + MissionPrompts.Quoted(mission.Goal) + ".\n" + MissionPrompts.Facts(_ut, _snapshot),
                 Notice = DebriefPrompts.ReducedGoalNotice,
-            });
+            };
         }
 
         /// <summary>The turn after a Debrief that did not end the Mission: a revised Mission Plan if Claudia proposed one, else the next Sequence Plan.</summary>

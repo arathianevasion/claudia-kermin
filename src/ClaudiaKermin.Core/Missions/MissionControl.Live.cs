@@ -226,32 +226,52 @@ namespace ClaudiaKermin.Core.Missions
             }
             if (mission.Stage != MissionStage.Running || !mission.RunId.HasValue) return;
             // Abort is disabled in a Blackout (story 103): a verdict that comes back after the link dropped isn't offered.
-            if (mission.Blackout)
+            // Under Auto Mode it needs no one to offer it to: the approve-in-advance check takes it after this reply.
+            if (mission.Blackout && !mission.AutoMode)
             {
                 crossing.Verdict = AbortNotOffered;
                 return;
             }
-            // A moment Claudia needs the player (stories 31 and 87): warp drops and the script holds it at 1x until they decide.
             mission.AbortRecommendation = "Claudia recommends Abort: " + crossing.Describe() + ". " + verdict.Why;
+            Event(mission, "abort_recommended", crossing.Describe());
+            if (mission.AutoMode) return;
+            // A moment Claudia needs the player (stories 31 and 87): warp drops and the script holds it at 1x until they decide.
             _commands.Add(new DropWarp());
             _commands.Add(new PostScreenMessage(mission.AbortRecommendation, always: true));
-            Event(mission, "abort_recommended", crossing.Describe());
         }
 
         /// <summary>The Abort button: the run is stopped and the craft made safe, and the mod records that the player aborted it.</summary>
         private void AbortPressed()
         {
+            AbortTaken(byAutoMode: false);
+        }
+
+        /// <summary>
+        /// The run is stopped and the craft made safe: by the player's Abort button, or by Auto Mode on Claudia's Abort
+        /// recommendation, which goes ahead in a Blackout too (the player gave it in advance) and with no room check.
+        /// </summary>
+        private void AbortTaken(bool byAutoMode)
+        {
             var mission = _mission;
             // Paused mid-run (an Alert Claudia couldn't judge) the script still flies, so Abort still stops it.
             if (mission == null || !IsRunning(mission) || !mission.RunId.HasValue || !mission.RunningProcessor.HasValue) return;
-            if (mission.StopReason != null || mission.Blackout) return;
-            mission.StopReason = "aborted by the player";
+            if (mission.StopReason != null || (mission.Blackout && !byAutoMode)) return;
+            var why = byAutoMode ? "Auto Mode took Claudia's Abort recommendation" : "the player pressed Abort";
+            mission.StopReason = byAutoMode ? AbortedByAutoMode : "aborted by the player";
+            if (byAutoMode)
+            {
+                Note(LogKind.Notice, mission.AbortRecommendation);
+                Note(LogKind.Notice, "Abort taken by Auto Mode.");
+            }
+            else Note(LogKind.Player, "Abort.");
             mission.AbortRecommendation = "";
-            Note(LogKind.Player, "Abort.");
-            Event(mission, "aborted", "the player pressed Abort");
-            mission.RunEvents.Add(_ut, RunEventKind.Stopped, "the player pressed Abort");
-            _commands.Add(new AbortScript(mission.RunningProcessor.Value, "the player pressed Abort", mission.RunId.Value));
+            Event(mission, "aborted", why);
+            mission.RunEvents.Add(_ut, RunEventKind.Stopped, why);
+            _commands.Add(new AbortScript(mission.RunningProcessor.Value, why, mission.RunId.Value));
         }
+
+        /// <summary>The stop reason of a run Auto Mode aborted, on the Debrief's title and in its run report.</summary>
+        internal const string AbortedByAutoMode = "aborted by Auto Mode";
 
         // ---- Building Blocks ----
 

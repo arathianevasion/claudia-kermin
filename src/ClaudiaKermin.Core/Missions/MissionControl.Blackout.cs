@@ -77,8 +77,9 @@ namespace ClaudiaKermin.Core.Missions
             Note(LogKind.Notice, text);
             // No screen message of its own: the warp drop (ADR 0004) and the strip's "No link" show the Blackout begin.
             Event(mission, "blackout", "the link to Kerbin was lost");
-            // Abort is disabled: a recommendation on show goes, and Alerts not yet sent are recorded instead.
-            mission.AbortRecommendation = "";
+            // Abort is disabled: a recommendation on show goes, and Alerts not yet sent are recorded instead. Under Auto Mode
+            // the recommendation stays, for the approve-in-advance check to take (MissionControl.AutoMode.cs).
+            if (!mission.AutoMode) mission.AbortRecommendation = "";
             foreach (var alert in mission.Queue.Where(t => t.Purpose == Purpose.Alert).ToList())
             {
                 mission.Queue.Remove(alert);

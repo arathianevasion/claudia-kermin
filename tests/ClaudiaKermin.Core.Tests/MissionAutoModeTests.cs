@@ -87,6 +87,205 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(Approved, log[next + 1].Text);
         }
 
+        // ---- A reduced goal (#329) ----
+
+        [Fact]
+        public void AReducedGoalIsApprovedOnArrivalAndTheRevisedMissionPlanForItFlies()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                DebriefReducedGoal(),
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport, AutoModeOn());
+            var first = ToRunning(mission);
+
+            mission.Send(new KosRunEnded(Finished(), first.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Running && transport.Requests.Count == 5);
+            var log = mission.View.Log.ToList();
+            var accepted = log.FindIndex(e => e.Text == "Reduced Mission Goal approved: " + ReducedGoal);
+            Assert.True(accepted > 0);
+            Assert.Equal(LogKind.Notice, log[accepted].Kind);
+            Assert.Equal(Approved, log[accepted + 1].Text);
+            Assert.Contains(ReducedGoal, LastUserText(transport.Requests[3]));
+            Assert.True(mission.View.AutoMode);
+        }
+
+        [Fact]
+        public void AReducedGoalWaitsWhenTheCapHasNoRoomAndRaisingTheCapApprovesIt()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                DebriefReducedGoal(),
+                ScriptedResponse.Fixture("mission-plan.sse"));
+            var mission = Control(transport);
+            var first = ToRunning(mission, 1.20m);
+            mission.Send(new KosRunEnded(Finished(), first.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingReducedGoal && !v.Busy);
+
+            mission.Send(new SetAutoMode(true));
+            Assert.Equal(MissionStage.AwaitingReducedGoal, mission.View.Stage);
+            Assert.Contains(QuickReply.AcceptReducedGoal, mission.View.QuickReplies);
+            var blocked = CostLines(mission).Single(l => l.GetProperty("event").GetString() == "blocked");
+            Assert.Equal("auto_mode_room", blocked.GetProperty("outcome").GetString());
+            Assert.Equal(3, transport.Requests.Count);
+
+            mission.Send(new RaiseCap(mission.View.Spent + mission.View.HeldCharges + blocked.GetProperty("amount").GetDecimal()));
+            Assert.Equal(MissionStage.Planning, mission.View.Stage);
+            Assert.Single(mission.View.Log, e => e.Text == Approved);
+        }
+
+        // ---- An unsafe script (#329) ----
+
+        [Fact]
+        public void AnUnsafeScriptIsReplannedOnceAndTheReplanFlies()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport, AutoModeOn(), new QuicksaveCheck());
+            ToSequencePlan(mission);
+            DrainUntil(mission, v => v.Stage == MissionStage.Running && transport.Requests.Count == 4);
+
+            var log = mission.View.Log.ToList();
+            var unsafeCard = log.FindIndex(e => e.Kind == LogKind.SequencePlan && e.Text.StartsWith("Couldn't produce a safe script"));
+            Assert.Equal(ReplannedText, log[unsafeCard + 1].Text);
+            Assert.Equal(LogKind.Notice, log[unsafeCard + 1].Kind);
+            Assert.Contains("asked for a different Sequence Plan", LastUserText(transport.Requests[3]));
+        }
+
+        [Fact]
+        public void ASecondUnsafeScriptAfterTheReplanWaitsForThePlayer()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"));
+            var mission = Control(transport, AutoModeOn(), new QuicksaveCheck());
+            CraftCheckRouter.StartChecked(mission, _background, OnPad(), new StartMission(Goal, 10m, Sonnet));
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.UnsafeScript && !v.Busy && transport.Requests.Count == 5);
+            mission.Send(new UtAdvanced(1300));
+
+            Assert.Equal(MissionStage.UnsafeScript, mission.View.Stage);
+            Assert.Equal(5, transport.Requests.Count);
+            Assert.Equal(new[] { QuickReply.Retry, QuickReply.RetryWithNote, QuickReply.Replan }, mission.View.QuickReplies);
+            Assert.Single(mission.View.Log, e => e.Text == ReplannedText);
+            Assert.True(mission.View.AutoMode);
+        }
+
+        [Fact]
+        public void TheNextPlanAfterAReplanThatFlewGetsItsOwnReplan()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"),
+                DebriefGoalNotMet(),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan-unsafe.sse"),
+                ScriptedResponse.Fixture("mission-sequence-plan.sse"));
+            var mission = Control(transport, AutoModeOn(), new QuicksaveCheck());
+            ToSequencePlan(mission);
+            DrainUntil(mission, v => v.Stage == MissionStage.Running && transport.Requests.Count == 4);
+            var first = mission.TakeCommands().OfType<StartScript>().Single();
+
+            mission.Send(new KosRunEnded(Finished(), first.RunId));
+            DrainUntil(mission, v => v.Stage == MissionStage.Running && transport.Requests.Count == 8);
+            Assert.Equal(2, mission.View.Log.Count(e => e.Text == ReplannedText));
+        }
+
+        // ---- Abort (#329) ----
+
+        [Fact]
+        public void AnAbortRecommendationIsTakenAtOnceWithNoAbortAttentionAndNoWarpDrop()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), DeltaVCheck(50)),
+                ScriptedResponse.Fixture("mission-alert-abort.sse"));
+            var mission = Control(transport, AutoModeOn());
+            var start = ToRunning(mission);
+            var watch = new AttentionWatch();
+            watch.Observe(mission.View);
+
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            DrainUntil(mission, v => v.Log.Any(e => e.Text == AbortTakenText));
+            mission.Send(new UtAdvanced(OnPad().Ut + 1));
+
+            AssertAbortTaken(mission, start);
+            Assert.Null(watch.Observe(mission.View));
+        }
+
+        [Fact]
+        public void AnAbortVerdictThatComesBackInABlackoutIsTakenUnderAutoMode()
+        {
+            var alert = ScriptedResponse.Fixture("mission-alert-abort.sse", 64);
+            alert.PauseAt = 100;
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), DeltaVCheck(50)),
+                alert);
+            var mission = Control(transport, AutoModeOn());
+            var start = ToRunning(mission);
+
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            mission.Send(Snapshot(s => { s.HasLink = false; s.Stages[0].DeltaVVac = 3100; }));
+            Assert.True(mission.View.Blackout);
+            // The Blackout's own warp drop, not the Abort's.
+            mission.TakeCommands();
+            alert.Gate.Set();
+            DrainUntil(mission, v => !v.Busy);
+            mission.Send(new UtAdvanced(OnPad().Ut + 1));
+
+            AssertAbortTaken(mission, start);
+            Assert.True(mission.View.Blackout);
+        }
+
+        [Fact]
+        public void TickingAutoModeWhileAnAbortIsRecommendedTakesIt()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), DeltaVCheck(50)),
+                ScriptedResponse.Fixture("mission-alert-abort.sse"));
+            var mission = Control(transport);
+            var start = ToRunning(mission);
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            DrainUntil(mission, v => v.AbortRecommended.Length > 0);
+            mission.TakeCommands();
+
+            mission.Send(new SetAutoMode(true));
+            AssertAbortTaken(mission, start);
+        }
+
+        [Fact]
+        public void AnAbortIsTakenEvenWithNoRoomInTheCap()
+        {
+            var transport = new StreamingFakeTransport(
+                ScriptedResponse.Fixture("mission-plan.sse"),
+                WithSequenceFields(ScriptedResponse.Fixture("mission-sequence-plan.sse"), DeltaVCheck(50)),
+                ScriptedResponse.Fixture("mission-alert-abort.sse"));
+            var mission = Control(transport, AutoModeOn());
+            // No room for the Debrief and next plan: the player approves the Sequence Plan themselves.
+            ToSequencePlan(mission, 0.90m);
+            Assert.Equal(MissionStage.AwaitingSequenceApproval, mission.View.Stage);
+            mission.Send(new Approve());
+            var start = mission.TakeCommands().OfType<StartScript>().Single();
+
+            mission.Send(Snapshot(s => s.Stages[0].DeltaVVac = 3100));
+            DrainUntil(mission, v => v.Log.Any(e => e.Text == AbortTakenText));
+            AssertAbortTaken(mission, start);
+        }
+
         // ---- What still waits for the player ----
 
         [Fact]
@@ -251,6 +450,59 @@ namespace ClaudiaKermin.Core.Tests
 
         // ---- Helpers ----
 
+        private const string ReducedGoal = "Reach a stable orbit of Kerbin.";
+        private const string ReplannedText = "Re-planned by Auto Mode.";
+        private const string AbortTakenText = "Abort taken by Auto Mode.";
+
+        /// <summary>The run was aborted for Auto Mode, as the Abort button would, and the player was never called to it.</summary>
+        private static void AssertAbortTaken(MissionControl mission, StartScript start)
+        {
+            var commands = mission.TakeCommands();
+            var abort = commands.OfType<AbortScript>().Single();
+            Assert.Equal((int?)start.RunId, abort.RunId);
+            Assert.Equal("Auto Mode took Claudia's Abort recommendation", abort.Reason);
+            Assert.DoesNotContain(commands, c => c is DropWarp);
+            Assert.DoesNotContain(commands.OfType<HoldScriptWarp>(), h => h.Reason == "Claudia recommends Abort");
+            Assert.Equal("", mission.View.AbortRecommended);
+            Assert.DoesNotContain(QuickReply.Abort, mission.View.QuickReplies);
+            var log = mission.View.Log.ToList();
+            var taken = log.FindIndex(e => e.Text == AbortTakenText);
+            Assert.Equal(LogKind.Notice, log[taken].Kind);
+            Assert.StartsWith("Claudia recommends Abort: ", log[taken - 1].Text);
+            Assert.Single(log, e => e.Text == AbortTakenText);
+        }
+
+        private static string DeltaVCheck(double threshold)
+        {
+            return "\"telemetry_checks\":[{\"quantity\":\"delta_v_used\",\"resource\":\"\",\"direction\":\"above\",\"threshold\":" + threshold
+                + ",\"why\":\"Nothing should burn.\"}],";
+        }
+
+        /// <summary>The Failed Debrief fixture, offering a reduced Mission Goal.</summary>
+        private static ScriptedResponse DebriefReducedGoal()
+        {
+            return Edited(ScriptedResponse.Fixture("mission-debrief-failed.sse"), "\\\"goal_reached\\\":false",
+                "\\\"goal_reached\\\":false,\\\"follow_up\\\":\\\"reduced_goal\\\",\\\"follow_up_text\\\":\\\"" + ReducedGoal + "\\\"");
+        }
+
+        /// <summary>The last user message of a request, as Claude reads it.</summary>
+        private static string LastUserText(HttpRequestSpec request)
+        {
+            using (var doc = JsonDocument.Parse(request.Body))
+                return doc.RootElement.GetProperty("messages").EnumerateArray().Last(m => m.GetProperty("role").GetString() == "user").GetRawText();
+        }
+
+        /// <summary>Fails any script that quicksaves, the way the real check would.</summary>
+        private sealed class QuicksaveCheck : IScriptCheck
+        {
+            public ScriptCheckResult Check(string script)
+            {
+                return script.ToUpperInvariant().Contains("QUICKSAVE")
+                    ? new ScriptCheckResult(null, new List<string> { "line 1: :QUICKSAVE (quicksave)" })
+                    : ScriptCheckResult.Pass();
+            }
+        }
+
         private static PlayerConfig AutoModeOn()
         {
             return new PlayerConfig { DefaultAutoMode = true };
@@ -298,11 +550,11 @@ namespace ClaudiaKermin.Core.Tests
                 "\\\"outcome\\\":\\\"Nominal\\\"", "\\\"outcome\\\":\\\"Off-Nominal\\\"");
         }
 
-        private MissionControl Control(StreamingFakeTransport transport, PlayerConfig config = null)
+        private MissionControl Control(StreamingFakeTransport transport, PlayerConfig config = null, IScriptCheck check = null)
         {
             var client = new ClaudeClient(new CraftCheckRouter(transport), () => "sk-ant-test", l => { });
             client.Timing.Wait = (d, c) => { };
-            var mission = new MissionControl(client, _background, config ?? new PlayerConfig(), () => true, new PassingScriptCheck());
+            var mission = new MissionControl(client, _background, config ?? new PlayerConfig(), () => true, check ?? new PassingScriptCheck());
             mission.Send(new SaveLoaded(_save.Path));
             mission.Send(new SceneChanged(GameScene.Flight));
             mission.Send(OnPad());

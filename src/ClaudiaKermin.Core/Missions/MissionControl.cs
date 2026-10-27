@@ -1519,7 +1519,13 @@ namespace ClaudiaKermin.Core.Missions
                 Note(LogKind.Player, "Retry with a note: " + note);
             }
             mission.Stage = MissionStage.Sequencing;
-            Begin(new Turn
+            Begin(ScriptRetryTurn(mission, note, replan));
+        }
+
+        /// <summary>The turn for Retry, Retry with a note or Re-plan after an unsafe script; also the probe the Auto Mode room check prices.</summary>
+        private static Turn ScriptRetryTurn(Mission mission, string note, bool replan)
+        {
+            return new Turn
             {
                 Purpose = Purpose.SequencePlan,
                 // A Re-plan is a new plan, so it gets its own automatic rewrite; a retry of the script doesn't.
@@ -1527,7 +1533,7 @@ namespace ClaudiaKermin.Core.Missions
                 UserText = replan ? MissionPrompts.ReplanAfterScriptCheck(mission.UnsafeProblems)
                     : MissionPrompts.RetryAfterScriptCheck(mission.UnsafeProblems, note),
                 Notice = replan ? MissionPrompts.ReplanNotice : MissionPrompts.RewriteNotice,
-            });
+            };
         }
 
         /// <summary>
@@ -1959,7 +1965,8 @@ namespace ClaudiaKermin.Core.Missions
                     view.RunStatus = "Running: " + mission.PendingSequence.Name + (mission.RunningChild.Length > 0 ? " on " + mission.RunningChild : "");
                     view.RunProgress = Progress(mission);
                 }
-                view.AbortRecommended = mission.AbortRecommendation;
+                // Under Auto Mode a recommendation is Auto Mode's to take, never the player's to answer: no Abort attention.
+                view.AbortRecommended = mission.AutoMode ? "" : mission.AbortRecommendation;
                 // While Running a question queues behind whatever is in hand, so typing stays open.
                 view.CanType = (!mission.InFlight || mission.Stage == MissionStage.Running) && (mission.Stage != MissionStage.Paused || mission.PauseCause == PauseCause.Refusal || mission.PauseCause == PauseCause.CutOff)
                     && mission.Stage != MissionStage.WaitingForFlight && mission.Stage != MissionStage.Lost
