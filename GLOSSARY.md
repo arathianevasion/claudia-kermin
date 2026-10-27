@@ -25,7 +25,7 @@ The player's plain-language statement of what a mission must achieve, e.g. "Land
 _Avoid_: objective, prompt, task
 
 **Mission Settings**:
-The player's choices for how Claudia meets a Mission Goal (e.g. daylight landing, time versus delta-v), set when the Mission starts and editable later; changing one makes Claudia revise the Mission Plan.
+The player's choices for how Claudia meets a Mission Goal (e.g. daylight landing, time versus delta-v, physics warp on Coasts), set when the Mission starts and editable later; changing one makes Claudia revise the Mission Plan.
 _Avoid_: mission parameters, options (which are Building Block settings)
 
 **Craft Check**:
