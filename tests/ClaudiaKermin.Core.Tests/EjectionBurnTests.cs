@@ -15,9 +15,11 @@ namespace ClaudiaKermin.Core.Tests
 {
     /// <summary>
     /// <c>ADDONS:CLAUDIA:EJECTIONBURN</c>, <c>transfer_to</c>'s ejection solver (spec #314), through <see cref="BlockCalls"/>: against
-    /// the Hohmann figures on a hand-built circular orbit with the stock Kerbin system's constants, and on a Game Snapshot of
-    /// the <c>transfer_to</c> block test's start (stock body elements, a 100 km orbit at UT 100). Each node is checked again
-    /// through <c>predict_burn</c>, which must arrive at <c>target_pe</c>.
+    /// the Hohmann figures on a hand-built circular orbit with the stock Kerbin system's constants, and on a Game Snapshot JSON
+    /// like the <c>transfer_to</c> block test's start (Fixtures/snapshots/kerbin-orbit-100km.json: the stock body elements,
+    /// Minmus's inclined orbit included, and a near-circular 100 km orbit at UT 100). That file is written by hand in the
+    /// snapshot's format, not captured in the game: no in-orbit snapshot had been recorded. Each node is checked again through
+    /// <c>predict_burn</c>, which must arrive at <c>target_pe</c>.
     /// </summary>
     public sealed class EjectionBurnTests
     {
@@ -54,7 +56,7 @@ namespace ClaudiaKermin.Core.Tests
             return snapshot;
         }
 
-        private static GameSnapshot Recorded()
+        private static GameSnapshot BlockTestStart()
         {
             return GameSnapshot.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "snapshots", "kerbin-orbit-100km.json")));
         }
@@ -129,7 +131,7 @@ namespace ClaudiaKermin.Core.Tests
             Solved(Circular());
             var watch = Stopwatch.StartNew();
             Solved(Circular());
-            Solved(Recorded(), earliest: 400);
+            Solved(BlockTestStart(), earliest: 400);
             Assert.InRange(watch.Elapsed.TotalMilliseconds, 0, 500);
         }
 
@@ -193,7 +195,7 @@ namespace ClaudiaKermin.Core.Tests
         public void The_block_tests_Mun_transfer_keeps_its_contract()
         {
             // test.cfg: ejection_node_dv < 900, ejection_wait (from the block's start) within a synodic period and the lead.
-            var snapshot = Recorded();
+            var snapshot = BlockTestStart();
             var node = Solved(snapshot, earliest: snapshot.Ut + 30);
             Assert.InRange(D(node, "dv"), 830, 900);
             Assert.InRange(D(node, "ut") - snapshot.Ut, 30, 30 + D(node, "synodic"));
@@ -203,7 +205,7 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void The_block_tests_orbit_reaches_inclined_Minmus()
         {
-            var snapshot = Recorded();
+            var snapshot = BlockTestStart();
             var node = Solved(snapshot, "Minmus", snapshot.Ut + 30, pe: 20000);
             Assert.InRange(PredictedPe(snapshot, node, "Minmus"), 19900, 20100);
             // A Hohmann transfer to Minmus's 47,000 km is 907 m/s in plane, plus the plane change toward its 6 degrees.
@@ -215,7 +217,7 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void A_body_that_does_not_orbit_the_craft_s_body_has_no_transfer()
         {
-            var result = Ask(Recorded(), "Sun");
+            var result = Ask(BlockTestStart(), "Sun");
             Assert.Equal("found no transfer: Sun does not orbit Kerbin, the body the craft orbits", result["error"]);
             Assert.False(result.ContainsKey("ut"));
         }
@@ -223,13 +225,13 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void An_unknown_body_has_no_transfer()
         {
-            Assert.StartsWith("found no transfer: there is no body named \"Duna\"", (string)Ask(Recorded(), "Duna")["error"]);
+            Assert.StartsWith("found no transfer: there is no body named \"Duna\"", (string)Ask(BlockTestStart(), "Duna")["error"]);
         }
 
         [Fact]
         public void A_landed_craft_has_no_transfer()
         {
-            var snapshot = Recorded();
+            var snapshot = BlockTestStart();
             snapshot.Situation = "LANDED";
             Assert.Equal("found no transfer: the craft is landed, not in flight; there is no orbit to burn from", Ask(snapshot)["error"]);
         }
@@ -237,19 +239,19 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void A_target_pe_outside_the_sphere_of_influence_has_no_transfer()
         {
-            Assert.StartsWith("found no transfer: target_pe must be from 0 to 2229559 m", (string)Ask(Recorded(), pe: 3000000)["error"]);
+            Assert.StartsWith("found no transfer: target_pe must be from 0 to 2229559 m", (string)Ask(BlockTestStart(), pe: 3000000)["error"]);
         }
 
         [Fact]
         public void A_window_that_is_neither_next_nor_a_UT_has_no_transfer()
         {
-            Assert.Equal("found no transfer: window must be \"next\" or a UT, not soon", Ask(Recorded(), window: "soon")["error"]);
+            Assert.Equal("found no transfer: window must be \"next\" or a UT, not soon", Ask(BlockTestStart(), window: "soon")["error"]);
         }
 
         [Fact]
         public void A_missing_target_pe_has_no_transfer()
         {
-            var result = BlockCalls.EjectionBurn(new Dictionary<string, object> { { "target", "Mun" } }, Recorded());
+            var result = BlockCalls.EjectionBurn(new Dictionary<string, object> { { "target", "Mun" } }, BlockTestStart());
             Assert.Equal("found no transfer: target_pe is required", result["error"]);
         }
     }

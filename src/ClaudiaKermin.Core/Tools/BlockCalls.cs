@@ -166,10 +166,10 @@ namespace ClaudiaKermin.Core.Tools
             object target, window;
             ask.TryGetValue("target", out target);
             ask.TryGetValue("window", out window);
-            if (!ask.ContainsKey("target_pe") || !(ask["target_pe"] is double)) return Error(Tools.EjectionBurn.Failure + ": target_pe is required");
+            if (!ask.ContainsKey("target_pe") || !(ask["target_pe"] is double)) return Error(Tools.EjectionBurn.Fail("target_pe is required").Error);
             if (window != null && !(window is double) && !string.Equals(window as string, "next", StringComparison.OrdinalIgnoreCase))
-                return Error(Tools.EjectionBurn.Failure + ": window must be \"next\" or a UT, not " + Convert.ToString(window, CultureInfo.InvariantCulture));
-            if (snapshot == null) return Error(Tools.EjectionBurn.Failure + ": no Game Snapshot");
+                return Error(Tools.EjectionBurn.Fail("window must be \"next\" or a UT, not " + Convert.ToString(window, CultureInfo.InvariantCulture)).Error);
+            if (snapshot == null) return Error(Tools.EjectionBurn.Fail("no Game Snapshot").Error);
             var plan = Tools.EjectionBurn.Find(snapshot, new EjectionAsk
             {
                 Target = target as string,

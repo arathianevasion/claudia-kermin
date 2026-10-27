@@ -51,7 +51,7 @@ namespace ClaudiaKermin.Core.Tools
     /// </summary>
     internal static class EjectionBurn
     {
-        public const string Failure = "found no transfer";
+        private const string Failure = "found no transfer";
         /// <summary>Departures tried per synodic period, as <c>transfer_to</c> seeded RSVP (span / 100).</summary>
         private const int Seeds = 100;
         /// <summary>Times of flight tried per departure, from 0.6 to 1.4 of the Hohmann time.</summary>
@@ -63,6 +63,14 @@ namespace ClaudiaKermin.Core.Tools
         private const double FineStep = 0.1;
         private const double ScanStep = 2;
         private const int ScanSteps = 60;
+        /// <summary>The descent from the grid's dip: its first time-of-flight step (of the Hohmann time), the step it stops under (s), and its most rounds.</summary>
+        private const double FirstFlightStep = 0.04;
+        private const double DescentFloor = 0.05;
+        private const int DescentRounds = 400;
+        /// <summary>The bisection on the prograde part: it stops within <see cref="PeClose"/> m of target_pe, and fails beyond <see cref="PeNear"/> m.</summary>
+        private const double PeClose = 10;
+        private const double PeNear = 100;
+        private const int Bisections = 60;
 
         public static EjectionPlan Find(GameSnapshot snapshot, EjectionAsk ask)
         {
@@ -127,15 +135,16 @@ namespace ClaudiaKermin.Core.Tools
             if (pick < 0)
                 return Fail("no departure in the " + Num(span) + " s from UT " + Num(from) + " has a path to " + target.Name);
 
-            // Coordinate descent from the grid's dip, never before the start.
+            // Coordinate descent from the grid's dip, never before the start or past the grid's end.
+            var last = from + (count - 2) * step;
             double bestT = from + (pick - 1) * step, bestTof = flight[pick], best = cheapest[pick];
-            double dt = step, dTof = Hohmann(home.Gm, craft.Radius(bestT), moon.A) * 0.04;
-            for (var round = 0; round < 400 && (dt > 0.05 || dTof > 0.05); round++)
+            double dt = step, dTof = Hohmann(home.Gm, craft.Radius(bestT), moon.A) * FirstFlightStep;
+            for (var round = 0; round < DescentRounds && (dt > DescentFloor || dTof > DescentFloor); round++)
             {
                 var moved = false;
                 foreach (var tryT in new[] { bestT - dt, bestT + dt })
                 {
-                    if (tryT < from) continue;
+                    if (tryT < from || tryT > last) continue;
                     var c = cost(tryT, bestTof);
                     if (c < best) { best = c; bestT = tryT; moved = true; }
                 }
@@ -194,8 +203,11 @@ namespace ClaudiaKermin.Core.Tools
         /// <summary>One trial of the burn on the patched conics: where it meets the target, or null when it doesn't go straight there.</summary>
         private sealed class Arrival
         {
+            /// <summary>The prograde part of the burn tried, m/s.</summary>
+            public double ProgradeDv;
             public double Pe;
-            public bool Prograde;
+            /// <summary>Whether the orbit round the target goes the way the target orbits.</summary>
+            public bool OrbitsPrograde;
             public double EncounterUt;
             public double PeUt;
         }
@@ -218,8 +230,9 @@ namespace ClaudiaKermin.Core.Tools
                 var there = after[1].Orbit;
                 return new Arrival
                 {
+                    ProgradeDv = p,
                     Pe = there.PeR - target.Radius,
-                    Prograde = Vec3.Dot(there.W, moon.W) > 0,
+                    OrbitsPrograde = Vec3.Dot(there.W, moon.W) > 0,
                     EncounterUt = after[0].EndUt,
                     PeUt = there.NextPeriapsis(after[1].StartUt) ?? after[1].StartUt,
                 };
@@ -249,8 +262,7 @@ namespace ClaudiaKermin.Core.Tools
                     : "the cheapest ejection, at UT " + Num(ut) + ", does not reach " + target.Name + "'s sphere of influence on the patched conics");
 
             // Out from it each way, the periapsis rises until the encounter is lost: the goal lies between.
-            EjectionPlan chosen = null;
-            var chosenPrograde = false;
+            Arrival chosen = null;
             foreach (var way in new[] { 1.0, -1.0 })
             {
                 var below = inside.Value;
@@ -264,43 +276,39 @@ namespace ClaudiaKermin.Core.Tools
                         continue;
                     }
                     var found = Bisect(arrive, below, p, goal);
-                    if (found != null)
-                    {
-                        var better = chosen == null || found.Item2.Prograde && !chosenPrograde
-                            || found.Item2.Prograde == chosenPrograde && Math.Abs(found.Item1) < Math.Abs(chosen.Prograde);
-                        if (better)
-                        {
-                            chosen = Plan(ut, found.Item1, normal, radial, found.Item2);
-                            chosenPrograde = found.Item2.Prograde;
-                        }
-                    }
+                    var better = found != null && (chosen == null || found.OrbitsPrograde && !chosen.OrbitsPrograde
+                        || found.OrbitsPrograde == chosen.OrbitsPrograde && Math.Abs(found.ProgradeDv) < Math.Abs(chosen.ProgradeDv));
+                    if (better) chosen = found;
                     break;
                 }
             }
-            return chosen ?? Fail("the ejection at UT " + Num(ut) + " reaches " + target.Name + ", but no burn there arrives with a periapsis of " + Num(goal) + " m");
+            return chosen != null
+                ? Plan(ut, normal, radial, chosen)
+                : Fail("the ejection at UT " + Num(ut) + " reaches " + target.Name + ", but no burn there arrives with a periapsis of " + Num(goal) + " m");
         }
 
         /// <summary>
         /// Narrows the prograde part between <paramref name="below"/> (periapsis under the goal) and <paramref name="above"/> (over
-        /// it, or no encounter) to a periapsis within 10 m of the goal; null when it can't get within 100 m.
+        /// it, or no encounter) to a periapsis within <see cref="PeClose"/> m of the goal; null when it can't get within <see cref="PeNear"/> m.
         /// </summary>
-        private static Tuple<double, Arrival> Bisect(Func<double, Arrival> arrive, double below, double above, double goal)
+        private static Arrival Bisect(Func<double, Arrival> arrive, double below, double above, double goal)
         {
-            Tuple<double, Arrival> nearest = null;
-            for (var i = 0; i < 60; i++)
+            Arrival nearest = null;
+            for (var i = 0; i < Bisections; i++)
             {
                 var mid = (below + above) / 2;
                 var got = arrive(mid);
-                if (got != null && (nearest == null || Math.Abs(got.Pe - goal) < Math.Abs(nearest.Item2.Pe - goal))) nearest = Tuple.Create(mid, got);
-                if (got != null && Math.Abs(got.Pe - goal) < 10) break;
+                if (got != null && (nearest == null || Math.Abs(got.Pe - goal) < Math.Abs(nearest.Pe - goal))) nearest = got;
+                if (got != null && Math.Abs(got.Pe - goal) < PeClose) break;
                 if (got != null && got.Pe < goal) below = mid;
                 else above = mid;
             }
-            return nearest != null && Math.Abs(nearest.Item2.Pe - goal) < 100 ? nearest : null;
+            return nearest != null && Math.Abs(nearest.Pe - goal) < PeNear ? nearest : null;
         }
 
-        private static EjectionPlan Plan(double ut, double prograde, double normal, double radial, Arrival arrival)
+        private static EjectionPlan Plan(double ut, double normal, double radial, Arrival arrival)
         {
+            var prograde = arrival.ProgradeDv;
             return new EjectionPlan
             {
                 Ut = ut,
@@ -314,7 +322,8 @@ namespace ClaudiaKermin.Core.Tools
             };
         }
 
-        private static EjectionPlan Fail(string why)
+        /// <summary>No node: "found no transfer: <paramref name="why"/>".</summary>
+        public static EjectionPlan Fail(string why)
         {
             return new EjectionPlan { Error = Failure + ": " + why };
         }
