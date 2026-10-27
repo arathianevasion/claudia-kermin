@@ -41,11 +41,11 @@ namespace ClaudiaKermin.Core.Tests
 
         // ---- Setup ----
 
-        private MissionControl Control(IHttpTransport transport, PlanningTools tools = null, bool route = true)
+        private MissionControl Control(IHttpTransport transport, PlanningTools tools = null, bool route = true, IScriptCheck check = null)
         {
             var client = new ClaudeClient(route ? new CraftCheckRouter(transport) : transport, () => "sk-ant-fake-key-0123456789", l => { });
             client.Timing.Wait = (d, c) => { };
-            var mission = new MissionControl(client, _background, new PlayerConfig(), () => true, new PassingScriptCheck());
+            var mission = new MissionControl(client, _background, new PlayerConfig(), () => true, check ?? new PassingScriptCheck());
             if (tools != null) mission.Tools = tools;
             mission.Send(new SaveLoaded(_save.Path));
             mission.Send(new SceneChanged(GameScene.Flight));
@@ -280,6 +280,45 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(MissionStage.Running, mission.View.Stage);
             Assert.StartsWith("Alert, delta-v used: carry on.", mission.View.LatestLine);
             Assert.Contains(ToolLines(mission), e => e.Text.EndsWith("error: not available during an Alert"));
+        }
+
+        // ---- check_script ----
+
+        private sealed class QuicksaveCheck : IScriptCheck
+        {
+            public int Calls;
+
+            public ScriptCheckResult Check(string script)
+            {
+                Calls++;
+                return script.ToUpperInvariant().Contains("QUICKSAVE")
+                    ? new ScriptCheckResult(null, new List<string> { "line 1: :QUICKSAVE (quicksave)" })
+                    : ScriptCheckResult.Pass();
+            }
+        }
+
+        [Fact]
+        public void AScriptThatPassedCheckScriptIsStillCheckedOnTheReply()
+        {
+            var check = new QuicksaveCheck();
+            var transport = new StreamingFakeTransport(
+                Fixture("mission-plan.sse"),
+                ToolUseStreams.ToolUse("cs", ("check_script", "{\"script\":\"print 1.\"}")),
+                Fixture("mission-sequence-plan-unsafe.sse"),
+                Fixture("mission-sequence-plan-rewritten.sse"));
+            var mission = Control(transport, check: check);
+            Start(mission);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            mission.Send(new Approve());
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingSequenceApproval);
+
+            // The tool said ok, and the reply with the quicksave was refused anyway and rewritten.
+            Assert.Equal(4, transport.Requests.Count);
+            Assert.Equal("{\"ok\":true}", Assert.Single(Results(transport.Requests[2])).GetProperty("content").GetString());
+            Assert.Contains("line 1: :QUICKSAVE (quicksave)", transport.Requests[3].Body);
+            Assert.DoesNotContain(mission.View.Log, e => e.Script.Contains("QUICKSAVE"));
+            // The tool's check, the unsafe reply's, the rewrite's.
+            Assert.Equal(3, check.Calls);
         }
 
         // ---- One commit, byte-exact steps ----

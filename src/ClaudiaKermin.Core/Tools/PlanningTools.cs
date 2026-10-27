@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using ClaudiaKermin.Core.Claude;
+using ClaudiaKermin.Core.Kos;
 using ClaudiaKermin.Core.Missions;
 
 namespace ClaudiaKermin.Core.Tools
@@ -93,9 +94,11 @@ namespace ClaudiaKermin.Core.Tools
         }
 
         /// <summary>Every tool the mod ships, in the fixed order the tools list is sent in (so the cached prefix never changes).</summary>
-        public static PlanningTools Default()
+        public static PlanningTools Default(IScriptCheck scriptCheck = null)
         {
-            return new PlanningTools(new IPlanningTool[] { new StagePerformance() });
+            var tools = new List<IPlanningTool> { new StagePerformance() };
+            if (scriptCheck != null) tools.Add(new CheckScript(scriptCheck));
+            return new PlanningTools(tools);
         }
 
         /// <summary>The tools list for a request kind, in registration order: identical on every request of the kind.</summary>
