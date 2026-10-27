@@ -6,16 +6,15 @@ namespace ClaudiaKermin.Core.Missions
     /// <summary>
     /// When the mod holds a running script's in-script warp at 1× (ADR 0004). The Core Library warps on rails through
     /// a sequence's waits; while the Mission needs the player, warp drops to 1× and the script doesn't warp again until
-    /// the hold ends. A Pause, the Spending Cap's waiting call and Manual Control hold for as long as they last; link
-    /// loss and a stock alarm are moments, so they hold for <see cref="MomentHoldSeconds"/> of game time and the wait
-    /// then warps on (a link that drops behind the Mun every orbit mustn't leave a long hold at 1×).
+    /// the hold ends. A Pause, the Spending Cap's waiting call and Manual Control hold for as long as they last; a stock
+    /// alarm is a moment, so it holds for <see cref="MomentHoldSeconds"/> of game time and the wait then warps on.
+    /// Link loss neither drops nor holds warp (ADR 0004, changed by #417): a Blackout doesn't need the player.
     /// </summary>
     public static class ScriptWarp
     {
-        /// <summary>Game seconds a moment (link loss, a stock alarm) holds warp at 1× before the script may warp again.</summary>
+        /// <summary>Game seconds a moment (a stock alarm) holds warp at 1× before the script may warp again.</summary>
         public const double MomentHoldSeconds = 10;
 
-        public const string LinkLost = "the link to Kerbin dropped";
         public const string StockAlarm = "a stock alarm went off";
 
         /// <summary>

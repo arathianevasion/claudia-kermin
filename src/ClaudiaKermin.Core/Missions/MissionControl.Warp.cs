@@ -11,11 +11,9 @@ namespace ClaudiaKermin.Core.Missions
     {
         /// <summary>Why the running script's warp is held at 1× now; "" when it may warp.</summary>
         private string _warpHold = "";
-        /// <summary>The last moment that held warp (link loss, a stock alarm), and the UT until which it holds.</summary>
+        /// <summary>The last moment that held warp (a stock alarm), and the UT until which it holds.</summary>
         private string _warpMoment = "";
         private double _warpMomentUntil = double.NegativeInfinity;
-        /// <summary>The craft had a link at the last check, so a drop is seen once.</summary>
-        private bool _warpLinked = true;
 
         private void StockAlarmWentOff()
         {
@@ -33,9 +31,6 @@ namespace ClaudiaKermin.Core.Missions
         {
             var mission = _mission;
             var running = mission != null && !MissionOver && IsRunning(mission);
-            var linked = _craftLink != false;
-            if (running && _warpLinked && !linked) HoldFor(ScriptWarp.LinkLost);
-            _warpLinked = linked;
 
             var reason = mission == null || MissionOver ? ""
                 : ScriptWarp.HoldReason(running, mission.Stage, mission.WaitingForCap, mission.AbortRecommendation.Length > 0,

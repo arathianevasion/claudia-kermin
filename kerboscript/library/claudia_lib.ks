@@ -813,7 +813,7 @@ function claudia_warp_tick {
 // it. It warps on rails where KSP allows it, back at 1x lead seconds before ut (at least 30), and
 // where KSP refuses rails and the craft is on a Coast it physics-warps (claudia_warp_rate), back at
 // 1x lead seconds before ut (0: at ut). Warp is asked for at the start and again whenever the rate
-// is back at 1x (claudia_warp_step), except while the mod holds warp at 1x (a Pause, link loss, the
+// is back at 1x (claudia_warp_step), except while the mod holds warp at 1x (a Pause, the
 // Spending Cap, a stock alarm) and after the player lowered or stopped warp during this wait
 // (ADDONS:CLAUDIA:WARPCANCELLED, reset by waitstart), so the player is never overridden. stop: a
 // delegate returning true to end the wait early (warp is cancelled and the wait returns ""), or 0

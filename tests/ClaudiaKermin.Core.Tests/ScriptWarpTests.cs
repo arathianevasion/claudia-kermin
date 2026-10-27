@@ -19,7 +19,7 @@ namespace ClaudiaKermin.Core.Tests
     /// <summary>
     /// In-script warp (issue #150, ADR 0004), driven through the Mission seam: a sequence that waits longer than an
     /// orbit runs as one approved sequence with no Due Time, and while its script warps, warp drops to 1x (and the
-    /// script holds it there) on a Pause, link loss, the Spending Cap, a stock alarm or Manual Control.
+    /// script holds it there) on a Pause, the Spending Cap, a stock alarm or Manual Control.
     /// </summary>
     public sealed class ScriptWarpTests : IDisposable
     {
@@ -85,7 +85,7 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
-        public void LosingTheLinkWhileTheScriptWarpsDropsWarpOnceThenTheWaitWarpsOn()
+        public void LosingTheLinkWhileTheScriptWarpsNeitherDropsNorHoldsWarp()
         {
             var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse", 64), HoldPlan()));
             ToRunning(mission);
@@ -93,20 +93,33 @@ namespace ClaudiaKermin.Core.Tests
 
             mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 1; }));
             var commands = mission.TakeCommands();
-            Assert.Single(commands.OfType<DropWarp>());
-            Assert.Equal(ScriptWarp.LinkLost, Assert.Single(commands.OfType<HoldScriptWarp>()).Reason);
+            Assert.Empty(commands.OfType<DropWarp>());
+            Assert.Empty(commands.OfType<HoldScriptWarp>());
+            Assert.DoesNotContain(mission.View.Log, e => e.Text.StartsWith("Warp dropped"));
             Assert.Equal(MissionStage.Running, mission.View.Stage);
 
-            // Still no link: no second drop; after the moment's hold the script may warp again.
+            // Still no link, and the link back and lost again: still nothing for warp.
             mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 5; }));
-            Assert.Empty(mission.TakeCommands());
-            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 1 + ScriptWarp.MomentHoldSeconds; }));
-            Assert.Equal("", Assert.Single(mission.TakeCommands().OfType<HoldScriptWarp>()).Reason);
-
-            // The link back and lost again is a new moment.
             mission.Send(Pad(s => { s.HasLink = true; s.Ut = ut + 20; }));
             mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 21; }));
-            Assert.Single(mission.TakeCommands().OfType<DropWarp>());
+            Assert.Empty(mission.TakeCommands());
+        }
+
+        [Fact]
+        public void LosingTheLinkWhileAStockAlarmHoldsWarpLeavesTheHoldAsItWas()
+        {
+            var mission = Control(new StreamingFakeTransport(ScriptedResponse.Fixture("mission-plan.sse", 64), HoldPlan()));
+            ToRunning(mission);
+            var ut = Pad().Ut;
+            mission.Send(new StockAlarmFired());
+            mission.TakeCommands();
+
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + 5; }));
+            Assert.Empty(mission.TakeCommands());
+
+            // The hold ends 10 s after the alarm, not 10 s after the link loss.
+            mission.Send(Pad(s => { s.HasLink = false; s.Ut = ut + ScriptWarp.MomentHoldSeconds + 1; }));
+            Assert.Equal("", Assert.Single(mission.TakeCommands().OfType<HoldScriptWarp>()).Reason);
         }
 
         [Fact]
@@ -156,7 +169,7 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("the Mission is Paused", ScriptWarp.HoldReason(true, MissionStage.Paused, false, false, ""));
             Assert.Equal("Claudia's next request waits at the Spending Cap", ScriptWarp.HoldReason(true, MissionStage.Running, true, false, ""));
             Assert.Equal("Claudia recommends Abort", ScriptWarp.HoldReason(true, MissionStage.Running, false, true, ""));
-            Assert.Equal(ScriptWarp.LinkLost, ScriptWarp.HoldReason(true, MissionStage.Running, false, false, ScriptWarp.LinkLost));
+            Assert.Equal(ScriptWarp.StockAlarm, ScriptWarp.HoldReason(true, MissionStage.Running, false, false, ScriptWarp.StockAlarm));
             Assert.Equal("you have Manual Control", ScriptWarp.HoldReason(false, MissionStage.ManualControl, false, false, ""));
             Assert.Equal("", ScriptWarp.HoldReason(true, MissionStage.Running, false, false, ""));
             // Nothing runs, nothing to hold: a Pause between sequences is the closed-window alert's business.
