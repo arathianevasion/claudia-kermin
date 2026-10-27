@@ -20,7 +20,7 @@
 //   "abort <option>: <detail>"; there is no in-block recovery.
 // - Block loops call claudia_tick() each physics tick: it measures delta-v used, auto-stages and
 //   checks the common aborts. Waits go through claudia_wait_until() (or claudia_warp_to() for a
-//   longer lead), which warp on rails with no cap.
+//   longer lead), which warp with no cap: on rails, or physics warp on a Coast where rails is refused.
 // - A block that flies another block (e.g. a burn through exec_node) passes on its common options
 //   and folds the result into its own with claudia_add_result (claudia_fly_node does both for nodes).
 // - Helpers are prefixed claudia_. Pure helpers (no ship, no time) take plain values so they can be
@@ -48,10 +48,10 @@
 //| situation (e.g. "ORBITING"), orbit (lexicon ap, pe in m, inc in degrees) or, when landed,
 //| splashed or on the pad, geo (lexicon lat, lng, alt), and stage (current stage number); plus the
 //| block's extra results. An abort leaves the craft safe (throttle 0, SAS holding attitude) and
-//| sets reason "abort <option>: <detail>". Waits use on-rails warp only, back at 1x at least 30 s before
-//| a burn, and have no cap: a block waits for its window or daylight however long, coast holds
-//| until a UT. Warp drops to 1x when the Mission needs the player, then resumes. If the player
-//| cancels it the wait won't override them: ADDONS:CLAUDIA:WARPCANCELLED stays true until the next wait. Waits re-ask for warp if KSP cuts it. Own wait: claudia_warp_to(ctx, ut, lead[, stop, cap]); never warp yourself. Report the Script Result yourself, once, at the end, e.g.
+//| sets reason "abort <option>: <detail>". Waits use on-rails warp, or physics warp on a Coast (up to 4x, less in
+//| thick air), back at 1x at least 30 s before a burn, and have no cap: a block waits for its window or daylight however long, coast holds
+//| until a UT. Warp drops to 1x while the Mission needs the player. Waits re-ask if KSP cuts warp, not once
+//| the player cancels it (ADDONS:CLAUDIA:WARPCANCELLED, until the next wait). Own wait: claudia_warp_to(ctx, ut, lead[, stop, cap]); never warp yourself. Report the Script Result yourself, once, at the end, e.g.
 //| `addons:claudia:report(res).`, or a lexicon of your own with at least success and reason.
 
 // ---- Options ----
@@ -590,7 +590,7 @@ function claudia_drop_empty {
 
 // ---- Waits and warp ----
 
-// A wait has no cap (ADR 0004): it warps on rails inside the sequence, however long, and the
+// A wait has no cap (ADR 0004): it warps inside the sequence (ADR 0008), however long, and the
 // player's Approval of the sequence approved it.
 
 function claudia_on_ground {
@@ -736,20 +736,20 @@ function claudia_warp_tick {
     if mode = "physics" {
       set want to claudia_warp_rate(cap).
     }
-    local r is claudia_physics_step(time:seconds, physics_end, tw:warp + 1, want, held, cancelled).
-    if r = 1 {
+    local next_rate is claudia_physics_step(time:seconds, physics_end, tw:warp + 1, want, held, cancelled).
+    if next_rate = 1 {
       tw:cancelwarp().
-    } else if r > 1 {
-      set tw:warp to r - 1.
+    } else if next_rate > 1 {
+      claudia_warp_request("physics", warp_end, next_rate).
     }
-    return r > 1.
+    return next_rate > 1.
   }
   if mode = "physics" and tw:warp = 0 and tw:rate <= 1 {
-    local r is claudia_physics_step(time:seconds, physics_end, 1, claudia_warp_rate(cap), held, cancelled).
-    if r > 1 {
-      claudia_warp_request(mode, warp_end, r).
+    local next_rate is claudia_physics_step(time:seconds, physics_end, 1, claudia_warp_rate(cap), held, cancelled).
+    if next_rate > 1 {
+      claudia_warp_request(mode, warp_end, next_rate).
     }
-    return r > 1.
+    return next_rate > 1.
   }
   local action is claudia_warp_step(time:seconds, warp_end, tw:rate, held, cancelled).
   if action = "drop" {

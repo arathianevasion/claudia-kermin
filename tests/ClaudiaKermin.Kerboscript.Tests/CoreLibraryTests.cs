@@ -360,11 +360,22 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         [Fact]
+        public void A_stop_delegate_sets_the_blocks_own_locals()
+        {
+            // launch's coast runs its per-tick step as the wait's stop, which sets the block's state.
+            var printed = Run("function f { local done is false. local n is 0. local step is { set n to n + 1. if n >= 3 { set done to true. } }.\n"
+                + "local stop is { step:call(). return done. }. until stop:call() { } return n. }\nprint f().");
+            Assert.Equal(new[] { "3" }, printed);
+        }
+
+        [Fact]
         public void There_is_one_wait_loop_taking_an_optional_stop_and_cap_and_land_coasts_through_it()
         {
             var bundle = CoreLibrary.Bundle("@lazyglobal off.\nprint 1.").Replace("\r\n", "\n");
             Assert.Contains("parameter ctx, ut, lead, stop is 0, cap is 0.", bundle);
             Assert.Contains("return claudia_warp_to(ctx, ut, 30, ground_near).", bundle);
+            // launch's coast: to the top of the atmosphere or the hop, physics warp to the event itself (lead 0).
+            Assert.Contains("claudia_warp_to(ctx, time:seconds + max(1, eta:apoapsis), 0, { step:call(). return done or not coasting. })", bundle);
             Assert.Single(System.Text.RegularExpressions.Regex.Matches(bundle, "timewarp:warpto\\("));
             Assert.Single(System.Text.RegularExpressions.Regex.Matches(bundle, "addons:claudia:waitstart\\("));
         }
