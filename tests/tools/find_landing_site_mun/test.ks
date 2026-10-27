@@ -71,13 +71,13 @@ if any:haskey("error") {
     }
   }
 
-  // 3. Near the far side of the body from where the craft is now, in daylight: the pass is about half an orbit away, and the
-  // craft is warped there to see where its ground track really is.
-  local here is ship:geoposition.
-  local far_lng is here:lng + 180.
-  if far_lng > 180 { set far_lng to far_lng - 360. }
+  // 3. Near the sub-solar point (where the sun is overhead now), in daylight: the sun hardly moves in an hour at the Mun or Minmus,
+  // so the track's pass over it within the hour is in daylight. (A point on the far side from the craft was night about half the
+  // time, #312.) The craft is warped to the pass to see where its ground track really is.
+  local to_sun is (body("Sun"):position - b:position):normalized.
+  local subsolar is b:geopositionof(b:position + to_sun * b:radius).
   local near is addons:claudia:planningtool("find_landing_site", lexicon("body", b:name, "daylight", true, "within_hours", 1, "max_slope_deg", 10,
-    "near", lexicon("latitude", 0, "longitude", far_lng))).
+    "near", lexicon("latitude", 0, "longitude", subsolar:lng))).
   if near:haskey("error") {
     result:add("near_error", near:error).
   } else {
@@ -86,6 +86,8 @@ if any:haskey("error") {
     local near_seen is compare(near:sites).
     result:add("near_biome_misses", near_seen:biome_misses).
     result:add("near_terrain_worst_m", near_seen:terrain_worst).
+    // An empty answer explains itself: the tool's note says how many track points survived each test.
+    if near:sites:length = 0 and near:haskey("note") { result:add("near_note", near:note). }
     if near:sites:length > 0 {
       result:add("near_sun_low_deg", extent(near:sites, "sun_elevation_deg"):low).
       local site is near:sites[0].
@@ -94,6 +96,11 @@ if any:haskey("error") {
       wait until time:seconds >= site:pass_ut.
       // The craft's ground point as the pass begins against the site, m on the surface.
       result:add("track_error_m", (ship:geoposition:position - spot:position):mag).
+      // KSP's own sun elevation at the site at the pass (the angle between the surface normal and the way to the sun), against the tool's
+      // for the same spot at the pass.
+      local ksp_sun is 90 - vang(spot:position - b:position, body("Sun"):position - b:position).
+      result:add("near_sun_ksp_deg", ksp_sun).
+      result:add("near_sun_error_deg", abs(ksp_sun - site:sun_elevation_deg)).
     }
   }
   print "find_landing_site scenario at " + b:name + ": " + any:sites:length + " sites, " + seen:biome_misses + " biome misses, terrain off by at most " + round(seen:terrain_worst, 2) + " m, " + round(any:call_ms, 1) + " ms.".
