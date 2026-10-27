@@ -790,6 +790,7 @@ function land_coast {
   parameter ctx, ut, a_brake.
   local warp_end is claudia_warp_end(ut, 30).
   local want is true.
+  addons:claudia:waitstart(warp_end).
   until time:seconds >= ut {
     local g is body:mu / (body:radius + altitude) ^ 2.
     local t_impact is land_fall_eta(alt:radar, -ship:verticalspeed, g).
@@ -812,11 +813,13 @@ function land_coast {
     local reason is claudia_tick(ctx, 0).
     if reason <> "" {
       kuniverse:timewarp:cancelwarp().
+      addons:claudia:waitend().
       return reason.
     }
     wait 0.
   }
   wait until kuniverse:timewarp:issettled and ship:unpacked.
+  addons:claudia:waitend().
   return "".
 }
 

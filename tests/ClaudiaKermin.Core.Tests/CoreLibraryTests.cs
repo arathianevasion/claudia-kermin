@@ -126,6 +126,24 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Contains("set kuniverse:timewarp:mode to \"RAILS\".", bundle);
         }
 
+        // #335: the warp trace counts real time at 1x only inside waits, so every wait loop says when it starts and ends.
+        [Theory]
+        [InlineData("claudia_warp_to")]
+        [InlineData("land_coast")]
+        public void EveryWaitLoopReportsItsWaitToTheWarpTraceAndEndsItOnEveryReturn(string function)
+        {
+            var bundle = CoreLibrary.Bundle(Script).Replace("\r\n", "\n");
+            var body = Regex.Match(bundle, "(?ms)^function " + function + " \\{\n.*?^\\}\n").Value;
+            Assert.NotEqual("", body);
+            var lines = body.Split('\n').Select(l => l.Trim()).ToList();
+            var start = lines.IndexOf("addons:claudia:waitstart(warp_end).");
+            Assert.True(start > 0 && start < lines.FindIndex(l => l.StartsWith("until ")), function + " starts its wait before the loop");
+            var returns = lines.Select((l, i) => new { l, i }).Where(x => x.l.StartsWith("return ")).ToList();
+            Assert.NotEmpty(returns);
+            foreach (var r in returns)
+                Assert.True(lines[r.i - 1] == "addons:claudia:waitend().", function + ": '" + r.l + "' without waitend() before it");
+        }
+
         [Fact]
         public void TheSharedDocsTellClaudiaWaitsWarpInsideTheScriptWithNoCap()
         {
