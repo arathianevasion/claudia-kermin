@@ -349,7 +349,44 @@ namespace ClaudiaKermin.Core.Tests
             Assert.True(spec.Judge(Traced(trace)).Passed);
         }
 
+        [Fact]
+        public void PhysicsMaxRateIsTheTopRateReachedOnPhysicsRequestsOnly()
+        {
+            // A launch: rails refused in the air, then physics warp on the coast at 2x, 4x; then rails above the air.
+            var trace = new WarpTrace(0);
+            trace.BlockStarted("launch", 0);
+            trace.WaitStarted(60, 1000, 1100);
+            trace.Requested(61, 1001, null, "physics", 2, "");
+            trace.Sample(62, 1003, 2);
+            trace.Requested(70, 1020, null, "physics", 4, "");
+            trace.Sample(71, 1024, 4);
+            trace.Sample(72, 1028, 1);
+            trace.Dropped(72, 1028, "cut", "");
+            trace.Requested(73, 1029, 1100, "rails", null, "");
+            trace.Sample(74, 1040, 50);
+            trace.WaitEnded(80, 1100);
+            trace.BlockEnded("launch", 80);
+
+            var spec = BlockTestSpec.Parse("launch", "block = launch\n"
+                + "check = warp.physics_max_rate == 4\ncheck = warp.max_rate == 50\ncheck = warp.launch.physics_max_rate == 4\n");
+            var result = spec.Judge(Traced(trace));
+            Assert.True(result.Passed, string.Join("\n", result.Lines));
+        }
+
+        [Fact]
+        public void PhysicsMaxRateIs1WithNoPhysicsWarp()
+        {
+            var trace = new WarpTrace(0);
+            trace.BlockStarted("coast", 0);
+            trace.WaitStarted(1, 100, 9000);
+            trace.Requested(2, 101, 9000, "rails", null, "");
+            trace.Sample(3, 200, 1000);
+            var result = BlockTestSpec.Parse("coast", "block = coast\ncheck = warp.physics_max_rate == 1\n").Judge(Traced(trace));
+            Assert.True(result.Passed, string.Join("\n", result.Lines));
+        }
+
         [Theory]
+        [InlineData("check = warp.physics_max_rate >= 2")]
         [InlineData("check = warp.first_request_real_s < 10")]
         [InlineData("check = warp.real_s_at_1x < 60")]
         [InlineData("check = warp.max_rate >= 1000")]
@@ -387,7 +424,7 @@ namespace ClaudiaKermin.Core.Tests
         {
             var lines = Coast(3).Lines();
             Assert.Contains("request real 3.0 s, UT 1003, target 6000, rails, asked KSP's pick, reached 1000x, attempt 1, in coast", lines);
-            Assert.Contains("block coast: first request 3.0 s, 4.0 s at 1x in waits, top rate 1000x, 1 requests, 0 retries, 0 drops", lines);
+            Assert.Contains("block coast: first request 3.0 s, 4.0 s at 1x in waits, top rate 1000x (physics 1x), 1 requests, 0 retries, 0 drops", lines);
         }
     }
 }

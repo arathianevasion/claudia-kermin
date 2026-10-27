@@ -403,7 +403,9 @@ function launch {
   local off_since is -1.
   local q_max is 0.
   local reason is "".
-  until false {
+  local done is false.
+  // One tick of the climb or the coast: sets tset and aim, and done (with reason if it failed).
+  local fly_tick is {
     local q_pa is ship:q * constant:atmtokpa * 1000.
     set q_max to max(q_max, q_pa).
     local spd is ship:velocity:surface:mag.
@@ -415,18 +417,23 @@ function launch {
 
     if coasting {
       if hop and ship:verticalspeed <= 0 {
-        break.
+        set done to true.
+        return.
       }
       if not hop and altitude > body_values:atm_height {
-        break.
+        set done to true.
+        return.
       }
       if not hop and ship:verticalspeed < 0 {
         set reason to "fell back into the atmosphere: ap " + round(ap) + " m, below " + round(body_values:atm_height) + " m".
-        break.
+        set done to true.
+        return.
       }
-      // Top up what drag took, but only out of thick air, so a hop coasts smoothly.
+      // Top up what drag took, but only out of thick air, so a hop coasts smoothly. The throttle
+      // waits a tick: the coast's wait ends first and drops its warp.
       if ap < target_ap - topup_tol and not launch_thick_air(ratio) {
         set coasting to false.
+        return.
       }
     }
     if coasting {
@@ -484,18 +491,33 @@ function launch {
       } else if time:seconds - off_since > 3 {
         local off_flow is vang(ship:facing:forevector, ship:srfprograde:vector).
         set reason to launch_lost_control(ship:thrust > 0, tset, q_pa, off_aim, off_flow, altitude).
-        break.
+        set done to true.
       }
     } else {
       set off_since to -1.
     }
+  }.
 
-    local ticked is claudia_tick(ctx, tset).
-    if ticked <> "" {
-      set reason to ticked.
-      break.
+  until done {
+    if coasting {
+      // The coast is one wait (claudia_warp_to), fly_tick its stop (it flies each tick and says when the Coast ends): physics warp by the q rule (KSP
+      // refuses rails in the air), back at 1x at the top of the atmosphere or the hop, or before a top-up.
+      local waited is claudia_warp_to(ctx, time:seconds + max(1, eta:apoapsis), 0, { fly_tick:call(). return done or not coasting. }).
+      if waited <> "" {
+        set reason to waited.
+        set done to true.
+      }
+    } else {
+      fly_tick:call().
+      if not done {
+        local ticked is claudia_tick(ctx, tset).
+        if ticked <> "" {
+          set reason to ticked.
+          set done to true.
+        }
+        wait 0.
+      }
     }
-    wait 0.
   }
 
   set extra:max_q to round(q_max).

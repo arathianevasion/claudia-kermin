@@ -265,6 +265,92 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(new[] { "1" }, printed);
         }
 
+        // ---- Physics warp on a Coast (#339, ADR 0008) ----
+
+        [Theory]
+        // The q rule: 4x under 1 kPa, 3x under 5 kPa, 2x under 15 kPa, 1x from 15 kPa; each boundary.
+        [InlineData(0, 0, "4")]
+        [InlineData(999.9, 0, "4")]
+        [InlineData(1000, 0, "3")]
+        [InlineData(4999.9, 0, "3")]
+        [InlineData(5000, 0, "2")]
+        [InlineData(14999.9, 0, "2")]
+        [InlineData(15000, 0, "1")]
+        [InlineData(40000, 0, "1")]
+        // At most 2x while steering is more than 5 degrees off; never raised by it.
+        [InlineData(0, 5, "4")]
+        [InlineData(0, 5.1, "2")]
+        [InlineData(2000, 30, "2")]
+        [InlineData(20000, 30, "1")]
+        public void The_physics_rate_follows_dynamic_pressure_and_at_most_2x_off_the_steering(double qPa, double steerErr, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_q_rate({0}, {1})", qPa, steerErr)));
+        }
+
+        [Theory]
+        // Rails wherever KSP allows it; physics only where it refuses and the mod allows physics warp (on a Coast).
+        [InlineData(true, true, "rails")]
+        [InlineData(true, false, "rails")]
+        [InlineData(false, true, "physics")]
+        // Off a Coast (or switched off) with rails refused: no warp at all.
+        [InlineData(false, false, "none")]
+        public void A_wait_chooses_rails_where_allowed_physics_on_a_coast_and_never_physics_off_one(bool railsOk, bool physicsOk, string expected)
+        {
+            Assert.Equal(expected, One("claudia_warp_mode(" + Bool(railsOk) + ", " + Bool(physicsOk) + ")"));
+        }
+
+        [Theory]
+        // The rate to set this tick, or 0 for none. physics_end is 1000.
+        // Start: ask for the rate wanted.
+        [InlineData(0, 1, 4, false, false, "4")]
+        // At it: nothing; thicker air: down; thinner: up.
+        [InlineData(500, 4, 4, false, false, "0")]
+        [InlineData(500, 4, 2, false, false, "2")]
+        [InlineData(500, 2, 3, false, false, "3")]
+        // Retry: cut to 1x, asked again.
+        [InlineData(500, 1, 3, false, false, "3")]
+        // Cancelled: never raised again, but still lowered for the air.
+        [InlineData(500, 1, 4, false, true, "0")]
+        [InlineData(500, 2, 4, false, true, "0")]
+        [InlineData(500, 3, 2, false, true, "2")]
+        // Held: back to 1x and not asked for.
+        [InlineData(500, 3, 4, true, false, "1")]
+        [InlineData(500, 1, 4, true, false, "0")]
+        // At its end: 1x; under 5 s from it, not worth raising.
+        [InlineData(1000, 4, 4, false, false, "1")]
+        [InlineData(996, 1, 4, false, false, "0")]
+        [InlineData(996, 2, 1, false, false, "1")]
+        public void A_physics_warp_follows_the_rate_wanted_with_the_retry_hold_and_cancel_rules(double now, int rate, int want, bool held, bool cancelled, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_physics_step({0}, 1000, {1}, {2}, {3}, {4})", now, rate, want, Bool(held), Bool(cancelled))));
+        }
+
+        [Theory]
+        // Physics warp is over lead s before ut, with no 30 s floor: 30 before a burn; lead 0 at the end of a coast where nothing acts: at the event.
+        [InlineData(5400, 30, "5370")]
+        [InlineData(5400, 0, "5400")]
+        [InlineData(5400, 10, "5390")]
+        public void Physics_warp_ends_the_lead_before_the_wait_ends(double ut, double lead, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "claudia_physics_end({0}, {1})", ut, lead)));
+        }
+
+        [Fact]
+        public void A_coast_up_through_the_air_warps_faster_as_the_air_thins_and_is_at_1x_at_the_top()
+        {
+            // A stand-in launch coast: q falls from 20 kPa by 300 Pa a second; physics warp ends at the top (t = 100, lead 0).
+            var printed = Run(
+                "local rate is 1. local rates is list(). local t is 0.\n"
+                + "until t > 100 {\n"
+                + "  local want is claudia_q_rate(max(0, 20000 - 300 * t), 0).\n"
+                + "  local next_rate is claudia_physics_step(t, claudia_physics_end(100, 0), rate, want, false, false).\n"
+                + "  if next_rate > 0 { set rate to next_rate. rates:add(t + \":\" + next_rate). }\n"
+                + "  set t to t + 1.\n"
+                + "}\n"
+                + "print rates:join(\",\"). print rate.");
+            Assert.Equal(new[] { "17:2,51:3,64:4,100:1", "1" }, printed);
+        }
+
         [Fact]
         public void The_default_stop_is_a_number_and_a_stop_condition_is_a_delegate()
         {
@@ -274,11 +360,22 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         [Fact]
+        public void A_stop_delegate_sets_the_blocks_own_locals()
+        {
+            // launch's coast runs its per-tick step as the wait's stop, which sets the block's state.
+            var printed = Run("function f { local done is false. local n is 0. local step is { set n to n + 1. if n >= 3 { set done to true. } }.\n"
+                + "local stop is { step:call(). return done. }. until stop:call() { } return n. }\nprint f().");
+            Assert.Equal(new[] { "3" }, printed);
+        }
+
+        [Fact]
         public void There_is_one_wait_loop_taking_an_optional_stop_and_cap_and_land_coasts_through_it()
         {
             var bundle = CoreLibrary.Bundle("@lazyglobal off.\nprint 1.").Replace("\r\n", "\n");
             Assert.Contains("parameter ctx, ut, lead, stop is 0, cap is 0.", bundle);
             Assert.Contains("return claudia_warp_to(ctx, ut, 30, ground_near).", bundle);
+            // launch's coast: to the top of the atmosphere or the hop, physics warp to the event itself (lead 0).
+            Assert.Contains("claudia_warp_to(ctx, time:seconds + max(1, eta:apoapsis), 0, { fly_tick:call(). return done or not coasting. })", bundle);
             Assert.Single(System.Text.RegularExpressions.Regex.Matches(bundle, "timewarp:warpto\\("));
             Assert.Single(System.Text.RegularExpressions.Regex.Matches(bundle, "addons:claudia:waitstart\\("));
         }
