@@ -212,6 +212,79 @@ namespace ClaudiaKermin.Core.Tests
             Assert.InRange(D(node, "dv"), 900, 1100);
         }
 
+        // ---- the correction after an ejection that missed (#363) ----
+
+        /// <summary>
+        /// The mission of #363: the ejection from <see cref="Circular"/> flown short, leaving apoapsis at 8,587 km and periapsis
+        /// at 90 km (the Mun orbits at 12,000 km, so no encounter), seen a minute after the burn. The orbit's periapsis is where
+        /// the circular orbit was at the node's UT (a circular equatorial orbit's angle runs at its mean motion from 0 at UT 0).
+        /// </summary>
+        private static GameSnapshot Missed(out double ejectionUt)
+        {
+            var snapshot = Circular();
+            ejectionUt = D(Solved(snapshot), "ut");
+            const double pe = KerbinR + 90238, ap = KerbinR + 8586806;
+            var angle = Math.Sqrt(KerbinGm / Math.Pow(KerbinR + 100000, 3)) * ejectionUt * 180 / Math.PI % 360;
+            snapshot.Ut = ejectionUt + 60;
+            snapshot.Orbit = new SnapshotOrbit
+            {
+                SemiMajorAxis = (pe + ap) / 2, Eccentricity = (ap - pe) / (ap + pe), Body = "Kerbin", Periapsis = 90238, Apoapsis = 8586806,
+                ArgumentOfPeriapsis = angle, Epoch = ejectionUt,
+            };
+            return snapshot;
+        }
+
+        private static IDictionary<string, object> Correction(GameSnapshot snapshot, double? latest = null, double? maxDv = null)
+        {
+            var input = new Dictionary<string, object> { { "target", "Mun" }, { "target_pe", TargetPe }, { "earliest_ut", snapshot.Ut + 120 } };
+            if (latest.HasValue) input["latest_ut"] = latest.Value;
+            if (maxDv.HasValue) input["max_dv"] = maxDv.Value;
+            return BlockCalls.EjectionBurn(input, snapshot);
+        }
+
+        [Fact]
+        public void A_missed_ejection_gets_a_correction_that_meets_the_target_at_target_pe()
+        {
+            double ejected;
+            var snapshot = Missed(out ejected);
+            var fix = Correction(snapshot);
+            Assert.Equal("", fix["error"]);
+            Assert.True(D(fix, "ut") >= snapshot.Ut + 120);
+            Assert.InRange(PredictedPe(snapshot, fix, "Mun"), TargetPe - 100, TargetPe + 100);
+            // Near periapsis, where the ejection fell about 44 m/s of speed short, tens of m/s put apoapsis back at the Mun.
+            Assert.InRange(D(fix, "dv"), 1, 60);
+        }
+
+        [Fact]
+        public void The_correction_comes_by_the_latest_UT_or_not_at_all()
+        {
+            double ejected;
+            var snapshot = Missed(out ejected);
+            // Ten minutes is a short span of the 13.8 h synodic period the search would otherwise take.
+            var latest = snapshot.Ut + 720;
+            var soon = Correction(snapshot, latest);
+            Assert.Equal("", soon["error"]);
+            Assert.InRange(D(soon, "ut"), snapshot.Ut + 120, latest);
+            Assert.InRange(PredictedPe(snapshot, soon, "Mun"), TargetPe - 100, TargetPe + 100);
+            // synodic stays the synodic period, not the span searched (1 / |1/36,550 - 1/138,984| s for the missed orbit).
+            Assert.InRange(D(soon, "synodic"), 49000, 51000);
+            // Thirty seconds holds no dip in the cost (it rises from the first departure): the cheapest in it is taken.
+            Assert.Equal("", Correction(snapshot, snapshot.Ut + 150)["error"]);
+            Assert.Equal("found no transfer: the burn must come by UT " + Math.Round(snapshot.Ut + 100) + ", before the earliest it can be, UT "
+                + Math.Round(snapshot.Ut + 120), Correction(snapshot, snapshot.Ut + 100)["error"]);
+        }
+
+        [Fact]
+        public void A_correction_dearer_than_the_craft_s_delta_v_is_refused()
+        {
+            double ejected;
+            var snapshot = Missed(out ejected);
+            var error = (string)Correction(snapshot, maxDv: 1)["error"];
+            Assert.StartsWith("found no transfer: the cheapest burn, at UT ", error);
+            Assert.EndsWith(" m/s, more than the craft's 1 m/s", error);
+            Assert.Equal("", Correction(snapshot, maxDv: 5000)["error"]);
+        }
+
         // ---- failures: "found no transfer: <why>" ----
 
         [Fact]

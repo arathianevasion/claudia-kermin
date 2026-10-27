@@ -19,6 +19,10 @@ namespace ClaudiaKermin.Core.Tools
         public double EarliestUt;
         /// <summary>The window's UT, or null for the next window.</summary>
         public double? WindowUt;
+        /// <summary>The latest UT the burn may be (the block's max_duration), or null for none: the search ends there.</summary>
+        public double? LatestUt;
+        /// <summary>The most delta-v the burn may take (the craft's), m/s, or null for no limit.</summary>
+        public double? MaxDv;
     }
 
     /// <summary>The ejection node found, or why there is none (<see cref="Error"/>, with the rest unset).</summary>
@@ -47,7 +51,9 @@ namespace ClaudiaKermin.Core.Tools
     /// capture at the target periapsis). A Lambert grid over departure time and time of flight finds the window, and then
     /// <see cref="PredictBurn"/>'s propagation, as <c>solve_burn</c> uses it, sizes the prograde part of the burn so the patched
     /// conics arrive at the periapsis asked for, on a prograde orbit round the target where one does. It works on the Game
-    /// Snapshot's detached orbits and only reads. Only the ejection node is given; the capture is <c>circularize</c>'s.
+    /// Snapshot's detached orbits and only reads. Only the ejection node is given; the capture is <c>circularize</c>'s. After an
+    /// ejection that misses (#363), <c>transfer_to</c> asks the same search for its correction from the orbit it is on, within
+    /// the block's limits (<see cref="EjectionAsk.LatestUt"/>, <see cref="EjectionAsk.MaxDv"/>).
     /// </summary>
     internal static class EjectionBurn
     {
@@ -90,8 +96,13 @@ namespace ClaudiaKermin.Core.Tools
             var craft = setup.Start;
             var moon = setup.System.OrbitOf(target);
             var peR = target.Radius + ask.TargetPe;
-            var span = Synodic(craft.Period, moon.Period);
+            var synodic = Synodic(craft.Period, moon.Period);
             var from = Math.Max(setup.Now, Math.Max(ask.EarliestUt, ask.WindowUt ?? double.NegativeInfinity));
+            // A latest UT shortens the span, and no window past it may be taken.
+            var until = ask.LatestUt ?? double.PositiveInfinity;
+            if (until <= from)
+                return Fail("the burn must come by UT " + Num(until) + ", before the earliest it can be, UT " + Num(from));
+            var span = Math.Min(synodic, until - from);
             Func<double, double, double> cost = (t, tof) =>
             {
                 Vec3 burn;
@@ -131,12 +142,16 @@ namespace ClaudiaKermin.Core.Tools
                 }
                 else if (late < 0 || cheapest[i] < cheapest[late]) late = i;
             }
-            if (pick < 0) pick = late;
+            if (pick < 0 && !ask.LatestUt.HasValue) pick = late;
+            // With a latest UT the span may hold no dip (the cost still falling at its end): its cheapest departure, then.
+            if (pick < 0 && ask.LatestUt.HasValue)
+                for (var i = 1; i < count - 1 && (i - 1) * step <= span; i++)
+                    if (!double.IsInfinity(cheapest[i]) && (pick < 0 || cheapest[i] < cheapest[pick])) pick = i;
             if (pick < 0)
                 return Fail("no departure in the " + Num(span) + " s from UT " + Num(from) + " has a path to " + target.Name);
 
-            // Coordinate descent from the grid's dip, never before the start or past the grid's end.
-            var last = from + (count - 2) * step;
+            // Coordinate descent from the grid's dip, never before the start or past the grid's end (or the latest UT).
+            var last = Math.Min(from + (count - 2) * step, until);
             double bestT = from + (pick - 1) * step, bestTof = flight[pick], best = cheapest[pick];
             double dt = step, dTof = Hohmann(home.Gm, craft.Radius(bestT), moon.A) * FirstFlightStep;
             for (var round = 0; round < DescentRounds && (dt > DescentFloor || dTof > DescentFloor); round++)
@@ -169,8 +184,10 @@ namespace ClaudiaKermin.Core.Tools
 
             var plan = Aim(setup, target, moon, bestT, Vec3.Dot(lambert, along), Vec3.Dot(lambert, up), Vec3.Dot(lambert, outward), ask.TargetPe);
             if (plan.Error != null) return plan;
+            if (plan.DeltaV > ask.MaxDv)
+                return Fail("the cheapest burn, at UT " + Num(bestT) + ", needs " + Num(plan.DeltaV) + " m/s, more than the craft's " + Num(ask.MaxDv.Value) + " m/s");
             plan.SearchFrom = from;
-            plan.Synodic = span;
+            plan.Synodic = synodic;
             return plan;
         }
 

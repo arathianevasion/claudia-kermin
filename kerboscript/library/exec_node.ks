@@ -18,7 +18,7 @@
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block.
 //| Extra results: node_dv (m/s the node asked for before the burn), residual (m/s the node still
 //| needed when the block ended), burn_time (s the engines burned), late_start_s (s the burn began
-//| late; 0 on time), turn_s and turn_time (s the turn took, and its prediction), not_aligned (turns
+//| late; its node moves too), turn_s and turn_time (s the turn took, and its prediction), not_aligned (turns
 //| given up after 120 s). It turns to the node before warping. Fails with "no maneuver node",
 //| "no thrust", "no usable torque" (no reaction wheel running and no RCS on to turn with), a node
 //| or lead it can't read, "residual <x> m/s is over max_residual", out of fuel, or an abort; on
@@ -99,7 +99,6 @@ function exec_node {
     claudia_make_safe().
     return claudia_finish(ctx, false, burn:error, extra).
   }
-  set extra:late_start_s to claudia_late_start(time:seconds, burn:start_ut).
 
   local steer is nd:deltav.
   lock steering to steer.
@@ -108,7 +107,17 @@ function exec_node {
   local initial is nd:deltav.
   local done_dv is min(0.1, opt:max_residual / 4).
   local burn_start is -1.
+  local lead is nd:time - burn:start_ut.
   until false {
+    // Until the engines light, a late burn takes its node with it (#363).
+    if burn_start < 0 {
+      set extra:late_start_s to claudia_late_start(time:seconds, burn:start_ut).
+      local due is exec_node_due_ut(time:seconds, burn:start_ut, lead).
+      if abs(due - nd:time) > 0.5 {
+        set nd:time to due.
+      }
+      set initial to nd:deltav.
+    }
     local left is nd:deltav.
     // Overshot (the node now points back) or close enough: stop.
     if vdot(initial, left) < 0 or left:mag < done_dv {
@@ -151,6 +160,20 @@ function exec_node {
   }
   remove nd.
   return claudia_finish(ctx, true, "", extra).
+}
+
+// The UT a burn starting at now should have its node at: lead after the start, which is start_ut
+// until the burn runs over a second late, then now. Stock's node vector matches the planned velocity
+// at the node's UT, so chasing it from a burn centred tau s past the node tilts the thrust out by
+// about 2 n tau (n the orbit's mean motion) and leaves the orbit about n tau^2 dv lower there: for
+// #363's 860 m/s node on a 100 km orbit, a minute late was a 22 degree burn that left apoapsis
+// 3,400 km short and periapsis 10 km lower. Pure.
+function exec_node_due_ut {
+  parameter now, start_ut, lead.
+  if now - start_ut < 1 {
+    return start_ut + lead.
+  }
+  return now + lead.
 }
 
 function exec_node_burned {

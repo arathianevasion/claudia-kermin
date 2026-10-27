@@ -31,7 +31,7 @@ namespace ClaudiaKermin.KOS
             AddSuffix("TURNTIME", new OneArgsSuffix<Lexicon, Lexicon>(TurnTime,
                 "Core Library only (a block that turns to a burn): the time to leave for a 190 degree turn on the wheels and RCS (if on), given max_stopping_time; lexicon error, turn_time, turn_s, top_rate"));
             AddSuffix("EJECTIONBURN", new OneArgsSuffix<Lexicon, Lexicon>(EjectionBurn,
-                "Core Library only (transfer_to): the cheapest ejection to target (a moon's name) arriving at target_pe, within one synodic period from earliest_ut or window; lexicon error, ut, prograde, normal, radial, dv, encounter_ut, arrival_ut, target_pe_actual, ..."));
+                "Core Library only (transfer_to): the cheapest ejection to target (a moon's name) arriving at target_pe, within one synodic period from earliest_ut or window (to latest_ut, refusing over max_dv); lexicon error, ut, prograde, normal, radial, dv, encounter_ut, arrival_ut, target_pe_actual, ..."));
         }
 
         private Lexicon EjectionBurn(Lexicon input)

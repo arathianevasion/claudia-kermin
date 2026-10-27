@@ -155,7 +155,9 @@ namespace ClaudiaKermin.Core.Tools
         /// <c>ADDONS:CLAUDIA:EJECTIONBURN</c>, for <c>transfer_to</c>: the ejection burn to a moon of the body the craft orbits
         /// (<see cref="Tools.EjectionBurn"/>), in place of RSVP's search. Takes <c>target</c> (the moon's name), <c>target_pe</c>
         /// (m), <c>earliest_ut</c> (UT; now if missing) and <c>window</c> ("next", the default, or a UT): it searches one synodic
-        /// period from the later of the two, so a window sooner than <c>earliest_ut</c> is skipped for the next. Gives
+        /// period from the later of the two, so a window sooner than <c>earliest_ut</c> is skipped for the next. <c>latest_ut</c>
+        /// (UT) ends the search there and <c>max_dv</c> (m/s) refuses a dearer burn; both are optional, for the correction after
+        /// an ejection that missed (#363). Gives
         /// <c>error</c> "", <c>ut</c>, <c>prograde</c>, <c>normal</c>, <c>radial</c> (m/s, maneuver node components), <c>dv</c>,
         /// <c>encounter_ut</c>, <c>arrival_ut</c> (periapsis at the target), <c>target_pe_actual</c> (m), <c>search_from</c> (UT)
         /// and <c>synodic</c> (s); or only <c>error</c>, "found no transfer: &lt;why&gt;".
@@ -176,6 +178,8 @@ namespace ClaudiaKermin.Core.Tools
                 TargetPe = Number(ask, "target_pe", 0),
                 EarliestUt = Number(ask, "earliest_ut", snapshot.Ut),
                 WindowUt = window as double?,
+                LatestUt = NumberOrNull(ask, "latest_ut"),
+                MaxDv = NumberOrNull(ask, "max_dv"),
             });
             if (plan.Error != null) return Error(plan.Error);
             return new Dictionary<string, object>
@@ -260,6 +264,12 @@ namespace ClaudiaKermin.Core.Tools
             object value;
             if (!ask.TryGetValue(key, out value) || !(value is double)) return fallback;
             return (double)value;
+        }
+
+        private static double? NumberOrNull(IDictionary<string, object> ask, string key)
+        {
+            object value;
+            return ask.TryGetValue(key, out value) && value is double ? (double)value : (double?)null;
         }
 
         private static IDictionary<string, object> Error(string reason)

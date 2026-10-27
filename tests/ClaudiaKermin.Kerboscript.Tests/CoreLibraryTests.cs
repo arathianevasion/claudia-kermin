@@ -470,6 +470,18 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         [Theory]
+        // On time, early, or within a second of the start: the node stays where it was planned (start plus the 30 s lead).
+        [InlineData(1000, 1000, "1030")]
+        [InlineData(990, 1000, "1030")]
+        [InlineData(1000.6, 1000, "1030")]
+        // #363: a burn still waiting to point at its node a minute after its start takes the node with it.
+        [InlineData(1060, 1000, "1090")]
+        public void A_burn_that_starts_late_moves_its_node_by_as_much(double now, double start, string expected)
+        {
+            Assert.Equal(expected, One(string.Format(CultureInfo.InvariantCulture, "exec_node_due_ut({0}, {1}, 30)", now, start)));
+        }
+
+        [Theory]
         // Warp to a burn is over max(30 s, the turn time) before its start.
         [InlineData(1000, 20, "970")]
         [InlineData(1000, 75, "925")]
