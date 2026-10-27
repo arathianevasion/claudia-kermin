@@ -1081,7 +1081,7 @@ function land_descend {
   local last_phase is "".
   local last_trace_ut is -1e9.
   // Seconds still to turn onto the last steering command (land_turn_seconds), and whether braking is
-  // still turning onto its first command, flying by land_turning_s until it is pointed (#380).
+  // still turning onto its first command, flying by land_turning_s until it is pointed and braking (#380).
   local turn_left is 0.
   local first_turn is false.
 
@@ -1148,7 +1148,7 @@ function land_descend {
       // the site falls behind, or if the ground comes up first.
       if land_brake_due(dist, vdot(v_h, to_site), v_h:mag, -v_v, h, land_brake_accel(a_max, g), opt:burn_margin, turn_left) {
         set braking to true.
-        set first_turn to turn_left > 0.
+        set first_turn to true.
         set h_start to max(500, h).
         // At least enough to close on a site moved up to max_divert.
         set v_top to max(50, v_h:mag).
@@ -1186,8 +1186,9 @@ function land_descend {
         set extra:reversals to extra:reversals + 1.
       }
       // Still turning onto its first braking command: braking that started early for the turn flies
-      // by the site that much nearer, until the craft is pointed (or slowed to the approach).
-      if turn_left <= 0 or v_h:mag <= 50 {
+      // by the site that much nearer (so a nose pulled off it, as land_guide holds v_top for a
+      // moment, is pulled back), until the craft is pointed and braking along (or slowed to the approach).
+      if v_h:mag <= 50 {
         set first_turn to false.
       }
       local s_guide is s.
@@ -1196,6 +1197,9 @@ function land_descend {
       }
       set want to land_guide(lexicon("s", s_guide, "c", vdot(to_site, across), "v_al", v_ahead, "v_cr", vdot(v_h, across),
         "v_up", v_v, "h", h, "h_start", h_start, "v_top", v_top, "a_max", a_max, "g", g, "radius", radius_now), opt:touchdown_speed, opt:burn_margin).
+      if turn_left <= 0 and want:al < -0.1 {
+        set first_turn to false.
+      }
       set to_go to want:to_go.
       local accel is ahead * want:al + across * want:cr + up_v * want:up.
       if accel:mag > 0.001 {
@@ -1213,7 +1217,7 @@ function land_descend {
     if land_trace_due(phase, last_phase, time:seconds, last_trace_ut) {
       addons:claudia:blocktrace("land", lexicon("phase", phase, "h", round(h), "radar", round(radar), "v_h", round(v_h:mag, 1),
         "v_down", round(-v_v, 1), "dist", round(dist), "throttle", round(tset, 2), "h_ref", round(want:h_ref),
-        "vh_want", round(want:vh, 1), "vv_want", round(want:vv, 1), "turn_left", round(turn_left, 1), "pe",round(ship:orbit:periapsis))).
+        "vh_want", round(want:vh, 1), "vv_want", round(want:vv, 1), "turn_left", round(turn_left, 1), "pe", round(ship:orbit:periapsis))).
       set last_phase to phase.
       set last_trace_ut to time:seconds.
     }
