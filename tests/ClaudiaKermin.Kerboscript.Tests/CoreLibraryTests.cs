@@ -482,6 +482,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [InlineData(500, 400, 1000, 20, "1000")]
         [InlineData(0, 975, 1000, 20, "1000")]
         // An SOI change well before the burn: warp to just past it, turn, warp on.
+        [InlineData(0, 20, 1000, 20, "1000")]
         [InlineData(0, 400, 1000, 20, "401")]
         [InlineData(0, 400, 1000, 75, "401")]
         [InlineData(0, 925, 1000, 75, "1000")]

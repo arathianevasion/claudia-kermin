@@ -948,11 +948,11 @@ function claudia_late_start {
 
 // The UT the next leg of a warp to a burn runs to (spec #314: one SOI at a time). patch_ut: when the
 // orbit next changes SOI (-1 for none); start_ut: the burn start. If the change comes well before the
-// burn (more than max(30 s, turn_time) of 1x ahead of the start once 1 s past it), the leg ends 1 s past
+// burn (1 s past it is before the warp end, claudia_warp_end) and over 30 s away, the leg ends 1 s past
 // the change, so the craft turns in the new SOI before warping on; else it ends at start_ut. Pure.
 function claudia_soi_leg_ut {
   parameter now, patch_ut, start_ut, turn_time.
-  if patch_ut > now and patch_ut + 1 < claudia_warp_end(start_ut, turn_time) {
+  if patch_ut > now + 30 and patch_ut + 1 < claudia_warp_end(start_ut, turn_time) {
     return patch_ut + 1.
   }
   return start_ut.
