@@ -13,6 +13,6 @@ local result is land(lexicon("target", lexicon("biome", "Midlands"), "daylight",
 // The checker compares a field with a literal only, so the script reports the comparisons.
 set result["in_biome"] to result:biome = "Midlands".
 set result["sun_up"] to vang(ship:up:vector, body("Sun"):position) < 90.
-set result["brakes_before_impact"] to result:burn_start_ut > 0 and (result:impact_ut < 0 or result:burn_start_ut < result:impact_ut).
+set result["brakes_before_impact"] to result:braking_began_ut > 0 and (result:impact_ut < 0 or result:braking_began_ut < result:impact_ut).
 print "land_biome test at the Mun: success " + result:success + ", in " + result:biome + ", " + result:distance_to_target + " m off the site, " + result:touchdown_speed_actual + " m/s, lean " + result:lean + ", dv " + result:dv_used + ", " + result:reason.
 addons:claudia:report(result).
