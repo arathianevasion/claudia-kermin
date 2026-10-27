@@ -97,11 +97,11 @@ namespace ClaudiaKermin.Core.Missions
 
         public const int MaxTokens = 32000;
 
-        /// <summary>The effort of the reduced form a cut-off reply is resent in, and the line added to that resend (#267).</summary>
-        public const string CutOffEffort = "medium";
         /// <summary>Said to Claudia with every turn sent while Auto Mode is on (#331): her plans fly without the player reading them. A per-turn notice, since the system layers are frozen at Start.</summary>
         public const string AutoModeNotice = "Auto Mode is on: the player has approved your plans in advance and may not read them before they fly. Don't ask the player questions in a plan; state your assumptions instead, and give a brief reason for each decision.";
 
+        /// <summary>The effort of the reduced form a cut-off reply is resent in, and the line added to that resend (#267).</summary>
+        public const string CutOffEffort = "medium";
         public const string CutOffNote = "Your last attempt ran out of room while thinking. Decide with what you have and keep your reasoning short.";
 
         /// <summary>
