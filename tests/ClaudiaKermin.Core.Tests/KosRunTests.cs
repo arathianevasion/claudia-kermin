@@ -118,6 +118,46 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ATraceNotKeptLeavesTheBlocksLastTracedStateAlone()
+        {
+            var run = new KosRun(Blank);
+            run.BlockTraced("land", 100, Descent("braking", 900));
+            run.BlockTraced("land", 101, new Dictionary<string, object> { { "phase", "rcs" } }, keep: false);
+            run.Interrupted("the kOS processor was lost");
+            run.ProgramEnded();
+
+            var last = (IDictionary<string, object>)run.Finish(Blank).Report["last_state"];
+
+            Assert.Equal("braking", last["phase"]);
+            Assert.Equal(100.0, last["ut"]);
+        }
+
+        [Fact]
+        public void ATraceNotKeptWithNothingKeptBeforeLeavesNoState()
+        {
+            var run = new KosRun(Blank);
+            run.BlockTraced("land", 101, new Dictionary<string, object> { { "phase", "rcs" } }, keep: false);
+            run.ProgramEnded();
+
+            // Nothing kept, so no stand-in carrying the rcs line.
+            Assert.Null(run.Finish(Blank).Report);
+        }
+
+        [Fact]
+        public void ATraceKeptByDefaultStillReplacesTheLastTracedState()
+        {
+            var run = new KosRun(Blank);
+            run.BlockTraced("land", 100, Descent("braking", 900));
+            run.BlockTraced("land", 101, Descent("touchdown", 0));
+            run.Interrupted("the kOS processor was lost");
+            run.ProgramEnded();
+
+            var last = (IDictionary<string, object>)run.Finish(Blank).Report["last_state"];
+
+            Assert.Equal("touchdown", last["phase"]);
+        }
+
+        [Fact]
         public void ATraceLineForTheLogNamesTheBlockTheUtAndEachValueInOrder()
         {
             var state = new Dictionary<string, object> { { "phase", "braking" }, { "h", 450.0 }, { "v_h", 201.5 }, { "flat", true } };

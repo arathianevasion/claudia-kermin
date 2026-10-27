@@ -1312,7 +1312,7 @@ function claudia_rcs_tick {
   parameter ctx.
   if sas {
     sas off.
-    addons:claudia:blocktrace(ctx:block, lexicon("phase", "sas", "note", "SAS was on: turned off, it fights kOS steering")).
+    addons:claudia:blocktrace(ctx:block, lexicon("phase", "sas", "note", "SAS was on: turned off, it fights kOS steering"), false).
   }
   if ctx:rcs_translating {
     // The hold within aligned_deg starts afresh once translating ends.
@@ -1371,7 +1371,7 @@ function claudia_rcs_tick {
     // Actuation per axis: KSP fires RCS only on an axis over 0.05.
     local act is steeringmanager:actuation.
     addons:claudia:blocktrace(ctx:block, lexicon("phase", "rcs", "error", round(error, 1), "rate", round(rate, 2), "rcs", rcs,
-      "actuation", round(act:x, 3) + "/" + round(act:y, 3) + "/" + round(act:z, 3))).
+      "actuation", round(act:x, 3) + "/" + round(act:y, 3) + "/" + round(act:z, 3)), false).
   }
 }
 

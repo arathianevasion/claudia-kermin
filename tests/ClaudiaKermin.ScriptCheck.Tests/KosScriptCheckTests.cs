@@ -318,6 +318,29 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             Assert.Contains("addons:claudia:blocktrace(", CoreLibrary.Bundle("").ToLowerInvariant());
         }
 
+        // #407: the optional third argument says "don't keep as the last traced state"; Script Check takes the new form.
+        [Fact]
+        public void AMissionScriptMayTraceForTheLogWithoutKeepingTheState()
+        {
+            AssertAllowed("addons:claudia:blocktrace(\"land\", lexicon(\"phase\", \"rcs\"), false).");
+            AssertAllowed(CoreLibrary.Bundle("addons:claudia:blocktrace(\"land\", lexicon(\"phase\", \"rcs\"), false)."));
+        }
+
+        // #407: the RCS Use trace and the SAS-off note go to KSP.log only, so a crash report keeps the block's own state.
+        [Fact]
+        public void TheRcsUseTraceAndTheSasOffNoteAreNotKeptAsTheLastTracedState()
+        {
+            var calls = CoreLibrary.Bundle("").Replace("\r", "").Split(new[] { "addons:claudia:blocktrace(" }, System.StringSplitOptions.None).Skip(1)
+                .Select(c => c.Substring(0, c.IndexOf(").\n", System.StringComparison.Ordinal) + 1)).ToList();
+            var rcs = calls.Where(c => c.Contains("\"rcs\"")).ToList();
+            var sas = calls.Where(c => c.Contains("\"sas\"")).ToList();
+
+            Assert.Single(rcs);
+            Assert.Single(sas);
+            Assert.EndsWith(", false)", rcs[0]);
+            Assert.EndsWith(", false)", sas[0]);
+        }
+
         // #398: an RCS switch is a report to the mod's log, like a trace, so the helper calls and a Custom Script may write one.
         [Fact]
         public void AMissionScriptMayReportAnRcsSwitch()

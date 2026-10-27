@@ -99,10 +99,11 @@ namespace ClaudiaKermin.Core.Kos
             if (!HasEnded) _report = report;
         }
 
-        /// <summary>A block traced its state (<c>ADDONS:CLAUDIA:BLOCKTRACE</c>, #365) at ut; the latest is kept until the block returns.</summary>
-        public void BlockTraced(string block, double ut, IDictionary<string, object> state)
+        /// <summary>A block traced its state (<c>ADDONS:CLAUDIA:BLOCKTRACE</c>, #365) at ut; the latest is kept until the block returns.
+        /// With keep false (the RCS Use trace and the SAS-off note, #407) the line is for KSP.log only and the kept state stays as it was.</summary>
+        public void BlockTraced(string block, double ut, IDictionary<string, object> state, bool keep = true)
         {
-            if (HasEnded) return;
+            if (HasEnded || !keep) return;
             var kept = new Dictionary<string, object>(state ?? new Dictionary<string, object>());
             kept["ut"] = ut;
             _tracedBlock = block ?? "";
