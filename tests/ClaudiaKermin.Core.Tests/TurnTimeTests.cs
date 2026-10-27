@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Andrew Watson
 
+using System.Collections.Generic;
 using ClaudiaKermin.Core.Tools;
 using Xunit;
 
@@ -101,6 +102,35 @@ namespace ClaudiaKermin.Core.Tests
             var turn = TurnTime.Predict(new TurnCraft { RcsPitch = 5, RcsYaw = 5, RcsOn = true, MoiPitch = 500, MoiYaw = 500 });
             Assert.Null(turn.Error);
             Assert.Equal(167.81, turn.TurnSeconds, 2);
+        }
+
+        // ---- the block-internal call: ADDONS:CLAUDIA:TURNTIME ----
+
+        [Fact]
+        public void The_block_call_gives_the_time_to_leave_and_the_turn_alone()
+        {
+            var slow = new TurnCraft { WheelPitch = 5, WheelYaw = 5, MoiPitch = 500, MoiYaw = 500 };
+            var result = BlockCalls.TurnTime(new Dictionary<string, object>(), slow);
+            Assert.Equal("", result["error"]);
+            Assert.Equal(177.81, (double)result["turn_time"], 2);
+            Assert.Equal(167.81, (double)result["turn_s"], 2);
+            Assert.Equal(1.146, (double)result["top_rate"], 3);
+        }
+
+        [Fact]
+        public void The_block_call_takes_the_steering_managers_stopping_time()
+        {
+            var slow = new TurnCraft { WheelPitch = 5, WheelYaw = 5, MoiPitch = 500, MoiYaw = 500 };
+            var result = BlockCalls.TurnTime(new Dictionary<string, object> { { "MAX_STOPPING_TIME", 100.0 } }, slow);
+            Assert.Equal(36.42, (double)result["turn_s"], 2);
+        }
+
+        [Fact]
+        public void The_block_call_gives_only_the_reason_for_a_craft_that_cannot_turn()
+        {
+            var result = BlockCalls.TurnTime(null, new TurnCraft { MoiPitch = 13.8, MoiYaw = 13.8 });
+            Assert.Equal("no usable torque", result["error"]);
+            Assert.False(result.ContainsKey("turn_time"));
         }
     }
 }

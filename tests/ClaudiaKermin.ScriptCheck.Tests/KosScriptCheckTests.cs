@@ -286,6 +286,8 @@ namespace ClaudiaKermin.ScriptCheck.Tests
         [InlineData("local b is addons:claudia:deorbitburn(lexicon(\"lat\", 0, \"lng\", -74)).")]
         [InlineData("print addons:claudia:reentryimpact(lexicon()):lat.")]
         [InlineData("local c is addons:claudia.\nprint c:ReentryImpact(lexicon()).")]
+        [InlineData("print addons:claudia:turntime(lexicon()):turn_time.")]
+        [InlineData("local t is addons:claudia:TurnTime@.\nprint t(lexicon(\"max_stopping_time\", 2)).")]
         public void ABlockInternalCallInAMissionScriptFails(string script)
         {
             AssertForbidden("call block-internal calculations", script);
