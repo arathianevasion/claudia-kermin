@@ -43,8 +43,8 @@ namespace ClaudiaKermin.Core.Tools
                     + "how it ends (escape, encounter <body>, impact, atmosphere or stable), plus the closest approach to a target body "
                     + "and each burn's estimated burn time. Burns are impulsive, in maneuver-node components (prograde, normal, radial "
                     + "m/s), at ap, pe, a UT or \"in <s>\". Its block is exec_node: call it to check what a node's burn does before you "
-                    + "put it in a plan, instead of working the orbit out yourself. Don't call it for transfer_to, return, tune_pe or "
-                    + "deorbit, which plan their own burns, for what to burn to reach an orbit (solve_burn), or for the craft's delta-v "
+                    + "put it in a plan, instead of working the orbit out yourself. Don't call it for transfer_to, return, tune_pe, "
+                    + "deorbit, circularize or land, which plan their own burns, for what to burn to reach an orbit (solve_burn), or for the craft's delta-v "
                     + "(stage_performance).";
             }
         }

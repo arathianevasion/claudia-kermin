@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Andrew Watson
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Kos;
 using ClaudiaKermin.Core.Missions;
 using ClaudiaKermin.Core.Tools;
@@ -25,9 +27,10 @@ namespace ClaudiaKermin.Core.Tests
             }
         }
 
-        private static IList<string> ToolNames()
+        /// <summary>Every tool a Mission request offers, check_script included.</summary>
+        private static IList<ToolDefinition> Tools()
         {
-            return PlanningTools.Default(new PassingCheck()).Definitions(ToolOffer.Mission).Select(t => t.Name).ToList();
+            return PlanningTools.Default(new PassingCheck()).Definitions(ToolOffer.Mission);
         }
 
         [Fact]
@@ -54,9 +57,9 @@ namespace ClaudiaKermin.Core.Tests
         public void TheWorkedExampleIsAMunLandingFromFindLandingSiteToStagePerformanceToLandByBiomeWithDropEmpty()
         {
             var plan = MissionPrompts.HowToPlan;
-            var site = plan.IndexOf("find_landing_site", System.StringComparison.Ordinal);
-            var stages = plan.IndexOf("stage_performance", System.StringComparison.Ordinal);
-            var script = plan.IndexOf(MissionPrompts.WorkedExampleScript, System.StringComparison.Ordinal);
+            var site = plan.IndexOf("find_landing_site", StringComparison.Ordinal);
+            var stages = plan.IndexOf("stage_performance", StringComparison.Ordinal);
+            var script = plan.IndexOf(MissionPrompts.WorkedExampleScript, StringComparison.Ordinal);
             Assert.True(site >= 0 && stages > site && script > stages, plan);
             Assert.Contains("land(", MissionPrompts.WorkedExampleScript);
             Assert.Contains("lexicon(\"biome\", \"Midlands\")", MissionPrompts.WorkedExampleScript);
@@ -79,7 +82,7 @@ namespace ClaudiaKermin.Core.Tests
         public void EveryToolDescriptionNamesItsBuildingBlockAndWhenNotToCallIt()
         {
             var blocks = CoreLibrary.Blocks.Select(b => b.Name).ToList();
-            foreach (var tool in PlanningTools.Default(new PassingCheck()).Definitions(ToolOffer.Mission))
+            foreach (var tool in Tools())
             {
                 // check_script pairs with whichever blocks the script runs.
                 var named = tool.Name == "check_script"
@@ -93,15 +96,15 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void PredictBurnIsNotForTheBlocksThatPlanTheirOwnBurns()
         {
-            var predict = PlanningTools.Default().Definitions(ToolOffer.Mission).Single(t => t.Name == "predict_burn").Description;
-            Assert.Contains("exec_node", predict);
-            Assert.Contains("Don't call it for transfer_to, return, tune_pe or deorbit, which plan their own burns", predict);
+            var predict = Tools().Single(t => t.Name == "predict_burn").Description;
+            Assert.Contains("Its block is exec_node", predict);
+            Assert.Contains("Don't call it for transfer_to, return, tune_pe, deorbit, circularize or land, which plan their own burns", predict);
         }
 
         [Fact]
         public void CheckScriptIsNotForTestingThatToolsWork()
         {
-            var check = PlanningTools.Default(new PassingCheck()).Definitions(ToolOffer.Mission).Single(t => t.Name == "check_script").Description;
+            var check = Tools().Single(t => t.Name == "check_script").Description;
             Assert.Contains("never to test that tools work", check);
         }
 
@@ -122,7 +125,7 @@ namespace ClaudiaKermin.Core.Tests
         {
             // The block summaries are cached in the base layer: a pair there would grow it past the rules and the example.
             var summaries = CoreLibrary.Summaries();
-            foreach (var tool in ToolNames()) Assert.DoesNotContain(tool, summaries);
+            foreach (var tool in Tools()) Assert.DoesNotContain(tool.Name, summaries);
         }
     }
 }

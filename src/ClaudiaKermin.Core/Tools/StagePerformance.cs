@@ -35,7 +35,7 @@ namespace ClaudiaKermin.Core.Tools
                     + "in this turn's Game Snapshot (a stage the stock readout shows as 0 at a trickle throttle is recomputed with the "
                     + "rocket equation). SI units: m/s, s, N, kg. Its blocks are the ones that burn (launch, ascend, "
                     + "land, deorbit, return and the rest): call it to check the craft against a leg's delta-v budget, or a launch's or "
-                    + "landing's TWR, and to see which tanks drain first for drop_empty, instead of working the rocket equation out "
+                    + "landing's TWR, and what each stage holds before you shed tanks with drop_empty, instead of working the rocket equation out "
                     + "yourself. Don't call it for where a burn leaves the orbit, or again when the craft hasn't changed since you last did.";
             }
         }

@@ -84,7 +84,7 @@ namespace ClaudiaKermin.Core.Missions
             + "Example: a Sequence Plan to land in the Mun's Midlands from low Mun orbit, with Daylight landing on. "
             + "find_landing_site {\"body\": \"Mun\", \"biome\": \"Midlands\"} shows a daylight site under the ground track "
             + "in about 2 h. stage_performance {\"situation\": \"vacuum\"} shows 820 m/s in the descent stage against the "
-            + "landing's 640 m/s, at TWR 2.4 on the Mun; its radial tanks (tagged \"side tanks\") drain first, so drop_empty "
+            + "landing's 640 m/s, at TWR 2.4 on the Mun. That stage's radial tanks are tagged \"side tanks\", so drop_empty "
             + "sheds them once empty. The script passes land those goals, not a site or a burn time:\n"
             + WorkedExampleScript + "\n"
             + "expected_duration_s counts the wait to the pass. The Debrief after it rates the Script Result against the "

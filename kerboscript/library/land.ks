@@ -56,7 +56,7 @@
 //| "no site in the <biome> biome" (saying how far the search got), landing outside the biome asked for,
 //| not enough delta-v, "deorbit left periapsis" well under the plan, "tipped over", out of fuel, or an abort; a failure in the
 //| descent leaves the craft safe but falling, so give it the delta-v (and TWR over 1.5) it needs.
-//| Tools: find_landing_site for a biome or named site; stage_performance for the delta-v and TWR at the body.
+//| Tool: stage_performance for the delta-v and TWR at the body (and find_landing_site, as above).
 //| Example: `local res is land(lexicon("target", latlng(-0.5, 22), "daylight", true)). addons:claudia:report(res).`
 
 // The block's own options and defaults.
