@@ -23,6 +23,8 @@ namespace ClaudiaKermin.Core.Tools
         public double NearLatitude;
         public double NearLongitude;
         public int MaxSites = 3;
+        /// <summary>With a biome: a site is inside it only if the biome runs at least this far every way round it, m (about the landing accuracy); 0 for no margin.</summary>
+        public double EdgeMarginM = LandingSiteSearch.DefaultEdgeMarginM;
     }
 
     internal sealed class LandingSite
@@ -39,6 +41,8 @@ namespace ClaudiaKermin.Core.Tools
         public double SunElevationDeg;
         /// <summary>Degrees of arc from the <c>near</c> point; NaN without one.</summary>
         public double FromNearDeg = double.NaN;
+        /// <summary>The biome edge is within the query's margin of this site: nothing deeper in the biome was reachable.</summary>
+        public bool AtEdge;
     }
 
     internal sealed class LandingSiteResult
@@ -67,6 +71,8 @@ namespace ClaudiaKermin.Core.Tools
         /// <summary>The sun must be at least this high at the pass for a daylight site, degrees.</summary>
         public const double MinSunElevationDeg = 5;
         public const double MaxWindowHours = 48;
+        /// <summary>How far inside its biome a site is wanted by default, m: about the landing accuracy.</summary>
+        public const double DefaultEdgeMarginM = 5000;
         /// <summary>The distance either side of a site the slope is measured over, m.</summary>
         public const double SlopeSpacing = 25;
         /// <summary>Sites in one result are at least this far apart, degrees of arc.</summary>
@@ -128,6 +134,7 @@ namespace ClaudiaKermin.Core.Tools
             result.AfterDaylight = candidates.Count;
 
             var sites = new List<LandingSite>();
+            var edgeSites = new List<LandingSite>();
             var checkedSlope = 0;
             var unreadable = 0;
             var passedSlope = 0;
@@ -138,7 +145,9 @@ namespace ClaudiaKermin.Core.Tools
                 var points = new List<SiteSample>();
                 foreach (var c in batch) points.AddRange(Cross(body, c.Sample));
                 api.Survey(body.Name, points, SiteFacts.Altitude | SiteFacts.Biome | SiteFacts.Sun);
-                for (var i = 0; i < batch.Count && sites.Count < query.MaxSites; i++)
+                var gentle = new List<int>();
+                var slopes = new double[batch.Count];
+                for (var i = 0; i < batch.Count; i++)
                 {
                     var five = points.Skip(i * 5).Take(5).ToList();
                     if (five.Any(p => double.IsNaN(p.Altitude)))
@@ -146,18 +155,27 @@ namespace ClaudiaKermin.Core.Tools
                         unreadable++;
                         continue;
                     }
-                    var slope = Slope(five);
-                    if (slope > query.MaxSlopeDeg) continue;
+                    slopes[i] = Slope(five);
+                    if (slopes[i] <= query.MaxSlopeDeg) gentle.Add(i);
+                }
+                var deep = wantBiome && query.EdgeMarginM > 0 ? DeepInBiome(body, batch, gentle, query, api) : null;
+                foreach (var i in gentle)
+                {
                     passedSlope++;
                     var c = batch[i];
-                    if (sites.Any(s => ArcDegrees(s.Latitude, s.Longitude, c.Sample.Latitude, c.Sample.Longitude) < MinSeparationDeg)) continue;
-                    sites.Add(new LandingSite
+                    var five = points.Skip(i * 5).Take(5).ToList();
+                    var atEdge = deep != null && !deep.Contains(i);
+                    var list = atEdge ? edgeSites : sites;
+                    if (list.Count >= query.MaxSites) continue;
+                    if (list.Any(s => ArcDegrees(s.Latitude, s.Longitude, c.Sample.Latitude, c.Sample.Longitude) < MinSeparationDeg)) continue;
+                    list.Add(new LandingSite
                     {
                         Latitude = c.Sample.Latitude, Longitude = c.Sample.Longitude, Biome = five[0].Biome, Altitude = five[0].Altitude,
-                        SlopeDeg = slope, PassUt = c.Sample.Ut, SunElevationDeg = five[0].SunElevation, FromNearDeg = c.FromNear,
+                        SlopeDeg = slopes[i], PassUt = c.Sample.Ut, SunElevationDeg = five[0].SunElevation, FromNearDeg = c.FromNear, AtEdge = atEdge,
                     });
                 }
             }
+            if (sites.Count == 0) sites = edgeSites;
             result.AfterSlope = passedSlope;
             if (candidates.Count > 0 && unreadable == checkedSlope)
             {
@@ -246,6 +264,35 @@ namespace ClaudiaKermin.Core.Tools
             yield return new SiteSample { Latitude = site.Latitude, Longitude = Wrap180(site.Longitude - dLon), Ut = site.Ut };
             yield return new SiteSample { Latitude = site.Latitude + dLat, Longitude = site.Longitude, Ut = site.Ut };
             yield return new SiteSample { Latitude = site.Latitude - dLat, Longitude = site.Longitude, Ut = site.Ut };
+        }
+
+        /// <summary>The batch's candidates (by index in <paramref name="gentle"/>) whose biome runs the margin out every way round them: eight points that far off, all in the query's biome.</summary>
+        private static HashSet<int> DeepInBiome(SnapshotBody body, List<Candidate> batch, List<int> gentle, LandingSiteQuery query, IPlanningBody api)
+        {
+            const int Ways = 8;
+            var d = query.EdgeMarginM / body.Radius * 180 / Math.PI;
+            var ring = new List<SiteSample>();
+            foreach (var i in gentle)
+            {
+                var site = batch[i].Sample;
+                var cos = Math.Max(0.05, Math.Cos(site.Latitude * Math.PI / 180));
+                for (var w = 0; w < Ways; w++)
+                {
+                    var angle = w * 2 * Math.PI / Ways;
+                    ring.Add(new SiteSample
+                    {
+                        Latitude = Math.Max(-90, Math.Min(90, site.Latitude + d * Math.Cos(angle))),
+                        Longitude = Wrap180(site.Longitude + d * Math.Sin(angle) / cos),
+                        Ut = site.Ut,
+                    });
+                }
+            }
+            var deep = new HashSet<int>();
+            if (ring.Count == 0) return deep;
+            api.Survey(body.Name, ring, SiteFacts.Biome);
+            for (var at = 0; at < gentle.Count; at++)
+                if (ring.Skip(at * Ways).Take(Ways).All(p => SameBiome(p.Biome, query.Biome))) deep.Add(gentle[at]);
+            return deep;
         }
 
         /// <summary>The ground's steepness from the centre and the four points round it, degrees.</summary>

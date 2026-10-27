@@ -26,7 +26,7 @@ namespace ClaudiaKermin.Core.Tools
         /// craft orbits (any <c>body</c> given is ignored), taking its other inputs (<c>biome</c>, <c>daylight</c>,
         /// <c>max_slope_deg</c>, <c>within_hours</c>, <c>near</c>). Gives the first site, the soonest pass or the nearest the
         /// <c>near</c> point: <c>error</c> "", <c>lat</c>, <c>lng</c>, <c>biome</c>, <c>terrain_altitude</c>, <c>slope_deg</c>,
-        /// <c>pass_ut</c>, <c>sun_elevation_deg</c>. With no site, or a search that could not run, only <c>error</c>, saying why.
+        /// <c>pass_ut</c>, <c>sun_elevation_deg</c>, <c>near_edge</c> (true if nothing deeper in the biome was reachable). With no site, or a search that could not run, only <c>error</c>, saying why.
         /// </summary>
         public static IDictionary<string, object> LandingSite(IDictionary<string, object> input, GameSnapshot snapshot, IPlanningBody body)
         {
@@ -61,6 +61,7 @@ namespace ClaudiaKermin.Core.Tools
                 { "slope_deg", JsonNode.Double(site["slope_deg"]) ?? 0 },
                 { "pass_ut", JsonNode.Double(site["pass_ut"]) ?? 0 },
                 { "sun_elevation_deg", JsonNode.Double(site["sun_elevation_deg"]) ?? 0 },
+                { "near_edge", site["near_biome_edge"] != null },
             };
         }
 
