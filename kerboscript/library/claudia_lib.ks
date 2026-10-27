@@ -1120,14 +1120,31 @@ function claudia_begin {
     "drop_ut", 0).
 }
 
+// Whether the tick auto-stages. burning: true / false when the block says whether it means the
+// engines to thrust now (a block whose throttle falls to 0 because its stage ran dry is still
+// burning); anything else (the caller didn't say): burning means tset > 0. Pure.
+function claudia_is_burning {
+  parameter burning, tset.
+  if burning:istype("Boolean") {
+    return burning.
+  }
+  return tset > 0.
+}
+
 // Once per physics tick in a block's loops. tset: the throttle the block is commanding now.
+// burning (optional): true while the block means the engines to thrust, whatever tset is; leave it
+// out and burning means tset > 0. Delta-v used is counted from tset either way. Callers that
+// pass tset 0 and no signal (return, transfer_to, science, the warp and wait loops) are coasting
+// with the engines off and never stage (#379).
 // Adds up delta-v used, auto-stages while burning and checks the common aborts.
 // Returns "" or the reason the block must fail.
 function claudia_tick {
-  parameter ctx, tset.
+  parameter ctx, tset, burning is "unsaid".
   local now is time:seconds.
   if tset > 0 and ship:mass > 0 {
     set ctx:dv_used to ctx:dv_used + tset * ship:availablethrust / ship:mass * (now - ctx:last_ut).
+  }
+  if claudia_is_burning(burning, tset) {
     local staging is claudia_autostage(ctx).
     if staging <> "" {
       return staging.

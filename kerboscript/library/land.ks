@@ -455,6 +455,13 @@ function land_phase {
   return "approach".
 }
 
+// Whether the descent means its engines to thrust in this phase: every phase but the fall before
+// braking (so a stage that runs dry while braking stages even though the throttle falls to 0). Pure.
+function land_burning {
+  parameter phase.
+  return phase <> "fall".
+}
+
 // Whether the descent traces a line now: at a phase change, or 2 s (ut) after the last line. Pure.
 function land_trace_due {
   parameter phase, last_phase, ut, last_ut.
@@ -1036,7 +1043,7 @@ function land_descend {
       set last_phase to phase.
       set last_trace_ut to time:seconds.
     }
-    local ticked is claudia_tick(ctx, tset).
+    local ticked is claudia_tick(ctx, tset, land_burning(phase)).
     if ticked <> "" {
       return ticked.
     }

@@ -510,7 +510,8 @@ function launch {
     } else {
       fly_tick:call().
       if not done {
-        local ticked is claudia_tick(ctx, tset).
+        // Burning while climbing, not in the coast out of the air (#379).
+        local ticked is claudia_tick(ctx, tset, not coasting).
         if ticked <> "" {
           set reason to ticked.
           set done to true.
