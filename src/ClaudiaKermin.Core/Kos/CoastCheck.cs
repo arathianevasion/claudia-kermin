@@ -11,8 +11,19 @@ namespace ClaudiaKermin.Core.Kos
     /// </summary>
     public static class CoastCheck
     {
-        /// <summary>The line the addon logs when it drops physics warp.</summary>
-        public const string DroppedLog = "physics warp dropped: thrust";
+        /// <summary>The line the addon logs when it drops physics warp, naming what tripped it: an engine, RCS, or both.</summary>
+        public static string DroppedLog(IEnumerable<double> engineThrusts, IEnumerable<bool> rcsFiring)
+        {
+            var engine = false;
+            var rcs = false;
+            if (engineThrusts != null)
+                foreach (var thrust in engineThrusts)
+                    if (thrust > 0) engine = true;
+            if (rcsFiring != null)
+                foreach (var firing in rcsFiring)
+                    if (firing) rcs = true;
+            return "physics warp dropped: " + (engine && rcs ? "engine and RCS" : rcs ? "RCS" : "engine") + " thrust";
+        }
 
         /// <summary>
         /// True when every engine's thrust is 0 and no RCS thruster fires. An engine at throttle 0 has no thrust, so it

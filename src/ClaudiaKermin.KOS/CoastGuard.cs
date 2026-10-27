@@ -27,9 +27,12 @@ namespace ClaudiaKermin.KOS
             {
                 Part part;
                 if (!FlightGlobals.FindLoadedPart(processor, out part) || part.vessel == null) continue;
-                if (!CoastCheck.ShouldDrop(true, OnCoast(part.vessel))) continue;
+                List<double> thrusts;
+                List<bool> rcsFiring;
+                Read(part.vessel, out thrusts, out rcsFiring);
+                if (!CoastCheck.ShouldDrop(true, CoastCheck.IsCoast(thrusts, rcsFiring))) continue;
                 TimeWarp.SetRate(0, true);
-                Debug.Log(ModInfo.LogTag + " " + CoastCheck.DroppedLog);
+                Debug.Log(ModInfo.LogTag + " " + CoastCheck.DroppedLog(thrusts, rcsFiring));
                 return;
             }
         }
@@ -37,8 +40,16 @@ namespace ClaudiaKermin.KOS
         /// <summary>The vessel is on a Coast now: no engine thrust and no RCS thruster firing.</summary>
         public static bool OnCoast(Vessel vessel)
         {
-            var thrusts = new List<double>();
-            var rcsFiring = new List<bool>();
+            List<double> thrusts;
+            List<bool> rcsFiring;
+            Read(vessel, out thrusts, out rcsFiring);
+            return CoastCheck.IsCoast(thrusts, rcsFiring);
+        }
+
+        private static void Read(Vessel vessel, out List<double> thrusts, out List<bool> rcsFiring)
+        {
+            thrusts = new List<double>();
+            rcsFiring = new List<bool>();
             foreach (var part in vessel.Parts)
             {
                 foreach (var module in part.Modules)
@@ -54,7 +65,6 @@ namespace ClaudiaKermin.KOS
                     rcsFiring.Add(firing);
                 }
             }
-            return CoastCheck.IsCoast(thrusts, rcsFiring);
         }
     }
 }

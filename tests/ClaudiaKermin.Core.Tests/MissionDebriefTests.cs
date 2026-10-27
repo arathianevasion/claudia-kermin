@@ -201,6 +201,79 @@ namespace ClaudiaKermin.Core.Tests
             Assert.DoesNotContain("Delta-v used this run", request);
         }
 
+        // ---- The monopropellant the run used (#399) ----
+
+        private static Action<GameSnapshot> Mono(double amount)
+        {
+            return s => s.Resources.Add(new SnapshotResource { Name = "MonoPropellant", Amount = amount, Max = 40 });
+        }
+
+        [Fact]
+        public void TheDebriefRequestCarriesTheMonopropellantTheRunUsed()
+        {
+            var rig = new Rig(this, DebriefJson("Nominal", ""));
+            var start = rig.RunToRunning(Mono(40));
+
+            rig.Mission.Send(Craft(Mono(28.4)));
+            rig.Mission.Send(new KosRunEnded(Finished(), start.RunId));
+            rig.DrainUntil(v => v.Stage == MissionStage.Sequencing || v.Stage == MissionStage.Succeeded || v.Stage == MissionStage.AwaitingSequenceApproval);
+
+            var request = LastUserText(rig.Transport.Requests[2]);
+            Assert.Contains("Monopropellant used this run: 12 units (40 at start, 28 now).", request);
+            Assert.True(request.IndexOf("Delta-v used this run", StringComparison.Ordinal) < request.IndexOf("Monopropellant used this run", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public void MonopropellantDroppedFromTheCraftCountsAsUsed()
+        {
+            var rig = new Rig(this, DebriefJson("Nominal", ""));
+            var start = rig.RunToRunning(Mono(40));
+
+            rig.Mission.Send(Craft(s => { }));
+            rig.Mission.Send(new KosRunEnded(Finished(), start.RunId));
+            rig.DrainUntil(v => v.Stage == MissionStage.Sequencing || v.Stage == MissionStage.Succeeded || v.Stage == MissionStage.AwaitingSequenceApproval);
+
+            Assert.Contains("Monopropellant used this run: 40 units (40 at start, 0 now).", LastUserText(rig.Transport.Requests[2]));
+        }
+
+        [Fact]
+        public void TheMonopropellantLineIsLeftOutWhenTheCraftCarriedNoneAtTheStart()
+        {
+            var rig = new Rig(this, DebriefJson("Nominal", ""));
+            var start = rig.RunToRunning();
+
+            rig.Mission.Send(Craft(Mono(5)));
+            rig.Mission.Send(new KosRunEnded(Finished(), start.RunId));
+            rig.DrainUntil(v => v.Stage == MissionStage.Sequencing || v.Stage == MissionStage.Succeeded || v.Stage == MissionStage.AwaitingSequenceApproval);
+
+            Assert.DoesNotContain("Monopropellant used this run", LastUserText(rig.Transport.Requests[2]));
+        }
+
+        [Fact]
+        public void WhenTheMonopropellantCantBeReadTheDebriefSaysWhyInsteadOfANumber()
+        {
+            Assert.Equal("Monopropellant used this run: unknown (no monopropellant reading at the run's start).",
+                MissionPrompts.RunMonopropellantLine(null, new GameSnapshot()));
+            Assert.Equal("Monopropellant used this run: unknown (the craft's readings aren't available now).",
+                MissionPrompts.RunMonopropellantLine(40, null));
+        }
+
+        [Fact]
+        public void AHandBackDebriefLeavesTheMonopropellantOut()
+        {
+            var rig = new Rig(this, DebriefJson("Nominal", ""));
+            rig.RunToRunning(Mono(40));
+            rig.Mission.Send(new TakeManualControl());
+            rig.Mission.Send(Craft(Mono(10)));
+
+            rig.Mission.Send(new HandBack("Done by hand."));
+            rig.DrainUntil(v => v.Stage != MissionStage.Debriefing);
+
+            var request = LastUserText(rig.Transport.Requests[2]);
+            Assert.Contains("took Manual Control", request);
+            Assert.DoesNotContain("Monopropellant used this run", request);
+        }
+
         [Fact]
         public void EveryDebriefRunsTheMarginRecheckThroughTheCraftCheckAndChargesItToTheMission()
         {

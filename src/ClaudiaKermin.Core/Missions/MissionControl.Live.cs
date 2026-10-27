@@ -60,6 +60,7 @@ namespace ClaudiaKermin.Core.Missions
             public readonly List<Turn> Queue = new List<Turn>();
             public double RunStartUt;
             public double? RunStartDeltaVLeft;
+            public double? RunStartMonopropellant;
             /// <summary>The current run's Telemetry Checks.</summary>
             public readonly List<LiveCheck> Checks = new List<LiveCheck>();
             /// <summary>Crossings since the last Debrief, which lists them.</summary>
@@ -105,6 +106,7 @@ namespace ClaudiaKermin.Core.Missions
         {
             mission.RunStartUt = _ut;
             mission.RunStartDeltaVLeft = LiveReadings.DeltaVLeftOf(MissionVesselSnapshot(mission));
+            mission.RunStartMonopropellant = LiveReadings.MonopropellantOf(MissionVesselSnapshot(mission));
             mission.Checks.Clear();
             foreach (var check in TelemetryDefaults.Fill(plan, _config)) mission.Checks.Add(new LiveCheck { Check = check });
             mission.Crossings.Clear();

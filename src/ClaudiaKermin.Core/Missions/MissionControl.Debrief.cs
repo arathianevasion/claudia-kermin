@@ -130,7 +130,15 @@ namespace ClaudiaKermin.Core.Missions
             var rest = RestOfPlanText(mission);
             // A hand-back Debrief is of a manual stretch, with no scripted run to total.
             if (!mission.HandBack) text += "\n" + MissionPrompts.RunDeltaVLine(mission.RunStartDeltaVLeft, MissionVesselSnapshot(mission));
+            if (!mission.HandBack) text += RunMonopropellantFact(mission);
             return text + "\nManeuver Sequences still to fly in the Mission Plan (quoted): " + MissionPrompts.Quoted(rest) + ".";
+        }
+
+        /// <summary>The monopropellant line with its newline, or "" when the craft carried none at the run's start.</summary>
+        private string RunMonopropellantFact(Mission mission)
+        {
+            var line = MissionPrompts.RunMonopropellantLine(mission.RunStartMonopropellant, MissionVesselSnapshot(mission));
+            return line == null ? "" : "\n" + line;
         }
 
         /// <summary>The Maneuver Sequences after the one just flown, with their delta-v budgets; the plan's own words.</summary>
