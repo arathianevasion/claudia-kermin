@@ -312,6 +312,13 @@ namespace ClaudiaKermin.ScriptCheck.Tests
         }
 
         [Fact]
+        public void ExecNodesOwnTurnTimeCallPasses()
+        {
+            Assert.Contains("addons:claudia:turntime(", CoreLibrary.Bundle("").ToLowerInvariant());
+            AssertAllowed(CoreLibrary.Bundle("add node(time:seconds + 600, 0, 0, 120).\nlocal res is exec_node().\naddons:claudia:report(res)."));
+        }
+
+        [Fact]
         public void ABlockInternalCallFailsOnTheMissionScriptsOwnLineInABundle()
         {
             var result = _check.Check(CoreLibrary.Bundle("print 1.\nprint addons:claudia:landingsite(lexicon())."));
