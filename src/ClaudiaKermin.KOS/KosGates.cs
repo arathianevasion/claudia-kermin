@@ -14,6 +14,9 @@ namespace ClaudiaKermin.KOS
         /// <summary>The processors with a mod-started program running; the bridge opens and closes them.</summary>
         public static readonly GatedRuns Runs = new GatedRuns();
 
+        /// <summary>The gates' "physics warp allowed" input (ADR 0008): the <c>physics_warp</c> config, read by <see cref="CoastGuard"/>.</summary>
+        public static bool PhysicsWarpAllowed = true;
+
         /// <summary>Why the gates are not in place, or null once they are. The bridge starts no run without them.</summary>
         public static string Failure { get; internal set; }
 

@@ -85,38 +85,81 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("debugfreezegame", RuntimeGates.Refuses(Call(GateTarget.DebugFreezeGame, "debugfreezegame")));
         }
 
-        // ---- Physics warp (triage case 1: a TIMEWARP handed in as a parameter reaches the same setter) ----
+        // ---- Physics warp on Coasts (ADR 0008, superseding ADR 0003's physics-warp bullet) ----
 
-        [Fact]
-        public void SettingPhysicsWarpModeIsRefused()
+        private static GateCall PhysicsMode(bool allowed = true, bool coast = true, int current = 0)
         {
             var call = Call(GateTarget.TimeWarp, "MODE", set: true);
             call.Value = "physics";
-            Assert.Equal("physics warp (warp mode PHYSICS)", RuntimeGates.Refuses(call));
+            call.PhysicsWarpAllowed = allowed;
+            call.OnCoast = coast;
+            call.CurrentWarpIndex = current;
+            return call;
         }
 
-        [Fact]
-        public void SettingRailsWarpModeIsAllowed()
-        {
-            var call = Call(GateTarget.TimeWarp, "MODE", set: true);
-            call.Value = "RAILS";
-            Assert.Null(RuntimeGates.Refuses(call));
-        }
-
-        [Fact]
-        public void WarpingInPhysicsModeIsRefusedButDroppingToOneTimesIsNot()
+        private static GateCall PhysicsWarp(int index, bool allowed = true, bool coast = true)
         {
             var warp = Call(GateTarget.TimeWarp, "WARP", set: true);
             warp.PhysicsWarpMode = true;
-            warp.WarpRateIndex = 2;
-            Assert.Equal("physics warp (warp 2)", RuntimeGates.Refuses(warp));
-
-            warp.WarpRateIndex = 0;
-            Assert.Null(RuntimeGates.Refuses(warp));
+            warp.WarpRateIndex = index;
+            warp.PhysicsWarpAllowed = allowed;
+            warp.OnCoast = coast;
+            return warp;
         }
 
         [Fact]
-        public void RailsWarpIsAllowed()
+        public void SwitchingToPhysicsModeIsAllowedAtOneTimesOnACoast()
+        {
+            Assert.Null(RuntimeGates.Refuses(PhysicsMode()));
+        }
+
+        [Fact]
+        public void SwitchingToPhysicsModeOffACoastOrAboveOneTimesIsRefused()
+        {
+            Assert.Equal("physics warp (warp mode PHYSICS, off a Coast)", RuntimeGates.Refuses(PhysicsMode(coast: false)));
+            Assert.Equal("physics warp (warp mode PHYSICS, not at 1x)", RuntimeGates.Refuses(PhysicsMode(current: 2)));
+        }
+
+        [Fact]
+        public void SettingRailsWarpModeIsAllowedWhateverElse()
+        {
+            var call = Call(GateTarget.TimeWarp, "MODE", set: true);
+            call.Value = "RAILS";
+            call.CurrentWarpIndex = 5;
+            Assert.Null(RuntimeGates.Refuses(call));
+        }
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(2)]
+        [InlineData(3)]
+        public void PhysicsWarpUpToFourTimesIsAllowedOnACoast(int index)
+        {
+            Assert.Null(RuntimeGates.Refuses(PhysicsWarp(index)));
+        }
+
+        [Fact]
+        public void PhysicsWarpAboveFourTimesIsRefusedEvenOnACoast()
+        {
+            Assert.Equal("physics warp (warp 4, above the 4x cap)", RuntimeGates.Refuses(PhysicsWarp(4)));
+        }
+
+        [Fact]
+        public void PhysicsWarpOffACoastIsRefusedButDroppingToOneTimesIsNot()
+        {
+            Assert.Equal("physics warp (warp 2, off a Coast)", RuntimeGates.Refuses(PhysicsWarp(2, coast: false)));
+            Assert.Null(RuntimeGates.Refuses(PhysicsWarp(0, coast: false, allowed: false)));
+        }
+
+        [Fact]
+        public void EveryPhysicsWarpIsRefusedWithPhysicsWarpOff()
+        {
+            Assert.Equal("physics warp (warp mode PHYSICS, physics warp is off)", RuntimeGates.Refuses(PhysicsMode(allowed: false)));
+            Assert.Equal("physics warp (warp 1, physics warp is off)", RuntimeGates.Refuses(PhysicsWarp(1, allowed: false)));
+        }
+
+        [Fact]
+        public void RailsWarpIsAllowedWhateverTheSwitchAndCoast()
         {
             var warp = Call(GateTarget.TimeWarp, "WARP", set: true);
             warp.WarpRateIndex = 4;
@@ -124,17 +167,44 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
-        public void WarpToIsRefusedInPhysicsModeAndAllowedOnRails()
+        public void WarpToIsRefusedInPhysicsModeEvenOnACoastAndAllowedOnRails()
         {
             // Issue #133: kOS's TIMEWARP:WARPTO and WARPTO() call KSP's TimeWarp.WarpTo, which warps in the mode
             // already set without calling the WARP setter; in physics mode that would be physics warp past the gate.
             var warpTo = Call(GateTarget.TimeWarp, "WARPTO");
             warpTo.PhysicsWarpMode = true;
+            warpTo.PhysicsWarpAllowed = true;
+            warpTo.OnCoast = true;
             Assert.Equal("physics warp (WARPTO in warp mode PHYSICS)", RuntimeGates.Refuses(warpTo));
 
             // The Core Library sets the mode to RAILS first, so its in-script warp (ADR 0004) is allowed.
             warpTo.PhysicsWarpMode = false;
             Assert.Null(RuntimeGates.Refuses(warpTo));
+        }
+
+        [Theory]
+        [InlineData(new double[0], new bool[0], true)]
+        [InlineData(new[] { 0.0, 0.0 }, new[] { false, false }, true)]
+        [InlineData(new[] { 0.0, 12.5 }, new[] { false }, false)]
+        [InlineData(new[] { 0.0 }, new[] { false, true }, false)]
+        public void ACoastIsNoEngineThrustAndNoRcsFiring(double[] thrusts, bool[] rcs, bool coast)
+        {
+            Assert.Equal(coast, CoastCheck.IsCoast(thrusts, rcs));
+        }
+
+        [Fact]
+        public void AnEngineAtThrottleZeroWithNoThrustIsACoastAndRcsFiringIsNot()
+        {
+            Assert.True(CoastCheck.IsCoast(new[] { 0.0 }, null));
+            Assert.False(CoastCheck.IsCoast(null, new[] { true }));
+        }
+
+        [Fact]
+        public void WarpIsDroppedOnlyWhenPhysicsWarpedAboveOneTimesOffACoast()
+        {
+            Assert.True(CoastCheck.ShouldDrop(true, false));
+            Assert.False(CoastCheck.ShouldDrop(true, true));
+            Assert.False(CoastCheck.ShouldDrop(false, false));
         }
 
         // ---- Other-vessel mutators (triage case 2: vessels found by iterating a list) ----

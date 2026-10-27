@@ -21,7 +21,6 @@ namespace ClaudiaKermin.ScriptCheck
         public const string SwitchVessels = "switch vessels";
         public const string LaunchCraft = "launch craft";
         public const string Pause = "pause";
-        public const string PhysicsWarp = "use physics warp";
         public const string TouchFiles = "touch files";
         public const string ChangeConfig = "change kOS config";
         public const string RebootOrShutDown = "reboot or shut down processors";
