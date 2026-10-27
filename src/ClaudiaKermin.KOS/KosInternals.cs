@@ -56,6 +56,7 @@ namespace ClaudiaKermin.KOS
             new[] { "kOS.Safe.SafeSharedObjects, kOS.Safe", "Processor", "-1" },
             new[] { "kOS.Safe.Utilities.SafeHouse, kOS.Safe", "Config", "-1" },
             new[] { "kOS.Safe.Encapsulation.IConfig, kOS.Safe", "AllowClobberBuiltIns", "-1" },
+            new[] { "kOS.Safe.Encapsulation.IConfig, kOS.Safe", "InstructionsPerUpdate", "-1" },
             new[] { "kOS.SharedObjects, kOS", "KSPPart", "-1" },
             new[] { "kOS.SharedObjects, kOS", "Vessel", "-1" },
             new[] { "kOS.Module.kOSProcessor, kOS", "ProcessorMode", "-1" },

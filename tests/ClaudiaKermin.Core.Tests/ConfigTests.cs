@@ -88,6 +88,26 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void ScriptIpuDefaultsTo1000IsWrittenToTheFileAndClampedTo50To2000()
+        {
+            using (var dir = new TempDir())
+            {
+                Assert.Equal(1000, PlayerConfig.LoadOrCreate(dir.Sub).ScriptIpu);
+                var path = Path.Combine(dir.Sub, PlayerConfig.FileName);
+                Assert.Contains("script_ipu = 1000", File.ReadAllText(path));
+
+                File.WriteAllText(path, "script_ipu = 400\n");
+                Assert.Equal(400, PlayerConfig.LoadOrCreate(dir.Sub).ScriptIpu);
+                File.WriteAllText(path, "script_ipu = 5000\n");
+                Assert.Equal(2000, PlayerConfig.LoadOrCreate(dir.Sub).ScriptIpu);
+                File.WriteAllText(path, "script_ipu = 10\n");
+                Assert.Equal(50, PlayerConfig.LoadOrCreate(dir.Sub).ScriptIpu);
+                File.WriteAllText(path, "script_ipu = fast\n");
+                Assert.Equal(1000, PlayerConfig.LoadOrCreate(dir.Sub).ScriptIpu);
+            }
+        }
+
+        [Fact]
         public void PhysicsWarpIsOnByDefaultWrittenToTheFileAndReadFromIt()
         {
             using (var dir = new TempDir())
