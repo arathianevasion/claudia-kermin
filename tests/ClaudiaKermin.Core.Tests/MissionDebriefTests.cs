@@ -201,6 +201,137 @@ namespace ClaudiaKermin.Core.Tests
             Assert.DoesNotContain("Delta-v used this run", request);
         }
 
+        // ---- RCS Use (#398) ----
+
+        private static Dictionary<string, object> Switch(bool on, string reason)
+        {
+            return new Dictionary<string, object> { { "on", on }, { "reason", reason } };
+        }
+
+        [Fact]
+        public void TheRcsTallyCountsSwitchesOnAndSecondsOnPerBlockAndNamesTheBlockWithMost()
+        {
+            var tally = new RcsUseTally();
+            tally.Switched(100, "circularize", true);
+            tally.Switched(110, "circularize", false);
+            tally.Switched(200, "land", true);
+            tally.Switched(205, "land", true);   // already on: not counted again
+            tally.Switched(210, "land", false);
+            tally.Switched(210, "land", false);  // already off
+            tally.Switched(300, "circularize", true);
+            tally.Switched(302, "circularize", false);
+
+            Assert.Equal(3, tally.TimesOn);
+            Assert.Equal(22, tally.SecondsOn, 6);
+            Assert.Equal("circularize", tally.MostBlock);
+            Assert.Equal(2, tally.MostBlockTimes);
+        }
+
+        [Fact]
+        public void TheRcsTallyCountsASwitchStillOnAtRunEndUpToThatMoment()
+        {
+            var tally = new RcsUseTally();
+            tally.Switched(100, "land", true);
+            tally.Close(130);
+            tally.Close(500);
+
+            Assert.Equal(1, tally.TimesOn);
+            Assert.Equal(30, tally.SecondsOn, 6);
+            tally.Clear();
+            Assert.Equal(0, tally.TimesOn);
+            Assert.Equal(0, tally.SecondsOn, 6);
+        }
+
+        [Fact]
+        public void TheRcsUseLineSaysHowOftenHowLongAndWhereMostOrThatThereWasNone()
+        {
+            var tally = new RcsUseTally();
+            Assert.Equal("RCS Use this run: none.", MissionPrompts.RcsUseLine(tally));
+            for (var i = 0; i < 14; i++)
+            {
+                tally.Switched(i * 10, i < 11 ? "Circularize at 80 km" : "land", true);
+                tally.Switched(i * 10 + (i < 12 ? 7 : 6), "x", false);
+            }
+            Assert.Equal("RCS Use this run: switched on 14 times, 96 s in all; most in \"Circularize at 80 km\" (11).", MissionPrompts.RcsUseLine(tally));
+
+            var once = new RcsUseTally();
+            once.Switched(0, "", true);
+            once.Close(4);
+            Assert.Equal("RCS Use this run: switched on 1 time, 4 s in all.", MissionPrompts.RcsUseLine(once));
+        }
+
+        [Fact]
+        public void AnRcsSwitchLineCarriesTheReasonAndTheFiguresItWasGiven()
+        {
+            var values = Switch(true, "turning");
+            values["error_deg"] = 34.2;
+            values["rate_dps"] = 0.1;
+            values["wheels_s"] = 85.0;
+            values["left_s"] = 60;
+            values["monoprop"] = 30.0;
+            values["monoprop_max"] = 40.0;
+            string problem;
+            Assert.Equal("RCS on: turning (error 34.2°, rate 0.1°/s, wheels 85 s vs 60 s left, monoprop 30/40)", RcsSwitch.Parse(values, out problem).Line());
+
+            var off = Switch(false, "aligned");
+            off["error_deg"] = 1.4;
+            off["rate_dps"] = 0.2;
+            Assert.Equal("RCS off: aligned (error 1.4°, rate 0.2°/s)", RcsSwitch.Parse(off, out problem).Line());
+            Assert.Equal("RCS off: block end", RcsSwitch.Parse(Switch(false, "block end"), out problem).Line());
+        }
+
+        [Fact]
+        public void ABadRcsSwitchLexiconFailsWithAProblemAndNoException()
+        {
+            string problem;
+            Assert.Null(RcsSwitch.Parse(null, out problem));
+            Assert.Null(RcsSwitch.Parse(new Dictionary<string, object>(), out problem));
+            Assert.Contains("'on'", problem);
+            Assert.Null(RcsSwitch.Parse(Switch(true, "bored"), out problem));
+            Assert.Contains("'reason'", problem);
+            var text = Switch(true, "turning");
+            text["error_deg"] = "big";
+            Assert.Null(RcsSwitch.Parse(text, out problem));
+            Assert.Contains("'error_deg'", problem);
+        }
+
+        [Fact]
+        public void TheDebriefRequestCarriesTheRcsUseLineAndTheMissionLogHasEachSwitch()
+        {
+            var rig = new Rig(this, DebriefJson("Nominal", ""));
+            var start = rig.RunToRunning();
+
+            rig.Mission.Send(new KosBlockStarted("circularize", start.RunId));
+            rig.Mission.Send(new KosRcsSwitched(Switch(true, "turning"), ApprovedAt + 10, start.RunId));
+            rig.Mission.Send(new KosRcsSwitched(Switch(false, "aligned"), ApprovedAt + 15, start.RunId));
+            rig.Mission.Send(new KosRcsSwitched(Switch(true, "bored"), ApprovedAt + 16, start.RunId));
+            rig.Mission.Send(new KosRunEnded(Finished(), start.RunId));
+            rig.DrainUntil(v => v.Stage == MissionStage.Sequencing || v.Stage == MissionStage.Succeeded || v.Stage == MissionStage.AwaitingSequenceApproval);
+
+            Assert.Contains("RCS Use this run: switched on 1 time, 5 s in all; most in \"circularize\" (1).", LastUserText(rig.Transport.Requests[2]));
+            var log = rig.Mission.View.Log.Select(e => e.Text).ToList();
+            Assert.Contains("RCS on: turning", log);
+            Assert.Contains("RCS off: aligned", log);
+            Assert.Contains(log, t => t != null && t.StartsWith("RCS switch not logged: 'reason'"));
+        }
+
+        [Fact]
+        public void ARunWithNoRcsSwitchesSaysNoneAndAHandBackDebriefLeavesTheLineOut()
+        {
+            var rig = new Rig(this, DebriefJson("Nominal", ""));
+            var start = rig.RunToRunning();
+            rig.Mission.Send(new KosRunEnded(Finished(), start.RunId));
+            rig.DrainUntil(v => v.Stage == MissionStage.Sequencing || v.Stage == MissionStage.Succeeded || v.Stage == MissionStage.AwaitingSequenceApproval);
+            Assert.Contains("RCS Use this run: none.", LastUserText(rig.Transport.Requests[2]));
+
+            var hand = new Rig(this, DebriefJson("Nominal", ""));
+            hand.RunToRunning();
+            hand.Mission.Send(new TakeManualControl());
+            hand.Mission.Send(new HandBack("Done by hand."));
+            hand.DrainUntil(v => v.Stage != MissionStage.Debriefing);
+            Assert.DoesNotContain("RCS Use this run", LastUserText(hand.Transport.Requests[2]));
+        }
+
         [Fact]
         public void EveryDebriefRunsTheMarginRecheckThroughTheCraftCheckAndChargesItToTheMission()
         {

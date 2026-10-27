@@ -114,6 +114,7 @@ namespace ClaudiaKermin.Core.Missions
             else if (input is KosRunBlocked) RunBlocked((KosRunBlocked)input);
             else if (input is KosBlockStarted) BlockStarted((KosBlockStarted)input);
             else if (input is KosBlockEnded) BlockEnded((KosBlockEnded)input);
+            else if (input is KosRcsSwitched) RcsSwitched((KosRcsSwitched)input);
             else if (input is AbortSequence) AbortPressed();
             else if (input is VesselsSeen) VesselsChanged(((VesselsSeen)input).Vessels);
             else if (input is VesselsDocked) Docked((VesselsDocked)input);
@@ -792,6 +793,7 @@ namespace ClaudiaKermin.Core.Missions
             if (!running || mission.RunId != ended.RunId) return;
             mission.RunId = null;
             mission.RunDeadlineUt = null;
+            mission.RcsUse.Close(_ut);
             EndLive(mission);
             var outcome = StoppedOutcome(mission, ended.Outcome);
             NoteRunOutcome(mission, outcome);

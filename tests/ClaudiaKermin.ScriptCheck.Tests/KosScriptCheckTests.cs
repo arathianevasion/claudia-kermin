@@ -318,6 +318,13 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             Assert.Contains("addons:claudia:blocktrace(", CoreLibrary.Bundle("").ToLowerInvariant());
         }
 
+        // #398: an RCS switch is a report to the mod's log, like a trace, so the helper calls and a Custom Script may write one.
+        [Fact]
+        public void AMissionScriptMayReportAnRcsSwitch()
+        {
+            AssertAllowed("addons:claudia:rcsswitch(lexicon(\"on\", true, \"reason\", \"translating\")).");
+        }
+
         [Fact]
         public void TheCoreLibrarysOwnBlockInternalCallPasses()
         {

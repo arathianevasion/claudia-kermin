@@ -282,6 +282,21 @@ namespace ClaudiaKermin.Core.Missions
         }
     }
 
+    /// <summary>A block switched RCS on or off (<c>ADDONS:CLAUDIA:RCSSWITCH</c>); <see cref="RcsSwitch"/> says what the lexicon holds.</summary>
+    public sealed class KosRcsSwitched : MissionInput
+    {
+        public readonly System.Collections.Generic.IDictionary<string, object> Switch;
+        public readonly double Ut;
+        /// <summary>The <see cref="StartScript.RunId"/> this answers.</summary>
+        public readonly int RunId;
+        public KosRcsSwitched(System.Collections.Generic.IDictionary<string, object> values, double ut, int runId)
+        {
+            Switch = values;
+            Ut = ut;
+            RunId = runId;
+        }
+    }
+
     /// <summary>
     /// A runtime gate (ADR 0003) refused a call from the script started by <see cref="StartScript"/>: the bridge
     /// has stopped the program and made the craft safe, and its <see cref="KosRunEnded"/> follows.
