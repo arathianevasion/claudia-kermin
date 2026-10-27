@@ -211,7 +211,8 @@ namespace ClaudiaKermin.Core.Missions
                 + "and late_window_dv to the delta-v (m/s) of the next window; when the player approves after the window has closed, "
                 + "the mod lets the script take the next window if late_window_dv is within tolerance of expected_delta_v, and "
                 + "otherwise asks you to re-plan. A Due Time the player has missed just waits; revise the Sequence Plan only if its "
-                + "timing no longer works.\n\n" + SettingsText(settings);
+                + "timing no longer works.\n\n" + SettingsText(settings)
+                + "\nAsked in chat to stop or allow physics warp, point the player to that setting; change no plan until they switch it.";
         }
 
         /// <summary>The Mission Settings in words, as Claudia must apply them.</summary>
@@ -225,7 +226,17 @@ namespace ClaudiaKermin.Core.Missions
             return "Mission Settings. Daylight landing: " + (settings.DaylightLanding
                     ? "on. Set the land block's daylight option to true and prefer a daylight landing."
                     : "off. Do not wait for daylight.")
-                + " Time versus delta-v, " + time;
+                + " Time versus delta-v, " + time + "\n" + PhysicsWarpText(settings);
+        }
+
+        /// <summary>The Physics warp on Coasts line of the Mission Settings (#348); with the config off, only the config turns it back on.</summary>
+        public static string PhysicsWarpText(MissionSettingsValues settings)
+        {
+            if (settings.PhysicsWarpOn)
+                return "Physics warp on Coasts: on. Blocks warp through Coasts with physics warp where rails can't; use the warp helpers for your own Coasts.";
+            return "Physics warp on Coasts: off. The mod refuses physics warp. "
+                + (settings.ConfigAllowsPhysicsWarp ? "" : "Only the player's config can turn it back on. ")
+                + "Where rails can't warp, Coasts run at 1×, so plan for the extra real time.";
         }
 
         public static string SettingsChanged(MissionSettingsValues settings)

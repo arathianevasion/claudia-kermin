@@ -248,6 +248,16 @@ namespace ClaudiaKermin.Core.Ui
             return "$" + Dollars(view.Spent + view.HeldCharges) + " / $" + Dollars(view.SpendingCap);
         }
 
+        // ---- Physics warp on Coasts ----
+
+        /// <summary>The Mission Setting's switch in the Settings window.</summary>
+        public const string PhysicsWarpLabel = "Physics warp on Coasts";
+
+        public const string PhysicsWarpTooltip = "Let scripts warp faster than 1× on a Coast, where rails can't. Off, Coasts that rails can't warp run at 1×.";
+
+        /// <summary>Shown under the greyed-out switch while <c>physics_warp</c> in the player config is false.</summary>
+        public const string PhysicsWarpOffInConfig = "Physics warp is turned off in config.";
+
         // ---- Auto Mode ----
 
         /// <summary>The Auto Mode switch in the control bar.</summary>

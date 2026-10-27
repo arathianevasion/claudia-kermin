@@ -334,6 +334,14 @@ namespace ClaudiaKermin.Adapter
             GUILayout.Label("Time versus delta-v", _label);
             _settings.TimeVersusDeltaV = (TimeVersusDeltaV)ClaudiaSkin.Segmented((int)_settings.TimeVersusDeltaV, TimeChoices);
             GUILayout.Label(TimeCaption(_settings.TimeVersusDeltaV), ClaudiaSkin.Secondary);
+            GUILayout.Space(ClaudiaSkin.Gap / 2);
+            // Off and greyed out while physics_warp in the config is false: only the config turns it back on.
+            _settings.ConfigAllowsPhysicsWarp = _config.PhysicsWarp;
+            GUI.enabled = editable && _config.PhysicsWarp;
+            var physicsWarp = ClaudiaSkin.Switch(_settings.PhysicsWarpOn, MissionWindowRules.PhysicsWarpLabel, MissionWindowRules.PhysicsWarpTooltip);
+            if (_config.PhysicsWarp) _settings.PhysicsWarp = physicsWarp;
+            GUI.enabled = editable;
+            if (!_config.PhysicsWarp) GUILayout.Label(MissionWindowRules.PhysicsWarpOffInConfig, ClaudiaSkin.Muted);
             GUI.enabled = true;
             if (!editable) GUILayout.Label("You can change these while a plan awaits Approval.", ClaudiaSkin.Muted);
         }

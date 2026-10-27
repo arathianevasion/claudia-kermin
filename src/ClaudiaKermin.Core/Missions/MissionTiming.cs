@@ -27,10 +27,26 @@ namespace ClaudiaKermin.Core.Missions
     {
         public const string DaylightKey = "daylight_landing";
         public const string TimeKey = "time_vs_dv";
+        public const string PhysicsWarpKey = "physics_warp";
 
         /// <summary>Prefer to land in daylight; drives the <c>land</c> block's <c>daylight</c> option.</summary>
         public bool DaylightLanding = true;
         public TimeVersusDeltaV TimeVersusDeltaV = TimeVersusDeltaV.Balanced;
+
+        /// <summary>The player's choice of Physics warp on Coasts (ADR 0008); starts as <c>physics_warp</c> in the config.</summary>
+        public bool PhysicsWarp = true;
+
+        /// <summary>
+        /// <c>physics_warp</c> in the config is on. Not saved: read from the config each time, so the config alone can turn
+        /// physics warp back on, and the setting shows greyed out and off while it is false.
+        /// </summary>
+        public bool ConfigAllowsPhysicsWarp = true;
+
+        /// <summary>Physics warp is allowed now, the gate's single input: the config and the Mission Setting are both on.</summary>
+        public bool PhysicsWarpOn
+        {
+            get { return ConfigAllowsPhysicsWarp && PhysicsWarp; }
+        }
 
         /// <summary>The wait Balanced allows, hours (<see cref="Label"/> says 6 h); the most a Planning Tool defaults a search window to.</summary>
         public const double BalancedWaitHours = 6;
@@ -43,17 +59,25 @@ namespace ClaudiaKermin.Core.Missions
 
         public static MissionSettingsValues Defaults(PlayerConfig config)
         {
-            return new MissionSettingsValues { DaylightLanding = config.DefaultDaylightLanding, TimeVersusDeltaV = config.DefaultTimeVersusDeltaV };
+            return new MissionSettingsValues
+            {
+                DaylightLanding = config.DefaultDaylightLanding,
+                TimeVersusDeltaV = config.DefaultTimeVersusDeltaV,
+                // The player's own choice starts on; the config alone gates it (PhysicsWarpOn), so turning the config back on turns it back on.
+                PhysicsWarp = true,
+                ConfigAllowsPhysicsWarp = config.PhysicsWarp,
+            };
         }
 
         /// <summary>The settings in a Mission's name/value pairs; a missing or unreadable one takes the default.</summary>
         public static MissionSettingsValues FromDictionary(IDictionary<string, string> pairs, MissionSettingsValues defaults)
         {
-            var values = new MissionSettingsValues { DaylightLanding = defaults.DaylightLanding, TimeVersusDeltaV = defaults.TimeVersusDeltaV };
+            var values = defaults.Copy();
             string text;
             if (pairs != null && pairs.TryGetValue(DaylightKey, out text) && (text == "true" || text == "false")) values.DaylightLanding = text == "true";
             TimeVersusDeltaV time;
             if (pairs != null && pairs.TryGetValue(TimeKey, out text) && Enum.TryParse(text, out time)) values.TimeVersusDeltaV = time;
+            if (pairs != null && pairs.TryGetValue(PhysicsWarpKey, out text) && (text == "true" || text == "false")) values.PhysicsWarp = text == "true";
             return values;
         }
 
@@ -61,16 +85,23 @@ namespace ClaudiaKermin.Core.Missions
         {
             pairs[DaylightKey] = DaylightLanding ? "true" : "false";
             pairs[TimeKey] = TimeVersusDeltaV.ToString();
+            pairs[PhysicsWarpKey] = PhysicsWarp ? "true" : "false";
         }
 
         public MissionSettingsValues Copy()
         {
-            return new MissionSettingsValues { DaylightLanding = DaylightLanding, TimeVersusDeltaV = TimeVersusDeltaV };
+            return new MissionSettingsValues
+            {
+                DaylightLanding = DaylightLanding,
+                TimeVersusDeltaV = TimeVersusDeltaV,
+                PhysicsWarp = PhysicsWarp,
+                ConfigAllowsPhysicsWarp = ConfigAllowsPhysicsWarp,
+            };
         }
 
         public bool SameAs(MissionSettingsValues other)
         {
-            return other != null && DaylightLanding == other.DaylightLanding && TimeVersusDeltaV == other.TimeVersusDeltaV;
+            return other != null && DaylightLanding == other.DaylightLanding && TimeVersusDeltaV == other.TimeVersusDeltaV && PhysicsWarp == other.PhysicsWarp;
         }
 
         public static string Label(TimeVersusDeltaV time)
@@ -86,7 +117,8 @@ namespace ClaudiaKermin.Core.Missions
         /// <summary>The settings in the player's words, for the Mission board.</summary>
         public string Summary()
         {
-            return "Daylight landing: " + (DaylightLanding ? "on" : "off") + "; time versus delta-v: " + Label(TimeVersusDeltaV);
+            return "Daylight landing: " + (DaylightLanding ? "on" : "off") + "; time versus delta-v: " + Label(TimeVersusDeltaV)
+                + "; physics warp on Coasts: " + (PhysicsWarpOn ? "on" : "off");
         }
     }
 

@@ -502,6 +502,94 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal("Fastest", Assert.Single(mission.ExportStates()).Settings[MissionSettingsValues.TimeKey]);
         }
 
+        // ---- Physics warp on Coasts (#348) ----
+
+        [Fact]
+        public void PhysicsWarpOnCoastsDefaultsFromTheConfigAndIsGreyedOutWhenTheConfigIsOff()
+        {
+            var on = Control(new StreamingFakeTransport(TimedMissionPlan()));
+            Assert.True(on.View.StartForm.DefaultSettings.PhysicsWarp);
+            Assert.True(on.View.StartForm.DefaultSettings.ConfigAllowsPhysicsWarp);
+
+            var off = Control(new StreamingFakeTransport(TimedMissionPlan()), new PlayerConfig { PhysicsWarp = false });
+            Assert.False(off.View.StartForm.DefaultSettings.PhysicsWarpOn);
+            Assert.False(off.View.StartForm.DefaultSettings.ConfigAllowsPhysicsWarp);
+            StartMission(off);
+            DrainUntil(off, v => v.Stage == MissionStage.AwaitingPlanApproval);
+            Assert.False(off.View.Settings.PhysicsWarpOn);
+            Assert.False(off.View.Settings.ConfigAllowsPhysicsWarp);
+            Assert.False(off.View.PhysicsWarpAllowed);
+        }
+
+        [Fact]
+        public void TheConfigOffWinsOverAMissionSettingThatSaysOn()
+        {
+            var transport = new StreamingFakeTransport(TimedMissionPlan());
+            var mission = Control(transport, new PlayerConfig { PhysicsWarp = false });
+            StartMission(mission, new MissionSettingsValues { PhysicsWarp = true });
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+
+            Assert.False(mission.View.Settings.PhysicsWarpOn);
+            Assert.False(mission.View.PhysicsWarpAllowed);
+            Assert.Contains("Physics warp on Coasts: off. The mod refuses physics warp. Only the player's config can turn it back on.", SystemLayers(transport.Requests[0])[2]);
+        }
+
+        [Fact]
+        public void PhysicsWarpOnCoastsIsPersistedAndFeedsTheGate()
+        {
+            var transport = new StreamingFakeTransport(TimedMissionPlan());
+            var mission = Control(transport);
+            StartMission(mission, new MissionSettingsValues { PhysicsWarp = false });
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+
+            Assert.False(mission.View.PhysicsWarpAllowed);
+            var state = Assert.Single(mission.ExportStates());
+            Assert.Equal("false", state.Settings[MissionSettingsValues.PhysicsWarpKey]);
+            Assert.Equal("false", MissionSaveState.FromValues(state.ToValues()).Settings[MissionSettingsValues.PhysicsWarpKey]);
+            var layer = SystemLayers(transport.Requests[0])[2];
+            Assert.Contains("Physics warp on Coasts: off. The mod refuses physics warp. Where rails can't warp, Coasts run at 1×, so plan for the extra real time.", layer);
+            Assert.Contains("Asked in chat to stop or allow physics warp, point the player to that setting; change no plan until they switch it.", layer);
+        }
+
+        [Fact]
+        public void PhysicsWarpOnCoastsOnTellsClaudiaToUseTheWarpHelpers()
+        {
+            var transport = new StreamingFakeTransport(TimedMissionPlan());
+            var mission = Control(transport);
+            StartMission(mission);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+
+            Assert.True(mission.View.PhysicsWarpAllowed);
+            Assert.Contains("Physics warp on Coasts: on. Blocks warp through Coasts with physics warp where rails can't; use the warp helpers for your own Coasts.", SystemLayers(transport.Requests[0])[2]);
+        }
+
+        [Fact]
+        public void ChangingPhysicsWarpOnCoastsTakesEffectAtOnceAndAsksForARevisedMissionPlan()
+        {
+            var transport = new StreamingFakeTransport(TimedMissionPlan(), TimedMissionPlan(null, 20000));
+            var mission = Control(transport);
+            StartMission(mission);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval);
+
+            mission.Send(new EditSettings(new MissionSettingsValues { PhysicsWarp = false }));
+            Assert.False(mission.View.PhysicsWarpAllowed);
+            Assert.True(mission.View.Busy);
+            DrainUntil(mission, v => v.Stage == MissionStage.AwaitingPlanApproval && !v.Busy);
+
+            var asked = Messages(transport.Requests[1]);
+            Assert.Contains("changed the Mission Settings", asked);
+            Assert.Contains("Physics warp on Coasts: off", asked);
+            Assert.Contains("Revise the Mission Plan", asked);
+            Assert.Equal("false", Assert.Single(mission.ExportStates()).Settings[MissionSettingsValues.PhysicsWarpKey]);
+        }
+
+        [Fact]
+        public void AMissionSavedWithoutTheSettingTakesTheConfigDefault()
+        {
+            var values = MissionSettingsValues.FromDictionary(new System.Collections.Generic.Dictionary<string, string>(), MissionSettingsValues.Defaults(new PlayerConfig { PhysicsWarp = true }));
+            Assert.True(values.PhysicsWarpOn);
+        }
+
         [Fact]
         public void AMissionLostWithADueTimeAlarmPendingClearsTheAlarm()
         {

@@ -168,7 +168,7 @@ namespace ClaudiaKermin.Core.Tests
             // The first request's worst case fits $0.40 (Sonnet's $10 per million output tokens); after its real cost the retry's worst case no longer does.
             var transport = new StreamingFakeTransport(CutOff(), ScriptedResponse.Fixture("mission-plan.sse"));
             var mission = Control(transport);
-            Start(mission, 0.4m);
+            Start(mission, 0.41m); // raised for #348 Physics warp on Coasts setting (human decision 2026-10-27)
             DrainUntil(mission, v => v.Stage == MissionStage.Paused);
 
             Assert.Single(transport.Requests);
