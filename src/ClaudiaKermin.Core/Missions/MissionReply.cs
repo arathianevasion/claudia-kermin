@@ -53,6 +53,11 @@ namespace ClaudiaKermin.Core.Missions
     public sealed class SequencePlan
     {
         public string Name = "";
+        /// <summary>
+        /// The Mission Plan step it flies, 1-based: a retry names the same step again, and a step split over two
+        /// sequences names it in both. Null when the plan names none (a transcript or save from before #413).
+        /// </summary>
+        public int? PlanStep;
         public string Intent = "";
         public string Why = "";
         public string Target = "";
@@ -242,8 +247,9 @@ namespace ClaudiaKermin.Core.Missions
 
         private const string SequencePlanSchema =
             "{\"type\":\"object\",\"additionalProperties\":false,"
-            + "\"required\":[\"name\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"telemetry_checks\",\"risks\",\"custom_script_reason\",\"script\",\"due_time_ut\",\"window_closes_ut\",\"late_window_dv\",\"manual\",\"vessel\"],"
+            + "\"required\":[\"name\",\"plan_step\",\"intent\",\"why\",\"target\",\"tolerances\",\"expected_delta_v\",\"expected_duration_s\",\"abort_conditions\",\"telemetry_checks\",\"risks\",\"custom_script_reason\",\"script\",\"due_time_ut\",\"window_closes_ut\",\"late_window_dv\",\"manual\",\"vessel\"],"
             + "\"properties\":{"
+            + "\"plan_step\":{\"type\":\"integer\",\"description\":\"The Mission Plan step this sequence flies, 1 for the first; a retry names the same step again.\"},"
             + "\"vessel\":{\"type\":\"string\",\"description\":\"craft, or the name of a Child Vessel from the Mission Plan: the script goes only to that vessel, "
             + "over a CommNet path from you, and every other vessel of the Mission must be stable (in orbit, landed or splashed down) when it starts.\"},"
             + "\"name\":{\"type\":\"string\"},\"intent\":{\"type\":\"string\"},"
@@ -368,6 +374,7 @@ namespace ClaudiaKermin.Core.Missions
                 reply.SequencePlan = new SequencePlan
                 {
                     Name = JsonNode.Str(sequence["name"]) ?? "",
+                    PlanStep = PlanStep(sequence["plan_step"]),
                     Intent = JsonNode.Str(sequence["intent"]) ?? "",
                     Why = JsonNode.Str(sequence["why"]) ?? "",
                     Target = JsonNode.Str(sequence["target"]) ?? "",
@@ -431,6 +438,14 @@ namespace ClaudiaKermin.Core.Missions
                 }
             }
             return reply;
+        }
+
+        /// <summary>The step a Sequence Plan names, as given (the mod refuses one outside the Mission Plan); null when it names none.</summary>
+        private static int? PlanStep(JsonNode node)
+        {
+            var step = JsonNode.Long(node);
+            if (!step.HasValue) return null;
+            return (int)System.Math.Max(int.MinValue, System.Math.Min(int.MaxValue, step.Value));
         }
 
         /// <summary>Claudia's Telemetry Checks; one with an unknown quantity, no threshold or no resource name is left out.</summary>

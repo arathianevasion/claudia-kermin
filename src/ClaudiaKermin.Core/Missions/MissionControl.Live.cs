@@ -163,7 +163,7 @@ namespace ClaudiaKermin.Core.Missions
         private static double LaterDeltaV(Mission mission)
         {
             if (mission.Plan == null) return 0;
-            return mission.Plan.Sequences.Skip(Math.Max(0, mission.SequencesProposed)).Sum(s => Math.Max(0, s.DeltaV));
+            return mission.Plan.Sequences.Skip(StepsBegun(mission)).Sum(s => Math.Max(0, s.DeltaV));
         }
 
         /// <summary>After every input while Running: the readings are refreshed and each check is tested; a crossing raises an Alert.</summary>

@@ -65,6 +65,8 @@ namespace ClaudiaKermin.Core.Missions
                 TranscriptMarker = mission.Conversation.Count,
                 SequencesProposed = mission.SequencesProposed,
                 SequenceCounted = mission.SequenceCounted,
+                PlanStep = mission.PlanStep,
+                PlanStepBefore = mission.PlanStepBefore,
                 LatestLine = mission.LatestLine,
                 PauseReason = mission.PauseReason,
                 PauseCause = mission.Stage == MissionStage.Paused && mission.PauseCause != PauseCause.Other ? mission.PauseCause.ToString() : "",
@@ -419,6 +421,8 @@ namespace ClaudiaKermin.Core.Missions
                 PendingSequence = state.SequencePlan,
                 SequencesProposed = state.SequencesProposed,
                 SequenceCounted = state.SequenceCounted,
+                PlanStep = state.PlanStep,
+                PlanStepBefore = state.PlanStepBefore,
                 UnsafeProblems = state.UnsafeProblems.ToList(),
                 LatestLine = state.LatestLine,
                 VesselId = state.VesselId,
@@ -680,7 +684,7 @@ namespace ClaudiaKermin.Core.Missions
             if (first == null) return false;
             var reply = MissionReply.Parse(string.Concat(first.Content.OfType<TextBlock>().Select(b => b.Text)));
             if (reply == null || Mismatch(purpose, reply) != null) return false;
-            if (purpose == Purpose.SequencePlan && !reply.SequencePlan.Manual && !CheckScript(reply.SequencePlan).Passed) return false;
+            if (purpose == Purpose.SequencePlan && !reply.SequencePlan.Manual && !CheckScript(mission, reply.SequencePlan).Passed) return false;
 
             mission.Owed = Owed.None;
             mission.LatestLine = SayWithWhy(purpose, reply);
@@ -691,6 +695,8 @@ namespace ClaudiaKermin.Core.Missions
                 // The run is over and its Debrief is in: the loop goes on from it as it did when the reply first landed.
                 mission.SequencesProposed = state.SequencesProposed;
                 mission.SequenceCounted = state.SequenceCounted;
+                mission.PlanStep = state.PlanStep;
+                mission.PlanStepBefore = state.PlanStepBefore;
                 mission.OwedOutcome = null;
                 mission.InterruptReason = null;
                 Debriefed(mission, reply);
@@ -708,6 +714,8 @@ namespace ClaudiaKermin.Core.Missions
             {
                 mission.SequenceCounted = state.SequenceCounted;
                 mission.SequencesProposed = state.SequencesProposed;
+                mission.PlanStep = state.PlanStep;
+                mission.PlanStepBefore = state.PlanStepBefore;
                 OfferSequencePlan(mission, reply.SequencePlan);
                 var rebuilt = mission.LogRebuilt ? mission.Log.LastOrDefault(e => e.Kind == LogKind.SequencePlan) : null;
                 if (rebuilt != null) rebuilt.Text = MissionCards.SequencePlanBody(reply.SequencePlan, mission.VesselName, _ut, _config);
@@ -750,7 +758,7 @@ namespace ClaudiaKermin.Core.Missions
                     if (mission.PendingSequence != null && mission.PendingSequence.Manual) return stage;
                     if (mission.PendingSequence != null)
                     {
-                        var check = CheckScript(mission.PendingSequence);
+                        var check = CheckScript(mission, mission.PendingSequence);
                         if (check.Passed) return stage;
                         mission.UnsafeProblems = check.Problems;
                         mission.PendingSequence = null;
@@ -810,6 +818,8 @@ namespace ClaudiaKermin.Core.Missions
                 Note(LogKind.Notice, mission.ReducedGoal.Length > 0 ? "Claudia offered a reduced goal for your Approval: " + mission.ReducedGoal
                     : "Claudia offered no reduced goal: End Mission, or Retry with a note asking her for one.");
             mission.SequencesProposed = state.SequencesProposed;
+            mission.PlanStep = state.PlanStep;
+            mission.PlanStepBefore = state.PlanStepBefore;
             mission.LatestLine = state.LatestLine;
         }
 

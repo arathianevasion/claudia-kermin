@@ -77,8 +77,15 @@ namespace ClaudiaKermin.Core.Tests
             Assert.InRange(MissionPrompts.HowToPlan.Length, 1, 1500);
             // was 8401 + 1500 = 9901; raised for #349 Claudia's warp guidance (human decision 2026-10-27); raised by the
             // rcs_tolerance doc worded in the RCS Use spec (#393, #400); to 10762 for the claudia_rcs_translate doc (#401);
-            // to 10921 for the spec's RCS Use / SAS wording in the mission prompt (#402; spec-mandated, not yet human-approved)
-            Assert.InRange(MissionPrompts.BaseLayer.Length, 1, 10921);
+            // to 10921 for the spec's RCS Use / SAS wording in the mission prompt (#402; spec-mandated, not yet human-approved);
+            // to 11095 (+174) for naming the Mission Plan step in each Sequence Plan (#413; ticket-mandated, not yet human-approved)
+            Assert.InRange(MissionPrompts.BaseLayer.Length, 1, 11095);
+        }
+
+        [Fact]
+        public void TheMissionPromptTellsClaudiaToNameTheStepEachSequencePlanFliesAndTheSameStepForARetry()
+        {
+            Assert.Contains("Each Sequence Plan's plan_step names the Mission Plan step it flies (1 for the first): a retry names the same step again", MissionPrompts.BaseLayer);
         }
 
         [Fact]
