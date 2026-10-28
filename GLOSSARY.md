@@ -80,6 +80,10 @@ _Avoid_: booster, lower stage, first stage
 A stage that lights while the craft is already in orbit: transfers, plane changes and the burns that follow.
 _Avoid_: upper stage, insertion stage, sustainer
 
+**Underhang**:
+The parts of a craft that reach below its landing legs' feet when it stands upright, such as a spent transfer stage under a lander. A landing drops them before touchdown, so the craft comes down on its legs.
+_Avoid_: parts below the legs, lower stage
+
 **Mission Plan**:
 The ordered list of Maneuver Sequences Claudia intends to fly to reach a Mission Goal, each with its delta-v budget and Due Time or rough timing; approved once to start the Mission and revised as Debriefs require.
 _Avoid_: flight plan, roadmap
