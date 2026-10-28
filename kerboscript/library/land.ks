@@ -45,10 +45,13 @@
 //|   touchdown_speed [2]: m/s at touchdown.
 //|   gear_alt [1000]: m above the ground to lower the landing gear.
 //|   burn_margin [1.10]: braking starts this much farther out than the stopping distance needs.
+//|   underhang_agl [2000]: m above the ground to drop any Underhang.
 //|   max_duration ["auto"]: the wait to the deorbit burn plus 2400 s.
 //|   plus min_ec_pct, abort_on_part_loss and stage_limit as for every block.
 //| Stages off a stage that can't cover the braking before the fall (within stage_limit), so plan the deorbit on it if you like.
-//| Extra results: staged_before_braking (true if it did; stage_left is the stage it left), slope (degrees where it came to rest), touchdown_speed_actual (m/s),
+//| Drops any Underhang (parts below the landing legs) at underhang_agl [2000] m above the ground during braking, or earlier if it runs dry, then relights on the lander's engines and lands clear of where the Underhang falls. Fails before the deorbit burn if the lander alone can't fly the last underhang_agl m.
+//| Extra results: dropped_underhang (the names of the parts dropped), underhang_kept (Underhang parts it couldn't drop), underhang_drop_agl (m above the ground at the drop; -1 if none),
+//| staged_before_braking (true if it did; stage_left is the stage it left), slope (degrees where it came to rest), touchdown_speed_actual (m/s),
 //| touchdown_h_speed (m/s sideways at touchdown), lean (degrees from upright once settled),
 //| reversals (times the descent turned back after braking began; 0 normally), distance_to_target
 //| (m from the site asked for, or the spot chosen for "any" or a biome), best_effort (true if nothing within
@@ -66,7 +69,14 @@
 // The block's own options and defaults.
 function land_defaults {
   return lexicon("target", "any", "daylight", true, "max_slope", 8, "max_divert", 300,
-    "max_overshoot", 500, "touchdown_speed", 2, "gear_alt", 1000, "burn_margin", 1.10).
+    "max_overshoot", 500, "touchdown_speed", 2, "gear_alt", 1000, "burn_margin", 1.10, "underhang_agl", 2000).
+}
+
+// The block's extra results at their defaults, before it flies. Pure.
+function land_extra {
+  return lexicon("slope", -1, "touchdown_speed_actual", -1, "touchdown_h_speed", -1, "lean", -1, "reversals", 0,
+    "distance_to_target", -1, "best_effort", false, "burn_start_ut", -1, "braking_began_ut", -1, "impact_ut", -1, "biome", "",
+    "staged_before_braking", false, "stage_left", -1, "dropped_underhang", list(), "underhang_kept", list(), "underhang_drop_agl", -1).
 }
 
 // "" or why an option's value isn't one the block can use.
@@ -113,6 +123,9 @@ function land_unreadable {
   }
   if not land_number_in(opt:burn_margin, 1, 10) {
     return "burn_margin must be a number, 1 or more".
+  }
+  if not land_number_in(opt:underhang_agl, 0, 100000) {
+    return "underhang_agl must be metres, 0 or more".
   }
   return "".
 }
@@ -523,6 +536,109 @@ function land_stage_early_block {
     return "stage_limit".
   }
   return "no engines".
+}
+
+// ---- Pure helpers: the Underhang (#427) ----
+
+// The indices, into lows, of the parts that are Underhang: those whose lowest point (lows, m along the
+// craft's down axis) reaches more than margin m past the landing legs' lowest (the most of leg_lows,
+// the legs' lowest points). No legs (leg_lows empty): none. Pure.
+function land_underhang {
+  parameter lows, leg_lows, margin.
+  local out is list().
+  if leg_lows:length = 0 {
+    return out.
+  }
+  local foot is leg_lows[0].
+  for each in leg_lows {
+    set foot to max(foot, each).
+  }
+  for i in range(lows:length) {
+    if lows[i] > foot + margin {
+      out:add(i).
+    }
+  }
+  return out.
+}
+
+// Delta-v (m/s) the lander alone needs to fly the last h m (underhang_agl) under g (m/s^2): the speed of a
+// free fall from h, plus 2 s of gravity (the thrust gap at the drop) and 10 s of hover, times 1.2. Pure.
+function land_lander_need {
+  parameter h, g.
+  return (sqrt(2 * g * max(0, h)) + 12 * g) * 1.2.
+}
+
+// Delta-v (m/s) of isp (s, vacuum) from mass m_wet down to m_dry (t); 0 if it can't burn. Pure.
+function land_rocket_dv {
+  parameter isp, m_wet, m_dry.
+  if isp <= 0 or m_dry <= 0 or m_wet <= m_dry {
+    return 0.
+  }
+  return isp * 9.80665 * ln(m_wet / m_dry).
+}
+
+// True if one of the lander's engines can fire: lit already (ignited, parallel to stages), or in a stage
+// (stages: the stage each activates in) at or above stage_limit. Pure.
+function land_lander_engine_ok {
+  parameter stages, ignited, stage_limit.
+  for i in range(stages:length) {
+    if ignited[i] or stages[i] >= stage_limit {
+      return true.
+    }
+  }
+  return false.
+}
+
+// Why land won't fly with a droppable Underhang (names, the Underhang's parts), or "": no lander engine
+// within stage_limit once it is gone, or the lander alone (lander_dv m/s) short of need (m/s,
+// land_lander_need) for the last agl m. Pure.
+function land_underhang_unflyable {
+  parameter names, lander_dv, need, engine_ok, agl, stage_limit.
+  local what is "Underhang (" + names:join(", ") + ")".
+  if not engine_ok {
+    return what + ": no lander engine at or above stage_limit " + stage_limit + " once it is dropped".
+  }
+  if lander_dv < need {
+    return what + ": the lander alone has about " + round(lander_dv) + " m/s, " + round(need) + " m/s needed to fly the last " + round(agl) + " m once it is dropped".
+  }
+  return "".
+}
+
+// Whether the Underhang drops now: the radar altitude (m) under underhang_agl, or its engines ran dry
+// while braking (ran_dry), whichever comes first. Pure.
+function land_drop_due {
+  parameter radar, underhang_agl, ran_dry.
+  return ran_dry or radar < underhang_agl.
+}
+
+// Whether the wait after firing the Underhang's decouplers is over: what left is gap m (-1 until any
+// has) clear of the craft's lowest point, 2 m or more, or waited s reached 1. Pure.
+function land_drop_waited {
+  parameter gap, waited.
+  return gap >= 2 or waited >= 1.
+}
+
+// Metres (sideways) a dropped part falling from h m up, v_down m/s (down positive) and v_h m/s across,
+// travels before it hits under gravity g: flat ground, no air. Pure.
+function land_fall_reach {
+  parameter h, v_down, v_h, g.
+  return v_h * land_fall_eta(h, v_down, g).
+}
+
+// True if a touchdown point dist m from where the Underhang hits is clear of it: 50 m or more. Pure.
+function land_clear_of {
+  parameter dist.
+  return dist >= 50.
+}
+
+// Metres to move a touchdown point dist m from where the Underhang hits, away from it, to be clear
+// (land_clear_of): 0 if it is, never over max_divert. Pure.
+function land_clear_shift {
+  parameter dist, max_divert.
+  if land_clear_of(dist) {
+    return 0.
+  }
+  return min(max_divert, 50 - dist).
 }
 
 // ---- Pure helpers: when braking starts, for a craft that turns slowly (#380) ----
@@ -1003,9 +1119,7 @@ function land_node_for {
 
 function land {
   parameter options is lexicon().
-  local extra is lexicon("slope", -1, "touchdown_speed_actual", -1, "touchdown_h_speed", -1, "lean", -1, "reversals", 0,
-    "distance_to_target", -1, "best_effort", false, "burn_start_ut", -1, "braking_began_ut", -1, "impact_ut", -1, "biome", "",
-    "staged_before_braking", false, "stage_left", -1).
+  local extra is land_extra().
   local ctx is claudia_begin("land", options, land_defaults(), "auto").
   if ctx:error <> "" {
     return claudia_finish(ctx, false, ctx:error, extra).
@@ -1069,6 +1183,15 @@ function land {
     return claudia_finish(ctx, false, lit, extra).
   }
 
+  // The Underhang (#427), measured now, before the deorbit burn: dropped during braking, or kept.
+  local under is land_measure_underhang(ctx).
+  if under:error <> "" {
+    return claudia_finish(ctx, false, under:error, extra).
+  }
+  for name in under:kept {
+    extra:underhang_kept:add(name).
+  }
+
   local approach is 3000.
   local plan is land_plan(opt, site, approach, pass_ut).
   if plan:error <> "" {
@@ -1082,6 +1205,13 @@ function land {
   local needed is abs(deorbit_dv) + 1.2 * land_periapsis_speed(mu, burn_pos:mag, plan:r_pe) + 100.
   if ship:deltav:current > 0 and ship:deltav:current < needed {
     return claudia_finish(ctx, false, "not enough delta-v: about " + round(needed) + " m/s needed, " + round(ship:deltav:current) + " m/s left", extra).
+  }
+  // With an Underhang to drop, the lander alone must fly the last underhang_agl m on an engine it can light.
+  if under:droppable:length > 0 {
+    local unflyable is land_underhang_unflyable(under:names, under:lander_dv, under:need, under:engine_ok, opt:underhang_agl, opt:stage_limit).
+    if unflyable <> "" {
+      return claudia_finish(ctx, false, unflyable, extra).
+    }
   }
   // The deorbit burn may be up to a day of the body off (a daylight pass): exec_node warps there.
   local wait_s is plan:burn_ut - time:seconds - 60.
@@ -1190,7 +1320,7 @@ function land {
     }
   }
 
-  local landed is land_descend(ctx, aim, extra, turn).
+  local landed is land_descend(ctx, aim, extra, turn, under).
   if landed <> "" {
     claudia_make_safe().
     return claudia_finish(ctx, false, landed, extra).
@@ -1246,6 +1376,256 @@ function land_stage_early {
   return lexicon("staged", true, "left", left, "note", "staged from stage " + left + " to " + stage:number).
 }
 
+// How far part p reaches along down (a unit vector): its bounding box's corner furthest that way, in m
+// along down from the craft's centre of mass (kOS 1.6 Part:BOUNDS).
+function land_part_low {
+  parameter p, down.
+  return vdot(p:bounds:furthestcorner(down), down).
+}
+
+// Measures the craft's Underhang (#427): with the gear down for the check, so the legs are at full
+// length (and back up after, if it was up), each part's lowest point along the craft's down axis
+// (-ship:facing:forevector) against the legs' lowest (land_underhang, 0.2 m margin). The legs are the
+// parts that deploy (ModuleWheelDeployment). Splits the Underhang into the parts a decoupler can drop,
+// as drop_parts decides (one whose firing takes neither the part running the script nor the root),
+// and those it keeps; works out the lander's own delta-v and engines once the droppable ones are gone.
+// No legs, or no Underhang: nothing to drop, and no gear moved for no legs. Traces the measurement.
+// Returns lexicon("error" ("" or an abort reason), "names" (the Underhang's), "droppable" (its
+// parts that drop), "kept" (names of those that don't), "plan" (claudia_drop_plan's shape),
+// "lander_dv", "need" (m/s), "engine_ok").
+function land_measure_underhang {
+  parameter ctx.
+  local g is body:mu / body:radius ^ 2.
+  local found is lexicon("error", "", "names", list(), "droppable", list(), "kept", list(),
+    "plan", lexicon("error", "", "decouplers", list(), "gone", list()), "lander_dv", 0,
+    "need", land_lander_need(ctx:opt:underhang_agl, g), "engine_ok", true).
+  local leg_parts is list().
+  for p in ship:parts {
+    if p:hasmodule("ModuleWheelDeployment") {
+      leg_parts:add(p).
+    }
+  }
+  if leg_parts:length = 0 {
+    addons:claudia:blocktrace("land", lexicon("phase", "underhang", "legs", 0, "note", "no landing legs: nothing measured")).
+    return found.
+  }
+  local was_down is gear.
+  if not was_down {
+    gear on.
+    // The legs take a second or two to swing out.
+    local deployed_ut is time:seconds + 4.
+    until time:seconds > deployed_ut {
+      local ticked is claudia_tick(ctx, 0).
+      if ticked <> "" {
+        gear off.
+        set found:error to ticked.
+        return found.
+      }
+      wait 0.
+    }
+  }
+  local down is -ship:facing:forevector.
+  local leg_lows is list().
+  for p in leg_parts {
+    leg_lows:add(land_part_low(p, down)).
+  }
+  local all_parts is ship:parts.
+  local lows is list().
+  for p in all_parts {
+    lows:add(land_part_low(p, down)).
+  }
+  if not was_down {
+    gear off.
+  }
+  local seen is list().
+  for i in land_underhang(lows, leg_lows, 0.2) {
+    local p is all_parts[i].
+    found:names:add(p:name).
+    local d is claudia_decoupler_of(p).
+    local droppable is false.
+    if not d:istype("String") {
+      local with is claudia_dropped_with(d).
+      if not claudia_drop_holds_core(with) {
+        set droppable to true.
+        if not seen:contains(d:uid) {
+          seen:add(d:uid).
+          claudia_drop_add(found:plan, d, with).
+        }
+      }
+    }
+    if droppable {
+      found:droppable:add(p).
+    } else {
+      found:kept:add(p:name).
+    }
+  }
+  // The lander once the droppable Underhang is gone: its mass, wet and dry, and its engines.
+  local gone is claudia_drop_uids(found:plan).
+  local m_wet is 0.
+  local m_dry is 0.
+  for p in all_parts {
+    if not gone:contains(p:uid) {
+      set m_wet to m_wet + p:mass.
+      set m_dry to m_dry + p:drymass.
+    }
+  }
+  local thrusts is list().
+  local isps is list().
+  local stages is list().
+  local ignited is list().
+  local engs is list().
+  list engines in engs.
+  for e in engs {
+    if not gone:contains(e:uid) {
+      thrusts:add(e:possiblethrust).
+      isps:add(e:vacuumisp).
+      stages:add(e:stage).
+      ignited:add(e:ignition).
+    }
+  }
+  set found:lander_dv to land_rocket_dv(claudia_mean_isp(thrusts, isps), m_wet, m_dry).
+  set found:engine_ok to land_lander_engine_ok(stages, ignited, ctx:opt:stage_limit).
+  local leg_low is leg_lows[0].
+  for each in leg_lows {
+    set leg_low to max(leg_low, each).
+  }
+  local droppable_names is list().
+  for p in found:droppable {
+    droppable_names:add(p:name).
+  }
+  addons:claudia:blocktrace("land", lexicon("phase", "underhang", "legs", leg_parts:length, "foot_m", round(leg_low, 2),
+    "parts", found:names:join(", "), "droppable", droppable_names:join(", "), "kept", found:kept:join(", "),
+    "lander_dv", round(found:lander_dv), "need", round(found:need), "engine_ok", found:engine_ok)).
+  return found.
+}
+
+// The Underhang's drop (#427), with the throttle already at 0 and steering held on the braking
+// direction: fires the decouplers that hold it (claudia_fire_decoupler, as drop_parts does; not
+// staging), waits until what left is 2 m clear of the craft's lowest point or for 1 s
+// (land_drop_waited), then, if nothing still gives thrust, stages into the lander's engines
+// (claudia_stage_into_engines, within stage_limit). Nothing separated: it keeps the Underhang
+// (underhang_kept) and relights what it had. Sets dropped_underhang, underhang_kept and
+// underhang_drop_agl (radar, m) in extra and traces the drop, the thrust gap and the relit stage.
+// Never fails: a falling craft keeps braking, and the descent's own tick catches a craft out of fuel.
+// Returns true if any of it left now.
+function land_drop {
+  parameter ctx, under, extra, radar.
+  local start is time:seconds.
+  local on_ship is list().
+  for p in ship:parts {
+    on_ship:add(p:uid).
+  }
+  local still is list().
+  for d in under:plan:decouplers {
+    if on_ship:contains(d:uid) {
+      still:add(d).
+    }
+  }
+  if still:length = 0 {
+    // Staged off before the fall (#382) with the stage it hung from.
+    for p in under:droppable {
+      extra:dropped_underhang:add(p:name).
+    }
+    addons:claudia:blocktrace("land", lexicon("phase", "drop", "note", "the Underhang already left when the stage was staged off before the fall")).
+    return false.
+  }
+  set extra:underhang_drop_agl to round(radar).
+  local fired is 0.
+  for d in still {
+    if claudia_fire_decoupler(d) {
+      set fired to fired + 1.
+    }
+  }
+  local down is -ship:facing:forevector.
+  until false {
+    // The drop is the block's own: not part loss.
+    set ctx:parts to ship:parts:length.
+    local aboard is list().
+    local lowest is -1e9.
+    for p in ship:parts {
+      aboard:add(p:uid).
+      set lowest to max(lowest, land_part_low(p, down)).
+    }
+    // How far the highest part that left is below the craft's lowest point; -1 until one has left.
+    local gap is -1.
+    local top is 1e9.
+    for g in under:plan:gone {
+      if not aboard:contains(g:uid) {
+        set top to min(top, -land_part_low(g, -down)).
+      }
+    }
+    if top < 1e9 {
+      set gap to top - lowest.
+    }
+    if land_drop_waited(gap, time:seconds - start) {
+      break.
+    }
+    wait 0.
+  }
+  local now_on is list().
+  for p in ship:parts {
+    now_on:add(p:uid).
+  }
+  for g in under:plan:gone {
+    if not now_on:contains(g:uid) {
+      extra:dropped_underhang:add(g:name).
+    }
+  }
+  for p in under:droppable {
+    if now_on:contains(p:uid) {
+      extra:underhang_kept:add(p:name).
+    }
+  }
+  local outcome is "".
+  if fired = 0 or extra:dropped_underhang:length = 0 {
+    set outcome to "nothing separated: the decouplers did not fire; keeping the Underhang and braking on".
+  }
+  set ctx:parts to ship:parts:length.
+  set ctx:last_ut to time:seconds.
+  local relit is "".
+  if ship:availablethrust <= 0 {
+    set relit to claudia_stage_into_engines(ctx).
+  }
+  addons:claudia:blocktrace("land", lexicon("phase", "drop", "agl", extra:underhang_drop_agl, "fired", fired,
+    "dropped", extra:dropped_underhang:length, "kept", extra:underhang_kept:join(", "), "gap_s", round(time:seconds - start, 2),
+    "stage", stage:number, "relit", relit, "note", outcome)).
+  return extra:dropped_underhang:length > 0.
+}
+
+// Where the Underhang dropped now will hit (a GeoCoordinates): its fall from the radar height at the
+// craft's speed down and across (land_fall_reach), on flat ground.
+function land_drop_impact {
+  parameter radar, v_v, v_h, g.
+  if v_h:mag < 0.01 {
+    return ship:geoposition.
+  }
+  return body:geopositionof(ship:position + v_h:normalized * land_fall_reach(radar, -v_v, v_h:mag, g)).
+}
+
+// The touchdown point (lat, lng) moved at least 50 m clear of where the Underhang hits (impact, a
+// GeoCoordinates), straight away from it, by no more than max_divert (land_clear_shift); as it was
+// if already clear. track: the way to move if the two are on the same spot. Traces a move.
+function land_clear_site {
+  parameter site, impact, max_divert, track.
+  local dist is land_surface_distance(site:lat, site:lng, impact:lat, impact:lng, body:radius).
+  local shift is land_clear_shift(dist, max_divert).
+  if shift <= 0 {
+    return site.
+  }
+  local site_pos is body:geopositionlatlng(site:lat, site:lng):position.
+  local up_v is (site_pos - body:position):normalized.
+  local away is vxcl(up_v, site_pos - impact:position).
+  if away:mag < 1 {
+    set away to vxcl(up_v, track).
+  }
+  if away:mag < 0.001 {
+    set away to ship:north:vector.
+  }
+  local spot is body:geopositionof(site_pos + away:normalized * shift).
+  addons:claudia:blocktrace("land", lexicon("phase", "clear", "from_impact", round(dist), "moved", round(shift))).
+  return lexicon("lat", spot:lat, "lng", spot:lng).
+}
+
 // The shared wait loop (claudia_warp_to) to ut, with a stop condition: ended early (returns "") once
 // land_brake_now says the terrain under the craft is coming too soon, since KSP can cut rails warp
 // short near the ground. a_brake: m/s^2 the engines brake with. Returns "" (at ut, or early for the
@@ -1268,9 +1648,10 @@ function land_coast {
 // The powered descent onto aim, to touchdown and a settled craft. Sets braking_began_ut, best_effort, reversals,
 // touchdown_speed_actual and touchdown_h_speed in extra (and lean, if settling fails), and traces each
 // phase and every 2 s to the log (#365). turn: the TURNTIME lexicon (top_rate, turn_s) for the turn
-// allowance (#380). Returns "" or why it failed.
+// allowance (#380). under: land_measure_underhang's, whose droppable Underhang it drops (land_drop_due,
+// land_drop) and then lands clear of (#427). Returns "" or why it failed.
 function land_descend {
-  parameter ctx, aim, extra, turn.
+  parameter ctx, aim, extra, turn, under.
   local opt is ctx:opt.
   local site is lexicon("lat", aim:lat, "lng", aim:lng).
   local braking is false.
@@ -1301,6 +1682,9 @@ function land_descend {
   local first_turn is false.
   // RCS Use: the pre-point has until braking is planned to start; braking itself has no deadline.
   set ctx:turn_by to extra:burn_start_ut.
+  // The Underhang (#427): still to drop, and where it was predicted to hit once dropped ("" until then).
+  local drop_pending is under:plan:decouplers:length > 0.
+  local drop_impact is "".
 
   until status = "LANDED" or status = "SPLASHED" {
     local up_v is ship:up:vector.
@@ -1378,6 +1762,9 @@ function land_descend {
         local spot is addons:claudia:flatspot(body:geopositionlatlng(site:lat, site:lng), opt:max_divert, opt:max_slope).
         local moved is land_surface_distance(site:lat, site:lng, spot:lat, spot:lng, body:radius).
         set site to lexicon("lat", spot:lat, "lng", spot:lng).
+        if not drop_impact:istype("String") {
+          set site to land_clear_site(site, drop_impact, opt:max_divert, fall_axis).
+        }
         set extra:best_effort to not spot:flat.
         set to_site to vxcl(up_v, body:geopositionlatlng(site:lat, site:lng):position).
         if moved > 1 {
@@ -1439,6 +1826,20 @@ function land_descend {
         "vh_want", round(want:vh, 1), "vv_want", round(want:vv, 1), "turn_left", round(turn_left, 1), "pe", round(ship:orbit:periapsis))).
       set last_phase to phase.
       set last_trace_ut to time:seconds.
+    }
+    // The Underhang drops under underhang_agl, or where its engines run dry while braking, before the
+    // tick's auto-staging would stage them off. The throttle goes to 0 for it, steering held; the next
+    // tick works the braking out again from the craft as it is then.
+    if drop_pending {
+      if land_drop_due(radar, opt:underhang_agl, braking and claudia_needs_stage()) {
+        set drop_pending to false.
+        set tset to 0.
+        local impact is land_drop_impact(radar, v_v, v_h, g).
+        if land_drop(ctx, under, extra, radar) {
+          set drop_impact to impact.
+          set site to land_clear_site(site, drop_impact, opt:max_divert, v_h).
+        }
+      }
     }
     local ticked is claudia_tick(ctx, tset, land_burning(phase)).
     if ticked <> "" {
