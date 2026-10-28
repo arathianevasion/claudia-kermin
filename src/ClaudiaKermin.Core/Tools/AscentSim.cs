@@ -197,7 +197,10 @@ namespace ClaudiaKermin.Core.Tools
         public int LaunchEndStage = -1;
         /// <summary>The lowest vertical speed while a Boost stage burns below the atmosphere top after the turn starts, m/s.</summary>
         public double MinVerticalSpeed = double.PositiveInfinity;
-        /// <summary>(altitude, pitch from vertical in degrees) at each 1000 m of the climb while burning, when asked for.</summary>
+        /// <summary>
+        /// (altitude, pitch and prograde from vertical in degrees, dynamic pressure Pa, throttle) at each 1000 m of the climb
+        /// while burning, when asked for.
+        /// </summary>
         public List<double[]> Track = new List<double[]>();
     }
 
@@ -554,7 +557,7 @@ namespace ClaudiaKermin.Core.Tools
                     if (turnStartAlt >= 0 && h < top) _flight.MinVerticalSpeed = Math.Min(_flight.MinVerticalSpeed, vertical);
                     if (_o.Track && h >= nextTrack)
                     {
-                        _flight.Track.Add(new[] { h, 90 - pitch });
+                        _flight.Track.Add(new[] { h, 90 - pitch, 90 - prograde, q, throttle });
                         nextTrack += 1000;
                     }
                 }

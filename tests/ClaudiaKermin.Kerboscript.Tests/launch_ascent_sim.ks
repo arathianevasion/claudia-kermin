@@ -12,7 +12,8 @@
 // opt: "target_ap" (m), "max_q" (Pa, -1 for none), "turn_start_speed" (m/s), "turn_shape", "max_aoa"
 // (degrees), "drag_area" (m^2), "hold" (false flies the turn by altitude alone, as before #235), "thin" (false lets the
 // pitch program run free in thin air, as before #236),
-// "thrust_scale" (1 for the LV-T45's 215 kN; less makes a heavier, slower craft that reaches thin air burning).
+// "thrust_scale" (1 for the LV-T45's 215 kN; less makes a heavier, slower craft that reaches thin air burning),
+// and optionally "dry" (t, 2.4 if not given: less leaves more of the 6.4 t to burn).
 // Prints one "track ..." line per 1000 m of climb, then "stalled <true|false> at <m>" (vertical speed
 // lost with the apoapsis still short of target_ap by more than the throttle's easing ramp),
 // "coast_ap <m>", "cutoff <where, q and path angle, or none>", "max_q <Pa>", "min_twr <lowest
@@ -31,6 +32,9 @@ function sim_ascent {
   local isp_vac is 320.
   local flow is thrust_vac / (isp_vac * 9.80665).
   local dry is 2.4.
+  if opt:haskey("dry") {
+    set dry to opt:dry.
+  }
   local dt is 0.1.
   local turn_end is min(70000, opt:target_ap).
   local ramp is max(500, 0.02 * opt:target_ap).
@@ -109,7 +113,9 @@ function sim_ascent {
     local mach is spd / (340 - 0.004 * min(h, 12000)).
     local transonic is (mach - 1.05) / 0.25.
     local drag is q * opt:drag_area * (1 + 1.2 * e_const ^ (-transonic * transonic)) / 1000.
-    local ax is force * cos(pitch) / m.
+    // The horizontal speed against the turning ground: the climb's curvature and Coriolis take from it as the craft rises
+    // (plan_ascent's C# sim flies the same physics, #370).
+    local ax is force * cos(pitch) / m - vx * vy / r - 2 * spin / r_body * vy.
     local ay is force * sin(pitch) / m - mu / r ^ 2 + vt ^ 2 / r.
     if spd > 0 {
       set ax to ax - drag / m * vx / spd.

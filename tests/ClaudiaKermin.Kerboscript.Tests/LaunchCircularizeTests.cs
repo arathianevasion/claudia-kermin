@@ -131,11 +131,11 @@ namespace ClaudiaKermin.Kerboscript.Tests
 
         // launch_no_flip's ascent (target_ap 60 km, throttle_max_q 12 kPa) in the offline sim, with the
         // turn hold on or off: the result lines by their first word, and the whole printout.
-        private static (System.Collections.Generic.Dictionary<string, string> Result, string Track) Ascent(bool hold, double dragArea, double maxQ = 12000, double targetAp = 60000, bool thin = true, double thrustScale = 1)
+        private static (System.Collections.Generic.Dictionary<string, string> Result, string Track) Ascent(bool hold, double dragArea, double maxQ = 12000, double targetAp = 60000, bool thin = true, double thrustScale = 1, double dry = 2.4)
         {
             var sim = System.IO.File.ReadAllText(System.IO.Path.Combine(System.AppContext.BaseDirectory, "launch_ascent_sim.ks"));
             var lines = Run(sim + "\nsim_ascent(lexicon(\"target_ap\", " + targetAp + ", \"max_q\", " + maxQ
-                + ", \"turn_start_speed\", 60, \"turn_shape\", 0.45, \"max_aoa\", 5, \"drag_area\", " + dragArea + ", \"hold\", " + (hold ? "true" : "false") + ", \"thin\", " + (thin ? "true" : "false") + ", \"thrust_scale\", " + thrustScale + ")).");
+                + ", \"turn_start_speed\", 60, \"turn_shape\", 0.45, \"max_aoa\", 5, \"drag_area\", " + dragArea + ", \"hold\", " + (hold ? "true" : "false") + ", \"thin\", " + (thin ? "true" : "false") + ", \"thrust_scale\", " + thrustScale + ", \"dry\", " + dry + ")).");
             var result = lines.Where(l => !l.StartsWith("track ")).ToDictionary(l => l.Split(' ')[0], l => l.Substring(l.IndexOf(' ') + 1));
             return (result, string.Join("\n", lines));
         }
@@ -187,16 +187,17 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(held, One("launch_thin_pitch(" + pitch + ", " + prograde + ", " + q + ", " + lead + ")"));
         }
 
-        // A slow (70% thrust) craft to a 300 km apoapsis is still burning above 40 km, in the thin air.
+        // A slow (70% thrust) craft to a 400 km apoapsis is still burning above 40 km, in the thin air. It has more to burn
+        // (2 t dry) since the sim's Coriolis (#370) costs it what it had spare.
         [Fact]
         public void Without_the_thin_air_cap_the_nose_runs_well_below_the_prograde_up_high_and_with_it_stays_within_a_few_degrees()
         {
-            var (free, freeTrack) = Ascent(true, 0.5, 12000, 300000, false, 0.7);
+            var (free, freeTrack) = Ascent(true, 0.5, 12000, 400000, false, 0.7, 2.0);
             Assert.True(double.Parse(free["max_thin_lead"]) > 20, freeTrack);
-            var (capped, track) = Ascent(true, 0.5, 12000, 300000, true, 0.7);
+            var (capped, track) = Ascent(true, 0.5, 12000, 400000, true, 0.7, 2.0);
             Assert.True(double.Parse(capped["max_thin_lead"]) <= 3.1, track);
             Assert.True(capped["stalled"].StartsWith("False"), track);
-            Assert.True(double.Parse(capped["coast_ap"]) >= 297000, track);
+            Assert.True(double.Parse(capped["coast_ap"]) >= 397000, track);
         }
 
         // ---- launch: heading and the plane ----
