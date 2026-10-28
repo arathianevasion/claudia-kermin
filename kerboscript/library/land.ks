@@ -1282,7 +1282,7 @@ function land_descend {
   set extra:reversals to 0.
   local steer is -ship:velocity:surface.
   local tset is 0.
-  lock steering to steer.
+  lock steering to claudia_keep_roll(steer).
   lock throttle to tset.
   local last_speed is ship:velocity:surface:mag.
   local last_h_speed is 0.

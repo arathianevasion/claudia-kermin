@@ -708,7 +708,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
         {
             var bundle = CoreLibrary.Bundle("@lazyglobal off.\nprint 1.").Replace("\r\n", "\n");
             var start = bundle.IndexOf("function claudia_warp_to_burn", StringComparison.Ordinal);
-            var far = bundle.Substring(start, bundle.IndexOf("lock steering to nd:deltav", start, StringComparison.Ordinal) - start);
+            var far = bundle.Substring(start, bundle.IndexOf("lock steering to claudia_keep_roll(nd:deltav)", start, StringComparison.Ordinal) - start);
             // The wait stops once warp has run to its end (30 s before the hour point), so the turn starts then, not 30 s on.
             Assert.Contains("claudia_warp_to(ctx, far_ut, 30, { return time:seconds >= warp_done. })", far);
             Assert.Contains("local warp_done is claudia_warp_end(far_ut, 30).", far);

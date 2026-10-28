@@ -1063,6 +1063,14 @@ function claudia_aligned_to {
   return claudia_aligned(angle, ship:angularvel:mag * constant:radtodeg, claudia_held_s(ctx:burn_within_ut, time:seconds), tol).
 }
 
+//| claudia_keep_roll(vec): steer along vec keeping the craft's roll: `lock steering to claudia_keep_roll(vec).` rather than a bare vector, which makes kOS spin a long craft near alignment.
+// Work vec out in the lock expression or a variable you update. A bare vector makes kOS roll the craft to
+// top-toward-the-sky within 5 degrees of the target. Not for a set roll (heading(), or lookdirup with your own up).
+function claudia_keep_roll {
+  parameter vec.
+  return lookdirup(vec, ship:facing:topvector).
+}
+
 // Turns to nd's burn vector (steering must be locked to it) until aligned, for at most 120 s and
 // never past start_ut. Returns lexicon error ("" or an abort reason), aligned (it ended Aligned,
 // claudia_aligned_to), timed_out (120 s passed unaligned: it prints "not aligned" and goes on), seconds
@@ -1129,7 +1137,7 @@ function claudia_warp_to_burn {
     set timing to claudia_burn_timing(nd:deltav:mag, claudia_burn_stages(ctx:opt:stage_limit), nd:eta, lead_opt).
   }
   // Points at the burn as it is now (raw-frame vectors drift during warp).
-  lock steering to nd:deltav.
+  lock steering to claudia_keep_roll(nd:deltav).
   local turned is claudia_turn_to_burn(ctx, nd, time:seconds + timing:start_in).
   set out:turn_s to turned:seconds.
   if turned:timed_out {
