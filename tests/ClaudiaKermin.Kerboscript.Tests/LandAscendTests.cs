@@ -573,6 +573,78 @@ function search {
             Assert.Equal("False", One("land_is_reversed(0, true)"));
         }
 
+        // ---- land: the site along the surface, and the braking guard (#431) ----
+
+        // land_site_figures from a craft on the Mun's equator at lng 0 heading east: dist, along, across (m).
+        private static string[] Figures(double siteLat, double siteLng, double hdg = 90)
+        {
+            return Run(string.Format(CultureInfo.InvariantCulture,
+                "local f is land_site_figures(0, 0, {0}, {1}, {2}, 200000). print round(f:dist, 1). print round(f:along, 1). print round(f:across, 1).",
+                siteLat, siteLng, hdg));
+        }
+
+        [Fact]
+        public void Land_measures_the_site_along_and_across_its_track_on_the_surface()
+        {
+            // 1 degree of the Mun's surface is 3490.7 m. North of an eastward track is to the left (negative).
+            Assert.Equal(new[] { "3508.1", "3490.7", "-349.1" }, Figures(0.1, 1));
+            Assert.Equal(new[] { "3490.7", "-3490.7", "0" }, Figures(0, -1));
+            // A quarter of the way round, 10 degrees south of the track: along the track 90 degrees, 10 off it.
+            Assert.Equal(new[] { "314159.3", "314159.3", "34906.6" }, Figures(-10, 90));
+            // The far side, 175 degrees round and 1 degree north: the straight line flattened onto the
+            // craft's horizon would say about 17 km. (Off the track converges toward the antipode: cos dist =
+            // cos along x cos across.)
+            Assert.Equal(new[] { "610520.5", "610865.2", "-3490.7" }, Figures(1, 175));
+            Assert.Equal("-610865.2", Figures(0, -175)[1]);
+            // Heading north, a site due east is across, to the right.
+            Assert.Equal(new[] { "3490.7", "0", "3490.7" }, Figures(0, 1, 0));
+        }
+
+        [Fact]
+        public void Land_bears_from_north_clockwise()
+        {
+            Assert.Equal("90", One("round(land_bearing(0, 0, 0, 10), 3)"));
+            Assert.Equal("0", One("round(land_bearing(0, 0, 10, 0), 3)"));
+            Assert.Equal("270", One("round(land_bearing(0, 0, 0, -10), 3)"));
+            Assert.Equal("180", One("round(land_bearing(10, 30, -10, 30), 3)"));
+        }
+
+        [Fact]
+        public void With_no_correction_burn_braking_is_not_due_at_the_deorbit_point_but_near_the_site()
+        {
+            // Samples from the deorbit burn on the Mun's equator, 26.9 km up and 507 m/s, falling half an orbit
+            // to periapsis 3 km up over a site 175 degrees ahead (and 0.5 north) at 1240 s, as in #431's mission.
+            var printed = Run(@"
+local a_brake is land_brake_accel(60000 / 5400, 1.63).
+local samples is list().
+local t is 0.
+until t > 1300 {
+  local f is land_site_figures(0, 175 * t / 1240, 0.5, 175, 90, 200000).
+  samples:add(lexicon(""ut"", t, ""dist"", f:dist, ""ahead"", f:along, ""v_h"", 507 + 63 * t / 1240,
+    ""v_down"", 11950 * sin(180 * t / 1240) * 3.141592653589793 / 1240, ""alt"", 3000 + 11950 * (1 + cos(180 * t / 1240)), ""ground"", 0)).
+  set t to t + 5.
+}
+local p is samples[0].
+print land_brake_due(p:dist, p:ahead, p:v_h, p:v_down, p:alt - p:ground, a_brake, 1.1, 0).
+print land_brake_estimate(samples, a_brake, 1.1).");
+            Assert.Equal("False", printed[0]);
+            // Braking comes due some 30 s before the site, not at the first sample.
+            Assert.InRange(double.Parse(printed[1], CultureInfo.InvariantCulture), 1150, 1240);
+        }
+
+        [Fact]
+        public void Braking_that_adds_speed_or_climbs_trips_the_guard()
+        {
+            Assert.Equal("", One("land_brake_guard(507, 26900, 526.9, 28899)"));
+            Assert.Equal("", One("land_brake_guard(507, 26900, 300, 20000)"));
+            Assert.Equal("braking added speed: v_h 527 m/s, 507 when braking began", One("land_brake_guard(507, 26900, 527, 26900)"));
+            Assert.Equal("braking climbed 2.1 km", One("land_brake_guard(507, 26900, 400, 29000)"));
+            Assert.Equal("braking climbed 2 km", One("land_brake_guard(507, 26900, 400, 28900)"));
+            // Braking that began slow may still close on the site at up to 50 m/s.
+            Assert.Equal("", One("land_brake_guard(10, 1000, 60, 1000)"));
+            Assert.Equal("braking added speed: v_h 70 m/s, 10 when braking began", One("land_brake_guard(10, 1000, 70, 1000)"));
+        }
+
         [Fact]
         public void Land_turns_back_only_when_stopped_beyond_max_overshoot()
         {

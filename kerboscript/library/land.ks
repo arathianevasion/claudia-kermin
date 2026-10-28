@@ -61,7 +61,7 @@
 //| geo (lat, lng, alt) is the common field once landed. Fails with "land flies airless
 //| bodies only", an orbit it can't land from, a site off the ground track, no daylight pass,
 //| "no site in the <biome> biome" (saying how far the search got), landing outside the biome asked for,
-//| not enough delta-v, "deorbit left periapsis" well under the plan, "tipped over", out of fuel, or an abort; a failure in the
+//| not enough delta-v, "deorbit left periapsis" well under the plan, braking that added speed or climbed, "tipped over", out of fuel, or an abort; a failure in the
 //| descent leaves the craft safe but falling, so give it the delta-v (and TWR over 1.5) it needs.
 //| Tool: stage_performance for the delta-v and TWR at the body (and find_landing_site, as above).
 //| Example: `local res is land(lexicon("target", latlng(-0.5, 22), "daylight", true)). addons:claudia:report(res).`
@@ -220,6 +220,27 @@ function land_surface_distance {
   local a is sin((lat2 - lat1) / 2) ^ 2 + cos(lat1) * cos(lat2) * sin((lng2 - lng1) / 2) ^ 2.
   // Literal pi rather than CONSTANT:PI, so this stays pure.
   return 2 * radius * arcsin(min(1, sqrt(a))) * 3.141592653589793 / 180.
+}
+
+// Degrees clockwise from north at spot 1 of the way along the surface to spot 2 (degrees). Pure.
+function land_bearing {
+  parameter lat1, lng1, lat2, lng2.
+  local dl is lng2 - lng1.
+  return mod(arctan2(sin(dl) * cos(lat2), cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dl)) + 360, 360).
+}
+
+// Where a site (site_lat, site_lng, degrees) lies from a craft at (lat, lng) heading hdg (degrees), along
+// the surface of a body of the given radius (#431): lexicon("dist" (m, land_surface_distance), "along" (m
+// along the great circle the heading sets out on; negative once behind), "across" (m off it; positive to
+// the right)). Right anywhere on the body, the far side too. Pure.
+function land_site_figures {
+  parameter lat, lng, site_lat, site_lng, hdg, radius.
+  local dist is land_surface_distance(lat, lng, site_lat, site_lng, radius).
+  local m_per_deg is radius * 3.141592653589793 / 180.
+  local d is dist / m_per_deg.
+  local off is land_bearing(lat, lng, site_lat, site_lng) - hdg.
+  return lexicon("dist", dist, "along", arctan2(sin(d) * cos(off), cos(d)) * m_per_deg,
+    "across", arcsin(max(-1, min(1, sin(d) * sin(off)))) * m_per_deg).
 }
 
 // The longitude, in today's body-fixed frame, of the point a site at lng will have turned to in dt
@@ -416,7 +437,7 @@ function land_cross_accel {
 }
 
 // One tick of the powered descent's guidance in the braking frame: the axis along the horizontal
-// velocity when braking began, and across it. st holds s (m to the site along the axis, negative once
+// velocity when braking began (carried round the body), and across it. st holds s (m to the site along the axis, negative once
 // past it), c (m to it across), v_al and v_cr (m/s along and across), v_up (m/s), h (m above the
 // terrain), h_start (h when braking began), v_top (the most m/s along the axis), a_max (m/s^2 the engines give), g (m/s^2) and radius (m
 // from the body's centre). It glides down (land_approach_height) to where it will stop, the site or
@@ -501,6 +522,20 @@ function land_is_reversed {
 function land_turn_back {
   parameter s, speed, max_overshoot.
   return s < -max_overshoot and speed < 1.
+}
+
+// Why braking that makes things worse must stop (#431), or "": horizontal speed v_h (m/s) 20 m/s or
+// more over its value when braking began (v_h0; over 50, the speed braking may close on the site at),
+// or the craft (alt_now, m above sea level) 2000 m or more above where braking began (alt_start). Pure.
+function land_brake_guard {
+  parameter v_h0, alt_start, v_h, alt_now.
+  if v_h >= max(50, v_h0) + 20 {
+    return "braking added speed: v_h " + round(v_h) + " m/s, " + round(v_h0) + " when braking began".
+  }
+  if alt_now - alt_start >= 2000 {
+    return "braking climbed " + round((alt_now - alt_start) / 1000, 1) + " km".
+  }
+  return "".
 }
 
 // ---- Pure helpers: staging off a short stage before the fall (#382) ----
@@ -679,8 +714,9 @@ function land_brake_distance {
   return v_h ^ 2 / (2 * a_ok) + 2 * v_h + v_h * max(0, turn_left).
 }
 
-// Whether braking starts now: within land_brake_distance of the site (dist m away; ahead, m of it
-// along the horizontal velocity, is negative once it has fallen behind), or the ground coming up
+// Whether braking starts now: within land_brake_distance of the site (dist m away along the surface;
+// ahead, m of it along the horizontal velocity's track (land_site_figures), is negative once it has
+// fallen behind), or the ground coming up
 // first: h (m, land_clearance) under 1500 m or under 40 s at v_down (m/s). Pure.
 function land_brake_due {
   parameter dist, ahead, v_h, v_down, h, a_brake, margin, turn_left.
@@ -722,7 +758,8 @@ function land_coast_end {
 }
 
 // The UT braking will start by, from samples of the coming fall (oldest first, each a lexicon of
-// ut, dist and ahead (m to the site, and along the horizontal velocity), v_h, v_down (m/s), alt and
+// ut, dist and ahead (m to the site along the surface, and along the horizontal velocity's track:
+// land_site_figures' dist and along), v_h, v_down (m/s), alt and
 // ground (m above sea level: the craft, and the terrain under it)): the sample before the first at
 // which land_brake_due fires, with h the clearance over the ground under the next 60 s of samples.
 // Never later than braking starts, however high the terrain on the way down. -1 if none fires. Pure.
@@ -770,7 +807,8 @@ function land_impact_ut {
 // ---- Planning (reads the ship and the clock) ----
 
 // Samples of the fall on this orbit, every step s from from_ut to until_ut or the ground under it, for
-// land_brake_estimate: where the site and the terrain under the craft will be then, as the body turns.
+// land_brake_estimate: where the site and the terrain under the craft will be then, as the body turns,
+// the site measured along the surface (land_site_figures) in today's frame, as the craft's spot is.
 function land_fall_samples {
   parameter site, from_ut, until_ut, step.
   local out is list().
@@ -780,11 +818,17 @@ function land_fall_samples {
     local up_v is pos:normalized.
     local vel is velocityat(ship, t):surface.
     local v_h is vxcl(up_v, vel).
-    local to_site is vxcl(up_v, land_site_vector(site, t) - pos).
     local under is body:geopositionof(body:position + pos).
+    local site_lng is land_site_lng(site:lng, t - time:seconds, body:rotationperiod).
+    local hdg is land_bearing(under:lat, under:lng, site:lat, site_lng).
+    if v_h:mag >= 1 {
+      local on is body:geopositionof(body:position + pos + v_h:normalized * 1000).
+      set hdg to land_bearing(under:lat, under:lng, on:lat, on:lng).
+    }
+    local fig is land_site_figures(under:lat, under:lng, site:lat, site_lng, hdg, body:radius).
     local ground is body:geopositionlatlng(under:lat, land_site_lng(under:lng, -(t - time:seconds), body:rotationperiod)):terrainheight.
     local alt_then is pos:mag - body:radius.
-    out:add(lexicon("ut", t, "dist", to_site:mag, "ahead", vdot(v_h, to_site), "v_h", v_h:mag, "v_down", -vdot(vel, up_v),
+    out:add(lexicon("ut", t, "dist", fig:dist, "ahead", fig:along, "v_h", v_h:mag, "v_down", -vdot(vel, up_v),
       "alt", alt_then, "ground", ground)).
     if alt_then <= ground {
       break.
@@ -1608,6 +1652,12 @@ function land_drop {
   return separated.
 }
 
+// The compass heading (degrees) of the horizontal direction vec at the craft.
+function land_heading_of {
+  parameter vec.
+  return mod(arctan2(vdot(vec, heading(90, 0):vector), vdot(vec, ship:north:vector)) + 360, 360).
+}
+
 // Where the Underhang dropped now will hit (a GeoCoordinates): its fall from the radar height at the
 // craft's speed down and across (land_fall_reach), on flat ground.
 function land_drop_impact {
@@ -1665,17 +1715,23 @@ function land_coast {
 // touchdown_speed_actual and touchdown_h_speed in extra (and lean, if settling fails), and traces each
 // phase and every 2 s to the log (#365). turn: the TURNTIME lexicon (top_rate, turn_s) for the turn
 // allowance (#380). under: land_measure_underhang's, whose droppable Underhang it drops (land_drop_due,
-// land_drop) and then lands clear of (#427). Returns "" or why it failed.
+// land_drop) and then lands clear of (#427). It measures the site along the surface and carries the
+// braking direction round the body (#431), and stops braking that adds speed or climbs
+// (land_brake_guard): throttle 0, safe, traced. Returns "" or why it failed.
 function land_descend {
   parameter ctx, aim, extra, turn, under.
   local opt is ctx:opt.
   local site is lexicon("lat", aim:lat, "lng", aim:lng).
   local braking is false.
   local h_start is 0.
-  // The braking axis: the horizontal velocity when braking began (towards the site again after
-  // turning back), and whether the craft is moving back along it (land_is_reversed).
+  // The braking direction: the horizontal velocity when braking began (towards the site again after
+  // turning back), carried round the body onto each tick's horizon (#431), and whether the craft is
+  // moving back along it (land_is_reversed).
   local axis is v(0, 0, 0).
   local reversed is false.
+  // Horizontal speed and altitude when braking began, for the guard (land_brake_guard).
+  local v_h_start is 0.
+  local alt_start is 0.
   set extra:reversals to 0.
   local steer is -ship:velocity:surface.
   local tset is 0.
@@ -1704,8 +1760,9 @@ function land_descend {
 
   until status = "LANDED" or status = "SPLASHED" {
     local up_v is ship:up:vector.
-    local to_site is vxcl(up_v, body:geopositionlatlng(site:lat, site:lng):position).
-    local dist is to_site:mag.
+    // The site along the surface (#431), from where the craft is now.
+    local here is ship:geoposition.
+    local dist is land_surface_distance(here:lat, here:lng, site:lat, site:lng, body:radius).
     local vel is ship:velocity:surface.
     local v_v is vdot(vel, up_v).
     local v_h is vxcl(up_v, vel).
@@ -1744,18 +1801,17 @@ function land_descend {
 
     if not braking {
       // The braking axis if braking began now: along the horizontal velocity, else towards the site;
-      // stopped over the site, any axis will do, as long as it has a direction.
-      local fall_axis is v_h.
-      if v_h:mag < 1 {
-        set fall_axis to to_site.
+      // stopped over the site, any axis will do, as long as it has a direction (land_bearing gives
+      // north there).
+      local fall_hdg is land_bearing(here:lat, here:lng, site:lat, site:lng).
+      if v_h:mag >= 1 {
+        set fall_hdg to land_heading_of(v_h).
       }
-      if vxcl(up_v, fall_axis):mag < 1 {
-        set fall_axis to ship:north:vector.
-      }
-      local fall_ahead is vxcl(up_v, fall_axis):normalized.
-      local fall_across is vcrs(up_v, fall_ahead):normalized.
+      local fall_ahead is heading(fall_hdg, 0):vector.
+      local fall_across is heading(fall_hdg + 90, 0):vector.
+      local fig is land_site_figures(here:lat, here:lng, site:lat, site:lng, fall_hdg, body:radius).
       // Steer along what braking will first ask for, so it starts pointed (#380).
-      local first is land_fall_guide(lexicon("s", vdot(to_site, fall_ahead), "c", vdot(to_site, fall_across), "v_al", vdot(v_h, fall_ahead),
+      local first is land_fall_guide(lexicon("s", fig:along, "c", fig:across, "v_al", vdot(v_h, fall_ahead),
         "v_cr", vdot(v_h, fall_across), "v_up", v_v, "h", h, "a_max", a_max, "g", g, "radius", radius_now), opt:touchdown_speed, opt:burn_margin).
       local first_accel is fall_ahead * first:al + fall_across * first:cr + up_v * first:up.
       if first_accel:mag > 0.001 {
@@ -1763,7 +1819,7 @@ function land_descend {
       }
       // Brake once land_vh_target's speed is down to this one (allowing for the turn still left), if
       // the site falls behind, or if the ground comes up first.
-      if land_brake_due(dist, vdot(v_h, to_site), v_h:mag, -v_v, h, land_brake_accel(a_max, g), opt:burn_margin, turn_left) {
+      if land_brake_due(dist, fig:along, v_h:mag, -v_v, h, land_brake_accel(a_max, g), opt:burn_margin, turn_left) {
         set braking to true.
         set ctx:turn_by to 0.
         set extra:braking_began_ut to round(time:seconds, 1).
@@ -1771,7 +1827,9 @@ function land_descend {
         set h_start to max(500, h).
         // At least enough to close on a site moved up to max_divert.
         set v_top to max(50, v_h:mag).
-        set axis to fall_axis.
+        set v_h_start to v_h:mag.
+        set alt_start to altitude.
+        set axis to fall_ahead.
         // Is the ground at the site flat enough? If not, divert to flatter ground now, while the
         // descent has the whole braking distance to take the new site in (a later move could put
         // the site behind it).
@@ -1779,28 +1837,42 @@ function land_descend {
         local moved is land_surface_distance(site:lat, site:lng, spot:lat, spot:lng, body:radius).
         set site to lexicon("lat", spot:lat, "lng", spot:lng).
         if not drop_impact:istype("String") {
-          set site to land_clear_site(site, drop_impact, opt:max_divert, fall_axis).
+          set site to land_clear_site(site, drop_impact, opt:max_divert, fall_ahead).
         }
         set extra:best_effort to not spot:flat.
-        set to_site to vxcl(up_v, body:geopositionlatlng(site:lat, site:lng):position).
+        set dist to land_surface_distance(here:lat, here:lng, site:lat, site:lng, body:radius).
         if moved > 1 {
-          addons:claudia:blocktrace("land", lexicon("phase", "divert", "moved", round(moved), "flat", spot:flat, "dist", round(to_site:mag))).
+          addons:claudia:blocktrace("land", lexicon("phase", "divert", "moved", round(moved), "flat", spot:flat, "dist", round(dist))).
         }
       }
       set tset to 0.
     }
     if braking {
-      local ahead is vxcl(up_v, axis):normalized.
-      local s is vdot(to_site, ahead).
-      if land_turn_back(s, v_h:mag, opt:max_overshoot) {
+      // Braking that adds speed or climbs is making things worse: stop, and leave the rest of the fuel
+      // in the tanks (#431).
+      local tripped is land_brake_guard(v_h_start, alt_start, v_h:mag, altitude).
+      if tripped <> "" {
+        set tset to 0.
+        addons:claudia:blocktrace("land", lexicon("phase", "guard", "error", tripped, "v_h", round(v_h:mag, 1), "v_h_start", round(v_h_start, 1),
+          "alt", round(altitude), "alt_start", round(alt_start), "dist", round(dist), "pe", round(ship:orbit:periapsis))).
+        claudia_make_safe().
+        return tripped.
+      }
+      // The braking direction carried onto this tick's horizon, and the site along and across it.
+      set axis to vxcl(up_v, axis):normalized.
+      local hdg is land_heading_of(axis).
+      local fig is land_site_figures(here:lat, here:lng, site:lat, site:lng, hdg, body:radius).
+      if land_turn_back(fig:along, v_h:mag, opt:max_overshoot) {
         // Stopped more than max_overshoot past the site: the one case it turns back.
-        set axis to to_site.
-        set ahead to vxcl(up_v, axis):normalized.
-        set s to vdot(to_site, ahead).
+        set hdg to land_bearing(here:lat, here:lng, site:lat, site:lng).
+        set axis to heading(hdg, 0):vector.
+        set fig to land_site_figures(here:lat, here:lng, site:lat, site:lng, hdg, body:radius).
         set extra:reversals to extra:reversals + 1.
         set reversed to false.
       }
-      local across is vcrs(up_v, ahead):normalized.
+      local s is fig:along.
+      local ahead is heading(hdg, 0):vector.
+      local across is heading(hdg + 90, 0):vector.
       local v_ahead is vdot(v_h, ahead).
       local was is reversed.
       set reversed to land_is_reversed(v_ahead, was).
@@ -1817,7 +1889,7 @@ function land_descend {
       if first_turn {
         set s_guide to land_turning_s(s, v_h:mag, turn_left).
       }
-      set want to land_guide(lexicon("s", s_guide, "c", vdot(to_site, across), "v_al", v_ahead, "v_cr", vdot(v_h, across),
+      set want to land_guide(lexicon("s", s_guide, "c", fig:across, "v_al", v_ahead, "v_cr", vdot(v_h, across),
         "v_up", v_v, "h", h, "h_start", h_start, "v_top", v_top, "a_max", a_max, "g", g, "radius", radius_now), opt:touchdown_speed, opt:burn_margin).
       if turn_left <= 0 and want:al < -0.1 {
         set first_turn to false.
