@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Andrew Watson
 
+using System.Collections.Generic;
+
 namespace ClaudiaKermin.Core.Missions
 {
     /// <summary>One stage as the stock delta-v simulator reports it. Mass in tonnes, thrust in kN, delta-v in m/s.</summary>
@@ -66,6 +68,11 @@ namespace ClaudiaKermin.Core.Missions
         public double ArgumentOfPeriapsis;
         public double MeanAnomalyAtEpoch;
         public double Epoch;
+        /// <summary>
+        /// Its air from sea level to the atmosphere top: (altitude m, pressure atmospheres, density kg/m³, speed of sound m/s)
+        /// rows, at the equator with the day's mean temperature; empty for an airless body or when not read (an older recording).
+        /// </summary>
+        public List<double[]> Air = new List<double[]>();
 
         /// <summary>Surface gravity in m/s².</summary>
         public double SurfaceGravity
