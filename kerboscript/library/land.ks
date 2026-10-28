@@ -1835,6 +1835,8 @@ function land_descend {
         set drop_pending to false.
         set tset to 0.
         local impact is land_drop_impact(radar, v_v, v_h, g).
+        // A tick for the throttle lock to take the 0 before the decouplers fire.
+        wait 0.
         if land_drop(ctx, under, extra, radar) {
           set drop_impact to impact.
           set site to land_clear_site(site, drop_impact, opt:max_divert, v_h).
