@@ -26,6 +26,8 @@ namespace ClaudiaKermin.Core.Missions
         {
             public TelemetryCheck Check;
             public bool Fired;
+            /// <summary>An orbit check has seen its reading on the safe side of the threshold this run (#419); until then it can't cross.</summary>
+            public bool Armed;
             /// <summary>A carry on's follow-up threshold, armed once the first Alert is judged.</summary>
             public double? FollowUp;
             public bool FollowUpFired;
@@ -181,6 +183,11 @@ namespace ClaudiaKermin.Core.Missions
                 var reading = mission.Readings.Of(live.Check);
                 if (!live.Fired)
                 {
+                    if (live.Check.NeedsArming && !live.Armed)
+                    {
+                        if (reading.HasValue && !live.Check.Crossed(reading, live.Check.Threshold)) live.Armed = true;
+                        continue;
+                    }
                     if (Confirmed(mission, live, reading, live.Check.Threshold, ref live.Pending))
                     {
                         live.Fired = true;

@@ -572,6 +572,55 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Equal(1, CrossedLines(mission));
         }
 
+        // ---- An orbit check arms once its reading is on the safe side (#419) ----
+
+        [Fact]
+        public void APeriapsisCheckDoesNotFireOnThePadAndCrossesOnceArmed()
+        {
+            var mission = RunningWith(QuantityCheck("periapsis", "below", -100000));
+
+            mission.Send(Snapshot(s => s.Orbit.Periapsis = -598435));
+            mission.Send(Snapshot(s => s.Orbit.Periapsis = -598435));
+            Assert.Equal(0, CrossedLines(mission));
+            mission.Send(Snapshot(s => s.Orbit.Periapsis = -50000));
+            Assert.Equal(0, CrossedLines(mission));
+            mission.Send(Snapshot(s => s.Orbit.Periapsis = -150000));
+            Assert.Equal(1, CrossedLines(mission, "periapsis"));
+        }
+
+        [Fact]
+        public void AnApoapsisCheckArmsOnceUnderItsThreshold()
+        {
+            // The pad's apoapsis (-599,073 m) is already over the threshold: no crossing until it has been under.
+            var mission = RunningWith(QuantityCheck("apoapsis", "above", -700000));
+
+            mission.Send(Snapshot(s => s.Orbit.Apoapsis = -599073));
+            Assert.Equal(0, CrossedLines(mission));
+            mission.Send(Snapshot(s => s.Orbit.Apoapsis = -800000));
+            mission.Send(Snapshot(s => s.Orbit.Apoapsis = -599073));
+            Assert.Equal(1, CrossedLines(mission, "apoapsis"));
+        }
+
+        [Fact]
+        public void APeriapsisCheckThatStartsOnTheSafeSideCrossesOnTheFirstBadReading()
+        {
+            var mission = RunningWith(QuantityCheck("periapsis", "below", -100000));
+
+            mission.Send(Snapshot(s => s.Orbit.Periapsis = 80000));
+            Assert.Equal(0, CrossedLines(mission));
+            mission.Send(Snapshot(s => s.Orbit.Periapsis = -150000));
+            Assert.Equal(1, CrossedLines(mission, "periapsis"));
+        }
+
+        [Fact]
+        public void ANonOrbitCheckAlreadyCrossedAtStartStillCrossesAtOnce()
+        {
+            var mission = RunningWith(QuantityCheck("altitude", "below", 1000));
+
+            mission.Send(Snapshot(s => s.Altitude = 50));
+            Assert.Equal(1, CrossedLines(mission, "altitude"));
+        }
+
         [Fact]
         public void TheFollowUpThresholdIsConfirmedOverTwoSnapshotsToo()
         {
