@@ -15,7 +15,7 @@ namespace ClaudiaKermin.Core.Missions
     /// then each optional: <c>error_deg</c> (steering error), <c>rate_dps</c> (turn rate, deg/s), <c>wheels_s</c> and <c>left_s</c>
     /// (the wheels' turn time against the seconds left to the deadline, given together), <c>monoprop</c> and <c>monoprop_max</c>
     /// (units, given together), <c>stopping_s</c> and <c>kp</c> (the turn override's kOS maxstoppingtime and rate gain, given together).
-    ///</summary>
+    /// </summary>
     public sealed class RcsSwitch
     {
         public static readonly string[] Reasons =
