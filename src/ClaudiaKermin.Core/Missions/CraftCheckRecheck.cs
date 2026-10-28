@@ -80,7 +80,7 @@ namespace ClaudiaKermin.Core.Missions
             + "Maneuver Sequences still to fly, with the margin: report delta_v_short when the delta-v left (stages are listed with "
             + "stage 0 firing last; count only the stages that have not fired) falls short of their budgets plus the margin, and "
             + "any other finding from the fixed lists only when it holds now for what is still to fly. Leave out findings about "
-            + "legs already flown. In summary, say the delta-v left against what is still to fly, key numbers first.";
+            + "legs already flown. The craft is flying, so do not call plan_ascent or report the ascent findings; give planned_turn_shape 0. In summary, say the delta-v left against what is still to fly, key numbers first.";
 
         public static string Facts(string goal, GameSnapshot snapshot, int marginPercent, uint? preferredProcessor, bool remote, string restOfPlan)
         {
