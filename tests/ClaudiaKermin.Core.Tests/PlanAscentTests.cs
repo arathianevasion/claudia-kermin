@@ -98,14 +98,14 @@ namespace ClaudiaKermin.Core.Tests
 
         // ---- the craft ----
 
-        /// <summary>A Reliant first stage (TWR about 1.7) and a Terrier upper stage with plenty to spare.</summary>
+        /// <summary>A Reliant Boost stage lighting on the pad (TWR about 1.7), then a Terrier stage with plenty to spare.</summary>
         private static GameSnapshot Strong()
         {
             return Craft(S(240, 205, 310, 12.0, 5.5), S(60, 14, 345, 3.5, 1.4));
         }
 
         /// <summary>
-        /// Mun Shot's shape (#367): a strong first stage, then a small stage at TWR under 0.4 that lights suborbital in the air,
+        /// Mun Shot's shape (#367): a strong stage on the pad, then a small stage at TWR under 0.4 that lights suborbital in the air,
         /// then a strong stage. The weak stage falls unless the climb before it was steep.
         /// </summary>
         private static GameSnapshot WeakBoost()
@@ -113,7 +113,7 @@ namespace ClaudiaKermin.Core.Tests
             return Craft(S(500, 450, 300, 27, 16), S(45, 40, 320, 12, 10.5), S(240, 60, 345, 9, 3));
         }
 
-        /// <summary>The same with a heavier first stage and a weaker second: it falls whatever the turn.</summary>
+        /// <summary>The same with a heavier pad stage and a weaker one after it: it falls whatever the turn.</summary>
         private static GameSnapshot Hopeless()
         {
             return Craft(S(500, 450, 300, 27, 17), S(40, 35, 320, 12, 10.5), S(240, 60, 345, 9, 3));
@@ -150,7 +150,7 @@ namespace ClaudiaKermin.Core.Tests
             Assert.False(margin.GetProperty("marginal").GetBoolean());
             Assert.True(margin.GetProperty("min_boost_vertical_speed").GetDouble() >= 20);
             Assert.Equal(0, result.GetProperty("dv_kept").GetDouble());
-            // The first stage lights on the pad: a Boost stage, at TWR about 1.7.
+            // The stage that lights on the pad: a Boost stage, at TWR about 1.7.
             var first = Stage(result, 1);
             Assert.Equal("Boost stage", first.GetProperty("role").GetString());
             Assert.Equal(0, first.GetProperty("lights").GetProperty("altitude").GetDouble());

@@ -554,7 +554,7 @@ namespace ClaudiaKermin.Core.Tools
                 if (!coasting)
                 {
                     if (vertical < 0 && h < top) return Fail("vertical speed fell below 0 while burning, under the atmosphere top");
-                    if (turnStartAlt >= 0 && h < top) _flight.MinVerticalSpeed = Math.Min(_flight.MinVerticalSpeed, vertical);
+                    if (turnStartAlt >= 0 && h < top && _flight.Lit[_flight.Lit.Count - 1].Suborbital) _flight.MinVerticalSpeed = Math.Min(_flight.MinVerticalSpeed, vertical);
                     if (_o.Track && h >= nextTrack)
                     {
                         _flight.Track.Add(new[] { h, 90 - pitch, 90 - prograde, q, throttle });
@@ -615,7 +615,7 @@ namespace ClaudiaKermin.Core.Tools
         }
 
         /// <summary>A step past launch's end: the air still drags on a craft that dips back under the atmosphere top.</summary>
-        private void Coast(double dt, double throttle, double pitch, double thrust)
+        private void StepInAir(double dt, double throttle, double pitch, double thrust)
         {
             double atm, density, sound;
             _air.Air(Altitude, out atm, out density, out sound);
@@ -666,7 +666,7 @@ namespace ClaudiaKermin.Core.Tools
             {
                 if (_t > end) return Fail("still coasting after " + MaxOrbitSeconds + " s");
                 if (InAirAgain()) return Fail("fell back into the atmosphere before circularizing");
-                Coast(Math.Max(dt, Math.Min(1, (startUt - _t) / 2)), 0, 0, 0);
+                StepInAir(Math.Max(dt, Math.Min(1, (startUt - _t) / 2)), 0, 0, 0);
             }
             // exec_node_due_ut: the node at start + lead, or now + lead once a second late.
             var nodeUt = _t - startUt < 1 ? startUt + lead : _t + lead;
@@ -686,7 +686,7 @@ namespace ClaudiaKermin.Core.Tools
                 Frame(out ux, out uy, out ex, out ey);
                 var pitch = Math.Atan2(steer.X * ux + steer.Y * uy, steer.X * ex + steer.Y * ey) * 180 / Math.PI;
                 var maxAccel = stage.ThrustVac / _mass;
-                Coast(dt, Math.Min(1, Math.Max(0.005, left.Length / maxAccel)), pitch, stage.ThrustVac);
+                StepInAir(dt, Math.Min(1, Math.Max(0.005, left.Length / maxAccel)), pitch, stage.ThrustVac);
                 if (stage.EndMass >= _mass && !StageOn())
                 {
                     _mass = stage.EndMass;
