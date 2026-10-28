@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Globalization;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Missions;
+using ClaudiaKermin.Core.Tools.Numerics;
 
 namespace ClaudiaKermin.Core.Tools
 {
@@ -24,6 +25,9 @@ namespace ClaudiaKermin.Core.Tools
         private const double ScanStep = 2;
         private const int MaxScanSteps = 1500;
         private const string DefaultAt = "in 60";
+        /// <summary>BrentRoot's tolerance on the burn size, relative to max(|burn|, 1) m/s: far finer than the metre the Pe is held to.</summary>
+        private const double RefineTolerance = 1e-9;
+        private const int RefineIterations = 80;
 
         public string Name
         {
@@ -129,7 +133,7 @@ namespace ClaudiaKermin.Core.Tools
 
         /// <summary>
         /// The burn at <c>at</c>, prograde or retrograde, whose next patch has the periapsis asked for: scans the burn size in steps
-        /// with the predict_burn propagation, finds where the next patch's Pe crosses the goal, and bisects.
+        /// with the predict_burn propagation, finds where the next patch's Pe crosses the goal, and refines it with <see cref="BrentRoot"/>.
         /// </summary>
         private static ToolOutcome SolvePatchPe(PredictBurn.Setup setup, List<Patch> path, double value, JsonNode at, string direction)
         {
@@ -192,23 +196,29 @@ namespace ClaudiaKermin.Core.Tools
                 + Num(most) + " m/s at " + where + ", not " + Num(value) + " m; try another burn time");
         }
 
-        /// <summary>Bisects the burn size between <paramref name="lo"/> and <paramref name="hi"/> (Pe errors straddle zero) to a Pe within a metre; null if the encounter drops out.</summary>
+        /// <summary>
+        /// Finds the burn size between <paramref name="lo"/> and <paramref name="hi"/> (Pe errors straddle zero) with
+        /// <see cref="BrentRoot"/>, to a Pe within a metre; null if the encounter drops out or the Pe jumps instead of crossing the goal.
+        /// The Pe at both ends is known from the scan, so those two evaluations are not repeated.
+        /// </summary>
         private static double? Refine(Func<double, Tuple<double, string>> pe, double lo, double hi, double peLo, double peHi, double value, string body)
         {
-            var below = peLo - value;
-            for (var i = 0; i < 80; i++)
+            var dropped = false;
+            Func<double, double> error = s =>
             {
-                var mid = (lo + hi) / 2;
-                var got = pe(mid);
-                if (got == null || got.Item2 != body) return null;
-                var error = got.Item1 - value;
-                if (Math.Abs(error) < 1) return mid;
-                // The Pe jumps here instead of crossing the goal: no burn gives it.
-                if (hi - lo < 1e-9) return null;
-                if ((error < 0) == (below < 0)) lo = mid;
-                else hi = mid;
-            }
-            return (lo + hi) / 2;
+                if (s == lo) return peLo - value;
+                if (s == hi) return peHi - value;
+                var got = pe(s);
+                if (got == null || got.Item2 != body)
+                {
+                    dropped = true;
+                    return double.NaN;
+                }
+                return got.Item1 - value;
+            };
+            var found = BrentRoot.Solve(error, lo, hi, RefineTolerance, RefineIterations);
+            if (dropped || !found.Converged || Math.Abs(found.Fx) >= 1) return null;
+            return found.X;
         }
 
         /// <summary>The result: the burn's components, magnitude and time, with the predict_burn result for it.</summary>
