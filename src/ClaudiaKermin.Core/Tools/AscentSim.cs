@@ -604,9 +604,47 @@ namespace ClaudiaKermin.Core.Tools
             return dv > 1e-6 ? double.PositiveInfinity : seconds;
         }
 
+        private Vec3 Position
+        {
+            get { return new Vec3(_px, _py, 0); }
+        }
+
+        private Vec3 Velocity
+        {
+            get { return new Vec3(_vx, _vy, 0); }
+        }
+
+        /// <summary>A step past launch's end: the air still drags on a craft that dips back under the atmosphere top.</summary>
+        private void Coast(double dt, double throttle, double pitch, double thrust)
+        {
+            double atm, density, sound;
+            _air.Air(Altitude, out atm, out density, out sound);
+            Step(throttle, pitch, thrust, density, sound, dt);
+        }
+
+        /// <summary>Back down where the air matters (launch's 500 Pa): a dip under the atmosphere top in near vacuum is not a fall.</summary>
+        private bool InAirAgain()
+        {
+            double atm, density, sound, horizontal, vertical;
+            _air.Air(Altitude, out atm, out density, out sound);
+            Surface(out horizontal, out vertical);
+            return 0.5 * density * (horizontal * horizontal + vertical * vertical) > AeroQ;
+        }
+
+        /// <summary>The coast's velocity at <paramref name="ut"/> on the orbit the craft is on now.</summary>
+        private Vec3 VelocityAt(double ut)
+        {
+            Vec3 r, v;
+            Conic.FromState(_o.Gm, Position, Velocity, _t).State(ut, out r, out v);
+            return v;
+        }
+
         /// <summary>
-        /// Out of the air: coast to half the burn before apoapsis, then burn along the horizon at apoapsis (a node's fixed
-        /// direction) until the orbit is circular, staging as before. Fails if the stages run dry or the craft sinks into the air.
+        /// Out of the air: <c>circularize</c>'s node (prograde only, at apoapsis) flown as <c>exec_node</c> flies it. It lights the
+        /// time of half the node's delta-v early; a burn that is late by more than a second takes its node with it (KSP keeps
+        /// the node's prograde, so the planned velocity is the coast's there plus that prograde). It steers along what the node
+        /// still asks for (as KSP re-solves <c>nd:deltav</c>), throttles down as it closes, stages as before, and stops under
+        /// 0.1 m/s or once it overshoots. Fails if the stages can't give it, run dry, or the craft sinks back where the air matters.
         /// </summary>
         private AscentFlight Circularize()
         {
@@ -615,44 +653,41 @@ namespace ClaudiaKermin.Core.Tools
             if (double.IsInfinity(ap)) return Fail("the coast escapes the body");
             var rAp = ap + _o.Radius;
             var a = (rAp + pe + _o.Radius) / 2;
-            var need = Math.Sqrt(_o.Gm / rAp) - Math.Sqrt(_o.Gm * (2 / rAp - 1 / a));
-            var burn = BurnTime(need);
-            if (double.IsInfinity(burn))
-                return Fail("can't circularize: it needs " + Math.Round(need) + " m/s at apoapsis and the stages have " + Math.Round(DeltaVLeft()) + " m/s");
+            var prograde = Math.Sqrt(_o.Gm / rAp) - Math.Sqrt(_o.Gm * (2 / rAp - 1 / a));
+            if (double.IsInfinity(BurnTime(prograde)))
+                return Fail("can't circularize: it needs " + Math.Round(prograde) + " m/s at apoapsis and the stages have " + Math.Round(DeltaVLeft()) + " m/s"
+                    + (_o.StageLimit > 0 ? " at stage limit " + _o.StageLimit : ""));
+            var lead = BurnTime(prograde / 2);
+            var startUt = _t + toAp - lead;
 
-            // The burn's direction: the horizon at apoapsis, fixed in space.
             var dt = 0.1;
             var end = _t + MaxOrbitSeconds;
-            while (toAp > burn / 2 && _t < end)
+            while (_t < startUt)
             {
-                Step(0, 0, 0, 0, 0, Math.Min(1, Math.Max(dt, (toAp - burn / 2) / 2)));
-                Orbit(out ap, out pe, out toAp);
-                if (Altitude < _o.AtmosphereHeight) return Fail("fell back into the atmosphere before circularizing");
+                if (_t > end) return Fail("still coasting after " + MaxOrbitSeconds + " s");
+                if (InAirAgain()) return Fail("fell back into the atmosphere before circularizing");
+                Coast(Math.Max(dt, Math.Min(1, (startUt - _t) / 2)), 0, 0, 0);
             }
-            double ux, uy, ex, ey;
-            var angle = toAp * Math.Sqrt(_o.Gm / (rAp * rAp * rAp));
-            Frame(out ux, out uy, out ex, out ey);
-            // The horizon at apoapsis is today's horizon turned on by the angle still to go: below it now, above it after.
-            var dirX = ex * Math.Cos(angle) - ux * Math.Sin(angle);
-            var dirY = ey * Math.Cos(angle) - uy * Math.Sin(angle);
-            var given = 0.0;
-            while (given < need)
+            // exec_node_due_ut: the node at start + lead, or now + lead once a second late.
+            var nodeUt = _t - startUt < 1 ? startUt + lead : _t + lead;
+            var coastV = VelocityAt(nodeUt);
+            var target = coastV + coastV.Normalized * prograde;
+            var initial = target - coastV;
+            var steer = initial.Normalized;
+            while (true)
             {
                 if (_t > end) return Fail("still circularizing after " + MaxOrbitSeconds + " s");
+                var left = target - VelocityAt(nodeUt);
+                if (Vec3.Dot(initial, left) < 0 || left.Length < 0.1) break;
+                if (left.Length > 1) steer = left.Normalized;
+                if (InAirAgain()) return Fail("fell back into the atmosphere while circularizing");
                 var stage = Current;
-                var accel = stage.ThrustVac / _mass;
-                var step = Math.Min(dt, (need - given) / accel);
-                var r = R;
-                _vx += (-_o.Gm * _px / (r * r * r) + accel * dirX) * step;
-                _vy += (-_o.Gm * _py / (r * r * r) + accel * dirY) * step;
-                _px += _vx * step;
-                _py += _vy * step;
-                _mass -= stage.Flow * step;
-                _t += step;
-                given += accel * step;
-                _flight.DeltaVToOrbit += accel * step;
-                if (Altitude < _o.AtmosphereHeight) return Fail("fell back into the atmosphere while circularizing");
-                if (stage.EndMass >= _mass && given < need && !StageOn())
+                double ux, uy, ex, ey;
+                Frame(out ux, out uy, out ex, out ey);
+                var pitch = Math.Atan2(steer.X * ux + steer.Y * uy, steer.X * ex + steer.Y * ey) * 180 / Math.PI;
+                var maxAccel = stage.ThrustVac / _mass;
+                Coast(dt, Math.Min(1, Math.Max(0.005, left.Length / maxAccel)), pitch, stage.ThrustVac);
+                if (stage.EndMass >= _mass && !StageOn())
                 {
                     _mass = stage.EndMass;
                     return Fail("out of fuel while circularizing" + (_o.StageLimit > 0 ? " at stage limit " + _o.StageLimit : ""));

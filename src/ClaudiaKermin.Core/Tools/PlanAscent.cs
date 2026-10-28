@@ -141,6 +141,8 @@ namespace ClaudiaKermin.Core.Tools
                     .Field("failed_role", role == null || role.Suborbital ? "Boost stage" : "Orbital stage")
                     .Field("failed_altitude", Math.Round(flight.FailedAltitude))
                     .Field("failure", flight.Failure);
+                // The launch got the apoapsis to target_ap but the stages left couldn't make an orbit of it.
+                if (flight.CoastAp > 0) json.Field("coast_ap", Math.Round(flight.CoastAp));
             }
             Stages(json, flight, stages, options.StageLimit);
             if (flight.ReachesOrbit)
