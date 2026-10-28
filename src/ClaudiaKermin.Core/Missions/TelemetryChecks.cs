@@ -114,6 +114,15 @@ namespace ClaudiaKermin.Core.Missions
             }
         }
 
+        /// <summary>
+        /// An orbit quantity starts wrong on the pad (periapsis far under the surface), so its check watches only once the
+        /// reading has been on the safe side of the threshold during the run (#419).
+        /// </summary>
+        public bool NeedsArming
+        {
+            get { return Quantity == TelemetryQuantity.Periapsis || Quantity == TelemetryQuantity.Apoapsis; }
+        }
+
         /// <summary>The reading is past <paramref name="threshold"/>; false when the quantity can't be measured now.</summary>
         public bool Crossed(double? reading, double threshold)
         {
