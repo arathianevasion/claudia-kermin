@@ -164,13 +164,16 @@ namespace ClaudiaKermin.Core.Missions
         /// Mission likely needs, picked from its Mission Goal (<see cref="BlockSelection"/>). The base layer's
         /// Summaries still name every block.
         /// </summary>
-        public static string MissionLayer(string missionId, string goal, string bodyTable = "")
+        public static string MissionLayer(string missionId, string goal, string bodyTable = "", double? plannedTurnShape = null)
         {
             return "Mission " + missionId + ".\n\n"
                 + "Building Blocks for this Mission, in full (the others are in the summaries above, without their options spelled out). "
                 + "Where no shipped block fits, write a Custom Script.\n\n"
                 + CoreLibrary.FullDocs(BlockSelection.For(goal))
-                + bodyTable;
+                + bodyTable
+                + (plannedTurnShape.HasValue
+                    ? "\n\nThe Craft Check planned turn_shape " + plannedTurnShape.Value.ToString("0.##", CultureInfo.InvariantCulture) + " for the launch."
+                    : "");
         }
 
         /// <summary>

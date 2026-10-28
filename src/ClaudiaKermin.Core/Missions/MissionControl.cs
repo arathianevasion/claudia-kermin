@@ -368,7 +368,8 @@ namespace ClaudiaKermin.Core.Missions
             // Frozen for the whole Mission, so the cached prefix never changes.
             mission.System.Add(MissionPrompts.BaseLayer);
             var bodyTable = MissionPrompts.BodyTable(_snapshot != null ? _snapshot.Bodies : null);
-            mission.System.Add(MissionPrompts.MissionLayer(id, goal, bodyTable));
+            mission.PlannedTurnShape = _craftCheck.PlannedTurnShape;
+            mission.System.Add(MissionPrompts.MissionLayer(id, goal, bodyTable, mission.PlannedTurnShape));
             var settings = start.Settings != null ? start.Settings.Copy() : MissionSettingsValues.Defaults(_config);
             settings.ConfigAllowsPhysicsWarp = _config.PhysicsWarp;
             settings.WriteTo(mission.Settings);

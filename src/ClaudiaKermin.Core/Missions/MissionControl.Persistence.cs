@@ -99,6 +99,7 @@ namespace ClaudiaKermin.Core.Missions
                 PausedCannotFly = mission.PausedCannotFly,
                 PausedForCap = mission.PausedForCap && mission.Stage == MissionStage.Paused,
                 SafePending = mission.SafePending,
+                PlannedTurnShape = mission.PlannedTurnShape,
                 MissionPlan = mission.Plan,
                 SequencePlan = mission.PendingSequence,
                 QueuedEntries = mission.Log.Count(e => e.Queued),
@@ -440,6 +441,7 @@ namespace ClaudiaKermin.Core.Missions
                 Recheck = state.Recheck ?? "",
                 RecheckSince = state.RecheckSince,
                 SafePending = state.SafePending ?? "",
+                PlannedTurnShape = state.PlannedTurnShape,
             };
             foreach (var setting in state.Settings) mission.Settings[setting.Key] = setting.Value;
             RestoreChildVessels(mission, state.ChildVessels);
@@ -470,7 +472,7 @@ namespace ClaudiaKermin.Core.Missions
             else
             {
                 mission.System.Add(MissionPrompts.BaseLayer);
-                mission.System.Add(MissionPrompts.MissionLayer(state.Id, state.Goal, MissionStore.ReadBodyTable(mission.Folder)));
+                mission.System.Add(MissionPrompts.MissionLayer(state.Id, state.Goal, MissionStore.ReadBodyTable(mission.Folder), state.PlannedTurnShape));
                 mission.System.Add(MissionPrompts.TimingLayer(MissionSettingsValues.FromDictionary(mission.Settings, MissionSettingsValues.Defaults(_config))));
             }
             RestoreBlackout(mission, state);
