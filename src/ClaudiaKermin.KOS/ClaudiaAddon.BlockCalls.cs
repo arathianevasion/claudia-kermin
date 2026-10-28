@@ -44,11 +44,10 @@ namespace ClaudiaKermin.KOS
         internal static Structure Guarded(string name, Func<Structure> call, Func<string> describe)
         {
             var watch = Stopwatch.StartNew();
+            Structure result;
             try
             {
-                var result = call();
-                Debug.Log(ModInfo.LogTag + " block call " + name + " took " + Ms(watch) + " ms: " + (describe == null ? "done" : describe()));
-                return result;
+                result = call();
             }
             catch (Exception e)
             {
@@ -57,6 +56,17 @@ namespace ClaudiaKermin.KOS
                 error.Add(new StringValue("error"), new StringValue(name + " failed: " + e.Message));
                 return error;
             }
+            // The log line is only a diagnostic: a failure writing it must not fail a call that worked.
+            var took = Ms(watch);
+            try
+            {
+                Debug.Log(ModInfo.LogTag + " block call " + name + " took " + took + " ms: " + (describe == null ? "done" : describe()));
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning(ModInfo.LogTag + " block call " + name + " took " + took + " ms; its log line failed: " + e.Message);
+            }
+            return result;
         }
 
         private Lexicon EjectionBurn(Lexicon input)
