@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Andrew Watson
 
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using ClaudiaKermin.Core.Kos;
@@ -318,27 +319,46 @@ namespace ClaudiaKermin.ScriptCheck.Tests
             Assert.Contains("addons:claudia:blocktrace(", CoreLibrary.Bundle("").ToLowerInvariant());
         }
 
-        // #407: the optional third argument says "don't keep as the last traced state"; Script Check takes the new form.
+        // #407: BLOCKNOTE writes the same line to KSP.log without keeping it as the block's last state; Script Check allows it anywhere.
         [Fact]
-        public void AMissionScriptMayTraceForTheLogWithoutKeepingTheState()
+        public void AMissionScriptMayNoteABlocksStateForTheLogOnly()
         {
-            AssertAllowed("addons:claudia:blocktrace(\"land\", lexicon(\"phase\", \"rcs\"), false).");
-            AssertAllowed(CoreLibrary.Bundle("addons:claudia:blocktrace(\"land\", lexicon(\"phase\", \"rcs\"), false)."));
+            AssertAllowed("addons:claudia:blocknote(\"land\", lexicon(\"phase\", \"rcs\")).");
+            AssertAllowed(CoreLibrary.Bundle("addons:claudia:blocknote(\"land\", lexicon(\"phase\", \"rcs\"))."));
         }
 
-        // #407: the RCS Use trace and the SAS-off note go to KSP.log only, so a crash report keeps the block's own state.
+        // #407: the RCS Use trace and the SAS-off note go to KSP.log only (BLOCKNOTE), so a crash report keeps the block's own state.
+        // Every BLOCKTRACE and BLOCKNOTE call in the Core Library takes exactly two arguments: the suffixes are fixed-arity, and an
+        // optional-argument form failed every call in game.
         [Fact]
         public void TheRcsUseTraceAndTheSasOffNoteAreNotKeptAsTheLastTracedState()
         {
-            var calls = CoreLibrary.Bundle("").Replace("\r", "").Split(new[] { "addons:claudia:blocktrace(" }, System.StringSplitOptions.None).Skip(1)
+            var bundle = CoreLibrary.Bundle("").Replace("\r", "");
+            List<string> Calls(string suffix) => bundle.Split(new[] { "addons:claudia:" + suffix + "(" }, System.StringSplitOptions.None).Skip(1)
                 .Select(c => c.Substring(0, c.IndexOf(").\n", System.StringComparison.Ordinal) + 1)).ToList();
-            var rcs = calls.Where(c => c.Contains("\"rcs\"")).ToList();
-            var sas = calls.Where(c => c.Contains("\"sas\"")).ToList();
+            var notes = Calls("blocknote");
+            var traces = Calls("blocktrace");
 
-            Assert.Single(rcs);
-            Assert.Single(sas);
-            Assert.EndsWith(", false)", rcs[0]);
-            Assert.EndsWith(", false)", sas[0]);
+            Assert.Single(notes, c => c.Contains("\"rcs\""));
+            Assert.Single(notes, c => c.Contains("\"sas\""));
+            Assert.DoesNotContain(traces, c => c.Contains("\"rcs\"") || c.Contains("\"sas\""));
+            Assert.All(notes.Concat(traces), c => Assert.False(c.EndsWith(", false)") || c.EndsWith(", true)"), "a third argument: " + c));
+        }
+
+        // Every ADDONS:CLAUDIA suffix is a fixed-arity kOS suffix. kOS 1.6 reads a varargs suffix's 'params' from the C# method, so a
+        // method without it is called with one argument and every call fails in game; nothing off KSP runs that call path. An
+        // optional argument is a second suffix instead (BLOCKTRACE and BLOCKNOTE).
+        [Fact]
+        public void TheAddonsSuffixesAreAllFixedArity()
+        {
+            var fixedArity = new HashSet<string> { "Suffix", "NoArgsSuffix", "NoArgsVoidSuffix", "OneArgsSuffix", "OneArgsVoidSuffix", "TwoArgsSuffix", "TwoArgsVoidSuffix", "ThreeArgsSuffix", "SetSuffix" };
+            var found = Directory.GetFiles(Path.Combine(RepoRoot(), "src", "ClaudiaKermin.KOS"), "*.cs")
+                .SelectMany(f => System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(f), @"new\s+(\w*Suffix)\s*[<(]").Cast<System.Text.RegularExpressions.Match>()
+                    .Select(m => Path.GetFileName(f) + ": " + m.Groups[1].Value))
+                .ToList();
+
+            Assert.Contains(found, f => f.EndsWith(": TwoArgsSuffix"));
+            Assert.All(found, f => Assert.True(fixedArity.Contains(f.Substring(f.LastIndexOf(' ') + 1)), "not a fixed-arity suffix: " + f));
         }
 
         // #398: an RCS switch is a report to the mod's log, like a trace, so the helper calls and a Custom Script may write one.

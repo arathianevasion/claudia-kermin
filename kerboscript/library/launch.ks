@@ -13,8 +13,9 @@
 //| with circularize in the same Mission Script (one Maneuver Sequence, one Approval). A target_ap
 //| below the atmosphere top makes it a hop that ends at the top of the climb.
 //| Options:
-//|   launch_at ["now"]: "now", a time (UT s) to wait for on the pad, or a body or vessel (e.g. MUN)
-//|     to wait for the pad to pass under the plane of, which also sets target_inc to its plane.
+//|   launch_at ["now"]: "now", a time (UT s) to wait for on the pad, or a body or vessel (e.g. MUN,
+//|     or a body's name: "Minmus") to wait for the pad to pass under the plane of, which also sets
+//|     target_inc to its plane.
 //|   target_ap ["auto"]: apoapsis to reach, m; "auto" is the atmosphere top + 10 km.
 //|   target_inc [0]: inclination, degrees; negative launches southward.
 //|   heading ["lib_lazcalc"]: compass degrees to fly, or "lib_lazcalc" to fly into target_inc.
@@ -68,9 +69,6 @@ function launch_defaults {
 // "" or why a string value of an option isn't one the block knows.
 function launch_unreadable {
   parameter opt.
-  if opt:launch_at:istype("String") and opt:launch_at <> "now" {
-    return "launch_at must be 'now', a time (UT s) or a body or vessel to launch into the plane of, not '" + opt:launch_at + "'".
-  }
   local words is list(
     list("target_ap", "auto", "m"),
     list("heading", "lib_lazcalc", "degrees"),
@@ -280,7 +278,15 @@ function launch_when {
   local plan is lexicon("error", "", "wait", 0, "inc", opt:target_inc).
   local go_at is opt:launch_at.
   if go_at:istype("String") {
-    return plan.
+    if go_at = "now" {
+      return plan.
+    }
+    // A body's name works as the body, as transfer_to's target does.
+    if not bodyexists(go_at) {
+      set plan:error to "launch_at must be 'now', a time (UT s), or a body (or its name) or vessel to launch into the plane of: no body named '" + go_at + "'".
+      return plan.
+    }
+    set go_at to body(go_at).
   }
   if go_at:istype("Scalar") {
     set plan:wait to max(0, go_at - time:seconds).

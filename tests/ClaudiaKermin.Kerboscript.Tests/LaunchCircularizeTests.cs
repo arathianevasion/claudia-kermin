@@ -34,7 +34,8 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [Theory]
         [InlineData("lexicon()", "")]
         [InlineData("lexicon(\"launch_at\", 1000, \"target_ap\", 80000, \"heading\", 90, \"throttle_max_q\", 20000, \"g\", 9.81, \"atm_height\", 70000, \"surface_pressure\", 1)", "")]
-        [InlineData("lexicon(\"launch_at\", \"later\")", "launch_at must be 'now', a time (UT s) or a body or vessel to launch into the plane of, not 'later'")]
+        // A string launch_at other than "now" is a body's name, looked up when launch plans the wait (launch_when), not refused here.
+        [InlineData("lexicon(\"launch_at\", \"Minmus\")", "")]
         [InlineData("lexicon(\"target_ap\", \"high\")", "target_ap must be 'auto' or m, not 'high'")]
         [InlineData("lexicon(\"heading\", \"east\")", "heading must be 'lib_lazcalc' or degrees, not 'east'")]
         [InlineData("lexicon(\"throttle_max_q\", \"off\")", "throttle_max_q must be 'none' or Pa, not 'off'")]
