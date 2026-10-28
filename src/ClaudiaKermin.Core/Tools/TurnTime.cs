@@ -44,6 +44,9 @@ namespace ClaudiaKermin.Core.Tools
         /// <summary>The top turn rate (deg/s): kOS's cap, or the peak half the turn reaches if that's lower.</summary>
         public double TopRateDegS;
 
+        /// <summary>The angular acceleration the turn was timed at (deg/s²), the weaker of pitch and yaw; kerboscript sizes the RCS turn override from it.</summary>
+        public double AlphaDegS2;
+
         /// <summary>Null, or why the craft can't turn (<see cref="TurnTime.NoTorque"/>).</summary>
         public string Error;
     }
@@ -67,6 +70,16 @@ namespace ClaudiaKermin.Core.Tools
 
         /// <summary>kOS's default <c>steeringmanager:maxstoppingtime</c> (s).</summary>
         public const double KosMaxStoppingTime = 2;
+
+        /// <summary>The override's bounds for <c>maxstoppingtime</c> (s) while RCS Use has RCS on for a turn (#422).</summary>
+        public const double OverrideMinStoppingTime = 2;
+        public const double OverrideMaxStoppingTime = 10;
+
+        /// <summary>The override's rate gain is this over its stopping time: 80% of the 2 / T that brakes without overshoot.</summary>
+        public const double OverrideKpGain = 1.6;
+
+        /// <summary>The turn is done when the error is under this (rad): the 2° of the alignment check.</summary>
+        private const double DoneRad = 2 * Math.PI / 180;
 
         /// <summary>The reason given for a craft with nothing to turn with on a Coast.</summary>
         public const string NoTorque = "no usable torque";
@@ -96,6 +109,20 @@ namespace ClaudiaKermin.Core.Tools
             if (!(alpha > 0) || double.IsInfinity(alpha)) return new TurnPrediction { Error = NoTorque };
 
             var angle = TurnDegrees * Math.PI / 180;
+            var alphaDeg = alpha * 180 / Math.PI;
+            // RCS Use raises the cap while RCS turns the craft (#422). Thrusters with no torque change nothing: the wheels' model stands.
+            if (withRcs && (craft.RcsPitch > 0 || craft.RcsYaw > 0))
+            {
+                double top;
+                var seconds = OverrideTurn(angle, alpha, OverrideStoppingTime(angle, alpha), out top);
+                return new TurnPrediction
+                {
+                    Seconds = Math.Max(FloorSeconds, seconds + SettleSeconds),
+                    TurnSeconds = seconds,
+                    TopRateDegS = top * 180 / Math.PI,
+                    AlphaDegS2 = alphaDeg,
+                };
+            }
             // kOS's steering asks for no more than it could stop from in maxstoppingtime at full torque.
             var cap = alpha * (maxStoppingTime > 0 ? maxStoppingTime : KosMaxStoppingTime);
             var peak = Math.Sqrt(alpha * angle);
@@ -115,7 +142,36 @@ namespace ClaudiaKermin.Core.Tools
                 Seconds = Math.Max(FloorSeconds, turn + SettleSeconds),
                 TurnSeconds = turn,
                 TopRateDegS = peak * 180 / Math.PI,
+                AlphaDegS2 = alphaDeg,
             };
+        }
+
+        /// <summary>The override's <c>maxstoppingtime</c> (s) for a turn of <paramref name="angle"/> at <paramref name="alpha"/> (same angle units): sqrt(angle / alpha), within 2 to 10.</summary>
+        public static double OverrideStoppingTime(double angle, double alpha)
+        {
+            var t = alpha > 0 ? Math.Sqrt(Math.Max(0, angle) / alpha) : OverrideMinStoppingTime;
+            return Math.Min(OverrideMaxStoppingTime, Math.Max(OverrideMinStoppingTime, t));
+        }
+
+        // The turn under the override: kOS asks for the rate kp * error (kp = 1.6 / T), no more than alpha * T, and the craft follows
+        // at no more than alpha. So it speeds up to the cap, holds it, then slows as the error shrinks (the linear gain's exponential
+        // tail) down to DoneRad. Stepped, as the three stretches overlap on a short turn.
+        private static double OverrideTurn(double angle, double alpha, double stopping, out double peak)
+        {
+            const double dt = 0.02;
+            var cap = alpha * stopping;
+            var kp = OverrideKpGain / stopping;
+            double error = angle, rate = 0, t = 0;
+            peak = 0;
+            while (error > DoneRad && t < 3600)
+            {
+                var want = Math.Min(cap, kp * error);
+                rate += Math.Max(-alpha * dt, Math.Min(alpha * dt, want - rate));
+                error -= rate * dt;
+                t += dt;
+                peak = Math.Max(peak, rate);
+            }
+            return t;
         }
 
         /// <summary>Angular acceleration (rad/s²) on one axis: kN·m over t·m².</summary>

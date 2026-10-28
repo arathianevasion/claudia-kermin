@@ -14,7 +14,7 @@ namespace ClaudiaKermin.Core.Missions
     /// figures the block had to hand. Keys of the lexicon: <c>on</c> (boolean) and <c>reason</c> (one of <see cref="Reasons"/>),
     /// then each optional: <c>error_deg</c> (steering error), <c>rate_dps</c> (turn rate, deg/s), <c>wheels_s</c> and <c>left_s</c>
     /// (the wheels' turn time against the seconds left to the deadline, given together), <c>monoprop</c> and <c>monoprop_max</c>
-    /// (units, given together).
+    /// (units, given together), <c>stopping_s</c> and <c>kp</c> (the turn override's kOS maxstoppingtime and rate gain, given together).
     /// </summary>
     public sealed class RcsSwitch
     {
@@ -25,7 +25,7 @@ namespace ClaudiaKermin.Core.Missions
 
         public bool On;
         public string Reason = "";
-        public double? ErrorDeg, RateDps, WheelsS, LeftS, Monoprop, MonopropMax;
+        public double? ErrorDeg, RateDps, WheelsS, LeftS, Monoprop, MonopropMax, StoppingS, Kp;
 
         /// <summary>Reads the lexicon; null with <paramref name="problem"/> set when it can't be a switch.</summary>
         public static RcsSwitch Parse(IDictionary<string, object> values, out string problem)
@@ -40,7 +40,7 @@ namespace ClaudiaKermin.Core.Missions
                 return null;
             }
             var found = new RcsSwitch { On = (bool)on, Reason = (string)reason };
-            foreach (var key in new[] { "error_deg", "rate_dps", "wheels_s", "left_s", "monoprop", "monoprop_max" })
+            foreach (var key in new[] { "error_deg", "rate_dps", "wheels_s", "left_s", "monoprop", "monoprop_max", "stopping_s", "kp" })
             {
                 object raw;
                 if (!values.TryGetValue(key, out raw) || raw == null) continue;
@@ -53,6 +53,8 @@ namespace ClaudiaKermin.Core.Missions
                     case "wheels_s": found.WheelsS = number; break;
                     case "left_s": found.LeftS = number; break;
                     case "monoprop": found.Monoprop = number; break;
+                    case "stopping_s": found.StoppingS = number; break;
+                    case "kp": found.Kp = number; break;
                     default: found.MonopropMax = number; break;
                 }
             }
@@ -73,6 +75,7 @@ namespace ClaudiaKermin.Core.Missions
             if (RateDps.HasValue) figures.Add("rate " + Format(RateDps.Value, "0.0") + "°/s");
             if (WheelsS.HasValue && LeftS.HasValue) figures.Add("wheels " + Format(WheelsS.Value, "0") + " s vs " + Format(LeftS.Value, "0") + " s left");
             if (Monoprop.HasValue && MonopropMax.HasValue) figures.Add("monoprop " + Format(Monoprop.Value, "0") + "/" + Format(MonopropMax.Value, "0"));
+            if (StoppingS.HasValue && Kp.HasValue) figures.Add("turn cap T " + Format(StoppingS.Value, "0.0") + " s, kp " + Format(Kp.Value, "0.00"));
             return "RCS " + (On ? "on" : "off") + ": " + Reason + (figures.Count > 0 ? " (" + string.Join(", ", figures.ToArray()) + ")" : "");
         }
 

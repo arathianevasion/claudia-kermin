@@ -568,6 +568,79 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal(expected, Decide(state));
         }
 
+        // ---- RCS turn-rate override (#422) ----
+
+        [Theory]
+        // T = sqrt(angle / alpha) within 2 to 10 s; kp = 1.6 / T; ki = 0.1 x kp.
+        [InlineData(36, 1, "6|0.267|0.027")]
+        [InlineData(128, 2, "8|0.2|0.02")]
+        // A small turn stays at 2 s (kp 0.8), a huge one at 10 s (kp 0.16); no acceleration is the default T.
+        [InlineData(4, 4, "2|0.8|0.08")]
+        [InlineData(0.5, 3, "2|0.8|0.08")]
+        [InlineData(5000, 1, "10|0.16|0.016")]
+        [InlineData(100, 0, "2|0.8|0.08")]
+        public void The_turn_override_sizes_T_kp_and_ki_from_the_angle_and_alpha(double angle, double alpha, string expected)
+        {
+            var tuning = "claudia_rcs_turn_tuning(" + angle.ToString(CultureInfo.InvariantCulture) + ", " + alpha.ToString(CultureInfo.InvariantCulture) + ")";
+            Assert.Equal(expected, Run("local u is " + tuning + ". print round(u:t, 3) + \"|\" + round(u:kp, 3) + \"|\" + round(u:ki, 3).").Single());
+        }
+
+        [Theory]
+        [InlineData("big turn", "True")]
+        [InlineData("turning", "True")]
+        [InlineData("falling behind", "True")]
+        [InlineData("no wheel torque", "False")]
+        [InlineData("translating", "False")]
+        [InlineData("aligned", "False")]
+        [InlineData("block end", "False")]
+        [InlineData("", "False")]
+        public void The_override_applies_only_to_the_turn_reasons(string reason, string expected)
+        {
+            Assert.Equal(expected, One("claudia_rcs_turn_reason(\"" + reason + "\")"));
+        }
+
+        // A stand-in for steeringmanager: lexicons with the suffixes the library sets, and reset() counted.
+        private const string FakeSteering =
+            "local resets is 0.\n"
+            + "local sm is lexicon(\"maxstoppingtime\", 2, \"pitchpid\", lexicon(\"kp\", 1, \"ki\", 0.1, \"reset\", { set resets to resets + 1. }),\n"
+            + "  \"yawpid\", lexicon(\"kp\", 1, \"ki\", 0.1, \"reset\", { set resets to resets + 1. })).\n"
+            + "function show { return round(sm:maxstoppingtime, 3) + \"|\" + round(sm:pitchpid:kp, 3) + \"|\" + round(sm:pitchpid:ki, 3) + \"|\" + round(sm:yawpid:kp, 3) + \"|\" + round(sm:yawpid:ki, 3) + \"|\" + resets. }\n";
+
+        [Fact]
+        public void The_override_sets_both_rate_controllers_and_resets_them_and_the_defaults_put_them_back()
+        {
+            var lines = Run(FakeSteering
+                + "claudia_rcs_set_tuning(sm, claudia_rcs_turn_tuning(36, 1)).\nprint show().\n"
+                + "claudia_rcs_set_tuning(sm, claudia_rcs_default_tuning()).\nprint show().");
+            Assert.Equal(new[] { "6|0.267|0.027|0.267|0.027|2", "2|1|0.1|1|0.1|4" }, lines);
+        }
+
+        [Fact]
+        public void Every_exit_puts_kOSs_steering_defaults_back()
+        {
+            var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "ClaudiaKermin.sln"))) dir = dir.Parent;
+            Assert.NotNull(dir);
+            var source = System.IO.File.ReadAllText(System.IO.Path.Combine(dir.FullName, "kerboscript", "library", "claudia_lib.ks"));
+            // The text of function name's body, up to the next top-level function.
+            Func<string, string> body = name =>
+            {
+                var start = source.IndexOf("\nfunction " + name + " {", StringComparison.Ordinal);
+                Assert.True(start >= 0, name);
+                var end = source.IndexOf("\nfunction ", start + 1, StringComparison.Ordinal);
+                return source.Substring(start, (end < 0 ? source.Length : end) - start);
+            };
+            Assert.Contains("claudia_rcs_restore_tuning()", body("claudia_make_safe"));
+            Assert.Contains("claudia_rcs_restore_tuning()", body("claudia_finish"));
+            // RCS Use switching RCS off, whatever the reason, goes through claudia_rcs_switch.
+            Assert.Matches(@"if not on \{\s*claudia_rcs_restore_tuning\(\)", body("claudia_rcs_switch"));
+            Assert.Contains("claudia_rcs_switch(decided[\"on\"]", body("claudia_rcs_tick"));
+            Assert.Contains("claudia_rcs_switch(false", body("claudia_rcs_off"));
+            // The override is applied in the tick only for a turn reason, never in the translate path.
+            Assert.Contains("claudia_rcs_turn_reason(decided:reason)", body("claudia_rcs_tick"));
+            Assert.DoesNotContain("claudia_rcs_set_tuning", body("claudia_rcs_translate"));
+        }
+
         [Theory]
         [InlineData("\"rcs\", true, \"steering\", false, \"error\", 34", "False|steering released")]
         [InlineData("\"steering\", false, \"error\", 34, \"gate\", true", "False|")]

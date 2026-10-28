@@ -43,7 +43,7 @@ namespace ClaudiaKermin.KOS
             // RCS Use (#393): the Core Library and Claudia's helper calls report each RCS switch, for the mission log and the Debrief's
             // tally. A report to the mod like BLOCKSTART, so the Script Check allows it anywhere; a bad lexicon is logged and ignored.
             AddSuffix("RCSSWITCH", new OneArgsSuffix<Lexicon>(RcsSwitch,
-                "Core Library and helper calls: RCS switched. Lexicon on (true/false), reason (turning, falling behind, big turn, no wheel torque, translating, aligned, steering released, block end or no monoprop), then any of error_deg (steering error), rate_dps (turn rate), wheels_s with left_s (the wheels' turn time against the seconds left to the deadline), monoprop with monoprop_max (units)"));
+                "Core Library and helper calls: RCS switched. Lexicon on (true/false), reason (turning, falling behind, big turn, no wheel torque, translating, aligned, steering released, block end or no monoprop), then any of error_deg (steering error), rate_dps (turn rate), wheels_s with left_s (the wheels' turn time against the seconds left to the deadline), monoprop with monoprop_max (units), stopping_s with kp (the turn override applied)"));
             // The Core Library's waits read this: true holds in-script warp at 1x while the Mission needs the player (ADR 0004).
             AddSuffix("WARPHOLD", new Suffix<BooleanValue>(() => ScriptWarpHold.Held, "In-script warp is held at 1x while the Mission needs the player"));
             // The Core Library's waits mark themselves for the warp trace (#335), which times the 1x inside them. Common calls,
