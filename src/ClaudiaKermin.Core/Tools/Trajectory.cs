@@ -34,6 +34,8 @@ namespace ClaudiaKermin.Core.Tools
         public PatchEnd End;
         /// <summary>The body whose sphere of influence it enters, on an encounter.</summary>
         public SnapshotBody Next;
+        /// <summary>Why the search for this patch's end gave up (an expected failure, not a bug), or null; the patch is then the last of its path.</summary>
+        public string Error;
     }
 
     /// <summary>
@@ -47,12 +49,19 @@ namespace ClaudiaKermin.Core.Tools
         private const double MinStep = 1;
         private const int MaxSteps = 200000;
 
+        private readonly int _maxSteps = MaxSteps;
         private readonly List<SnapshotBody> _bodies;
         private readonly Dictionary<string, Conic> _orbits = new Dictionary<string, Conic>(StringComparer.OrdinalIgnoreCase);
 
         public BodySystem(IEnumerable<SnapshotBody> bodies)
         {
             _bodies = bodies.ToList();
+        }
+
+        /// <summary>A system whose encounter search gives up after <paramref name="maxSteps"/> steps, so a test can make it.</summary>
+        internal BodySystem(IEnumerable<SnapshotBody> bodies, int maxSteps) : this(bodies)
+        {
+            _maxSteps = maxSteps;
         }
 
         public SnapshotBody Find(string name)
@@ -130,8 +139,14 @@ namespace ClaudiaKermin.Core.Tools
             if (orbit.Closed) horizon = Math.Min(horizon, startUt + orbit.Period);
 
             SnapshotBody hit;
-            var encounter = FirstEncounter(body, orbit, startUt, horizon, justLeft, out hit);
-            if (encounter.HasValue)
+            string error;
+            var encounter = FirstEncounter(body, orbit, startUt, horizon, justLeft, out hit, out error);
+            if (error != null)
+            {
+                patch.Error = error;
+                patch.EndUt = startUt;
+            }
+            else if (encounter.HasValue)
             {
                 patch.End = PatchEnd.Encounter;
                 patch.Next = hit;
@@ -154,11 +169,13 @@ namespace ClaudiaKermin.Core.Tools
         /// <summary>
         /// The first time in [start, horizon] the craft is inside a child body's sphere of influence, stepping in time no faster
         /// than the gap to each SOI could close at the current closing speed (so a brief pass is not stepped over), then
-        /// bisecting the crossing. The body just left is ignored until the craft is clear of its SOI.
+        /// bisecting the crossing. The body just left is ignored until the craft is clear of its SOI. When the search runs out of
+        /// steps it gives <paramref name="error"/> (null otherwise) and no encounter: an expected failure, not a bug.
         /// </summary>
-        private double? FirstEncounter(SnapshotBody body, Conic orbit, double start, double horizon, SnapshotBody justLeft, out SnapshotBody hit)
+        internal double? FirstEncounter(SnapshotBody body, Conic orbit, double start, double horizon, SnapshotBody justLeft, out SnapshotBody hit, out string error)
         {
             hit = null;
+            error = null;
             var children = Children(body).ToList();
             if (children.Count == 0) return null;
             var armed = children.Select(c => justLeft == null || !string.Equals(c.Name, justLeft.Name, StringComparison.OrdinalIgnoreCase)).ToArray();
@@ -166,7 +183,7 @@ namespace ClaudiaKermin.Core.Tools
             var maxStep = (end - start) / 100;
             var t = start;
             var previous = start;
-            for (var steps = 0; steps < MaxSteps; steps++)
+            for (var steps = 0; steps < _maxSteps; steps++)
             {
                 Vec3 r, v;
                 orbit.State(t, out r, out v);
@@ -200,7 +217,8 @@ namespace ClaudiaKermin.Core.Tools
                 previous = t;
                 t = Math.Min(end, t + step);
             }
-            throw new InvalidOperationException("the encounter search took too many steps");
+            error = "the encounter search took too many steps";
+            return null;
         }
 
         /// <summary>How far ahead to look for an encounter on a hyperbola round the star, which never leaves: one orbit of its slowest child.</summary>

@@ -115,6 +115,16 @@ function transfer_to_make_encounter {
   return done.
 }
 
+// Why a block-internal call gave nothing to fly: its error, "" when it gave a result. ADDONS:CLAUDIA turns a throw inside
+// a call into lexicon("error", reason) (#439), so a failed call ends this block with that reason, not the kOS program.
+function transfer_to_call_failure {
+  parameter result.
+  if result:haskey("error") {
+    return result:error.
+  }
+  return "".
+}
+
 function transfer_to {
   parameter options is lexicon().
   local extra is lexicon("encounter_ut", -1, "target_pe_actual", -1, "correction_dv", 0,
@@ -150,13 +160,15 @@ function transfer_to {
   // calls are block-internal (ADR 0006, ADR 0007), so they sit in the block. The earliest departure
   // leaves time to turn to the burn, which exec_node does before it warps.
   local turn is addons:claudia:turntime(lexicon("max_stopping_time", steeringmanager:maxstoppingtime)).
-  if turn:error <> "" {
-    return claudia_finish(ctx, false, turn:error, extra).
+  local turn_failure is transfer_to_call_failure(turn).
+  if turn_failure <> "" {
+    return claudia_finish(ctx, false, turn_failure, extra).
   }
   local found is addons:claudia:ejectionburn(lexicon("target", dest:name, "target_pe", opt:target_pe,
     "earliest_ut", ctx:start_ut + turn:turn_time, "window", opt:window)).
-  if found:error <> "" {
-    return claudia_finish(ctx, false, found:error, extra).
+  local found_failure is transfer_to_call_failure(found).
+  if found_failure <> "" {
+    return claudia_finish(ctx, false, found_failure, extra).
   }
   add node(found:ut, found:radial, found:normal, found:prograde).
   // The ejection burn may be far off (window "next" up to a synodic period away, a UT window
