@@ -158,7 +158,7 @@ namespace ClaudiaKermin.Core.Tools
         /// <summary>Every tool the mod ships, in the fixed order the tools list is sent in (so the cached prefix never changes).</summary>
         public static PlanningTools Default(IScriptCheck scriptCheck = null)
         {
-            var tools = new List<IPlanningTool> { new PredictBurn(), new SolveBurn(), new StagePerformance(), new FindLandingSite() };
+            var tools = new List<IPlanningTool> { new PredictBurn(), new SolveBurn(), new StagePerformance(), new PlanAscent(), new FindLandingSite() };
             if (scriptCheck != null) tools.Add(new CheckScript(scriptCheck));
             return new PlanningTools(tools);
         }

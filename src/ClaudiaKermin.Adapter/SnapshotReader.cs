@@ -238,8 +238,27 @@ namespace ClaudiaKermin.Adapter
                     ArgumentOfPeriapsis = orbit != null && body.referenceBody != body ? orbit.argumentOfPeriapsis : 0,
                     MeanAnomalyAtEpoch = orbit != null && body.referenceBody != body ? orbit.meanAnomalyAtEpoch : 0,
                     Epoch = orbit != null && body.referenceBody != body ? orbit.epoch : 0,
+                    Air = ReadAir(body),
                 });
             }
+        }
+
+        /// <summary>Rows of the body's air for plan_ascent: every fiftieth of its depth, as <see cref="ReentryAir"/> reads it at the equator.</summary>
+        private static List<double[]> ReadAir(CelestialBody body)
+        {
+            var rows = new List<double[]>();
+            if (!body.atmosphere || body.atmosphereDepth <= 0) return rows;
+            var air = new ReentryAir(body);
+            const int Steps = 50;
+            for (var i = 0; i <= Steps; i++)
+            {
+                var altitude = body.atmosphereDepth * i / Steps;
+                double density, sound;
+                air.Air(altitude, 0, out density, out sound);
+                var atm = altitude < body.atmosphereDepth ? body.GetPressure(altitude) / 101.325 : 0;
+                rows.Add(new[] { altitude, atm, density, sound });
+            }
+            return rows;
         }
 
         /// <summary>Tags what a part module makes the part able to do; the names are the stock (and kOS) module classes.</summary>

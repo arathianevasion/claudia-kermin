@@ -292,11 +292,25 @@ namespace ClaudiaKermin.Core.Missions
             {
                 json.Name("bodies").BeginArray();
                 foreach (var body in Bodies)
+                {
                     json.BeginObject().Field("name", body.Name).Field("parent", body.Parent).Field("gm", body.Gm).Field("radius", body.Radius)
                         .Field("atmosphere_height", body.AtmosphereHeight).Field("sea_level_atm", body.SeaLevelAtm).Field("sma", body.Sma).Field("inclination", body.Inclination)
                         .Field("soi_radius", body.SoiRadius).Field("rotation_period", body.RotationPeriod)
                         .Field("eccentricity", body.Eccentricity).Field("lan", body.Lan).Field("arg_pe", body.ArgumentOfPeriapsis)
-                        .Field("mean_anomaly_at_epoch", body.MeanAnomalyAtEpoch).Field("epoch", body.Epoch).EndObject();
+                        .Field("mean_anomaly_at_epoch", body.MeanAnomalyAtEpoch).Field("epoch", body.Epoch);
+                    if (body.Air.Count > 0)
+                    {
+                        json.Name("air").BeginArray();
+                        foreach (var row in body.Air)
+                        {
+                            json.BeginArray();
+                            foreach (var value in row) json.Number(value);
+                            json.EndArray();
+                        }
+                        json.EndArray();
+                    }
+                    json.EndObject();
+                }
                 json.EndArray();
             }
             json.Name("orbit");
@@ -329,6 +343,14 @@ namespace ClaudiaKermin.Core.Missions
             if (keys == null) return new List<double[]>();
             return keys.Items.Where(k => k.Items.Count >= 2)
                 .Select(k => new[] { JsonNode.Double(k.Items[0]) ?? 0, JsonNode.Double(k.Items[1]) ?? 0 }).ToList();
+        }
+
+        /// <summary>Rows of <paramref name="width"/> numbers; a shorter row is left out.</summary>
+        private static List<double[]> Rows(JsonNode rows, int width)
+        {
+            if (rows == null) return new List<double[]>();
+            return rows.Items.Where(r => r.Items.Count >= width)
+                .Select(r => r.Items.Take(width).Select(v => JsonNode.Double(v) ?? 0).ToArray()).ToList();
         }
 
         /// <summary>Reads snapshot JSON; missing fields keep their defaults. Throws <see cref="System.FormatException"/> on bad JSON.</summary>
@@ -457,6 +479,7 @@ namespace ClaudiaKermin.Core.Missions
                         ArgumentOfPeriapsis = JsonNode.Double(body["arg_pe"]) ?? 0,
                         MeanAnomalyAtEpoch = JsonNode.Double(body["mean_anomaly_at_epoch"]) ?? 0,
                         Epoch = JsonNode.Double(body["epoch"]) ?? 0,
+                        Air = Rows(body["air"], 4),
                     });
                 }
             }
