@@ -1371,9 +1371,12 @@ function land {
     return claudia_finish(ctx, false, landed, extra).
   }
   set extra:distance_to_target to round(land_surface_distance(aim:lat, aim:lng, ship:geoposition:lat, ship:geoposition:lng, body:radius)).
-  set extra:slope to round(addons:claudia:slope(ship:geoposition), 1).
+  // SLOPE and BIOME give lexicon("error", reason) when they throw (#439): the landing stands, the reading is -1 or "".
+  local read_slope is addons:claudia:slope(ship:geoposition).
+  set extra:slope to choose -1 if read_slope:istype("Lexicon") else round(read_slope, 1).
   set extra:lean to round(vang(ship:facing:forevector, ship:up:vector), 1).
-  set extra:biome to addons:claudia:biome(ship:geoposition).
+  local read_biome is addons:claudia:biome(ship:geoposition).
+  set extra:biome to choose "" if read_biome:istype("Lexicon") else read_biome.
   if extra:lean > 30 {
     return claudia_finish(ctx, false, "tipped over on landing", extra).
   }
@@ -1834,6 +1837,10 @@ function land_descend {
         // descent has the whole braking distance to take the new site in (a later move could put
         // the site behind it).
         local spot is addons:claudia:flatspot(body:geopositionlatlng(site:lat, site:lng), opt:max_divert, opt:max_slope).
+        if spot:haskey("error") {
+          // FLATSPOT threw (#439): stay on the site, as one that found nothing flatter.
+          set spot to lexicon("lat", site:lat, "lng", site:lng, "flat", false).
+        }
         local moved is land_surface_distance(site:lat, site:lng, spot:lat, spot:lng, body:radius).
         set site to lexicon("lat", spot:lat, "lng", spot:lng).
         if not drop_impact:istype("String") {

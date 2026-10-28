@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Andrew Watson
 
+using System;
 using System.Diagnostics;
 using System.Globalization;
 using ClaudiaKermin.Adapter;
@@ -34,25 +35,65 @@ namespace ClaudiaKermin.KOS
                 "Core Library only (transfer_to): the cheapest ejection to target (a moon's name) arriving at target_pe, within one synodic period from earliest_ut or window (to latest_ut, refusing over max_dv); lexicon error, ut, prograde, normal, radial, dv, encounter_ut, arrival_ut, target_pe_actual, ..."));
         }
 
-        private Lexicon EjectionBurn(Lexicon input)
+        /// <summary>
+        /// The one wrapper every block-internal call goes through (#439): runs <paramref name="call"/>, logs its name and wall-clock
+        /// time with <paramref name="describe"/>'s account of the result (so block tests can read it back from KSP.log), and turns an
+        /// exception into <c>lexicon("error", reason)</c> so the block fails with <c>reason</c> instead of the kOS program ending.
+        /// Core returns expected failures as an <c>error</c>; an exception here is a bug, logged with its stack.
+        /// </summary>
+        internal static Structure Guarded(string name, Func<Structure> call, Func<string> describe)
         {
             var watch = Stopwatch.StartNew();
-            var node = BlockCalls.EjectionBurn(KosValues.ToDictionary(input), SnapshotReader.Read(shared.Vessel));
-            // The search's time, against the minutes the old RSVP search took, and the node, so block tests can read it back from KSP.log.
-            Debug.Log(ModInfo.LogTag + " block call EJECTIONBURN took " + Ms(watch) + " ms: " + (node["error"] as string == ""
+            Structure result;
+            try
+            {
+                result = call();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError(ModInfo.LogTag + " block call " + name + " failed after " + Ms(watch) + " ms: " + e);
+                var error = new Lexicon();
+                error.Add(new StringValue("error"), new StringValue(name + " failed: " + e.Message));
+                return error;
+            }
+            // The log line is only a diagnostic: a failure writing it must not fail a call that worked.
+            var took = Ms(watch);
+            try
+            {
+                Debug.Log(ModInfo.LogTag + " block call " + name + " took " + took + " ms: " + (describe == null ? "done" : describe()));
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning(ModInfo.LogTag + " block call " + name + " took " + took + " ms; its log line failed: " + e.Message);
+            }
+            return result;
+        }
+
+        private Lexicon EjectionBurn(Lexicon input)
+        {
+            System.Collections.Generic.IDictionary<string, object> node = null;
+            // The search's time, against the minutes the old RSVP search took, and the node.
+            return (Lexicon)Guarded("EJECTIONBURN", () =>
+            {
+                node = BlockCalls.EjectionBurn(KosValues.ToDictionary(input), SnapshotReader.Read(shared.Vessel));
+                return KosValues.FromPlain(node);
+            }, () => node["error"] as string == ""
                 ? string.Format(CultureInfo.InvariantCulture, "node at UT {0:0.0}, prograde {1:0.00}, normal {2:0.00}, radial {3:0.00} m/s ({4:0.0} m/s); Pe {5:0} m at UT {6:0}; searched {7:0} s from UT {8:0.0}",
                     node["ut"], node["prograde"], node["normal"], node["radial"], node["dv"], node["target_pe_actual"], node["arrival_ut"], node["synodic"], node["search_from"])
-                : node["error"]));
-            return (Lexicon)KosValues.FromPlain(node);
+                : (string)node["error"]);
         }
 
         private Lexicon TurnTime(Lexicon input)
         {
-            var watch = Stopwatch.StartNew();
-            var craft = TurnCraftReader.Read(shared.Vessel);
-            var turn = BlockCalls.TurnTime(KosValues.ToDictionary(input), craft);
+            System.Collections.Generic.IDictionary<string, object> turn = null;
+            TurnCraft craft = null;
             // The prediction, so block tests can read it back from KSP.log against the turn the block flew.
-            Debug.Log(ModInfo.LogTag + " block call TURNTIME took " + Ms(watch) + " ms: " + string.Format(CultureInfo.InvariantCulture,
+            return (Lexicon)Guarded("TURNTIME", () =>
+            {
+                craft = TurnCraftReader.Read(shared.Vessel);
+                turn = BlockCalls.TurnTime(KosValues.ToDictionary(input), craft);
+                return KosValues.FromPlain(turn);
+            }, () => string.Format(CultureInfo.InvariantCulture,
                 "{0}; wheels {1:0.##}/{2:0.##} kN m, RCS {3:0.##}/{4:0.##} kN m{5}, MOI {6:0.##}/{7:0.##} t m2 (pitch/yaw)",
                 turn["error"] as string == ""
                     ? string.Format(CultureInfo.InvariantCulture, "turn_time {0:0.0} s, turn {1:0.0} s at up to {2:0.0} deg/s; wheels alone {3}",
@@ -60,29 +101,32 @@ namespace ClaudiaKermin.KOS
                             : string.Format(CultureInfo.InvariantCulture, "turn_time {0:0.0} s, turn {1:0.0} s", turn["wheels_turn_time"], turn["wheels_turn_s"]))
                     : turn["error"],
                 craft.WheelPitch, craft.WheelYaw, craft.RcsPitch, craft.RcsYaw, craft.RcsUsable ? "" : " (no monoprop)", craft.MoiPitch, craft.MoiYaw));
-            return (Lexicon)KosValues.FromPlain(turn);
         }
 
         private Lexicon DeorbitBurn(Lexicon input)
         {
-            var watch = Stopwatch.StartNew();
-            var vessel = shared.Vessel;
-            var ask = KosValues.ToDictionary(input);
-            var found = BlockCalls.DeorbitBurn(ask, SnapshotReader.Read(vessel), new PlanningBody(),
-                new ReentryAir(vessel.mainBody), new ReentryCraft(vessel, BlockCalls.LeftOut(ask)));
-            Debug.Log(ModInfo.LogTag + " block call DEORBITBURN took " + Ms(watch) + " ms: " + Landing(found));
-            return (Lexicon)KosValues.FromPlain(found);
+            System.Collections.Generic.IDictionary<string, object> found = null;
+            return (Lexicon)Guarded("DEORBITBURN", () =>
+            {
+                var vessel = shared.Vessel;
+                var ask = KosValues.ToDictionary(input);
+                found = BlockCalls.DeorbitBurn(ask, SnapshotReader.Read(vessel), new PlanningBody(),
+                    new ReentryAir(vessel.mainBody), new ReentryCraft(vessel, BlockCalls.LeftOut(ask)));
+                return KosValues.FromPlain(found);
+            }, () => Landing(found));
         }
 
         private Lexicon ReentryImpact(Lexicon input)
         {
-            var watch = Stopwatch.StartNew();
-            var vessel = shared.Vessel;
-            var ask = KosValues.ToDictionary(input);
-            var landing = BlockCalls.ReentryImpact(ask, SnapshotReader.Read(vessel), new PlanningBody(),
-                new ReentryAir(vessel.mainBody), new ReentryCraft(vessel, BlockCalls.LeftOut(ask)));
-            Debug.Log(ModInfo.LogTag + " block call REENTRYIMPACT took " + Ms(watch) + " ms: " + Landing(landing));
-            return (Lexicon)KosValues.FromPlain(landing);
+            System.Collections.Generic.IDictionary<string, object> landing = null;
+            return (Lexicon)Guarded("REENTRYIMPACT", () =>
+            {
+                var vessel = shared.Vessel;
+                var ask = KosValues.ToDictionary(input);
+                landing = BlockCalls.ReentryImpact(ask, SnapshotReader.Read(vessel), new PlanningBody(),
+                    new ReentryAir(vessel.mainBody), new ReentryCraft(vessel, BlockCalls.LeftOut(ask)));
+                return KosValues.FromPlain(landing);
+            }, () => Landing(landing));
         }
 
         /// <summary>A predicted landing for the log, so predicted against actual can be read back from KSP.log.</summary>
@@ -106,16 +150,15 @@ namespace ClaudiaKermin.KOS
 
         private Lexicon LandingSite(Lexicon input)
         {
-            var watch = Stopwatch.StartNew();
-            var snapshot = SnapshotReader.Read(shared.Vessel);
-            var site = BlockCalls.LandingSite(KosValues.ToDictionary(input), snapshot, new PlanningBody());
+            System.Collections.Generic.IDictionary<string, object> site = null;
             // The search runs on the main thread, as kOS does: its time against the frame budget is for tuning it.
-            var found = site["error"] as string == ""
+            return (Lexicon)Guarded("LANDINGSITE", () =>
+            {
+                site = BlockCalls.LandingSite(KosValues.ToDictionary(input), SnapshotReader.Read(shared.Vessel), new PlanningBody());
+                return KosValues.FromPlain(site);
+            }, () => site["error"] as string == ""
                 ? string.Format(CultureInfo.InvariantCulture, "{0} at {1}, {2}", site["biome"], site["lat"], site["lng"])
-                : site["error"];
-            Debug.Log(ModInfo.LogTag + " block call LANDINGSITE took "
-                + watch.Elapsed.TotalMilliseconds.ToString("0.0", CultureInfo.InvariantCulture) + " ms: " + found);
-            return (Lexicon)KosValues.FromPlain(site);
+                : (string)site["error"]);
         }
     }
 }

@@ -111,6 +111,7 @@ namespace ClaudiaKermin.Core.Tools
             var setup = PredictBurn.Setup.Prepare(snapshot, null, out error);
             if (setup == null) return error;
             var path = setup.System.Follow(setup.Body, setup.Start, setup.Now, 8);
+            if (path[path.Count - 1].Error != null) return PlanningJson.Error(path[path.Count - 1].Error);
             return goal == "next_patch_pe"
                 ? SolvePatchPe(setup, path, value.Value, at, direction ?? "prograde")
                 : SolveClosedForm(setup, path, goal, value, at);

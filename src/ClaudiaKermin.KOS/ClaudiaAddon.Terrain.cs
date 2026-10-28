@@ -25,10 +25,14 @@ namespace ClaudiaKermin.KOS
 
         private void AddTerrainSuffixes()
         {
-            AddSuffix("BIOME", new OneArgsSuffix<StringValue, GeoCoordinates>(Biome, "The science biome name at a GEOPOSITION (\"\" if its body has none)"));
+            // Block-internal calls (#439): through ClaudiaAddon.Guarded, so a throw becomes lexicon("error", reason) for the block.
+            AddSuffix("BIOME", new OneArgsSuffix<Structure, GeoCoordinates>(geo => Guarded("BIOME", () => Biome(geo), null),
+                "The science biome name at a GEOPOSITION (\"\" if its body has none)"));
             AddSuffix("HIGHESTTERRAIN", new OneArgsSuffix<ScalarValue, BodyTarget>(HighestTerrain, "The height in m above sea level of a body's highest terrain"));
-            AddSuffix("SLOPE", new OneArgsSuffix<ScalarValue, GeoCoordinates>(Slope, "The ground's slope in degrees at a GEOPOSITION, over about a lander's footprint"));
-            AddSuffix("FLATSPOT", new ThreeArgsSuffix<Lexicon, GeoCoordinates, ScalarValue, ScalarValue>(FlatSpot,
+            AddSuffix("SLOPE", new OneArgsSuffix<Structure, GeoCoordinates>(geo => Guarded("SLOPE", () => Slope(geo), null),
+                "The ground's slope in degrees at a GEOPOSITION, over about a lander's footprint"));
+            AddSuffix("FLATSPOT", new ThreeArgsSuffix<Structure, GeoCoordinates, ScalarValue, ScalarValue>(
+                (geo, reach, maxSlope) => Guarded("FLATSPOT", () => FlatSpot(geo, reach, maxSlope), null),
                 "Where to land near a GEOPOSITION: FLATSPOT(geo, reach_m, max_slope_deg) gives lexicon lat, lng, slope, alt, distance, flat"));
         }
 

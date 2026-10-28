@@ -170,6 +170,7 @@ namespace ClaudiaKermin.Core.Tools
             var now = setup.Now;
             burns = new List<BurnDone>();
             path = system.Follow(setup.Body, setup.Start, now, PathPatches);
+            if (path[path.Count - 1].Error != null) return path[path.Count - 1].Error;
             for (var i = 0; i < requests.Count; i++)
             {
                 var label = "burn " + (i + 1).ToString(CultureInfo.InvariantCulture);
@@ -196,6 +197,7 @@ namespace ClaudiaKermin.Core.Tools
                 var magnitude = Math.Sqrt(prograde * prograde + normal * normal + radial * radial);
                 burns.Add(new BurnDone { Ut = ut.Value, DeltaV = magnitude, Body = patch.Body, Orbit = burned, BurnTime = stages != null ? stages.Take(magnitude) : null });
                 path = system.Follow(patch.Body, burned, ut.Value, i == requests.Count - 1 ? MaxPatches : PathPatches);
+                if (path[path.Count - 1].Error != null) return path[path.Count - 1].Error;
             }
             return null;
         }

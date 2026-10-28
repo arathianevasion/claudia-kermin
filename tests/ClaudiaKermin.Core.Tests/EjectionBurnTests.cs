@@ -321,6 +321,20 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void A_target_out_of_the_craft_s_reach_gives_error_text_not_an_exception()
+        {
+            // #439: an expected failure comes back as error, so the block call has a reason and nothing throws.
+            var snapshot = BlockTestStart();
+            var result = Ask(snapshot, earliest: snapshot.Ut + 30);
+            Assert.Equal("", result["error"]);
+            var input = new Dictionary<string, object> { { "target", "Mun" }, { "target_pe", TargetPe }, { "earliest_ut", snapshot.Ut + 30 }, { "max_dv", 100.0 } };
+            var refused = BlockCalls.EjectionBurn(input, snapshot);
+            Assert.StartsWith("found no transfer: the cheapest burn", (string)refused["error"]);
+            Assert.Contains("more than the craft's 100 m/s", (string)refused["error"]);
+            Assert.False(refused.ContainsKey("ut"));
+        }
+
+        [Fact]
         public void A_missing_target_pe_has_no_transfer()
         {
             var result = BlockCalls.EjectionBurn(new Dictionary<string, object> { { "target", "Mun" } }, BlockTestStart());

@@ -63,6 +63,22 @@ namespace ClaudiaKermin.Kerboscript.Tests
             Assert.Equal("", Unreadable("\"target\", \"Mun\", \"target_pe\", 30000, \"window\", 5000, \"correction\", false"));
         }
 
+        // ---- A block call that threw (#439) ----
+
+        [Fact]
+        public void A_block_call_error_is_the_reason_transfer_to_fails_with()
+        {
+            // The lexicon ClaudiaAddon.Guarded gives for a throw: only error. transfer_to reads it as it reads Core's own errors.
+            Assert.Equal("EJECTIONBURN failed: boom", One("transfer_to_call_failure(lexicon(\"error\", \"EJECTIONBURN failed: boom\"))"));
+            Assert.Equal("found no transfer: no departure", One("transfer_to_call_failure(lexicon(\"error\", \"found no transfer: no departure\"))"));
+        }
+
+        [Fact]
+        public void A_block_call_that_gave_a_result_has_no_failure()
+        {
+            Assert.Equal("", One("transfer_to_call_failure(lexicon(\"error\", \"\", \"ut\", 5))"));
+        }
+
         // ---- The correction after a missed ejection (#363) ----
 
         private static string[] CorrectionAsk(string maxDuration, string auto, string dvLeft)
