@@ -181,6 +181,7 @@ namespace ClaudiaKermin.Core.Tests
             var r1 = new Vec3(700000, 0, 0);
             var r2 = new Vec3(-9000000, 6000000, 300000);
             Lambert.Solve(KerbinGm, r1, r2, 100000, Up);
+            Lambert.Solve(KerbinGm, r1, r2, 500000, Up, 1);
             var watch = Stopwatch.StartNew();
             for (var i = 0; i < 10000; i++)
             {

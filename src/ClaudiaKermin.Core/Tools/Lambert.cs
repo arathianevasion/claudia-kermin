@@ -44,7 +44,7 @@ namespace ClaudiaKermin.Core.Tools
         private const double BracketedTolerance = 1e-13;
 
         /// <summary>The sine of the angle between r1 and r2 below which they are in line, and the plane comes from the normal.</summary>
-        private const double InLine = 1e-8;
+        private const double InLineSine = 1e-8;
 
         /// <summary>
         /// The velocities leaving <paramref name="r1"/> and arriving at <paramref name="r2"/> after <paramref name="seconds"/>;
@@ -88,7 +88,7 @@ namespace ClaudiaKermin.Core.Tools
             var sine = cross.Length;
             Vec3 iH;
             bool flip;
-            if (sine > InLine)
+            if (sine > InLineSine)
             {
                 iH = cross / sine;
                 flip = (Vec3.Dot(iH, normal) < 0) != retrograde;
@@ -96,7 +96,7 @@ namespace ClaudiaKermin.Core.Tools
             else
             {
                 var inPlane = normal - Vec3.Dot(normal, iR1) * iR1;
-                if (inPlane.Length <= InLine * normal.Length) return Fail("r1 and r2 are in line through the body and the normal is along them, so the transfer has no plane");
+                if (inPlane.Length <= InLineSine * normal.Length) return Fail("r1 and r2 are in line through the body and the normal is along them, so the transfer has no plane");
                 iH = inPlane.Normalized;
                 flip = retrograde;
             }
@@ -235,7 +235,7 @@ namespace ClaudiaKermin.Core.Tools
         private static double Tof(double x, double ll, int m, out double d1, out double d2, out double d3)
         {
             var y = Math.Sqrt(1 - ll * ll * (1 - x * x));
-            var t = TofEquationY(x, y, 0, ll, m);
+            var t = TofEquationY(x, y, ll, m);
             var ll3 = ll * ll * ll;
             var oneMinusX2 = 1 - x * x;
             d1 = (3 * t * x - 2 + 2 * ll3 * x / y) / oneMinusX2;
@@ -257,8 +257,8 @@ namespace ClaudiaKermin.Core.Tools
             return 0.0;
         }
 
-        /// <summary>The time-of-flight equation, less <paramref name="t0"/>, with y computed outside.</summary>
-        private static double TofEquationY(double x, double y, double t0, double ll, int m)
+        /// <summary>The time-of-flight equation, with y computed outside.</summary>
+        private static double TofEquationY(double x, double y, double ll, int m)
         {
             double t;
             if (m == 0 && Math.Sqrt(0.6) < x && x < Math.Sqrt(1.4))
@@ -273,7 +273,7 @@ namespace ClaudiaKermin.Core.Tools
                 var psi = ComputePsi(x, y, ll);
                 t = ((psi + m * Math.PI) / Math.Sqrt(Math.Abs(1 - x * x)) - x + ll * y) / (1 - x * x);
             }
-            return t - t0;
+            return t;
         }
 
         /// <summary>
