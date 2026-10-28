@@ -103,7 +103,7 @@ function exec_node {
   }
 
   local steer is nd:deltav.
-  lock steering to steer.
+  lock steering to claudia_keep_roll(steer).
   local tset is 0.
   lock throttle to tset.
   local initial is nd:deltav.
