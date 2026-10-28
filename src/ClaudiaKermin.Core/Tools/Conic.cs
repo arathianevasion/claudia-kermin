@@ -70,6 +70,8 @@ namespace ClaudiaKermin.Core.Tools
         private readonly bool _fromState;
         private readonly Vec3 _r0;
         private readonly Vec3 _v0;
+        /// <summary>Where Shepperd's last solve for this orbit ended, its next start: the searches step one orbit by nearby times.</summary>
+        private Shepperd.WarmStart _warm;
 
         private Conic(double mu, double a, double e, Vec3 p, Vec3 q, Vec3 w, double epoch, double m0)
         {
@@ -174,7 +176,7 @@ namespace ClaudiaKermin.Core.Tools
         {
             if (_fromState)
             {
-                var s = Shepperd.Solve(Mu, ut - Epoch, _r0, _v0);
+                var s = Shepperd.Solve(Mu, ut - Epoch, _r0, _v0, ref _warm);
                 r = s.r;
                 v = s.v;
                 return;

@@ -29,6 +29,28 @@ namespace ClaudiaKermin.Core.Tools.Numerics
         /// </summary>
         public static (Vec3 r, Vec3 v) Solve(double mu, double dt, Vec3 r0, Vec3 v0)
         {
+            var start = default(WarmStart);
+            return Solve(mu, dt, r0, v0, ref start);
+        }
+
+        /// <summary>
+        /// Where the last solve for one state ended: Shepperd's variable u, the time it solved for and du/dt there. A caller that
+        /// steps the same state by nearby times keeps one and passes it back, and the next solve starts from u extrapolated to its
+        /// time instead of from 0 as MechJeb's does, which saves most of the iterations. The default is a cold start.
+        /// </summary>
+        internal struct WarmStart
+        {
+            public double U;
+            public double Dt;
+            public double Rate;
+        }
+
+        /// <summary>
+        /// <see cref="Solve(double, double, Vec3, Vec3)"/> starting from <paramref name="start"/> and leaving this solve there; a
+        /// start outside the orbit's bounds on u starts at 0. Only the iteration count depends on it, not the answer.
+        /// </summary>
+        public static (Vec3 r, Vec3 v) Solve(double mu, double dt, Vec3 r0, Vec3 v0, ref WarmStart start)
+        {
             if (!Finite(mu) || mu <= 0) throw new ArgumentException("Shepperd.Solve needs a positive, finite gravitational parameter, not " + mu);
             if (!Finite(dt)) throw new ArgumentException("Shepperd.Solve needs a finite time, not " + dt);
             if (!Finite(r0) || !Finite(v0)) throw new ArgumentException("Shepperd.Solve needs a finite position and velocity");
@@ -36,7 +58,6 @@ namespace ClaudiaKermin.Core.Tools.Numerics
 
             const double tolerance = 1.0e-12;
             const int imax = 50;
-            double u = 0;
             var umax = double.MaxValue;
             var umin = double.MinValue;
             double orbits = 0;
@@ -52,6 +73,9 @@ namespace ClaudiaKermin.Core.Tools.Numerics
                 umin = -1.0 / Math.Sqrt(Math.Abs(beta));
             }
 
+            var u = start.U + (dt - start.Dt) * start.Rate;
+            if (!Finite(u) || u <= umin || u >= umax) u = 0;
+
             if (beta > 0.0)
             {
                 orbits = beta * dt - 2 * n0;
@@ -64,6 +88,8 @@ namespace ClaudiaKermin.Core.Tools.Numerics
             var u1 = 0.0;
             var u2 = 0.0;
             var r1 = 0.0;
+            var solved = u;
+            var slope = 0.0;
 
             for (var i = 1; i < imax; i++)
             {
@@ -105,7 +131,8 @@ namespace ClaudiaKermin.Core.Tools.Numerics
 
                 r1 = rLen0 * u0 + n0 * u1 + mu * u2;
                 var t = rLen0 * u1 + n0 * u2 + mu * u3;
-                var slope = 4 * r1 / (1 + beta * u * u);
+                slope = 4 * r1 / (1 + beta * u * u);
+                solved = u;
 
                 var terror = dt - t;
 
@@ -139,6 +166,10 @@ namespace ClaudiaKermin.Core.Tools.Numerics
                         u = (umin + umax) / 2;
                 }
             }
+
+            start.U = solved;
+            start.Dt = dt;
+            start.Rate = slope > 0 ? 1 / slope : 0;
 
             var f = 1.0 - mu / rLen0 * u2;
             var gg = 1.0 - mu / r1 * u2;

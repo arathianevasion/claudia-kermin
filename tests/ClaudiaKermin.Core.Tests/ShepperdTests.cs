@@ -143,6 +143,27 @@ namespace ClaudiaKermin.Core.Tests
             return v;
         }
 
+        // ---- warm start ----
+
+        [Theory]
+        [InlineData(3000000, 0.2)]
+        [InlineData(-3000000, 1.5)]
+        public void A_warm_start_from_any_earlier_solve_gives_the_cold_answer(double sma, double e)
+        {
+            var conic = Conic.FromElements(KerbinGm, sma, e, 12, 200, 30, -0.7, 0);
+            Vec3 r0, v0;
+            conic.StateAtTrue(-0.5, out r0, out v0);
+            var warm = default(Shepperd.WarmStart);
+            // Nearby steps, a jump back, a jump many orbits on, and back to the start.
+            foreach (var dt in new[] { 10.0, 20, 35, -6000, 50000, 50010, 0 })
+            {
+                var cold = Shepperd.Solve(KerbinGm, dt, r0, v0);
+                var hot = Shepperd.Solve(KerbinGm, dt, r0, v0, ref warm);
+                Close(cold.r, hot.r, 1e-11);
+                Close(cold.v, hot.v, 1e-11);
+            }
+        }
+
         // ---- input ----
 
         [Fact]
