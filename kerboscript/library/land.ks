@@ -595,11 +595,12 @@ function land_lander_engine_ok {
 function land_underhang_unflyable {
   parameter names, lander_dv, need, engine_ok, agl, stage_limit.
   local what is "Underhang (" + names:join(", ") + ")".
+  local figures is "the lander alone has about " + round(lander_dv) + " m/s, " + round(need) + " m/s needed to fly the last " + round(agl) + " m once it is dropped".
   if not engine_ok {
-    return what + ": no lander engine at or above stage_limit " + stage_limit + " once it is dropped".
+    return what + ": no lander engine at or above stage_limit " + stage_limit + " once it is dropped (" + figures + ")".
   }
   if lander_dv < need {
-    return what + ": the lander alone has about " + round(lander_dv) + " m/s, " + round(need) + " m/s needed to fly the last " + round(agl) + " m once it is dropped".
+    return what + ": " + figures.
   }
   return "".
 }
@@ -1515,20 +1516,33 @@ function land_drop {
   for p in ship:parts {
     on_ship:add(p:uid).
   }
+  // Only what is still aboard: a stage staged off before the fall (#382) may have taken some or all of
+  // it, and a part that left is never read again (its vessel may be gone).
   local still is list().
   for d in under:plan:decouplers {
     if on_ship:contains(d:uid) {
       still:add(d).
     }
   }
-  if still:length = 0 {
-    // Staged off before the fall (#382) with the stage it hung from.
-    for p in under:droppable {
+  local leaving is list().
+  for g in under:plan:gone {
+    if on_ship:contains(g:uid) {
+      leaving:add(g).
+    }
+  }
+  local hanging is list().
+  for p in under:droppable {
+    if on_ship:contains(p:uid) {
+      hanging:add(p).
+    } else {
       extra:dropped_underhang:add(p:name).
     }
+  }
+  if still:length = 0 or hanging:length = 0 {
     addons:claudia:blocktrace("land", lexicon("phase", "drop", "note", "the Underhang already left when the stage was staged off before the fall")).
     return false.
   }
+  local dropped_before is extra:dropped_underhang:length.
   set extra:underhang_drop_agl to round(radar).
   local fired is 0.
   for d in still {
@@ -1537,6 +1551,7 @@ function land_drop {
     }
   }
   local down is -ship:facing:forevector.
+  // No claudia_tick here: its auto-staging must not fire mid-drop, and this lasts 1 s at most.
   until false {
     // The drop is the block's own: not part loss.
     set ctx:parts to ship:parts:length.
@@ -1549,7 +1564,7 @@ function land_drop {
     // How far the highest part that left is below the craft's lowest point; -1 until one has left.
     local gap is -1.
     local top is 1e9.
-    for g in under:plan:gone {
+    for g in leaving {
       if not aboard:contains(g:uid) {
         set top to min(top, -land_part_low(g, -down)).
       }
@@ -1566,18 +1581,19 @@ function land_drop {
   for p in ship:parts {
     now_on:add(p:uid).
   }
-  for g in under:plan:gone {
+  for g in leaving {
     if not now_on:contains(g:uid) {
       extra:dropped_underhang:add(g:name).
     }
   }
-  for p in under:droppable {
+  for p in hanging {
     if now_on:contains(p:uid) {
       extra:underhang_kept:add(p:name).
     }
   }
+  local separated is extra:dropped_underhang:length > dropped_before.
   local outcome is "".
-  if fired = 0 or extra:dropped_underhang:length = 0 {
+  if not separated {
     set outcome to "nothing separated: the decouplers did not fire; keeping the Underhang and braking on".
   }
   set ctx:parts to ship:parts:length.
@@ -1589,7 +1605,7 @@ function land_drop {
   addons:claudia:blocktrace("land", lexicon("phase", "drop", "agl", extra:underhang_drop_agl, "fired", fired,
     "dropped", extra:dropped_underhang:length, "kept", extra:underhang_kept:join(", "), "gap_s", round(time:seconds - start, 2),
     "stage", stage:number, "relit", relit, "note", outcome)).
-  return extra:dropped_underhang:length > 0.
+  return separated.
 }
 
 // Where the Underhang dropped now will hit (a GeoCoordinates): its fall from the radar height at the
@@ -1843,7 +1859,9 @@ function land_descend {
         }
       }
     }
-    local ticked is claudia_tick(ctx, tset, land_burning(phase)).
+    // While the Underhang is still to drop the tick never auto-stages, so a stage running dry between
+    // the check above and here waits for the next pass's drop rather than being staged off.
+    local ticked is claudia_tick(ctx, tset, land_burning(phase) and not drop_pending).
     if ticked <> "" {
       return ticked.
     }

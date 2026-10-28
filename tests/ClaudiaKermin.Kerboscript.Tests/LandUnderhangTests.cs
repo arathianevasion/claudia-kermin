@@ -9,7 +9,7 @@ using Xunit;
 namespace ClaudiaKermin.Kerboscript.Tests
 {
     /// <summary>
-    /// land's Underhang (#427): the pure helpers that decide which parts hang below the legs, what the
+    /// land's Underhang (#427): the pure helpers that decide which parts are Underhang, what the
     /// lander alone needs, when the drop happens, how long it waits and where it lands clear of the
     /// dropped parts, on kOS.Safe through the real bundle.
     /// </summary>
@@ -96,7 +96,8 @@ namespace ClaudiaKermin.Kerboscript.Tests
         [Fact]
         public void The_start_check_fails_with_no_lander_engine_within_stage_limit()
         {
-            Assert.Equal("Underhang (liquidEngine): no lander engine at or above stage_limit 2 once it is dropped",
+            Assert.Equal("Underhang (liquidEngine): no lander engine at or above stage_limit 2 once it is dropped "
+                + "(the lander alone has about 900 m/s, 120 m/s needed to fly the last 2000 m once it is dropped)",
                 One("land_underhang_unflyable(list(\"liquidEngine\"), 900, 120, false, 2000, 2)"));
         }
 
