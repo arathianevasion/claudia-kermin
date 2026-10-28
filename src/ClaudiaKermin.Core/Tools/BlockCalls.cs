@@ -136,8 +136,9 @@ namespace ClaudiaKermin.Core.Tools
         /// <c>ADDONS:CLAUDIA:TURNTIME</c>, for a block that turns to a burn: how long to leave for the turn (<see cref="Tools.TurnTime"/>),
         /// from the torque and moment of inertia the adapter reads into <paramref name="craft"/>. Takes <c>max_stopping_time</c> (s,
         /// kOS's <c>steeringmanager:maxstoppingtime</c>; 2 if missing). Gives <c>error</c> "", <c>turn_time</c> (s, at least 30),
-        /// <c>turn_s</c> (the 190° turn alone) and <c>top_rate</c> (deg/s), on the wheels and RCS (if the craft has MonoPropellant,
-        /// whatever the switch), and <c>wheels_turn_time</c> and <c>wheels_turn_s</c>, the same on the wheels alone (-1 when the
+        /// <c>turn_s</c> (the 190° turn alone), <c>top_rate</c> (deg/s) and <c>alpha</c> (deg/s², the weaker axis's angular
+        /// acceleration), on the wheels and RCS (if the craft has MonoPropellant, whatever the switch; where RCS adds torque the
+        /// figures follow the RCS Use override, #422, and ignore <c>max_stopping_time</c>), and <c>wheels_turn_time</c> and <c>wheels_turn_s</c>, the same on the wheels alone (-1 when the
         /// wheels have no torque about pitch or yaw); or only <c>error</c>, "no usable torque".
         /// </summary>
         public static IDictionary<string, object> TurnTime(IDictionary<string, object> input, TurnCraft craft)
@@ -153,6 +154,7 @@ namespace ClaudiaKermin.Core.Tools
                 { "turn_time", turn.Seconds },
                 { "turn_s", turn.TurnSeconds },
                 { "top_rate", turn.TopRateDegS },
+                { "alpha", turn.AlphaDegS2 },
                 { "wheels_turn_time", wheels.Error == null ? wheels.Seconds : -1.0 },
                 { "wheels_turn_s", wheels.Error == null ? wheels.TurnSeconds : -1.0 },
             };

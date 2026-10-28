@@ -354,6 +354,17 @@ namespace ClaudiaKermin.Core.Tests
         }
 
         [Fact]
+        public void AnRcsSwitchLineRecordsTheTurnOverrideWhenItWasApplied()
+        {
+            var values = Switch(true, "big turn");
+            values["error_deg"] = 128.0;
+            values["stopping_s"] = 6.2;
+            values["kp"] = 0.258;
+            string problem;
+            Assert.Equal("RCS on: big turn (error 128.0°, turn cap T 6.2 s, kp 0.26)", RcsSwitch.Parse(values, out problem).Line());
+        }
+
+        [Fact]
         public void ABadRcsSwitchLexiconFailsWithAProblemAndNoException()
         {
             string problem;

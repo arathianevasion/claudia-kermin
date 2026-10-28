@@ -72,8 +72,8 @@ namespace ClaudiaKermin.Core.Tests
             var off = new TurnCraft { WheelPitch = 5, WheelYaw = 5, RcsPitch = 5, RcsYaw = 5, MoiPitch = 500, MoiYaw = 500 };
             var on = new TurnCraft { WheelPitch = 5, WheelYaw = 5, RcsPitch = 5, RcsYaw = 5, RcsUsable = true, MoiPitch = 500, MoiYaw = 500 };
             Assert.Equal(167.81, TurnTime.Predict(off).TurnSeconds, 2);
-            // Twice the torque: alpha 0.02 rad/s², cap 0.04 rad/s, 82.90 s cruising plus 2 s.
-            Assert.Equal(84.90, TurnTime.Predict(on).TurnSeconds, 2);
+            // Twice the torque: alpha 0.02 rad/s². The RCS Use override (T 10 s, cap 0.2 rad/s) turns in 36.48 s, not the capped 84.90 s.
+            Assert.Equal(36.48, TurnTime.Predict(on).TurnSeconds, 2);
         }
 
         [Fact]
@@ -102,7 +102,8 @@ namespace ClaudiaKermin.Core.Tests
         {
             var turn = TurnTime.Predict(new TurnCraft { RcsPitch = 5, RcsYaw = 5, RcsUsable = true, MoiPitch = 500, MoiYaw = 500 });
             Assert.Null(turn.Error);
-            Assert.Equal(167.81, turn.TurnSeconds, 2);
+            // The override on RCS alone: alpha 0.01 rad/s², T 10 s.
+            Assert.True(turn.TurnSeconds < 167.81 * 0.5);
         }
 
         [Fact]
@@ -110,7 +111,51 @@ namespace ClaudiaKermin.Core.Tests
         {
             var craft = new TurnCraft { WheelPitch = 5, WheelYaw = 5, RcsPitch = 5, RcsYaw = 5, RcsUsable = true, MoiPitch = 500, MoiYaw = 500 };
             Assert.Equal(167.81, TurnTime.PredictWheels(craft).TurnSeconds, 2);
-            Assert.Equal(84.90, TurnTime.Predict(craft).TurnSeconds, 2);
+            Assert.Equal(36.48, TurnTime.Predict(craft).TurnSeconds, 2);
+        }
+
+        // ---- the RCS Use override (#422) ----
+
+        [Fact]
+        public void The_with_RCS_turn_beats_the_old_capped_model_when_the_full_torque_peak_tops_twice_alpha()
+        {
+            // alpha 0.02 rad/s²: the unchecked peak sqrt(0.02 * 3.316) = 0.258 rad/s tops the old cap of alpha * 2 = 0.04 (84.90 s).
+            var craft = new TurnCraft { WheelPitch = 5, WheelYaw = 5, RcsPitch = 5, RcsYaw = 5, RcsUsable = true, MoiPitch = 500, MoiYaw = 500 };
+            var turn = TurnTime.Predict(craft);
+            Assert.True(turn.TurnSeconds < 84.90 * 0.5);
+            // T = 10 s caps the rate at 0.2 rad/s (11.46 deg/s); the full-torque bang-bang bound is 2 * sqrt(3.316 / 0.02) = 25.8 s.
+            Assert.Equal(11.46, turn.TopRateDegS, 1);
+            Assert.True(turn.TurnSeconds > 25.8);
+            Assert.Equal(1.146, turn.AlphaDegS2, 3);
+        }
+
+        [Fact]
+        public void The_wheels_only_figures_stay_at_a_2_s_stopping_time()
+        {
+            var craft = new TurnCraft { WheelPitch = 5, WheelYaw = 5, RcsPitch = 5, RcsYaw = 5, RcsUsable = true, MoiPitch = 500, MoiYaw = 500 };
+            var wheels = TurnTime.PredictWheels(craft);
+            Assert.Equal(167.81, wheels.TurnSeconds, 2);
+            Assert.Equal(1.146, wheels.TopRateDegS, 3);
+            Assert.Equal(0.573, wheels.AlphaDegS2, 3);
+        }
+
+        [Fact]
+        public void The_override_lets_a_quick_craft_slow_down_gradually_rather_than_stop_at_full_torque()
+        {
+            // alpha 0.362 rad/s² (the reference craft): T = sqrt(3.316 / 0.362) = 3.03 s, kp 0.53. The linear tail makes it slower than
+            // the bang-bang 2 * sqrt(3.316 / 0.362) = 6.06 s.
+            var craft = new TurnCraft { WheelPitch = 5, WheelYaw = 5, RcsPitch = 1, RcsYaw = 1, RcsUsable = true, MoiPitch = 13.8, MoiYaw = 13.8 };
+            Assert.True(TurnTime.Predict(craft).TurnSeconds > 2 * System.Math.Sqrt(TurnTime.TurnDegrees * System.Math.PI / 180 / (6.0 / 13.8)));
+        }
+
+        [Theory]
+        [InlineData(1, 1, 2)]    // a small turn: sqrt(1/1) = 1 s, up to the floor of 2
+        [InlineData(4, 1, 2)]
+        [InlineData(36, 1, 6)]
+        [InlineData(1000, 1, 10)] // a huge turn stays at 10
+        public void The_override_stopping_time_is_sqrt_of_angle_over_alpha_within_2_to_10_s(double angle, double alpha, double expected)
+        {
+            Assert.Equal(expected, TurnTime.OverrideStoppingTime(angle, alpha), 6);
         }
 
         [Fact]
@@ -128,9 +173,10 @@ namespace ClaudiaKermin.Core.Tests
             var craft = new TurnCraft { WheelPitch = 5, WheelYaw = 5, RcsPitch = 5, RcsYaw = 5, RcsUsable = true, MoiPitch = 500, MoiYaw = 500 };
             var result = BlockCalls.TurnTime(new Dictionary<string, object>(), craft);
             Assert.Equal("", result["error"]);
-            // Wheels and RCS: 84.90 s turning, 10 s settling. Wheels alone: 167.81 s and 10 s.
-            Assert.Equal(94.90, (double)result["turn_time"], 2);
-            Assert.Equal(84.90, (double)result["turn_s"], 2);
+            // Wheels and RCS (the override): 36.48 s turning, 10 s settling. Wheels alone, at T = 2: 167.81 s and 10 s.
+            Assert.Equal(46.48, (double)result["turn_time"], 2);
+            Assert.Equal(36.48, (double)result["turn_s"], 2);
+            Assert.Equal(1.146, (double)result["alpha"], 3);
             Assert.Equal(177.81, (double)result["wheels_turn_time"], 2);
             Assert.Equal(167.81, (double)result["wheels_turn_s"], 2);
         }
