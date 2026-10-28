@@ -109,4 +109,4 @@ CI (`.github/workflows/ci.yml`) runs on every push. It runs the core tests, then
 
 Claudia Kermin is free software under the GNU General Public License, version 3 or (at your option) any later version (`GPL-3.0-or-later`). See [LICENSE](LICENSE).
 
-Bundled third-party scripts keep their own licenses and notices: KSLib's `lib_lazcalc` (MIT). The Mission Scripts and Custom Scripts that Claudia writes for your Missions are yours; Claudia Kermin claims no license over them.
+Bundled third-party scripts keep their own licenses and notices: KSLib's `lib_lazcalc` (MIT). Ported from MechJebLib (MechJeb2 a958383, dual-licensed, ported under GPL-3.0-or-later with its copyright and SPDX lines kept): `BrentRoot`, `BrentMin`, `Newton` and `Scale` in `src/ClaudiaKermin.Core/Tools/Numerics/`. The Mission Scripts and Custom Scripts that Claudia writes for your Missions are yours; Claudia Kermin claims no license over them.
