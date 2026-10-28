@@ -96,9 +96,9 @@ namespace ClaudiaKermin.Kerboscript.Tests
         {
             var printed = Run("local o is claudia_common_opts(claudia_merge_options(lexicon(\"min_ec_pct\", 25, \"stage_limit\", 2, \"max_residual\", 0.2), "
                 + "claudia_merge_options(lexicon(\"max_residual\", 1), claudia_common_defaults(600)))). "
-                + "print o:keys:length. print o:min_ec_pct. print o:stage_limit. print o:abort_on_part_loss. print o:drop_empty:length. print o:rcs_tolerance:on_deg. "
+                + "print o:keys:length. print o:min_ec_pct. print o:stage_limit. print o:abort_on_part_loss. print o:drop_empty. print o:rcs_tolerance:on_deg. "
                 + "print o:haskey(\"max_residual\"). print o:haskey(\"max_duration\").");
-            Assert.Equal(new[] { "5", "25", "2", "True", "0", "10", "False", "False" }, printed);
+            Assert.Equal(new[] { "5", "25", "2", "True", "auto", "10", "False", "False" }, printed);
         }
 
         [Fact]

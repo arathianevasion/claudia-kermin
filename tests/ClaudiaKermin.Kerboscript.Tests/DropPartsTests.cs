@@ -16,16 +16,42 @@ namespace ClaudiaKermin.Kerboscript.Tests
         }
 
         [Fact]
-        public void Every_block_takes_drop_empty_and_it_defaults_to_nothing()
+        public void Every_block_takes_drop_empty_and_it_defaults_to_auto()
         {
             Assert.Equal("", One("claudia_options(lexicon(\"drop_empty\", list(\"fuelTank\")), exec_node_defaults(), \"auto\"):error"));
-            Assert.Equal("0", One("claudia_options(lexicon(), exec_node_defaults(), \"auto\"):opt:drop_empty:length"));
-            Assert.Equal("0", One("claudia_common_defaults(\"auto\"):drop_empty:length"));
+            Assert.Equal("", One("claudia_options(lexicon(), exec_node_defaults(), \"auto\"):error"));
+            Assert.Equal("auto", One("claudia_options(lexicon(), exec_node_defaults(), \"auto\"):opt:drop_empty"));
+            Assert.Equal("auto", One("claudia_common_defaults(\"auto\"):drop_empty"));
+            Assert.Equal("auto", One("claudia_common_opts(claudia_options(lexicon(), exec_node_defaults(), \"auto\"):opt):drop_empty"));
+        }
+
+        [Fact]
+        public void A_list_still_works_and_an_empty_list_turns_dropping_off()
+        {
+            Assert.Equal("2", One("claudia_options(lexicon(\"drop_empty\", list(\"a\", \"b\")), exec_node_defaults(), \"auto\"):opt:drop_empty:length"));
+            Assert.Equal("0", One("claudia_options(lexicon(\"drop_empty\", list()), exec_node_defaults(), \"auto\"):opt:drop_empty:length"));
+            Assert.Equal("", One("claudia_options(lexicon(\"drop_empty\", list()), exec_node_defaults(), \"auto\"):error"));
+        }
+
+        [Theory]
+        [InlineData("list(\"\", \"\", \"\")", "list(0)", "list(400)", "True")]        // empty tank, nose cones, fuel duct
+        [InlineData("list(\"\", \"\")", "list(80)", "list(400)", "False")]             // the tank holds fuel
+        [InlineData("list(\"\", \"rcs\")", "list(0)", "list(400)", "False")]           // empty tank + RCS block
+        [InlineData("list(\"\", \"engine\")", "list(0)", "list(400)", "False")]        // empty tank + engine
+        [InlineData("list(\"\", \"\")", "list()", "list()", "False")]                  // trim only, no tank
+        [InlineData("list(\"\", \"parachute\")", "list(0)", "list(400)", "False")]     // empty tank + parachute
+        [InlineData("list(\"\", \"shield\")", "list(0)", "list(400)", "False")]        // empty tank + heat shield
+        [InlineData("list(\"\", \"\")", "list(0, 0)", "list(400, 400)", "True")]       // two empty tanks
+        [InlineData("list(\"\", \"\")", "list(0, 9)", "list(400, 400)", "False")]      // one still holds fuel
+        public void Auto_fires_only_for_empty_tanks_and_trim(string kinds, string amounts, string capacities, string expected)
+        {
+            Assert.Equal(expected, One("claudia_auto_drop_fires(" + kinds + ", " + amounts + ", " + capacities + ")"));
         }
 
         [Fact]
         public void A_bare_name_is_a_one_item_list_and_a_non_list_is_refused()
         {
+            Assert.Equal("boosters", One("claudia_options(lexicon(\"drop_empty\", \"boosters\"), exec_node_defaults(), \"auto\"):opt:drop_empty[0]"));
             Assert.Equal("1", One("claudia_options(lexicon(\"drop_empty\", \"boosters\"), exec_node_defaults(), \"auto\"):opt:drop_empty:length"));
             Assert.Equal("drop_empty must be a list of part names or tags", One("claudia_options(lexicon(\"drop_empty\", 3), exec_node_defaults(), \"auto\"):error"));
         }

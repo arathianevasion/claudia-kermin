@@ -33,11 +33,11 @@
 //| s, degrees); leave an option out to get its default. Don't name a variable after a kOS built-in
 //| (r, v, q, node, transfer, ...): kOS won't compile the script. An unknown option fails the block at once
 //| with reason "unknown option <name>". Every block also takes the common options:
-//|   drop_empty [empty list]: part names or tags (e.g. list("fuelTank", "side tanks")); the auto-staging fires the
-//|     decoupler that holds them once every tank it would drop is empty (fuel, oxidizer, solid fuel, mono and
-//|     xenon all count), in the very burn that empties them, and never one that still holds fuel, is below
-//|     stage_limit or holds the part running the script. Only burning blocks use it (launch, ascend, land,
-//|     exec_node, circularize and the blocks that fly them); the result then lists dropped.
+//|   drop_empty ["auto"]: "auto", or part names or tags (e.g. list("fuelTank", "side tanks")); list() is off. The auto-staging
+//|     fires a decoupler once all its tanks are empty, never one holding fuel, below stage_limit or holding the part
+//|     running the script. "auto" judges every decoupler: only empty tanks and trim (cones, ducts, struts) may leave,
+//|     never an engine, crew/command part, processor, science, power, antenna, wheel, RCS, leg, chute, heat shield.
+//|     Burning blocks only; result lists dropped.
 //|   min_ec_pct [10]: abort when electric charge falls below this percent of capacity.
 //|   max_duration [per block]: abort when the block has run this many seconds, waits included.
 //|   abort_on_part_loss [true]: abort when the craft loses a part other than by the block's own staging.
@@ -61,7 +61,7 @@
 // The common options every block takes. max_duration is the block's own default.
 function claudia_common_defaults {
   parameter max_duration.
-  return lexicon("min_ec_pct", 10, "max_duration", max_duration, "abort_on_part_loss", true, "stage_limit", 0, "drop_empty", list(),
+  return lexicon("min_ec_pct", 10, "max_duration", max_duration, "abort_on_part_loss", true, "stage_limit", 0, "drop_empty", "auto",
     "rcs_tolerance", claudia_rcs_defaults()).
 }
 
@@ -120,10 +120,11 @@ function claudia_options {
   local merged is claudia_merge_options(opts, defaults).
   local error is claudia_unknown_option(opts, defaults).
   // One name or tag may be given bare; the rest of the library sees a list.
-  if merged:drop_empty:istype("String") {
+  // "auto" stays a string: it is the default rule, not a name.
+  if merged:drop_empty:istype("String") and merged:drop_empty <> "auto" {
     set merged:drop_empty to list(merged:drop_empty).
   }
-  if error = "" and not merged:drop_empty:istype("List") {
+  if error = "" and not merged:drop_empty:istype("List") and merged:drop_empty <> "auto" {
     set error to "drop_empty must be a list of part names or tags".
   }
   // A partial rcs_tolerance takes the rest from the defaults.
@@ -578,25 +579,65 @@ function claudia_note_dropped {
   }
 }
 
-// Fires the decoupler of every part in drop_empty whose tanks are all empty, together with every other
-// part leaving with it, and notes the names of the parts that left in ctx:dropped. Looks twice a second.
-// A decoupler is tried once (ctx:drop_tried), and never one below stage_limit.
+// What a part is besides a tank or trim: "engine", "command", "crew", "processor", "science", "power",
+// "antenna", "wheel", "rcs", "leg", "parachute" or "shield"; "" if it has no other job.
+function claudia_part_kind {
+  parameter p.
+  local checks is list(
+    list("engine", "ModuleEngines"), list("engine", "ModuleEnginesFX"), list("command", "ModuleCommand"),
+    list("processor", "kOSProcessor"), list("science", "ModuleScienceExperiment"),
+    list("power", "ModuleGenerator"), list("power", "ModuleDeployableSolarPanel"),
+    list("antenna", "ModuleDataTransmitter"), list("wheel", "ModuleReactionWheel"),
+    list("rcs", "ModuleRCS"), list("rcs", "ModuleRCSFX"), list("leg", "ModuleWheelBase"),
+    list("parachute", "ModuleParachute"), list("parachute", "RealChuteModule"), list("shield", "ModuleAblator")).
+  for c in checks {
+    if p:hasmodule(c[1]) {
+      return c[0].
+    }
+  }
+  if p:crewcapacity > 0 {
+    return "crew".
+  }
+  return "".
+}
+
+// True if the "auto" drop_empty fires a decoupler. kinds: claudia_part_kind of every part leaving with
+// it; amounts and capacities: the propellant tanks among them, as claudia_tanks_empty takes them. Only
+// empty tanks and trim may leave, and at least one empty tank, so a bare decoupler with trim never fires.
+function claudia_auto_drop_fires {
+  parameter kinds, amounts, capacities.
+  for k in kinds {
+    if k <> "" {
+      return false.
+    }
+  }
+  return claudia_tanks_empty(amounts, capacities).
+}
+
+// Fires decouplers whose tanks are all empty, together with every other part leaving with them, and
+// notes the names of the parts that left in ctx:dropped. Looks twice a second. drop_empty "auto" judges
+// every decoupler on the craft (claudia_auto_drop_fires); a list judges the decoupler of each part it
+// names. A decoupler is tried once (ctx:drop_tried), and never one below stage_limit.
 function claudia_drop_empty {
   parameter ctx.
   local wanted is ctx:opt:drop_empty.
-  if wanted:length = 0 or time:seconds < ctx:drop_ut + 0.5 {
+  local auto is wanted:istype("String").
+  if (not auto and wanted:length = 0) or time:seconds < ctx:drop_ut + 0.5 {
     return.
   }
   set ctx:drop_ut to time:seconds.
   local fired is list().
   local fired_parts is list().
+  local judged is list().
   for p in ship:parts {
-    if claudia_drop_matches(p:name, p:tag, wanted) {
+    if auto or claudia_drop_matches(p:name, p:tag, wanted) {
       local d is claudia_decoupler_of(p).
-      if not d:istype("String") and not ctx:drop_tried:contains(d:uid) and d:stage >= ctx:opt:stage_limit {
+      if not d:istype("String") and not ctx:drop_tried:contains(d:uid) and not judged:contains(d:uid) and d:stage >= ctx:opt:stage_limit {
+        judged:add(d:uid).
         local gone is claudia_dropped_with(d).
         local amounts is list().
         local capacities is list().
+        local kinds is list().
         for g in gone {
           for res in g:resources {
             if claudia_is_propellant(res:name) and res:capacity > 0 {
@@ -604,9 +645,16 @@ function claudia_drop_empty {
               capacities:add(res:capacity).
             }
           }
+          if auto {
+            kinds:add(claudia_part_kind(g)).
+          }
+        }
+        local ok is claudia_tanks_empty(amounts, capacities).
+        if auto {
+          set ok to claudia_auto_drop_fires(kinds, amounts, capacities).
         }
         // Nested, not one "and": firing is a side effect and must only follow the guards.
-        if claudia_tanks_empty(amounts, capacities) {
+        if ok {
           if not claudia_drop_holds_core(gone) {
             ctx:drop_tried:add(d:uid).
             if claudia_fire_decoupler(d) {
