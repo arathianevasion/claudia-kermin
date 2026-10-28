@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
 using ClaudiaKermin.Core.Claude;
 using ClaudiaKermin.Core.Missions;
@@ -19,15 +18,32 @@ namespace ClaudiaKermin.Core.Tools
     /// </summary>
     internal sealed class SolveBurn : IPlanningTool
     {
-        /// <summary>The next_patch_pe search gives up after this long, well inside the loop's 5 s cap per call.</summary>
-        private const double SearchSeconds = 3;
         /// <summary>The finest burn step the search scans with, m/s: a transfer window is tens of m/s wide.</summary>
         private const double ScanStep = 2;
         private const int MaxScanSteps = 1500;
+        /// <summary>
+        /// How many burn sizes the next_patch_pe scan tries before it gives up: one past the scan's own step count (it runs from 0
+        /// to its end inclusive), so a normal search is never cut short. A count, not a clock, so the same input gives the same
+        /// answer under any machine load. A full scan (the Pe never reaches the goal) measured about 0.3 s on a dev machine, roughly
+        /// 0.2 ms a burn size, so the 5 s cap needs a burn size to cost over 3 ms: more than 10x headroom.
+        /// </summary>
+        internal const int DefaultMaxScanEvaluations = MaxScanSteps + 1;
         private const string DefaultAt = "in 60";
         /// <summary>BrentRoot's tolerance on the burn size, relative to max(|burn|, 1) m/s: far finer than the metre the Pe is held to.</summary>
         private const double RefineTolerance = 1e-9;
         private const int RefineIterations = 80;
+
+        private readonly int _maxScanEvaluations;
+
+        public SolveBurn() : this(DefaultMaxScanEvaluations)
+        {
+        }
+
+        /// <summary>A solver whose next_patch_pe scan gives up after <paramref name="maxScanEvaluations"/> burn sizes (tests inject a small one).</summary>
+        internal SolveBurn(int maxScanEvaluations)
+        {
+            _maxScanEvaluations = maxScanEvaluations;
+        }
 
         public string Name
         {
@@ -135,7 +151,7 @@ namespace ClaudiaKermin.Core.Tools
         /// The burn at <c>at</c>, prograde or retrograde, whose next patch has the periapsis asked for: scans the burn size in steps
         /// with the predict_burn propagation, finds where the next patch's Pe crosses the goal, and refines it with <see cref="BrentRoot"/>.
         /// </summary>
-        private static ToolOutcome SolvePatchPe(PredictBurn.Setup setup, List<Patch> path, double value, JsonNode at, string direction)
+        private ToolOutcome SolvePatchPe(PredictBurn.Setup setup, List<Patch> path, double value, JsonNode at, string direction)
         {
             string problem;
             var ut = PredictBurn.BurnUt(at ?? JsonReader.Parse(PlanningJson.Quote(DefaultAt)), path, setup.Now, setup.Now, "the burn", out problem);
@@ -148,7 +164,6 @@ namespace ClaudiaKermin.Core.Tools
             var speed = v.Length;
             var most = sign > 0 ? 2 * Math.Sqrt(patch.Body.Gm / r.Length) : speed;
             var fixedAt = JsonReader.Parse(ut.Value.ToString("R", CultureInfo.InvariantCulture));
-            var watch = Stopwatch.StartNew();
 
             // The next patch's Pe (m above its body's sea level) and body for a burn of s m/s; false when there is no next patch.
             Func<double, Tuple<double, string>> pe = s =>
@@ -165,10 +180,12 @@ namespace ClaudiaKermin.Core.Tools
             var anyNext = false;
             double? last = null;
             string lastBody = null;
+            var tried = 0;
             for (var s = 0.0; s <= most; s += step)
             {
-                if (watch.Elapsed.TotalSeconds > SearchSeconds)
-                    return PlanningJson.Error("the search for a burn to a next patch Pe of " + Num(value) + " m ran out of time at " + Num(s) + " m/s; try an earlier or narrower burn time");
+                if (tried++ >= _maxScanEvaluations)
+                    return PlanningJson.Error("the search for a burn to a next patch Pe of " + Num(value) + " m gave up after " + (tried - 1).ToString(CultureInfo.InvariantCulture)
+                        + " burn sizes, at " + Num(s) + " m/s; try an earlier or narrower burn time");
                 var got = pe(s);
                 if (got == null)
                 {

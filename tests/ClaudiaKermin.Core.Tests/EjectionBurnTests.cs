@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
@@ -128,11 +127,11 @@ namespace ClaudiaKermin.Core.Tests
         [Fact]
         public void It_runs_in_milliseconds()
         {
-            Solved(Circular());
-            var watch = Stopwatch.StartNew();
-            Solved(Circular());
-            Solved(BlockTestStart(), earliest: 400);
-            Assert.InRange(watch.Elapsed.TotalMilliseconds, 0, 500);
+            Timing.Within(500, () =>
+            {
+                Solved(Circular());
+                Solved(BlockTestStart(), earliest: 400);
+            });
         }
 
         // ---- window "next" and a UT ----

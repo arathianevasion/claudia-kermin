@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Andrew Watson
 
 using System;
-using System.Diagnostics;
 using ClaudiaKermin.Core.Tools.Numerics;
 using Xunit;
 
@@ -10,7 +9,7 @@ namespace ClaudiaKermin.Core.Tests
 {
     /// <summary>
     /// The ported searches (BrentRoot, BrentMin, Newton) and Scale on functions with known answers. Each search's test asserts a
-    /// generous wall-clock budget in the style of EjectionBurnTests.It_runs_in_milliseconds; the pattern is settled in #310.
+    /// generous wall-clock budget through <see cref="Timing.Within"/>, the settled pattern (#310, #425).
     /// </summary>
     public sealed class NumericsTests
     {
@@ -26,10 +25,10 @@ namespace ClaudiaKermin.Core.Tests
 
         private static void WithinBudget(Action search)
         {
-            search();
-            var watch = Stopwatch.StartNew();
-            for (var i = 0; i < 100; i++) search();
-            Assert.InRange(watch.Elapsed.TotalMilliseconds, 0, 500);
+            Timing.Within(500, () =>
+            {
+                for (var i = 0; i < 100; i++) search();
+            });
         }
 
         // ---- BrentRoot ----
