@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Andrew Watson
 
 using System;
+using System.Diagnostics;
 using ClaudiaKermin.Core.Tools;
 using ClaudiaKermin.Core.Tools.Numerics;
 using Xunit;
@@ -162,6 +163,25 @@ namespace ClaudiaKermin.Core.Tests
                 Close(cold.r, hot.r, 1e-11);
                 Close(cold.v, hot.v, 1e-11);
             }
+        }
+
+        // ---- speed ----
+
+        [Fact]
+        public void Twenty_thousand_cold_solves_run_in_milliseconds()
+        {
+            var r0 = new Vec3(812345, -123456, 45678);
+            var v0 = new Vec3(300, 2100, -150);
+            var escaping = new Vec3(300, 3500, -150);
+            Shepperd.Solve(KerbinGm, 1000, r0, v0);
+            Shepperd.Solve(KerbinGm, 1000, r0, escaping);
+            var watch = Stopwatch.StartNew();
+            for (var i = 0; i < 10000; i++)
+            {
+                Shepperd.Solve(KerbinGm, 7 * i, r0, v0);
+                Shepperd.Solve(KerbinGm, 7 * i, r0, escaping);
+            }
+            Assert.InRange(watch.Elapsed.TotalMilliseconds, 0, 200);
         }
 
         // ---- input ----
