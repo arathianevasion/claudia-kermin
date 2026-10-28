@@ -6,6 +6,7 @@
 // Copyright (C) 2026 Andrew Watson
 
 using System;
+using System.Globalization;
 
 namespace ClaudiaKermin.Core.Tools.Numerics
 {
@@ -13,7 +14,7 @@ namespace ClaudiaKermin.Core.Tools.Numerics
     /// Shepperd's universal-variable Kepler propagator, ported from MechJebLib's <c>TwoBody/Shepperd.cs</c> (MechJeb2 a958383),
     /// the state-only <c>Solve</c>; the state transition partials (<c>Solve2</c>) are left until something needs them. It steps
     /// a state vector by a time on an ellipse, a parabola or a hyperbola alike, with no special case and no elements.
-    /// Unlike MechJeb's, its input is checked in every build.
+    /// Unlike MechJeb's, its input is checked in every build, and a caller may warm-start it (<see cref="WarmStart"/>).
     /// <para>
     /// Shepperd SW. Universal Keplerian state transition matrix. Celestial Mechanics. 1985 Feb;35(2):129–44. doi:10.1007/BF01227666.
     /// Shepperd SW. Naturally occurring continued fractions in the variation of Kepler’s equation. Celestial Mechanics. 1987
@@ -25,7 +26,8 @@ namespace ClaudiaKermin.Core.Tools.Numerics
         /// <summary>
         /// The position and velocity <paramref name="dt"/> seconds after (or, negative, before) <paramref name="r0"/> and
         /// <paramref name="v0"/> on the two-body orbit round a body of gravitational parameter <paramref name="mu"/>. It solves for
-        /// U3 directly by Newton's method, falling back to bisection, and never throws for finite input.
+        /// U3 directly by Newton's method, falling back to bisection. A non-finite input, a <paramref name="mu"/> that is not positive
+        /// or an <paramref name="r0"/> at the body's centre is an <see cref="ArgumentException"/>; any other input has an answer.
         /// </summary>
         public static (Vec3 r, Vec3 v) Solve(double mu, double dt, Vec3 r0, Vec3 v0)
         {
@@ -47,14 +49,16 @@ namespace ClaudiaKermin.Core.Tools.Numerics
 
         /// <summary>
         /// <see cref="Solve(double, double, Vec3, Vec3)"/> starting from <paramref name="start"/> and leaving this solve there; a
-        /// start outside the orbit's bounds on u starts at 0. Only the iteration count depends on it, not the answer.
+        /// start outside the orbit's bounds on u starts at 0. The answer agrees with a cold start's within the solve's tolerance
+        /// (1e-12 of the time), though not always to the last bit; no time at all is the start exactly either way.
         /// </summary>
         public static (Vec3 r, Vec3 v) Solve(double mu, double dt, Vec3 r0, Vec3 v0, ref WarmStart start)
         {
-            if (!Finite(mu) || mu <= 0) throw new ArgumentException("Shepperd.Solve needs a positive, finite gravitational parameter, not " + mu);
-            if (!Finite(dt)) throw new ArgumentException("Shepperd.Solve needs a finite time, not " + dt);
+            if (!Finite(mu) || mu <= 0) throw new ArgumentException("Shepperd.Solve needs a positive, finite gravitational parameter, not " + R(mu));
+            if (!Finite(dt)) throw new ArgumentException("Shepperd.Solve needs a finite time, not " + R(dt));
             if (!Finite(r0) || !Finite(v0)) throw new ArgumentException("Shepperd.Solve needs a finite position and velocity");
             if (r0.Length <= 0) throw new ArgumentException("Shepperd.Solve needs a position off the body's centre");
+            if (dt == 0) return (r0, v0);
 
             const double tolerance = 1.0e-12;
             const int imax = 50;
@@ -181,12 +185,17 @@ namespace ClaudiaKermin.Core.Tools.Numerics
 
         private static bool Finite(double x)
         {
-            return !double.IsNaN(x) && !double.IsInfinity(x);
+            return SearchInput.Finite(x);
         }
 
         private static bool Finite(Vec3 a)
         {
             return Finite(a.X) && Finite(a.Y) && Finite(a.Z);
+        }
+
+        private static string R(double x)
+        {
+            return x.ToString("R", CultureInfo.InvariantCulture);
         }
     }
 }

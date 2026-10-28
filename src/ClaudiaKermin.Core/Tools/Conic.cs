@@ -50,7 +50,8 @@ namespace ClaudiaKermin.Core.Tools
     /// Snapshot's elements, or from a state vector, and nothing about it reaches the game. Angles in the elements are KSP's:
     /// inclination, LAN and argument of periapsis in degrees, mean anomaly at epoch in radians, the equator as the reference plane.
     /// An orbit built from a state vector keeps that state, and <see cref="State"/> steps it by the time with <see cref="Shepperd"/>
-    /// rather than going through the elements and back; the elements still answer apsides, period, nodes and anomalies.
+    /// rather than going through the elements and back; the elements still answer apsides, period, nodes and anomalies. Such an
+    /// orbit remembers where its last step's solve ended to start the next one there, so it is not for sharing across threads.
     /// </summary>
     internal sealed class Conic
     {

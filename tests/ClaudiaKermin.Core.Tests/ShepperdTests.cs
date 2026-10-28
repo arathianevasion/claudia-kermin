@@ -120,28 +120,30 @@ namespace ClaudiaKermin.Core.Tests
         public void It_agrees_with_Kepler_on_the_elements(double sma, double e)
         {
             var conic = Conic.FromElements(KerbinGm, sma, e, 12, 200, 30, -0.7, 1000);
-            var r0 = KeplerPosition(conic, 1000);
-            var v0 = KeplerVelocity(conic, 1000);
+            Vec3 r0, v0;
+            conic.StateAtTrue(conic.TrueAnomaly(1000), out r0, out v0);
             foreach (var later in new[] { 1000.0, 1300, 5000, 25000, -4000 })
             {
                 var s = Shepperd.Solve(KerbinGm, later - 1000, r0, v0);
-                Close(KeplerPosition(conic, later), s.r, 1e-8);
-                Close(KeplerVelocity(conic, later), s.v, 1e-8);
+                Vec3 r, v;
+                conic.StateAtTrue(conic.TrueAnomaly(later), out r, out v);
+                Close(r, s.r, 1e-8);
+                Close(v, s.v, 1e-8);
             }
         }
 
-        private static Vec3 KeplerPosition(Conic conic, double ut)
+        [Fact]
+        public void A_conic_from_a_parabolic_state_steps_it_on_Barkers_equation()
         {
+            // Kepler on the elements has no parabola; a Conic from a state vector steps the state with Shepperd, so it has.
+            const double q = 700000;
+            var t = Math.Sqrt(2 * q * q * q / KerbinGm) * 4 / 3;
+            var conic = Conic.FromState(KerbinGm, new Vec3(q, 0, 0), new Vec3(0, Math.Sqrt(2 * KerbinGm / q), 0), 500);
             Vec3 r, v;
-            conic.StateAtTrue(conic.TrueAnomaly(ut), out r, out v);
-            return r;
-        }
-
-        private static Vec3 KeplerVelocity(Conic conic, double ut)
-        {
-            Vec3 r, v;
-            conic.StateAtTrue(conic.TrueAnomaly(ut), out r, out v);
-            return v;
+            conic.State(500 + t, out r, out v);
+            var k = Math.Sqrt(KerbinGm / (2 * q));
+            Close(new Vec3(0, 2 * q, 0), r, 1e-9);
+            Close(new Vec3(-k, k, 0), v, 1e-9);
         }
 
         // ---- warm start ----
@@ -168,7 +170,7 @@ namespace ClaudiaKermin.Core.Tests
         // ---- speed ----
 
         [Fact]
-        public void Twenty_thousand_cold_solves_run_in_milliseconds()
+        public void It_runs_in_microseconds()
         {
             var r0 = new Vec3(812345, -123456, 45678);
             var v0 = new Vec3(300, 2100, -150);
