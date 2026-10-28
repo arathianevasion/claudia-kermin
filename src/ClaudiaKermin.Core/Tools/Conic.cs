@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Andrew Watson
 
 using System;
+using ClaudiaKermin.Core.Tools.Numerics;
 
 namespace ClaudiaKermin.Core.Tools
 {
@@ -48,6 +49,9 @@ namespace ClaudiaKermin.Core.Tools
     /// in plain doubles so it runs and is tested without the game. It is never the live vessel's orbit: it is built from the Game
     /// Snapshot's elements, or from a state vector, and nothing about it reaches the game. Angles in the elements are KSP's:
     /// inclination, LAN and argument of periapsis in degrees, mean anomaly at epoch in radians, the equator as the reference plane.
+    /// An orbit built from a state vector keeps that state, and <see cref="State"/> steps it by the time with <see cref="Shepperd"/>
+    /// rather than going through the elements and back; the elements still answer apsides, period, nodes and anomalies. Such an
+    /// orbit remembers where its last step's solve ended to start the next one there, so it is not for sharing across threads.
     /// </summary>
     internal sealed class Conic
     {
@@ -63,6 +67,12 @@ namespace ClaudiaKermin.Core.Tools
         /// <summary>The UT <see cref="M0"/> is given at, and the mean anomaly then (radians; hyperbolic mean anomaly on a hyperbola).</summary>
         public readonly double Epoch;
         public readonly double M0;
+        /// <summary>Whether it came from <see cref="FromState"/>, and the state at <see cref="Epoch"/> it came from.</summary>
+        private readonly bool _fromState;
+        private readonly Vec3 _r0;
+        private readonly Vec3 _v0;
+        /// <summary>Where Shepperd's last solve for this orbit ended, its next start: the searches step one orbit by nearby times.</summary>
+        private Shepperd.WarmStart _warm;
 
         private Conic(double mu, double a, double e, Vec3 p, Vec3 q, Vec3 w, double epoch, double m0)
         {
@@ -146,7 +156,15 @@ namespace ClaudiaKermin.Core.Tools
             var nu = Math.Atan2(Vec3.Dot(r, q), Vec3.Dot(r, p));
             if (e <= 1e-11) e = 0;
             var conic = new Conic(mu, a, e, p, q, w, ut, 0);
-            return new Conic(mu, a, e, p, q, w, ut, conic.MeanFromTrue(nu));
+            return new Conic(mu, a, e, p, q, w, ut, conic.MeanFromTrue(nu), r, v);
+        }
+
+        private Conic(double mu, double a, double e, Vec3 p, Vec3 q, Vec3 w, double epoch, double m0, Vec3 r0, Vec3 v0)
+            : this(mu, a, e, p, q, w, epoch, m0)
+        {
+            _fromState = true;
+            _r0 = r0;
+            _v0 = v0;
         }
 
         public double MeanAnomaly(double ut)
@@ -157,6 +175,13 @@ namespace ClaudiaKermin.Core.Tools
         /// <summary>Position and velocity relative to the body at <paramref name="ut"/>.</summary>
         public void State(double ut, out Vec3 r, out Vec3 v)
         {
+            if (_fromState)
+            {
+                var s = Shepperd.Solve(Mu, ut - Epoch, _r0, _v0, ref _warm);
+                r = s.r;
+                v = s.v;
+                return;
+            }
             var nu = TrueAnomaly(ut);
             StateAtTrue(nu, out r, out v);
         }
