@@ -10,7 +10,6 @@ using kOS.AddOns;
 using kOS.Module;
 using kOS.Safe.Encapsulation;
 using kOS.Safe.Encapsulation.Suffixes;
-using kOS.Safe.Exceptions;
 using kOS.Safe.Utilities;
 using kOS.Suffixed.Part;
 
@@ -36,11 +35,11 @@ namespace ClaudiaKermin.KOS
             AddSuffix("BLOCKRESULT", new TwoArgsSuffix<StringValue, Lexicon>(BlockResult, "A Building Block returned its result"));
             // A block's trace line for KSP.log (#365), e.g. land's descent; the last one stands for the block if the run ends
             // without a Script Result. A report to the mod like BLOCKSTART, so the Script Check allows it anywhere.
-            // The optional third argument (default true) says whether this call is also kept as that last state; the RCS Use trace and
-            // the SAS-off note pass false, so they reach KSP.log without standing in for the block (#407). kOS's optional-argument
-            // suffix takes one slot per argument, null marking a required one.
-            AddSuffix("BLOCKTRACE", new OptionalArgsSuffix<Structure>(BlockTrace, new Structure[] { null, null, BooleanValue.True },
-                "A Building Block traced its state for the log: BLOCKTRACE(block, state lexicon, keep as last traced state = true)"));
+            AddSuffix("BLOCKTRACE", new TwoArgsSuffix<StringValue, Lexicon>(BlockTrace, "A Building Block traced its state for the log"));
+            // The same line to KSP.log, not kept as that last state (#407): the RCS Use trace and the SAS-off note, so a crash report
+            // keeps the block's own state. A separate suffix, not an optional argument: kOS 1.6 calls only fixed-arity suffixes
+            // reliably (an optional-argument BLOCKTRACE failed every call in game).
+            AddSuffix("BLOCKNOTE", new TwoArgsSuffix<StringValue, Lexicon>(BlockNote, "A Building Block noted its state in KSP.log only; it doesn't stand for the block"));
             // RCS Use (#393): the Core Library and Claudia's helper calls report each RCS switch, for the mission log and the Debrief's
             // tally. A report to the mod like BLOCKSTART, so the Script Check allows it anywhere; a bad lexicon is logged and ignored.
             AddSuffix("RCSSWITCH", new OneArgsSuffix<Lexicon>(RcsSwitch,
@@ -139,17 +138,16 @@ namespace ClaudiaKermin.KOS
             if (shared.KSPPart != null && bridge != null) bridge.OnBlock(shared.KSPPart.persistentId, block.ToString(), KosValues.ToDictionary(result));
         }
 
-        private Structure BlockTrace(Structure[] args)
+        private void BlockTrace(StringValue block, Lexicon state)
         {
-            var block = args[0] as StringValue;
-            var state = args[1] as Lexicon;
-            var keep = args[2] as BooleanValue;
-            if (block == null) throw new KOSException("BLOCKTRACE's first argument is the block's name, a string");
-            if (state == null) throw new KOSException("BLOCKTRACE's second argument is the state, a lexicon");
-            if (keep == null) throw new KOSException("BLOCKTRACE's third argument, keep as last traced state, must be true or false");
             var bridge = KosBridge.Instance;
-            if (shared.KSPPart != null && bridge != null) bridge.OnBlockTrace(shared.KSPPart.persistentId, block.ToString(), KosValues.ToDictionary(state), keep);
-            return BooleanValue.True;
+            if (shared.KSPPart != null && bridge != null) bridge.OnBlockTrace(shared.KSPPart.persistentId, block.ToString(), KosValues.ToDictionary(state));
+        }
+
+        private void BlockNote(StringValue block, Lexicon state)
+        {
+            var bridge = KosBridge.Instance;
+            if (shared.KSPPart != null && bridge != null) bridge.OnBlockTrace(shared.KSPPart.persistentId, block.ToString(), KosValues.ToDictionary(state), false);
         }
 
         private void RcsSwitch(Lexicon values)
