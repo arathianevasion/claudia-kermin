@@ -180,15 +180,14 @@ namespace ClaudiaKermin.Core.Tests
         {
             var r1 = new Vec3(700000, 0, 0);
             var r2 = new Vec3(-9000000, 6000000, 300000);
-            Lambert.Solve(KerbinGm, r1, r2, 100000, Up);
-            Lambert.Solve(KerbinGm, r1, r2, 500000, Up, 1);
-            var watch = Stopwatch.StartNew();
-            for (var i = 0; i < 10000; i++)
+            Timing.Within(200, () =>
             {
-                Lambert.Solve(KerbinGm, r1, r2, 50000 + 10 * i, Up);
-                Lambert.Solve(KerbinGm, r1, r2, 500000 + 10 * i, Up, 1);
-            }
-            Assert.InRange(watch.Elapsed.TotalMilliseconds, 0, 200);
+                for (var i = 0; i < 10000; i++)
+                {
+                    Lambert.Solve(KerbinGm, r1, r2, 50000 + 10 * i, Up);
+                    Lambert.Solve(KerbinGm, r1, r2, 500000 + 10 * i, Up, 1);
+                }
+            });
         }
 
         private static void Arrives(Vec3 r1, Vec3 v1, Vec3 r2, double tof)

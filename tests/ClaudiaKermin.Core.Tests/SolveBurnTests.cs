@@ -225,6 +225,30 @@ namespace ClaudiaKermin.Core.Tests
             Assert.Contains("90000000000", message);
         }
 
+        [Theory]
+        [InlineData(0)]
+        [InlineData(1)]
+        public void Next_patch_pe_gives_up_with_an_error_when_the_scan_budget_runs_out(int budget)
+        {
+            var tools = new PlanningTools(new IPlanningTool[] { new SolveBurn(budget) });
+            var outcome = tools.Run("solve_burn", "{\"goal\":\"next_patch_pe\",\"value\":50000}", MunBound(), new NoPlanningBody());
+            Assert.True(outcome.IsError, outcome.Json);
+            using (var doc = JsonDocument.Parse(outcome.Json))
+            {
+                var message = doc.RootElement.GetProperty("error").GetString();
+                Assert.Contains("gave up after " + budget + " burn sizes", message);
+                Assert.Contains("50000", message);
+                Assert.Contains("try an earlier or narrower burn time", message);
+            }
+        }
+
+        [Fact]
+        public void The_default_scan_budget_covers_every_step_of_the_scan()
+        {
+            // The scan tries at most 1501 burn sizes (0 to its end inclusive); the default budget must never cut a normal search short.
+            Assert.True(SolveBurn.DefaultMaxScanEvaluations >= 1501);
+        }
+
         [Fact]
         public void A_burn_time_after_the_path_ends_is_an_error_not_a_crash()
         {
