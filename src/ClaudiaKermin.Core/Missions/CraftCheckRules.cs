@@ -82,6 +82,10 @@ namespace ClaudiaKermin.Core.Missions
             new CraftCheckRule("manual_stretches_without_crew", Warning, "Manual stretches planned with no other crew aboard",
                 "the Mission Goal plans stretches the player flies by hand (docking, EVA science, or flying a sequence themselves) and the crew list has no Kerbal "
                 + "other than Claudia (trait SuperIntelligence) and Tourists (trait Tourist)."),
+            new CraftCheckRule("ascent_cannot_reach_orbit", Warning, "The ascent can't reach orbit",
+                "plan_ascent says reaches_orbit is false for the launch (no turn_shape it tried reaches orbit); name the Boost stage that falls short."),
+            new CraftCheckRule("ascent_thin_margin", Warning, "The ascent reaches orbit by a thin margin",
+                "plan_ascent says the launch reaches orbit but its margin is marginal (thin)."),
         };
 
         public static CraftCheckRule Find(string code)
@@ -108,11 +112,12 @@ namespace ClaudiaKermin.Core.Missions
             var codes = new JsonWriter().BeginArray();
             foreach (var rule in All) codes.String(rule.Code);
             codes.EndArray();
-            return "{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"summary\",\"findings\",\"child_vessel_stages\",\"unsure_because\"],\"properties\":{"
+            return "{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"summary\",\"findings\",\"child_vessel_stages\",\"unsure_because\",\"planned_turn_shape\"],\"properties\":{"
                 + SecondLook.FieldJson + ","
                 + "\"summary\":{\"type\":\"string\",\"description\":\"Your line to the player: concise mission-control voice, key numbers first, one or two sentences.\"},"
                 + "\"child_vessel_stages\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"},\"description\":\"The separation stages (from the separations facts) "
                 + "whose vessels the Mission Goal plans to fly as Child Vessels; empty when it plans none.\"},"
+                + "\"planned_turn_shape\":{\"type\":\"number\",\"description\":\"The turn_shape plan_ascent gave for the launch; 0 when you did not call it or it found none.\"},"
                 + "\"findings\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"additionalProperties\":false,"
                 + "\"required\":[\"code\",\"explanation\",\"fix\"],\"properties\":{"
                 + "\"code\":{\"type\":\"string\",\"enum\":" + codes + "},"

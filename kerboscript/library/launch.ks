@@ -23,7 +23,8 @@
 //|     will reach (e.g. 100000) to climb straight up.
 //|   turn_shape [0.45]: the turn's pitch is 90 * (1 - f^turn_shape), f the fraction of the way from
 //|     the turn start to the atmosphere top (or target_ap if lower); smaller turns over sooner. The
-//|     turn starts again from vertical wherever throttle_max_q held it.
+//|     turn starts again from vertical wherever throttle_max_q held it. Pass the turn_shape plan_ascent
+//|     gives (the Craft Check's, or a new call if the craft or target_ap changed).
 //|   max_aoa [5]: most degrees the nose may be off the airflow while the air is thick enough to matter
 //|     (over 500 Pa dynamic pressure), all the way up and through the coast; above 8000 Pa the angle
 //|     allowed falls in proportion to q (a tenth of max_aoa at the least).

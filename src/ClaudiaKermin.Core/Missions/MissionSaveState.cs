@@ -110,6 +110,8 @@ namespace ClaudiaKermin.Core.Missions
         public bool PausedForCap;
         /// <summary>Why the craft is still to be made safe because it was unloaded when the make-safe came (#207); "" for none and in older saves.</summary>
         public string SafePending = "";
+        /// <summary>The turn_shape the Craft Check planned for the launch; null when it planned none, and in older saves.</summary>
+        public double? PlannedTurnShape;
         public MissionPlan MissionPlan;
         /// <summary>The current Sequence Plan: the one awaiting Approval, running, or just run.</summary>
         public SequencePlan SequencePlan;
@@ -175,6 +177,7 @@ namespace ClaudiaKermin.Core.Missions
             if (PausedCannotFly) values["pausedCannotFly"] = "true";
             if (PausedForCap) values["pausedForCap"] = "true";
             if (SafePending.Length > 0) values["safePending"] = SafePending;
+            if (PlannedTurnShape.HasValue) values["plannedTurnShape"] = PlannedTurnShape.Value.ToString("R", CultureInfo.InvariantCulture);
             foreach (var setting in Settings) values[SettingPrefix + setting.Key] = setting.Value;
             for (var i = 0; i < UnsafeProblems.Count; i++) values[UnsafeProblemPrefix + i.ToString(CultureInfo.InvariantCulture)] = UnsafeProblems[i];
             if (QueuedEntries > 0) values["queuedEntries"] = QueuedEntries.ToString(CultureInfo.InvariantCulture);
@@ -235,6 +238,7 @@ namespace ClaudiaKermin.Core.Missions
             double reading;
             if (double.TryParse(Get(values, "runStartMonopropellant"), NumberStyles.Float, CultureInfo.InvariantCulture, out reading)) state.RunStartMonopropellant = reading;
             if (double.TryParse(Get(values, "runStartDeltaVLeft"), NumberStyles.Float, CultureInfo.InvariantCulture, out reading)) state.RunStartDeltaVLeft = reading;
+            if (double.TryParse(Get(values, "plannedTurnShape"), NumberStyles.Float, CultureInfo.InvariantCulture, out reading)) state.PlannedTurnShape = reading;
             decimal cap;
             if (decimal.TryParse(Get(values, "spendingCap"), NumberStyles.Number, CultureInfo.InvariantCulture, out cap)) state.SpendingCap = cap;
             int number;

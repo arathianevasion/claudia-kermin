@@ -41,6 +41,8 @@ namespace ClaudiaKermin.Core.Missions
             public string Recheck = "";
             /// <summary>Why the craft is still to be made safe: a make-safe found it unloaded (#207); "" when none is owed. Saved.</summary>
             public string SafePending = "";
+            /// <summary>The turn_shape the Craft Check planned for the launch; null when it planned none. Saved.</summary>
+            public double? PlannedTurnShape;
             /// <summary>Requests sent when the craft docked: a plan from a later request was made with the facts after docking.</summary>
             public int RecheckSince;
         }
