@@ -232,8 +232,7 @@ function land_bearing {
 // Where a site (site_lat, site_lng, degrees) lies from a craft at (lat, lng) heading hdg (degrees), along
 // the surface of a body of the given radius (#431): lexicon("dist" (m, land_surface_distance), "along" (m
 // along the great circle the heading sets out on; negative once behind), "across" (m off it; positive to
-// the right)). Right anywhere on the body, the far side too, where the old straight line flattened onto
-// the craft's horizon shrinks toward 0. Pure.
+// the right)). Right anywhere on the body, the far side too. Pure.
 function land_site_figures {
   parameter lat, lng, site_lat, site_lng, hdg, radius.
   local dist is land_surface_distance(lat, lng, site_lat, site_lng, radius).
@@ -822,7 +821,7 @@ function land_fall_samples {
     local under is body:geopositionof(body:position + pos).
     local site_lng is land_site_lng(site:lng, t - time:seconds, body:rotationperiod).
     local hdg is land_bearing(under:lat, under:lng, site:lat, site_lng).
-    if v_h:mag > 0.01 {
+    if v_h:mag >= 1 {
       local on is body:geopositionof(body:position + pos + v_h:normalized * 1000).
       set hdg to land_bearing(under:lat, under:lng, on:lat, on:lng).
     }
