@@ -178,6 +178,7 @@ function claudia_make_safe {
   unlock throttle.
   unlock steering.
   set ship:control:neutralize to true.
+  claudia_rcs_restore_tuning().
   local mono is claudia_monoprop().
   if mono:amount > 0 and claudia_wheels_turn_time() < 0 {
     if not rcs {
@@ -1314,11 +1315,57 @@ function claudia_wheels_turn_time {
   return turn:wheels_turn_time.
 }
 
+// The turn-rate override (#422). kOS caps the turn rate at torque x maxstoppingtime / MOI and brakes without
+// overshoot only while the rate gain kp <= 2 / maxstoppingtime. Turns by RCS widen the cap: T = sqrt(angle / alpha)
+// within 2 to 10 s (angle in degrees, alpha in deg/s2: TURNTIME's alpha), kp = 1.6 / T, ki = 0.1 x kp. Pure.
+function claudia_rcs_turn_tuning {
+  parameter angle, alpha.
+  local t is 2.
+  if alpha > 0 {
+    set t to min(10, max(2, sqrt(max(0, angle) / alpha))).
+  }
+  local kp is 1.6 / t.
+  return lexicon("t", t, "kp", kp, "ki", 0.1 * kp).
+}
+
+// kOS's own steering settings: what the override puts back.
+function claudia_rcs_default_tuning {
+  return lexicon("t", 2, "kp", 1, "ki", 0.1).
+}
+
+// Whether a claudia_rcs_decide reason is a turn the override applies to: not translating, not wheels-only
+// ("no wheel torque" has no wheel turn to speed up), not a Coast hold.
+function claudia_rcs_turn_reason {
+  parameter reason.
+  return reason = "big turn" or reason = "turning" or reason = "falling behind".
+}
+
+// Sets steering manager sm (steeringmanager) to tuning (t, kp, ki) and resets both rate controllers.
+function claudia_rcs_set_tuning {
+  parameter sm, tuning.
+  set sm:maxstoppingtime to tuning:t.
+  set sm:pitchpid:kp to tuning:kp.
+  set sm:pitchpid:ki to tuning:ki.
+  set sm:yawpid:kp to tuning:kp.
+  set sm:yawpid:ki to tuning:ki.
+  sm:pitchpid:reset().
+  sm:yawpid:reset().
+}
+
+// Puts kOS's defaults back. These settings belong to the vessel and outlive the script, so every exit does this.
+function claudia_rcs_restore_tuning {
+  claudia_rcs_set_tuning(steeringmanager, claudia_rcs_default_tuning()).
+}
+
 // Switches RCS on or off and reports it (ADDONS:CLAUDIA:RCSSWITCH) with its reason and figures (a
-// lexicon of error_deg, rate_dps, wheels_s with left_s, monoprop with monoprop_max; any may be left out).
+// lexicon of error_deg, rate_dps, wheels_s with left_s, monoprop with monoprop_max, stopping_s with kp; any may be left out).
+// Off, whatever the reason, restores kOS's steering defaults.
 function claudia_rcs_switch {
   parameter on, reason, figures.
   set rcs to on.
+  if not on {
+    claudia_rcs_restore_tuning().
+  }
   local report is lexicon("on", on, "reason", reason).
   for key in figures:keys {
     set report[key] to figures[key].
@@ -1393,6 +1440,16 @@ function claudia_rcs_tick {
     if decided["on"] or decided:reason = "no monoprop" {
       set figures:monoprop to round(mono:amount, 1).
       set figures:monoprop_max to round(mono:capacity, 1).
+    }
+    if decided["on"] and claudia_rcs_turn_reason(decided:reason) {
+      // Once per turn, at the switch; left alone until RCS goes off. alpha is the one TURNTIME models with RCS.
+      local turn is addons:claudia:turntime(lexicon("max_stopping_time", 2)).
+      if turn:error = "" {
+        local tuning is claudia_rcs_turn_tuning(error, turn:alpha).
+        claudia_rcs_set_tuning(steeringmanager, tuning).
+        set figures:stopping_s to round(tuning:t, 1).
+        set figures:kp to round(tuning:kp, 3).
+      }
     }
     claudia_rcs_switch(decided["on"], decided:reason, figures).
   }
@@ -1539,6 +1596,7 @@ function claudia_dv_remaining {
 // The block's result lexicon: the Script Result's common fields plus extra (the block's own).
 function claudia_finish {
   parameter ctx, success, reason, extra.
+  claudia_rcs_restore_tuning().
   local result is lexicon(
     "success", success,
     "reason", reason,
