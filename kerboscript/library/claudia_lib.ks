@@ -1063,11 +1063,9 @@ function claudia_aligned_to {
   return claudia_aligned(angle, ship:angularvel:mag * constant:radtodeg, claudia_held_s(ctx:burn_within_ut, time:seconds), tol).
 }
 
-//| claudia_keep_roll(vec): the direction along vec that keeps the craft's current roll. Use it whenever your
-//| own Mission Script code steers to a direction: `lock steering to claudia_keep_roll(vec).` with vec
-//| worked out in the expression or a variable you update, never a bare vector. A bare vector makes kOS roll
-//| the craft to top-toward-the-sky once it is within 5 degrees of the target, and a long craft spins up hard.
-//| Don't use it where you want a set roll (heading(), or lookdirup with your own up).
+//| claudia_keep_roll(vec): steer along vec keeping the craft's roll: `lock steering to claudia_keep_roll(vec).` rather than a bare vector, which makes kOS spin a long craft near alignment.
+// Work vec out in the lock expression or a variable you update. A bare vector makes kOS roll the craft to
+// top-toward-the-sky within 5 degrees of the target. Not for a set roll (heading(), or lookdirup with your own up).
 function claudia_keep_roll {
   parameter vec.
   return lookdirup(vec, ship:facing:topvector).

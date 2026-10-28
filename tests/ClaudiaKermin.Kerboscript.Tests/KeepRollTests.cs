@@ -42,7 +42,7 @@ namespace ClaudiaKermin.Kerboscript.Tests
         {
             var docs = string.Join("\n", CoreLibrary.Files.Single(f => f.Name == "claudia_lib").Docs);
             Assert.Contains("claudia_keep_roll(vec)", docs);
-            Assert.Contains("steers to a direction", docs);
+            Assert.Contains("rather than a bare vector", docs);
         }
 
         [Fact]

@@ -79,8 +79,9 @@ namespace ClaudiaKermin.Core.Tests
             // rcs_tolerance doc worded in the RCS Use spec (#393, #400); to 10762 for the claudia_rcs_translate doc (#401);
             // to 10921 for the spec's RCS Use / SAS wording in the mission prompt (#402; spec-mandated, not yet human-approved);
             // to 11116 (+195) for numbering the Mission Plan's Maneuver Sequence each Sequence Plan flies (#413; ticket-mandated, not yet human-approved);
-            // to 11275 (+159) for #415: big_deg in the rcs_tolerance doc and the big-turn wording in the RCS Use sentence (spec-mandated, not yet human-approved)
-            Assert.InRange(MissionPrompts.BaseLayer.Length, 1, 11275);
+            // to 11275 (+159) for #415: big_deg in the rcs_tolerance doc and the big-turn wording in the RCS Use sentence (spec-mandated, not yet human-approved);
+            // to 11461 (+186) for #421: the one-line claudia_keep_roll doc (human approved the raise, trimming the doc to one line)
+            Assert.InRange(MissionPrompts.BaseLayer.Length, 1, 11461);
         }
 
         [Fact]
