@@ -649,9 +649,11 @@ function claudia_drop_empty {
             kinds:add(claudia_part_kind(g)).
           }
         }
-        local ok is claudia_tanks_empty(amounts, capacities).
+        local ok is false.
         if auto {
           set ok to claudia_auto_drop_fires(kinds, amounts, capacities).
+        } else {
+          set ok to claudia_tanks_empty(amounts, capacities).
         }
         // Nested, not one "and": firing is a side effect and must only follow the guards.
         if ok {
