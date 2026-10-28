@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Andrew Watson
 
 using System;
-using System.Diagnostics;
 using ClaudiaKermin.Core.Tools;
 using Xunit;
 

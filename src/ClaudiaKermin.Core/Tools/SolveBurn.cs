@@ -24,7 +24,8 @@ namespace ClaudiaKermin.Core.Tools
         /// <summary>
         /// How many burn sizes the next_patch_pe scan tries before it gives up: one past the scan's own step count (it runs from 0
         /// to its end inclusive), so a normal search is never cut short. A count, not a clock, so the same input gives the same
-        /// answer under any machine load; it bounds the scan's cost in game, inside the tool loop's 5 s cap.
+        /// answer under any machine load. A full scan (the Pe never reaches the goal) measured about 0.3 s on a dev machine, roughly
+        /// 0.2 ms a burn size, so the 5 s cap needs a burn size to cost over 3 ms: more than 10x headroom.
         /// </summary>
         internal const int DefaultMaxScanEvaluations = MaxScanSteps + 1;
         private const string DefaultAt = "in 60";
