@@ -68,6 +68,10 @@ _Avoid_: on target, settled, pointed
 The moment a maneuver node's burn lights its engines: ahead of the node by about the time it takes to burn half the node's delta-v, worked out from every stage the burn will use. Leads before a burn (when warp ends, when the craft must be Aligned) count back from the Burn Start, not from the node.
 _Avoid_: node time, burn time (the burn's length)
 
+**Course Correction**:
+A burn between departure and arrival that trims the predicted arrival at a body or vessel to the target periapsis or closest approach, and optionally to the target arrival inclination.
+_Avoid_: mid-course correction, MCC
+
 **Daylight**:
 At a landing site, the sun is more than 20° above the horizon there. A daylight landing touches down only in Daylight; a sun lower than that, though up, is not Daylight.
 _Avoid_: lit, sunlit, daytime
